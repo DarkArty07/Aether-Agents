@@ -1,0 +1,63 @@
+diff --git a/agent/prompt_builder.py b/agent/prompt_builder.py
+index a42474bf7c..4d63895173 100644
+--- a/agent/prompt_builder.py
++++ b/agent/prompt_builder.py
+@@ -258,10 +258,12 @@ KANBAN_GUIDANCE = (
+     "include the structured handoff (`summary`, `metadata`) on the lifecycle "
+     "transition itself; never put secrets, tokens, or raw PII in these durable "
+     "fields. If `kanban_show()` lists child IDs, inspect those cards with "
+-    "`kanban_show(task_id=...)` before choosing the terminal action. When any "
+-    "pre-created review, QA, or release child depends on your task, call "
++    "`kanban_show(task_id=...)` before choosing the terminal action. A terminal "
++    "integration, release, or evidence-only child alone does NOT replace unit "
++    "review. Only when the card delivery or task graph explicitly identifies a "
++    "distinct review/QA phase child depending on your task should you call "
+     "`kanban_complete`: your implementation phase is done, and completion is "
+-    "what releases those children. Never sticky-block that parent for "
++    "what releases that downstream review lane. Never sticky-block that parent for "
+     "`review-required` and never request same-card review as well — either "
+     "choice would strand or duplicate the downstream lane. Otherwise, when "
+     "this same task needs review before it is final, call "
+diff --git a/tests/hermes_cli/test_kanban_review_surfaces.py b/tests/hermes_cli/test_kanban_review_surfaces.py
+index e0698f981d..02e50f40d9 100644
+--- a/tests/hermes_cli/test_kanban_review_surfaces.py
++++ b/tests/hermes_cli/test_kanban_review_surfaces.py
+@@ -233,7 +233,15 @@ def test_worker_guidance_distinguishes_same_card_and_downstream_review() -> None
+ 
+     assert "lists child IDs" in KANBAN_GUIDANCE
+     assert "inspect those cards" in KANBAN_GUIDANCE
+-    assert "pre-created review, QA, or release child" in KANBAN_GUIDANCE
++    assert (
++        "A terminal integration, release, or evidence-only child alone does NOT "
++        "replace unit review"
++    ) in KANBAN_GUIDANCE
++    assert (
++        "Only when the card delivery or task graph explicitly identifies a "
++        "distinct review/QA phase child"
++    ) in KANBAN_GUIDANCE
++    assert "pre-created review, QA, or release child" not in KANBAN_GUIDANCE
+     assert "call `kanban_complete`" in KANBAN_GUIDANCE
+     assert "Never sticky-block that parent for `review-required`" in KANBAN_GUIDANCE
+     assert "`kanban_request_changes`" in KANBAN_GUIDANCE
+@@ -250,6 +258,21 @@ def test_worker_guidance_distinguishes_same_card_and_downstream_review() -> None
+     assert "escalate" in skill_text.lower()
+ 
+ 
++def test_worker_guidance_terminal_child_does_not_replace_review() -> None:
++    """#385 regression: guidance must not treat terminal/release children as unit review."""
++    from agent.prompt_builder import KANBAN_GUIDANCE
++
++    assert (
++        "A terminal integration, release, or evidence-only child alone does NOT "
++        "replace unit review"
++    ) in KANBAN_GUIDANCE
++    assert (
++        "Only when the card delivery or task graph explicitly identifies a "
++        "distinct review/QA phase child"
++    ) in KANBAN_GUIDANCE
++    assert "pre-created review, QA, or release child" not in KANBAN_GUIDANCE
++
++
+ def test_cli_reopen_review_is_transition_first_and_redacts_reason(
+     monkeypatch: pytest.MonkeyPatch,
+     tmp_path: Path,

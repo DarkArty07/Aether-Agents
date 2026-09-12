@@ -1,5 +1,5 @@
 {
-  "observed_at_utc": "2026-09-11T03:34:52Z",
+  "observed_at_utc": "2026-09-11T22:55:11Z",
   "overall_blockers": [
     {
       "detail": "Retirement gate status is failed.",
@@ -312,6 +312,21 @@
       "kind": "uncertainty"
     },
     {
+      "detail": "The exact maintained-fork reconstruction, focused candidate checks, and fork PR #5 merged source passed, but public upstream equivalence remains unavailable because upstream has no equivalent independent-review requirement.",
+      "id": "HLP-362",
+      "kind": "artifact"
+    },
+    {
+      "detail": "Retirement gate status is not_executed.",
+      "id": "HLP-362",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "The upstream Hermes Kanban protocol does not distinguish self-review from independent review at the inspected revision.",
+      "id": "HLP-362",
+      "kind": "uncertainty"
+    },
+    {
       "detail": "The exact maintained-fork reconstruction, focused candidate checks, and fork PR #6 merged source passed, but the public upstream revision is not an equivalent reconstruction input; upstream artifact equivalence therefore remains unavailable.",
       "id": "HLP-369",
       "kind": "artifact"
@@ -327,6 +342,21 @@
       "kind": "uncertainty"
     },
     {
+      "detail": "The exact maintained-fork reconstruction, focused candidate checks, and PR #10 candidate passed, but public upstream equivalence remains unavailable because upstream lacks profile-scoped script root resolution.",
+      "id": "HLP-372",
+      "kind": "artifact"
+    },
+    {
+      "detail": "Retirement gate status is not_executed.",
+      "id": "HLP-372",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "Upstream hardcodes default ~/.hermes/scripts in validation and diagnostic error strings at the inspected revision.",
+      "id": "HLP-372",
+      "kind": "uncertainty"
+    },
+    {
       "detail": "Retirement gate status is not_executed.",
       "id": "HLP-382",
       "kind": "retirement_gate"
@@ -337,6 +367,36 @@
       "kind": "uncertainty"
     },
     {
+      "detail": "The exact maintained-fork reconstruction, prompt size checks, and PR #9 candidate passed, but public upstream equivalence remains unavailable because upstream prompt guidance remains ambiguous.",
+      "id": "HLP-385",
+      "kind": "artifact"
+    },
+    {
+      "detail": "Retirement gate status is not_executed.",
+      "id": "HLP-385",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "Upstream KANBAN_GUIDANCE conflates pre-created review/QA and release children at the inspected revision.",
+      "id": "HLP-385",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "The exact maintained-fork reconstruction, focused candidate checks, and PR #10 candidate passed, but public upstream equivalence remains unavailable because upstream omits launch cwd persistence for cron sessions.",
+      "id": "HLP-388",
+      "kind": "artifact"
+    },
+    {
+      "detail": "Retirement gate status is not_executed.",
+      "id": "HLP-388",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "Upstream does not persist cron launch workdir in the session row at the inspected revision.",
+      "id": "HLP-388",
+      "kind": "uncertainty"
+    },
+    {
       "detail": "Retirement gate status is not_executed.",
       "id": "HLP-389",
       "kind": "retirement_gate"
@@ -344,6 +404,21 @@
     {
       "detail": "The syntax-aware view intentionally matches the already-permitted `python3 -c` form: a path that appears only inside a quoted non-shell interpreter heredoc body is no longer scanned as a shell script. Direct lifecycle text in that body is still blocked.",
       "id": "HLP-389",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "The exact maintained-fork reconstruction, focused candidate checks, and PR #10 candidate passed, but public upstream equivalence remains unavailable because upstream lacks cron commissioning origin and kanban auto-subscription.",
+      "id": "HLP-393",
+      "kind": "artifact"
+    },
+    {
+      "detail": "Retirement gate status is not_executed.",
+      "id": "HLP-393",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "Upstream does not capture or restore durable commissioning origin for cron-spawned tasks at the inspected revision.",
+      "id": "HLP-393",
       "kind": "uncertainty"
     }
   ],
@@ -1698,6 +1773,82 @@
         "artifacts": [
           {
             "checksum_status": "passed",
+            "computed_sha256": "e6218c02d5da3eee1b620c4e2e845c840a8e86ce36616781c97ddcdcad7e5638",
+            "kind": "patch",
+            "ledger_sha256": "e6218c02d5da3eee1b620c4e2e845c840a8e86ce36616781c97ddcdcad7e5638",
+            "parse_status": "passed",
+            "reference": "patches/hermes/HLP-362-independent-review-ownership.patch",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction_input",
+            "reference": "maintained fork base 28b593efa86bbc674b32f488c35932a4e7e85a51",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction",
+            "reference": "git apply --check against maintained fork base 28b593efa86bbc674b32f488c35932a4e7e85a51",
+            "result": "passed"
+          }
+        ],
+        "blocker": "The exact maintained-fork reconstruction, focused candidate checks, and fork PR #5 merged source passed, but public upstream equivalence remains unavailable because upstream has no equivalent independent-review requirement.",
+        "status": "unavailable"
+      },
+      "blocking_uncertainty": [
+        "The upstream Hermes Kanban protocol does not distinguish self-review from independent review at the inspected revision."
+      ],
+      "components": [
+        "HLP-362",
+        "hermes_cli/kanban_db.py",
+        "tools/kanban_tools.py",
+        "tests/hermes_cli/test_kanban_review_independence.py"
+      ],
+      "id": "HLP-362",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-362--independent-same-card-review-ownership",
+      "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+      "required_behavior": "An initial same-card review request without an independent reviewer fails closed before clearing the implementation claim; self-review is rejected; legacy reviewer-null review events remain parked; valid re-review provenance and explicit reviewer cycles remain supported.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "tests/hermes_cli/test_kanban_review_independence.py on maintained fork base 28b593efa86bbc674b32f488c35932a4e7e85a51",
+            "result": "Baseline fails 4 of 5 tests (accepts missing reviewer, self-review, and claims legacy reviewer-null event)."
+          },
+          {
+            "kind": "test",
+            "reference": "tests/hermes_cli/test_kanban_review_independence.py on reviewed candidate 8afefe7e304f2b3c80cecbbb24bf9e60be72044b",
+            "result": "5 passed in 0.87s."
+          }
+        ],
+        "status": "not_executed",
+        "summary": "Retire only when an adopted exact Hermes release provides equivalent independent review gating (initial review without an independent reviewer fails closed and self-review is rejected) and passes the ABR-362 regression predicates without downstream patches."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Retain HLP-362. Initial same-card review requires an explicit independent reviewer; self-review is rejected and legacy unassigned review claims remain parked. Verified by regression tests on the maintained fork and candidate testing in Aether.",
+      "upstream": {
+        "disposition": "upstream_missing",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+            "result": "The inspected revision allows initial request_review without a reviewer and transitions the card without independent reviewer gating (verified also at 31d0a2428e9db346d6781da66f5b37ff3e12def2)."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "issue",
+            "url": "https://github.com/DarkArty07/Aether-Agents/issues/362"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [
+          {
+            "checksum_status": "passed",
             "computed_sha256": "f90b2264fdf60a7b5da6476967366e7b5bd5d40acfc25ab7095ddfccb7f7ac1c",
             "kind": "patch",
             "ledger_sha256": "f90b2264fdf60a7b5da6476967366e7b5bd5d40acfc25ab7095ddfccb7f7ac1c",
@@ -1774,6 +1925,89 @@
           {
             "kind": "issue",
             "url": "https://github.com/DarkArty07/Aether-Agents/issues/369"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [
+          {
+            "checksum_status": "passed",
+            "computed_sha256": "97152a6358b13b34b95341d5f82f7b7012c5174d917817d3e3934260d15ebdaf",
+            "kind": "patch",
+            "ledger_sha256": "97152a6358b13b34b95341d5f82f7b7012c5174d917817d3e3934260d15ebdaf",
+            "parse_status": "passed",
+            "reference": "patches/hermes/HLP-372-profile-cron-script-root.patch",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction_input",
+            "reference": "maintained fork base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction",
+            "reference": "git apply --check against maintained fork base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+            "result": "passed"
+          }
+        ],
+        "blocker": "The exact maintained-fork reconstruction, focused candidate checks, and PR #10 candidate passed, but public upstream equivalence remains unavailable because upstream lacks profile-scoped script root resolution.",
+        "status": "unavailable"
+      },
+      "blocking_uncertainty": [
+        "Upstream hardcodes default ~/.hermes/scripts in validation and diagnostic error strings at the inspected revision."
+      ],
+      "components": [
+        "HLP-372",
+        "cron/script_root.py",
+        "cron/lifecycle_guard.py",
+        "cron/scheduler.py",
+        "cron/jobs.py",
+        "tools/cronjob_tools.py",
+        "tests/cron/test_cron_script_root_372.py"
+      ],
+      "id": "HLP-372",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-372--profile-scoped-cron-script-root",
+      "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+      "required_behavior": "Creation/update validation, lifecycle scanning, execution, and user-facing diagnostics resolve script and monitor_script through one effective profile-scoped script-root contract; relative paths stay confined to the active HERMES_HOME/scripts, absolute/traversal/symlink-escape/non-regular targets fail closed, and error diagnostics name the effective profile root dynamically resolved at call time.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "tests/cron/test_cron_script_root_372.py on pristine base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+            "result": "4 of 9 tests fail (hardcoded ~/.hermes/scripts diagnostics, accepts non-regular target, missing monitor_script scanning)."
+          },
+          {
+            "kind": "test",
+            "reference": "tests/cron/test_cron_script_root_372.py on candidate 4fc5141f8d764f1dbc2b4d37128b5351b8d0aa62",
+            "result": "9 passed in 0.43s."
+          }
+        ],
+        "status": "not_executed",
+        "summary": "Retire only when an adopted exact Hermes release resolves script and monitor_script through an effective profile-scoped root at call time, enforces confinement and non-regular rejection, and passes the PR8-CRON #372 test suite without downstream patches."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Retain HLP-372. Cron scripts and monitor scripts resolve dynamically through one effective profile-scoped root at call time with fail-closed confinement on traversal, symlink escapes, and non-regular files.",
+      "upstream": {
+        "disposition": "upstream_missing",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/cron/lifecycle_guard.py",
+            "result": "The inspected revision resolves script paths against hardcoded ~/.hermes/scripts and does not share a unified profile-scoped script-root contract between validation, lifecycle scanning, and execution (verified also at 31d0a2428e9db346d6781da66f5b37ff3e12def2)."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "issue",
+            "url": "https://github.com/DarkArty07/Aether-Agents/issues/372"
+          },
+          {
+            "kind": "pull_request",
+            "url": "https://github.com/DarkArty07/aether-hermes/pull/10"
           }
         ],
         "repository": "https://github.com/NousResearch/hermes-agent"
@@ -1873,6 +2107,164 @@
         "artifacts": [
           {
             "checksum_status": "passed",
+            "computed_sha256": "b3decd3e83ea0133765ce0204ddc3ad017bffa0cac657f6b0153a92fbb8e4003",
+            "kind": "patch",
+            "ledger_sha256": "b3decd3e83ea0133765ce0204ddc3ad017bffa0cac657f6b0153a92fbb8e4003",
+            "parse_status": "passed",
+            "reference": "patches/hermes/HLP-385-review-topology-guidance.patch",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction_input",
+            "reference": "maintained fork base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction",
+            "reference": "git apply --check against maintained fork base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+            "result": "passed"
+          }
+        ],
+        "blocker": "The exact maintained-fork reconstruction, prompt size checks, and PR #9 candidate passed, but public upstream equivalence remains unavailable because upstream prompt guidance remains ambiguous.",
+        "status": "unavailable"
+      },
+      "blocking_uncertainty": [
+        "Upstream KANBAN_GUIDANCE conflates pre-created review/QA and release children at the inspected revision."
+      ],
+      "components": [
+        "HLP-385",
+        "agent/prompt_builder.py",
+        "tests/hermes_cli/test_kanban_review_surfaces.py"
+      ],
+      "id": "HLP-385",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-385--review-topology-guidance",
+      "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+      "required_behavior": "Worker review guidance distinguishes explicit review/QA phase children from terminal integration, release, or evidence-only children, so workers do not mistake terminal integration for unit review and call kanban_complete prematurely.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "tests/hermes_cli/test_kanban_review_surfaces.py on pristine base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+            "result": "2 of 12 tests fail (asserting updated prompt guidance invariants)."
+          },
+          {
+            "kind": "test",
+            "reference": "tests/hermes_cli/test_kanban_review_surfaces.py on candidate 9fba8552bba30004ab452823668a105dee1ee89d",
+            "result": "12 passed in 1.95s."
+          }
+        ],
+        "status": "not_executed",
+        "summary": "Retire only when an adopted exact Hermes release provides clear prompt guidance that terminal integration or release children do not substitute for unit review, passing the regression tests in test_kanban_review_surfaces.py."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Retain HLP-385. Guidance in KANBAN_GUIDANCE explicitly states that terminal integration or release children alone do not replace unit review, requiring an explicit review/QA phase child before kanban_complete is called as an implementation handoff.",
+      "upstream": {
+        "disposition": "upstream_missing",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/agent/prompt_builder.py",
+            "result": "The inspected revision instructs workers that any pre-created review, QA, or release child releases on kanban_complete, allowing terminal integration children to be mistaken for unit review (verified also at 31d0a2428e9db346d6781da66f5b37ff3e12def2)."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "issue",
+            "url": "https://github.com/DarkArty07/Aether-Agents/issues/385"
+          },
+          {
+            "kind": "pull_request",
+            "url": "https://github.com/DarkArty07/aether-hermes/pull/9"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [
+          {
+            "checksum_status": "passed",
+            "computed_sha256": "1d3bdad267ae3e95a6db379f7f4fe24ff3e895f3b0941d41f42ef3d06d0a5210",
+            "kind": "patch",
+            "ledger_sha256": "1d3bdad267ae3e95a6db379f7f4fe24ff3e895f3b0941d41f42ef3d06d0a5210",
+            "parse_status": "passed",
+            "reference": "patches/hermes/HLP-388-cron-session-launch-workdir.patch",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction_input",
+            "reference": "maintained fork base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction",
+            "reference": "git apply --check against maintained fork base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+            "result": "passed"
+          }
+        ],
+        "blocker": "The exact maintained-fork reconstruction, focused candidate checks, and PR #10 candidate passed, but public upstream equivalence remains unavailable because upstream omits launch cwd persistence for cron sessions.",
+        "status": "unavailable"
+      },
+      "blocking_uncertainty": [
+        "Upstream does not persist cron launch workdir in the session row at the inspected revision."
+      ],
+      "components": [
+        "HLP-388",
+        "run_agent.py",
+        "tests/cron/test_cron_workdir_session_388.py"
+      ],
+      "id": "HLP-388",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-388--persisted-launch-workdir-in-cron-session-row",
+      "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+      "required_behavior": "The cron scheduler's context-local effective workdir is preserved and run_agent._launch_cwd_for_session('cron') persists that trusted directory in the session row before agent tools execute; jobs without a workdir keep a null cwd.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "tests/cron/test_cron_workdir_session_388.py on pristine base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+            "result": "2 of 3 tests fail (launch_cwd returns None, session row cwd is None)."
+          },
+          {
+            "kind": "test",
+            "reference": "tests/cron/test_cron_workdir_session_388.py on candidate 62eee7baab1337a9e40a8312052cecd096caaed7",
+            "result": "3 passed in 1.37s."
+          }
+        ],
+        "status": "not_executed",
+        "summary": "Retire only when an adopted exact Hermes release persists the verified launch workdir in the cron session row and keeps null when workdir is unset, passing the #388 framework tests."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Retain HLP-388. The framework persists the verified cron launch workdir in the session row before tools run, preventing ungrounded contract authoring while keeping null cwd when unset.",
+      "upstream": {
+        "disposition": "upstream_missing",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/run_agent.py",
+            "result": "The inspected revision leaves _launch_cwd_for_session(\"cron\") returning None, omitting workdir persistence in the session row (verified also at 31d0a2428e9db346d6781da66f5b37ff3e12def2)."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "issue",
+            "url": "https://github.com/DarkArty07/Aether-Agents/issues/388"
+          },
+          {
+            "kind": "pull_request",
+            "url": "https://github.com/DarkArty07/aether-hermes/pull/10"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [
+          {
+            "checksum_status": "passed",
             "computed_sha256": "5806cb304a2520055b1d2954e89220fdb4a0bc32f86edb8484672583c23e05d3",
             "kind": "patch",
             "ledger_sha256": "5806cb304a2520055b1d2954e89220fdb4a0bc32f86edb8484672583c23e05d3",
@@ -1952,10 +2344,93 @@
         ],
         "repository": "https://github.com/NousResearch/hermes-agent"
       }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [
+          {
+            "checksum_status": "passed",
+            "computed_sha256": "d81191d1727361528864498d2ee41a3c9fa95302559932e300a7c15e6838f460",
+            "kind": "patch",
+            "ledger_sha256": "d81191d1727361528864498d2ee41a3c9fa95302559932e300a7c15e6838f460",
+            "parse_status": "passed",
+            "reference": "patches/hermes/HLP-393-cron-commissioning-origin-subscription.patch",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction_input",
+            "reference": "maintained fork base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction",
+            "reference": "git apply --check against maintained fork base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+            "result": "passed"
+          }
+        ],
+        "blocker": "The exact maintained-fork reconstruction, focused candidate checks, and PR #10 candidate passed, but public upstream equivalence remains unavailable because upstream lacks cron commissioning origin and kanban auto-subscription.",
+        "status": "unavailable"
+      },
+      "blocking_uncertainty": [
+        "Upstream does not capture or restore durable commissioning origin for cron-spawned tasks at the inspected revision."
+      ],
+      "components": [
+        "HLP-393",
+        "cron/jobs.py",
+        "cron/scheduler.py",
+        "gateway/session_context.py",
+        "tools/cronjob_tools.py",
+        "tools/kanban_tools.py",
+        "tests/cron/test_cron_commissioning_origin_393.py"
+      ],
+      "id": "HLP-393",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-393--trusted-commissioning-origin-and-kanban-auto-subscription",
+      "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+      "required_behavior": "Creating a cron job from a TUI/desktop or gateway session captures a trusted durable commissioning origin; at fire time that origin is restored only as a request-local context consumed by Kanban auto-subscription, reporting subscribed=true, persisting exactly the originating subscription, and waking that origin once on terminal flow.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "tests/cron/test_cron_commissioning_origin_393.py on pristine base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+            "result": "5 of 8 tests fail (notification_origin is None, auto-subscription returns False)."
+          },
+          {
+            "kind": "test",
+            "reference": "tests/cron/test_cron_commissioning_origin_393.py on candidate 4fc5141f8d764f1dbc2b4d37128b5351b8d0aa62",
+            "result": "8 passed in 1.45s."
+          }
+        ],
+        "status": "not_executed",
+        "summary": "Retire only when an adopted exact Hermes release captures trusted commissioning origin at create time, restores it as request-local context during cron execution, and passes the #393 test suite without downstream patches."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Retain HLP-393. Cron jobs commissioned from TUI or gateway capture durable origin, restored at fire time as request-local context so spawned Kanban root tasks auto-subscribe and wake the exact origin upon completion.",
+      "upstream": {
+        "disposition": "upstream_missing",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/cron/jobs.py",
+            "result": "The inspected revision captures no notification_origin on cron jobs and has no request-local origin restoration for Kanban auto-subscription at fire time (verified also at 31d0a2428e9db346d6781da66f5b37ff3e12def2)."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "issue",
+            "url": "https://github.com/DarkArty07/Aether-Agents/issues/393"
+          },
+          {
+            "kind": "pull_request",
+            "url": "https://github.com/DarkArty07/aether-hermes/pull/10"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
     }
   ],
   "schema_version": "aether.hermes-patch-reconciliation.v1",
-  "source_ledger_sha256": "1aabc18438fc88e6cf303fcda7ae93b038141f519f821a49ce40bd1bad0a758b",
+  "source_ledger_sha256": "43b25f9497e9b84b7108d40878b1e2f09694c7a70edab7bd75759000d66b0890",
   "upstream": {
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
     "repository": "https://github.com/NousResearch/hermes-agent"

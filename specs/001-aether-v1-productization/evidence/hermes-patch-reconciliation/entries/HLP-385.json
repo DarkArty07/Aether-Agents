@@ -1,0 +1,79 @@
+{
+  "artifact_verification": {
+    "artifacts": [
+      {
+        "checksum_status": "passed",
+        "computed_sha256": "b3decd3e83ea0133765ce0204ddc3ad017bffa0cac657f6b0153a92fbb8e4003",
+        "kind": "patch",
+        "ledger_sha256": "b3decd3e83ea0133765ce0204ddc3ad017bffa0cac657f6b0153a92fbb8e4003",
+        "parse_status": "passed",
+        "reference": "patches/hermes/HLP-385-review-topology-guidance.patch",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "maintained fork base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "git apply --check against maintained fork base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+        "result": "passed"
+      }
+    ],
+    "blocker": "The exact maintained-fork reconstruction, prompt size checks, and PR #9 candidate passed, but public upstream equivalence remains unavailable because upstream prompt guidance remains ambiguous.",
+    "status": "unavailable"
+  },
+  "blocking_uncertainty": [
+    "Upstream KANBAN_GUIDANCE conflates pre-created review/QA and release children at the inspected revision."
+  ],
+  "components": [
+    "HLP-385",
+    "agent/prompt_builder.py",
+    "tests/hermes_cli/test_kanban_review_surfaces.py"
+  ],
+  "id": "HLP-385",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-385--review-topology-guidance",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+  "required_behavior": "Worker review guidance distinguishes explicit review/QA phase children from terminal integration, release, or evidence-only children, so workers do not mistake terminal integration for unit review and call kanban_complete prematurely.",
+  "retirement_gate": {
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "tests/hermes_cli/test_kanban_review_surfaces.py on pristine base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+        "result": "2 of 12 tests fail (asserting updated prompt guidance invariants)."
+      },
+      {
+        "kind": "test",
+        "reference": "tests/hermes_cli/test_kanban_review_surfaces.py on candidate 9fba8552bba30004ab452823668a105dee1ee89d",
+        "result": "12 passed in 1.95s."
+      }
+    ],
+    "status": "not_executed",
+    "summary": "Retire only when an adopted exact Hermes release provides clear prompt guidance that terminal integration or release children do not substitute for unit review, passing the regression tests in test_kanban_review_surfaces.py."
+  },
+  "retirement_recommendation": "retain",
+  "summary": "Retain HLP-385. Guidance in KANBAN_GUIDANCE explicitly states that terminal integration or release children alone do not replace unit review, requiring an explicit review/QA phase child before kanban_complete is called as an implementation handoff.",
+  "upstream": {
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/agent/prompt_builder.py",
+        "result": "The inspected revision instructs workers that any pre-created review, QA, or release child releases on kanban_complete, allowing terminal integration children to be mistaken for unit review (verified also at 31d0a2428e9db346d6781da66f5b37ff3e12def2)."
+      }
+    ],
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/385"
+      },
+      {
+        "kind": "pull_request",
+        "url": "https://github.com/DarkArty07/aether-hermes/pull/9"
+      }
+    ],
+    "repository": "https://github.com/NousResearch/hermes-agent"
+  }
+}

@@ -1,0 +1,556 @@
+diff --git a/hermes_cli/kanban_db.py b/hermes_cli/kanban_db.py
+index 4d95884336..a5e90579b1 100644
+--- a/hermes_cli/kanban_db.py
++++ b/hermes_cli/kanban_db.py
+@@ -5836,6 +5836,39 @@ def claim_review_task(
+     lock = claimer or _claimer_id()
+     expires = now + _resolve_claim_ttl_seconds(ttl_seconds)
+     with write_txn(conn):
++        # A legacy or externally-created review row may still carry a
++        # ``review_requested`` event with no independent reviewer.  Do not
++        # let the implementing profile reclaim that run; leave it parked for
++        # an explicit reassignment instead.  Rows without review provenance
++        # retain the existing manual/dashboard behavior.
++        review_event = conn.execute(
++            "SELECT payload FROM task_events "
++            "WHERE task_id = ? AND kind = 'review_requested' "
++            "ORDER BY id DESC LIMIT 1",
++            (task_id,),
++        ).fetchone()
++        if review_event is not None:
++            try:
++                review_payload = (
++                    json.loads(review_event["payload"])
++                    if review_event["payload"]
++                    else {}
++                )
++            except (json.JSONDecodeError, TypeError):
++                review_payload = None
++            if isinstance(review_payload, dict):
++                reviewer = review_payload.get("reviewer")
++                implementer = review_payload.get("implementer")
++                if (
++                    not isinstance(reviewer, str)
++                    or not reviewer.strip()
++                    or (
++                        isinstance(implementer, str)
++                        and _canonical_assignee(reviewer)
++                        == _canonical_assignee(implementer)
++                    )
++                ):
++                    return None
+         if not _parents_satisfied(conn, task_id):
+             demoted = conn.execute(
+                 "UPDATE tasks SET status = 'todo' "
+@@ -7571,7 +7604,9 @@ def request_review(
+     the event so an autonomous reviewer can route requested changes back to the
+     right profile.  Supplying ``reviewer`` reassigns the task before it is
+     exposed to the review dispatcher.  On re-review, omitting it reuses the
+-    reviewer provenance persisted by the latest ``changes_requested`` event.
++    reviewer provenance persisted by the latest ``changes_requested`` event;
++    an initial request without an independent reviewer fails closed.  A
++    reviewer that is the implementing profile is rejected as self-review.
+ 
+     When the task is ``running`` under a live claim, a caller that supplies no
+     ``expected_run_id`` must pass ``force=True`` (explicit human/CLI override)
+@@ -7613,6 +7648,7 @@ def request_review(
+                 "override) instead of clearing the live run's claim",
+             )
+         implementer = trow["assignee"]
++        implementer_identity = _canonical_assignee(implementer)
+         if reviewer is None:
+             changes_run = conn.execute(
+                 "SELECT id FROM task_runs "
+@@ -7651,8 +7687,22 @@ def request_review(
+                         "malformed); pass reviewer= explicitly",
+                     )
+                 reviewer = prior_reviewer
++        if reviewer is not None and not str(reviewer).strip():
++            reviewer = None
+         reviewer = _canonical_assignee(reviewer) if reviewer is not None else None
+-        assignee_sql = ", assignee = ?" if reviewer is not None else ""
++        if reviewer is None:
++            return _ret(
++                False,
++                "an initial review requires an explicit independent reviewer; "
++                "pass reviewer= (re-review may reuse durable reviewer provenance)",
++            )
++        if implementer_identity is not None and reviewer == implementer_identity:
++            return _ret(
++                False,
++                "reviewer must be independent from the implementing profile; "
++                "pass a different reviewer=",
++            )
++        assignee_sql = ", assignee = ?"
+         params: tuple[Any, ...]
+         if expected_run_id is None:
+             params = (reviewer, task_id) if reviewer is not None else (task_id,)
+diff --git a/tests/hermes_cli/test_kanban_review_independence.py b/tests/hermes_cli/test_kanban_review_independence.py
+new file mode 100644
+index 0000000000..f2959b0bf9
+--- /dev/null
++++ b/tests/hermes_cli/test_kanban_review_independence.py
+@@ -0,0 +1,197 @@
++"""Regression tests for independent same-card review ownership (#362)."""
++
++from __future__ import annotations
++
++import json
++from pathlib import Path
++
++import pytest
++
++from hermes_cli import kanban_db as kb
++
++
++@pytest.fixture
++def kanban_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
++    """Create a sterile board for review ownership transitions."""
++    home = tmp_path / ".hermes"
++    home.mkdir()
++    monkeypatch.setenv("HERMES_HOME", str(home))
++    monkeypatch.setattr(Path, "home", lambda: tmp_path)
++    kb.init_db()
++    return home
++
++
++def test_initial_review_without_independent_reviewer_fails_closed(
++    kanban_home: Path,
++) -> None:
++    """An implementer cannot leave its own review run claimable."""
++    with kb.connect() as conn:
++        task_id = kb.create_task(
++            conn,
++            title="requires an independent review",
++            assignee="implementer",
++        )
++        claimed = kb.claim_task(conn, task_id, claimer="implementer:1")
++        assert claimed is not None
++
++        ok, reason = kb.request_review(
++            conn,
++            task_id,
++            summary="Implementation is ready.",
++            expected_run_id=claimed.current_run_id,
++            with_reason=True,
++        )
++
++        assert ok is False
++        assert reason is not None
++        assert "reviewer" in reason
++        task = kb.get_task(conn, task_id)
++        assert task is not None
++        assert task.status == "running"
++        assert task.assignee == "implementer"
++        assert task.current_run_id == claimed.current_run_id
++        assert task.claim_lock is not None
++        assert [
++            event for event in kb.list_events(conn, task_id)
++            if event.kind == "review_requested"
++        ] == []
++
++
++
++def test_worker_review_tool_rejects_missing_reviewer(
++    kanban_home: Path,
++    monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    """The worker surface reports the fail-closed review decision."""
++    from tools import kanban_tools
++
++    with kb.connect() as conn:
++        task_id = kb.create_task(
++            conn,
++            title="tool requires independent review",
++            assignee="implementer",
++        )
++        implementation = kb.claim_task(conn, task_id, claimer="implementer:1")
++        assert implementation is not None
++
++    monkeypatch.setenv("HERMES_KANBAN_TASK", task_id)
++    monkeypatch.setenv("HERMES_KANBAN_RUN_ID", str(implementation.current_run_id))
++    result = json.loads(
++        kanban_tools._handle_request_review(
++            {"summary": "Implementation is ready."}
++        )
++    )
++    assert "error" in result
++    assert "reviewer" in result["error"]
++    with kb.connect() as conn:
++        task = kb.get_task(conn, task_id)
++        assert task is not None
++        assert task.status == "running"
++
++
++def test_implementer_cannot_select_itself_as_reviewer(kanban_home: Path) -> None:
++    """An explicit self-review is rejected rather than routed to the implementer."""
++    with kb.connect() as conn:
++        task_id = kb.create_task(
++            conn,
++            title="reject self review",
++            assignee="implementer",
++        )
++        claimed = kb.claim_task(conn, task_id, claimer="implementer:1")
++        assert claimed is not None
++
++        ok, reason = kb.request_review(
++            conn,
++            task_id,
++            summary="Implementation is ready.",
++            reviewer="implementer",
++            expected_run_id=claimed.current_run_id,
++            with_reason=True,
++        )
++
++        assert ok is False
++        assert reason is not None
++        assert "independent" in reason
++        task = kb.get_task(conn, task_id)
++        assert task is not None
++        assert task.status == "running"
++        assert task.assignee == "implementer"
++        assert [
++            event for event in kb.list_events(conn, task_id)
++            if event.kind == "review_requested"
++        ] == []
++
++
++
++def test_legacy_review_without_reviewer_cannot_be_claimed(kanban_home: Path) -> None:
++    """Already-parked unsafe reviews stay parked instead of self-approving."""
++    with kb.connect() as conn:
++        task_id = kb.create_task(
++            conn,
++            title="legacy unsafe review",
++            assignee="implementer",
++        )
++        with kb.write_txn(conn):
++            conn.execute(
++                "UPDATE tasks SET status = 'review' WHERE id = ?", (task_id,)
++            )
++            kb._append_event(
++                conn,
++                task_id,
++                "review_requested",
++                {"implementer": "implementer", "reviewer": None},
++            )
++
++        assert kb.claim_review_task(conn, task_id, claimer="implementer:1") is None
++        task = kb.get_task(conn, task_id)
++        assert task is not None
++        assert task.status == "review"
++        assert task.claim_lock is None
++
++
++def test_explicit_reviewer_can_claim_and_re_review_reuses_provenance(
++    kanban_home: Path,
++) -> None:
++    """Explicit review remains available and omitted re-review is safe."""
++    with kb.connect() as conn:
++        task_id = kb.create_task(
++            conn,
++            title="preserve explicit review cycle",
++            assignee="implementer",
++        )
++        implementation = kb.claim_task(conn, task_id, claimer="implementer:1")
++        assert implementation is not None
++        assert kb.request_review(
++            conn,
++            task_id,
++            summary="First candidate is ready.",
++            reviewer="supervisor",
++            expected_run_id=implementation.current_run_id,
++        )
++
++        awaiting_review = kb.get_task(conn, task_id)
++        assert awaiting_review is not None
++        assert awaiting_review.status == "review"
++        assert awaiting_review.assignee == "supervisor"
++        review = kb.claim_review_task(conn, task_id, claimer="supervisor:1")
++        assert review is not None
++        assert kb.request_changes(
++            conn,
++            task_id,
++            reason="Add the boundary regression.",
++            expected_run_id=review.current_run_id,
++        ) == (True, "implementer")
++
++        rework = kb.claim_task(conn, task_id, claimer="implementer:2")
++        assert rework is not None
++        assert kb.request_review(
++            conn,
++            task_id,
++            summary="Boundary regression is now covered.",
++            expected_run_id=rework.current_run_id,
++        )
++        rereview = kb.get_task(conn, task_id)
++        assert rereview is not None
++        assert rereview.status == "review"
++        assert rereview.assignee == "supervisor"
++        assert kb.claim_review_task(conn, task_id, claimer="supervisor:2") is not None
+diff --git a/tests/hermes_cli/test_kanban_review_lifecycle.py b/tests/hermes_cli/test_kanban_review_lifecycle.py
+index 9e11560323..f249dae468 100644
+--- a/tests/hermes_cli/test_kanban_review_lifecycle.py
++++ b/tests/hermes_cli/test_kanban_review_lifecycle.py
+@@ -128,21 +128,31 @@ def test_repeated_review_requests_never_triage(kanban_home: Path) -> None:
+     with kb.connect() as conn:
+         tid = kb.create_task(conn, title="cycle me", assignee="worker")
+ 
+-        for _ in range(4):
+-            # Executor claims (ready->running or review->running) and finishes
+-            # with a review request. claim_review_task handles review->running.
++        for cycle in range(4):
++            # Each independent review returns to the original implementer
++            # before the next implementation run. This keeps the test's
++            # repeated-cycle invariant while preventing reviewer self-review.
+             task = kb.get_task(conn, tid)
+             if task.status == "ready":
+-                kb.claim_task(conn, tid)
++                claimed = kb.claim_task(conn, tid)
+             else:
+                 assert task.status == "review"
+-                claimed = kb.claim_review_task(conn, tid)
+-                assert claimed is not None
+-
+-            run_id = kb.get_task(conn, tid).current_run_id
++                review = kb.claim_review_task(conn, tid)
++                assert review is not None
++                assert kb.request_changes(
++                    conn,
++                    tid,
++                    reason=f"continue cycle {cycle}",
++                    expected_run_id=review.current_run_id,
++                ) == (True, "worker")
++                claimed = kb.claim_task(conn, tid)
++            assert claimed is not None
++
++            run_id = claimed.current_run_id
+             ok = kb.request_review(
+                 conn, tid,
+                 summary="pass complete",
++                reviewer="reviewer",
+                 expected_run_id=run_id,
+             )
+             assert ok is True
+@@ -212,7 +222,8 @@ def test_request_review_refuses_to_clear_live_claim_without_ownership(
+ 
+         # 2) Worker path: proving ownership via expected_run_id works.
+         assert kb.request_review(
+-            conn, tid, summary="done", expected_run_id=claimed.current_run_id,
++            conn, tid, summary="done", reviewer="reviewer",
++            expected_run_id=claimed.current_run_id,
+         ) is True
+         assert kb.get_task(conn, tid).status == "review"
+ 
+@@ -220,7 +231,9 @@ def test_request_review_refuses_to_clear_live_claim_without_ownership(
+     with kb.connect() as conn:
+         tid2 = kb.create_task(conn, title="forced", assignee="worker")
+         assert kb.claim_task(conn, tid2) is not None
+-        assert kb.request_review(conn, tid2, summary="override", force=True) is True
++        assert kb.request_review(
++            conn, tid2, summary="override", reviewer="reviewer", force=True
++        ) is True
+         assert kb.get_task(conn, tid2).status == "review"
+ 
+ 
+@@ -284,7 +297,9 @@ def test_request_review_whitespace_only_summary_does_not_crash(
+         kb.claim_task(conn, tid)
+         run_id = kb.get_task(conn, tid).current_run_id
+ 
+-        ok = kb.request_review(conn, tid, summary=blank, expected_run_id=run_id)
++        ok = kb.request_review(
++            conn, tid, summary=blank, reviewer="reviewer", expected_run_id=run_id
++        )
+         assert ok is True
+         assert kb.get_task(conn, tid).status == "review"
+ 
+@@ -308,6 +323,7 @@ def test_complete_task_closes_review_to_done(kanban_home: Path) -> None:
+         kb.claim_task(conn, tid)
+         kb.request_review(
+             conn, tid, summary="ready",
++            reviewer="reviewer",
+             expected_run_id=kb.get_task(conn, tid).current_run_id,
+         )
+         assert kb.get_task(conn, tid).status == "review"
+@@ -344,6 +360,7 @@ def test_review_requested_event_is_claimable_for_wake(kanban_home: Path) -> None
+         kb.claim_task(conn, tid)
+         kb.request_review(
+             conn, tid, summary="please review",
++            reviewer="reviewer",
+             expected_run_id=kb.get_task(conn, tid).current_run_id,
+         )
+ 
+@@ -387,6 +404,7 @@ def test_review_dispatch_gate_prevents_phantom_reviewer(
+         kb.claim_task(conn, tid)
+         kb.request_review(
+             conn, tid, summary="done",
++            reviewer="reviewer",
+             expected_run_id=kb.get_task(conn, tid).current_run_id,
+         )
+         assert kb.get_task(conn, tid).status == "review"
+@@ -437,12 +455,13 @@ def test_active_pr_guard_skipped_for_review_lane_but_defers_ready_lane(
+ 
+     with kb.connect() as conn:
+         # Review-lane task with a fresh PR comment.
+-        review_id = kb.create_task(conn, title="review me", assignee="reviewer")
++        review_id = kb.create_task(conn, title="review me", assignee="worker")
+         claimed = kb.claim_task(conn, review_id)
+         assert claimed is not None
+         kb.add_comment(conn, review_id, author="worker", body=pr_comment)
+         assert kb.request_review(
+             conn, review_id, summary="PR ready",
++            reviewer="reviewer",
+             expected_run_id=claimed.current_run_id,
+         )
+         # Ready-lane task with the same fresh PR comment.
+@@ -497,7 +516,7 @@ def test_review_dispatch_preserves_task_skills_and_adds_reviewer_skill(
+         task_id = kb.create_task(
+             conn,
+             title="domain review",
+-            assignee="reviewer",
++            assignee="builder",
+             skills=["domain-specific-review"],
+         )
+         implementation = kb.claim_task(conn, task_id)
+@@ -506,6 +525,7 @@ def test_review_dispatch_preserves_task_skills_and_adds_reviewer_skill(
+             conn,
+             task_id,
+             summary="ready",
++            reviewer="reviewer",
+             expected_run_id=implementation.current_run_id,
+         )
+         monkeypatch.setattr(
+@@ -548,13 +568,14 @@ def test_review_dispatch_honors_global_and_per_profile_caps(
+ 
+         review_ids: list[str] = []
+         for title in ("review one", "review two"):
+-            task_id = kb.create_task(conn, title=title, assignee="reviewer")
++            task_id = kb.create_task(conn, title=title, assignee="builder")
+             implementation = kb.claim_task(conn, task_id)
+             assert implementation is not None
+             assert kb.request_review(
+                 conn,
+                 task_id,
+                 summary="ready",
++                reviewer="reviewer",
+                 expected_run_id=implementation.current_run_id,
+             )
+             review_ids.append(task_id)
+@@ -642,7 +663,7 @@ def test_review_cycle_end_to_end(kanban_home: Path) -> None:
+         # Pass 1: implement -> review.
+         kb.claim_task(conn, tid)
+         kb.request_review(
+-            conn, tid, summary="v1",
++            conn, tid, summary="v1", reviewer="reviewer",
+             expected_run_id=kb.get_task(conn, tid).current_run_id,
+         )
+         assert kb.get_task(conn, tid).status == "review"
+@@ -652,7 +673,7 @@ def test_review_cycle_end_to_end(kanban_home: Path) -> None:
+         assert kb.get_task(conn, tid).status == "ready"
+         kb.claim_task(conn, tid)
+         kb.request_review(
+-            conn, tid, summary="v2",
++            conn, tid, summary="v2", reviewer="reviewer",
+             expected_run_id=kb.get_task(conn, tid).current_run_id,
+         )
+         assert kb.get_task(conn, tid).status == "review"
+@@ -679,7 +700,9 @@ def test_request_review_on_unclaimed_ready_synthesizes_run(kanban_home: Path) ->
+         assert kb.get_task(conn, tid).status == "ready"
+         assert kb.get_task(conn, tid).current_run_id is None
+ 
+-        ok = kb.request_review(conn, tid, summary="done without a claim")
++        ok = kb.request_review(
++            conn, tid, summary="done without a claim", reviewer="reviewer"
++        )
+         assert ok is True
+         assert kb.get_task(conn, tid).status == "review"
+ 
+diff --git a/tests/hermes_cli/test_kanban_review_lifecycle_complete.py b/tests/hermes_cli/test_kanban_review_lifecycle_complete.py
+index 4dc65d0f9c..ed598c8223 100644
+--- a/tests/hermes_cli/test_kanban_review_lifecycle_complete.py
++++ b/tests/hermes_cli/test_kanban_review_lifecycle_complete.py
+@@ -124,6 +124,7 @@ def test_same_card_review_supports_changes_and_approval_without_block_loop(conn)
+         conn,
+         task_id,
+         summary="Fallback regression added.",
++        reviewer="reviewer",
+         expected_run_id=implementation_2.current_run_id,
+     )
+     awaiting_rereview = kb.get_task(conn, task_id)
+@@ -267,6 +268,7 @@ def test_parent_reopen_blocks_request_review_until_parent_is_done(conn) -> None:
+         conn,
+         task_id,
+         summary="parent stable",
++        reviewer="reviewer",
+         expected_run_id=implementation.current_run_id,
+     )
+ 
+@@ -541,8 +543,10 @@ def test_goal_run_status_is_bound_to_original_run(conn) -> None:
+ 
+ 
+ def test_parked_review_approval_without_evidence_still_creates_audit_run(conn) -> None:
+-    task_id = kb.create_task(conn, title="Manual approval", assignee="reviewer")
+-    assert kb.request_review(conn, task_id, summary="implementation handoff")
++    task_id = kb.create_task(conn, title="Manual approval", assignee="builder")
++    assert kb.request_review(
++        conn, task_id, summary="implementation handoff", reviewer="reviewer"
++    )
+     assert kb.complete_task(conn, task_id)
+     completed_event = _event(kb.list_events(conn, task_id), "completed")
+     assert completed_event.run_id is not None
+@@ -679,7 +683,7 @@ def test_review_transitions_preserve_consecutive_failures(conn) -> None:
+     retry = kb.claim_task(conn, task_id, claimer="builder:2")
+     assert retry is not None
+     assert kb.request_review(
+-        conn, task_id, summary="v2",
++        conn, task_id, summary="v2", reviewer="supervisor",
+         expected_run_id=retry.current_run_id,
+     )
+     assert _failures(conn, task_id) == 1  # full re-review cycle: still 1
+diff --git a/tests/hermes_cli/test_kanban_review_surfaces.py b/tests/hermes_cli/test_kanban_review_surfaces.py
+index 908b6dcd49..fb7f76a1a5 100644
+--- a/tests/hermes_cli/test_kanban_review_surfaces.py
++++ b/tests/hermes_cli/test_kanban_review_surfaces.py
+@@ -176,6 +176,7 @@ def test_domain_and_cli_review_handoffs_redact_before_persistence(
+             conn,
+             direct_id,
+             summary=f"direct {secret}",
++            reviewer="reviewer",
+             metadata={"nested": [secret]},
+             expected_run_id=direct_run.current_run_id,
+         )
+@@ -209,6 +210,7 @@ def test_domain_and_cli_review_handoffs_redact_before_persistence(
+         cli_id = kb.create_task(conn, title="CLI redaction", assignee="builder")
+     cli_output = kc.run_slash(
+         f'request-review {cli_id} --summary "cli {secret}" '
++        f"--reviewer reviewer "
+         f"--metadata '{{\"token\":\"{secret}\"}}'"
+     )
+     assert "Requested review" in cli_output
+@@ -259,7 +261,9 @@ def test_cli_reopen_review_is_transition_first_and_redacts_reason(
+     with kb.connect() as conn:
+         invalid_id = kb.create_task(conn, title="not review", assignee="builder")
+         review_id = kb.create_task(conn, title="review", assignee="builder")
+-        assert kb.request_review(conn, review_id, summary="ready")
++        assert kb.request_review(
++            conn, review_id, summary="ready", reviewer="reviewer"
++        )
+ 
+     invalid_output = kc.run_slash(
+         f'reopen-review {invalid_id} --reason "invalid {secret}"'
+diff --git a/tools/kanban_tools.py b/tools/kanban_tools.py
+index 6c5ce1762e..9a6f4f5094 100644
+--- a/tools/kanban_tools.py
++++ b/tools/kanban_tools.py
+@@ -2094,8 +2094,9 @@ KANBAN_REQUEST_REVIEW_SCHEMA = {
+             "reviewer": {
+                 "type": "string",
+                 "description": (
+-                    "Optional reviewer profile. When provided, the task is "
+-                    "reassigned to that profile before review dispatch."
++                    "Reviewer profile. Required for an initial review and "
++                    "must differ from the implementing profile. On a re-review, "
++                    "omitting it reuses durable reviewer provenance."
+                 ),
+             },
+             "metadata": {

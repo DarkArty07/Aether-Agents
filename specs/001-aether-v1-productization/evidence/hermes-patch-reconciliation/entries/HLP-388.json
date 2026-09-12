@@ -1,0 +1,79 @@
+{
+  "artifact_verification": {
+    "artifacts": [
+      {
+        "checksum_status": "passed",
+        "computed_sha256": "1d3bdad267ae3e95a6db379f7f4fe24ff3e895f3b0941d41f42ef3d06d0a5210",
+        "kind": "patch",
+        "ledger_sha256": "1d3bdad267ae3e95a6db379f7f4fe24ff3e895f3b0941d41f42ef3d06d0a5210",
+        "parse_status": "passed",
+        "reference": "patches/hermes/HLP-388-cron-session-launch-workdir.patch",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "maintained fork base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "git apply --check against maintained fork base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+        "result": "passed"
+      }
+    ],
+    "blocker": "The exact maintained-fork reconstruction, focused candidate checks, and PR #10 candidate passed, but public upstream equivalence remains unavailable because upstream omits launch cwd persistence for cron sessions.",
+    "status": "unavailable"
+  },
+  "blocking_uncertainty": [
+    "Upstream does not persist cron launch workdir in the session row at the inspected revision."
+  ],
+  "components": [
+    "HLP-388",
+    "run_agent.py",
+    "tests/cron/test_cron_workdir_session_388.py"
+  ],
+  "id": "HLP-388",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-388--persisted-launch-workdir-in-cron-session-row",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+  "required_behavior": "The cron scheduler's context-local effective workdir is preserved and run_agent._launch_cwd_for_session('cron') persists that trusted directory in the session row before agent tools execute; jobs without a workdir keep a null cwd.",
+  "retirement_gate": {
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "tests/cron/test_cron_workdir_session_388.py on pristine base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+        "result": "2 of 3 tests fail (launch_cwd returns None, session row cwd is None)."
+      },
+      {
+        "kind": "test",
+        "reference": "tests/cron/test_cron_workdir_session_388.py on candidate 62eee7baab1337a9e40a8312052cecd096caaed7",
+        "result": "3 passed in 1.37s."
+      }
+    ],
+    "status": "not_executed",
+    "summary": "Retire only when an adopted exact Hermes release persists the verified launch workdir in the cron session row and keeps null when workdir is unset, passing the #388 framework tests."
+  },
+  "retirement_recommendation": "retain",
+  "summary": "Retain HLP-388. The framework persists the verified cron launch workdir in the session row before tools run, preventing ungrounded contract authoring while keeping null cwd when unset.",
+  "upstream": {
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/run_agent.py",
+        "result": "The inspected revision leaves _launch_cwd_for_session(\"cron\") returning None, omitting workdir persistence in the session row (verified also at 31d0a2428e9db346d6781da66f5b37ff3e12def2)."
+      }
+    ],
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/388"
+      },
+      {
+        "kind": "pull_request",
+        "url": "https://github.com/DarkArty07/aether-hermes/pull/10"
+      }
+    ],
+    "repository": "https://github.com/NousResearch/hermes-agent"
+  }
+}

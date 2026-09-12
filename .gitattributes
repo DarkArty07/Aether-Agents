@@ -1,3 +1,8 @@
 # Unified patches encode blank context lines with a required prefix space.
 patches/hermes/HLP-263-gateway-process-ownership.patch whitespace=-trailing-space
 patches/hermes/HLP-280-bounded-flow-recovery.patch whitespace=-trailing-space
+patches/hermes/HLP-362-independent-review-ownership.patch whitespace=-trailing-space
+patches/hermes/HLP-372-profile-cron-script-root.patch whitespace=-trailing-space
+patches/hermes/HLP-385-review-topology-guidance.patch whitespace=-trailing-space
+patches/hermes/HLP-388-cron-session-launch-workdir.patch whitespace=-trailing-space
+patches/hermes/HLP-393-cron-commissioning-origin-subscription.patch whitespace=-trailing-space

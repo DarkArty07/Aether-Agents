@@ -1,10 +1,10 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-09-11T03:34:52Z`
+Observation timestamp: `2026-09-11T22:55:11Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `1aabc18438fc88e6cf303fcda7ae93b038141f519f821a49ce40bd1bad0a758b`
+Source ledger SHA-256: `43b25f9497e9b84b7108d40878b1e2f09694c7a70edab7bd75759000d66b0890`
 
 ## Remaining local guarantees
 
@@ -26,9 +26,14 @@ Source ledger SHA-256: `1aabc18438fc88e6cf303fcda7ae93b038141f519f821a49ce40bd1b
 - `HLP-310`: Retain HLP-310. Inspected upstream does not exclude delegated child identity or Kanban environment variables from terminal snapshots. Maintained fork commit 25cabeb25327199a03aa3cf1613ed2f815f646cb provides the causal repair in PR #4.
 - `HLP-335`: Retain HLP-335. The local respawn-guard recovery releases only independently verifiable CLOSED/MERGED PR references so Graphify closeout can resume; OPEN/unknown/auth failures stay guarded. This records a downstream repair, not a Hermes upgrade or a Graphify product delivery.
 - `HLP-354`: Retain HLP-354. Inspected upstream lacks worktree_base_ref materialization and fail-closed validation. Maintained fork commit 7d3173e1f3dba107f9a389d4e35c95f215775ee1 provides the causal repair in PR #4.
+- `HLP-362`: Retain HLP-362. Initial same-card review requires an explicit independent reviewer; self-review is rejected and legacy unassigned review claims remain parked. Verified by regression tests on the maintained fork and candidate testing in Aether.
 - `HLP-369`: Retain HLP-369. Exact upstream retains the circular goal-mode review gate and recovery-kind mismatch; maintained-fork PR #6 merge 415056fee527c5a2302370bd6dba56f84b9a4202 separates review readiness from completion, preserves independent review and completion gates, and accepts only the exact pending controller recovery signal while retaining origin attention.
+- `HLP-372`: Retain HLP-372. Cron scripts and monitor scripts resolve dynamically through one effective profile-scoped root at call time with fail-closed confinement on traversal, symlink escapes, and non-regular files.
 - `HLP-382`: Retain HLP-382. Transcript publication is now bounded and atomic: staged batches in the existing store, exact-once preservation of interleaved concurrent appends, one metadata-only cutover, and bounded target-local cleanup. The unchanged oracle is deterministically RED at the fork base and green on the candidate and integrated tree.
+- `HLP-385`: Retain HLP-385. Guidance in KANBAN_GUIDANCE explicitly states that terminal integration or release children alone do not replace unit review, requiring an explicit review/QA phase child before kanban_complete is called as an implementation handoff.
+- `HLP-388`: Retain HLP-388. The framework persists the verified cron launch workdir in the session row before tools run, preventing ungrounded contract authoring while keeping null cwd when unset.
 - `HLP-389`: Retain HLP-389. Referenced-script discovery now uses a syntax-aware view for inert interpreter heredoc bodies while direct detection keeps the original text, so the harmless log-read path is accepted and every recorded executable control remains blocked.
+- `HLP-393`: Retain HLP-393. Cron jobs commissioned from TUI or gateway capture durable origin, restored at fire time as request-local context so spawned Kanban root tasks auto-subscribe and wake the exact origin upon completion.
 
 ## Qualified upstream equivalents
 
@@ -98,13 +103,28 @@ Source ledger SHA-256: `1aabc18438fc88e6cf303fcda7ae93b038141f519f821a49ce40bd1b
 - `HLP-354` (retirement_gate): Retirement gate status is failed.
 - `HLP-354` (uncertainty): The inspected upstream roots new worktrees at incidental HEAD and lacks worktree_base_ref.
 - `HLP-354` (uncertainty): Maintained fork commit 7d3173e1f3dba107f9a389d4e35c95f215775ee1 is downstream-only; no equivalent upstream change exists.
+- `HLP-362` (artifact): The exact maintained-fork reconstruction, focused candidate checks, and fork PR #5 merged source passed, but public upstream equivalence remains unavailable because upstream has no equivalent independent-review requirement.
+- `HLP-362` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-362` (uncertainty): The upstream Hermes Kanban protocol does not distinguish self-review from independent review at the inspected revision.
 - `HLP-369` (artifact): The exact maintained-fork reconstruction, focused candidate checks, and fork PR #6 merged source passed, but the public upstream revision is not an equivalent reconstruction input; upstream artifact equivalence therefore remains unavailable.
 - `HLP-369` (retirement_gate): Retirement gate status is failed.
 - `HLP-369` (uncertainty): The inspected upstream revision retains the circular request-review judge gate and has no equivalent exact recovery-controller route.
+- `HLP-372` (artifact): The exact maintained-fork reconstruction, focused candidate checks, and PR #10 candidate passed, but public upstream equivalence remains unavailable because upstream lacks profile-scoped script root resolution.
+- `HLP-372` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-372` (uncertainty): Upstream hardcodes default ~/.hermes/scripts in validation and diagnostic error strings at the inspected revision.
 - `HLP-382` (retirement_gate): Retirement gate status is not_executed.
 - `HLP-382` (uncertainty): The historical holder that first exhausted the append budget was never identified; the causal class (unbounded publication transaction) is proven and the repair is verified against that class, not against the unavailable historical identity.
+- `HLP-385` (artifact): The exact maintained-fork reconstruction, prompt size checks, and PR #9 candidate passed, but public upstream equivalence remains unavailable because upstream prompt guidance remains ambiguous.
+- `HLP-385` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-385` (uncertainty): Upstream KANBAN_GUIDANCE conflates pre-created review/QA and release children at the inspected revision.
+- `HLP-388` (artifact): The exact maintained-fork reconstruction, focused candidate checks, and PR #10 candidate passed, but public upstream equivalence remains unavailable because upstream omits launch cwd persistence for cron sessions.
+- `HLP-388` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-388` (uncertainty): Upstream does not persist cron launch workdir in the session row at the inspected revision.
 - `HLP-389` (retirement_gate): Retirement gate status is not_executed.
 - `HLP-389` (uncertainty): The syntax-aware view intentionally matches the already-permitted `python3 -c` form: a path that appears only inside a quoted non-shell interpreter heredoc body is no longer scanned as a shell script. Direct lifecycle text in that body is still blocked.
+- `HLP-393` (artifact): The exact maintained-fork reconstruction, focused candidate checks, and PR #10 candidate passed, but public upstream equivalence remains unavailable because upstream lacks cron commissioning origin and kanban auto-subscription.
+- `HLP-393` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-393` (uncertainty): Upstream does not capture or restore durable commissioning origin for cron-spawned tasks at the inspected revision.
 
 ## Artifact integrity
 
@@ -126,9 +146,14 @@ Source ledger SHA-256: `1aabc18438fc88e6cf303fcda7ae93b038141f519f821a49ce40bd1b
 - `HLP-310`: unavailable
 - `HLP-335`: unavailable
 - `HLP-354`: unavailable
+- `HLP-362`: unavailable
 - `HLP-369`: unavailable
+- `HLP-372`: unavailable
 - `HLP-382`: passed
+- `HLP-385`: unavailable
+- `HLP-388`: unavailable
 - `HLP-389`: passed
+- `HLP-393`: unavailable
 
 ## Safe next decisions
 
