@@ -133,6 +133,11 @@ jobs:
           patches/hermes/HLP-305-tui-lease-refresh-contention.patch
           patches/hermes/HLP-310-delegated-child-snapshot-exclusion.patch
           patches/hermes/HLP-354-kanban-worktree-base-ref.patch
+          patches/hermes/HLP-362-independent-review-ownership.patch
+          patches/hermes/HLP-372-profile-cron-script-root.patch
+          patches/hermes/HLP-385-review-topology-guidance.patch
+          patches/hermes/HLP-388-cron-session-launch-workdir.patch
+          patches/hermes/HLP-393-cron-commissioning-origin-subscription.patch
           patches/hermes/HLP-369-goal-mode-review-recovery.patch
           patches/hermes/HLP-275-aux-image-prep-cap.patch
           patches/hermes/HLP-382-bounded-transcript-publication.patch
