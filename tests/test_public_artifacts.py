@@ -153,7 +153,7 @@ def test_canonical_base_manifest_matches_tracked_non_specs_files() -> None:
     in_heredoc = False
     expected: list[str] = []
     for line in lines:
-        if 'cat >"$expected" <<\'EOF\'' in line:
+        if "cat >\"$expected\" <<'EOF'" in line:
             in_heredoc = True
             continue
         if in_heredoc and line.strip() == "EOF":
@@ -173,7 +173,5 @@ def test_canonical_base_manifest_matches_tracked_non_specs_files() -> None:
         capture_output=True,
         text=True,
     )
-    actual = sorted(
-        path for path in git_ls.stdout.splitlines() if not path.startswith("specs/")
-    )
+    actual = sorted(path for path in git_ls.stdout.splitlines() if not path.startswith("specs/"))
     assert expected == actual
