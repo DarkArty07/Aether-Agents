@@ -1042,6 +1042,21 @@ def test_plugin_prepare_handoff_provisions_one_project_scoped_board_idempotently
 
     subprocess.run(("git", "config", "user.email", "test@example.invalid"), cwd=project, check=True)
     subprocess.run(("git", "config", "user.name", "Test"), cwd=project, check=True)
+
+    import sqlite3
+
+    session_db = hermes_home / "state.db"
+    with sqlite3.connect(session_db) as connection:
+        connection.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT)")
+        connection.executemany(
+            "INSERT INTO sessions (id, cwd) VALUES (?, ?)",
+            [
+                ("session-zero", str(project)),
+                ("session-one", str(project)),
+                ("session-two", str(project)),
+            ],
+        )
+
     store = ObjectiveContractStore(registry=registry, clock=lambda: FIXED)
     started = store.begin(project_id=PROJECT_A, title="Alpha", session_id="s1")
     revision = _complete(store, PROJECT_A, started["contract_id"], 1)
@@ -1096,9 +1111,21 @@ def test_plugin_prepare_handoff_provisions_one_project_scoped_board_idempotently
 def test_plugin_registers_one_morfeo_only_transactional_tool(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    import sqlite3
+
+    hermes_home = tmp_path / "hermes-home"
+    hermes_home.mkdir()
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     registry = ProjectRegistry()
-    _project(tmp_path, registry, PROJECT_A, "alpha")
+    project = _project(tmp_path, registry, PROJECT_A, "alpha")
+    session_db = hermes_home / "state.db"
+    with sqlite3.connect(session_db) as connection:
+        connection.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT)")
+        connection.execute(
+            "INSERT INTO sessions (id, cwd) VALUES (?, ?)",
+            ("session-from-hermes", str(project)),
+        )
     registered: dict[str, object] = {}
 
     class Context:
@@ -1815,6 +1842,12 @@ def test_session_worktree_authoring_rejects_unrelated_workspace(
     assert res["success"] is False
     assert res["error"]["code"] == "AETHER-OBJECTIVE-CONTRACT-PROJECT-MARKER-INVALID"
 
+    # Direct store use still surfaces the specific marker validation error
+    store_direct = ObjectiveContractStore(registry=registry, authoring_root=unrelated_repo)
+    with pytest.raises(ContractError) as exc_direct:
+        store_direct.begin(project_id=PROJECT_A, title="Test", session_id="s1")
+    assert exc_direct.value.code == "AETHER-OBJECTIVE-CONTRACT-PROJECT-MARKER-INVALID"
+
     # 2. Unrelated git repo with mismatched project marker
     marker = unrelated_repo / ".aether" / "project.toml"
     marker.parent.mkdir(parents=True, exist_ok=True)
@@ -1842,6 +1875,11 @@ def test_session_worktree_authoring_rejects_unrelated_workspace(
     assert res_mismatch["success"] is False
     assert res_mismatch["error"]["code"] == "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT"
 
+    store_direct2 = ObjectiveContractStore(registry=registry, authoring_root=unrelated_repo)
+    with pytest.raises(ContractError) as exc_direct2:
+        store_direct2.begin(project_id=PROJECT_A, title="Test", session_id="s1")
+    assert exc_direct2.value.code == "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT"
+
     # 3. Unrelated git repo with same project UUID but different git common-dir
     marker.write_text(
         "\n".join(
@@ -1866,6 +1904,11 @@ def test_session_worktree_authoring_rejects_unrelated_workspace(
     )
     assert res_diff_git["success"] is False
     assert res_diff_git["error"]["code"] == "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT"
+
+    store_direct3 = ObjectiveContractStore(registry=registry, authoring_root=unrelated_repo)
+    with pytest.raises(ContractError) as exc_direct3:
+        store_direct3.begin(project_id=PROJECT_A, title="Test", session_id="s1")
+    assert exc_direct3.value.code == "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT"
 
 
 def test_execution_board_validates_worktree_base_ref_format_and_equality(
@@ -2425,3 +2468,260 @@ def test_concurrent_flow_handoff_preserves_lineage_through_reconstructed_maintai
     assert git_text(primary, "rev-parse", "HEAD") == primary_head
     assert git_text(primary, "status", "--porcelain=v1") == primary_status_before
     assert tracked_bytes(primary) == primary_tracked_before
+
+
+def test_objective_contract_fails_closed_without_resolved_git_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A non-empty native session with no valid registered Git workspace fails closed before mutation."""
+    import sqlite3
+
+    hermes_home = tmp_path / "hermes-home"
+    hermes_home.mkdir()
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state-home"))
+    for name in ("HERMES_KANBAN_DB", "HERMES_KANBAN_BOARD", "HERMES_KANBAN_HOME"):
+        monkeypatch.delenv(name, raising=False)
+
+    from aether_agents.objective_contracts import hermes_plugin
+
+    registry = ProjectRegistry()
+    primary = _project(tmp_path, registry, PROJECT_A, "alpha")
+    subprocess.run(("git", "config", "user.email", "test@example.invalid"), cwd=primary, check=True)
+    subprocess.run(("git", "config", "user.name", "Test"), cwd=primary, check=True)
+    subprocess.run(("git", "add", "."), cwd=primary, check=True)
+    subprocess.run(("git", "commit", "-qm", "chore: initial commit"), cwd=primary, check=True)
+    subprocess.run(("git", "branch", "-M", "primary-branch"), cwd=primary, check=True)
+
+    # 1. Non-git directory fixture
+    non_git_dir = tmp_path / "non-git-dir"
+    non_git_dir.mkdir()
+
+    # 2. Unrelated git repo fixture (no marker, separate repo)
+    unrelated_repo = tmp_path / "unrelated-repo"
+    unrelated_repo.mkdir()
+    subprocess.run(("git", "init", "-q"), cwd=unrelated_repo, check=True)
+    subprocess.run(
+        ("git", "config", "user.email", "test@example.invalid"), cwd=unrelated_repo, check=True
+    )
+    subprocess.run(("git", "config", "user.name", "Test"), cwd=unrelated_repo, check=True)
+    (unrelated_repo / "README.md").write_text("unrelated", encoding="utf-8")
+    subprocess.run(("git", "add", "."), cwd=unrelated_repo, check=True)
+    subprocess.run(
+        ("git", "commit", "-qm", "chore: unrelated init"), cwd=unrelated_repo, check=True
+    )
+
+    # 3. Valid linked worktree fixture
+    worktree = tmp_path / "worktree-alpha"
+    subprocess.run(
+        ("git", "worktree", "add", "-b", "feature-contract", str(worktree)),
+        cwd=primary,
+        check=True,
+    )
+    subprocess.run(
+        ("git", "config", "user.email", "test@example.invalid"), cwd=worktree, check=True
+    )
+    subprocess.run(("git", "config", "user.name", "Test"), cwd=worktree, check=True)
+
+    # Setup session database
+    session_db = hermes_home / "state.db"
+    with sqlite3.connect(session_db) as connection:
+        connection.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT)")
+        # Insert rows for test cases (missing session row is omitted from table)
+        connection.execute(
+            "INSERT INTO sessions (id, cwd) VALUES (?, ?)", ("session-null-cwd", None)
+        )
+        connection.execute(
+            "INSERT INTO sessions (id, cwd) VALUES (?, ?)", ("session-empty-cwd", "")
+        )
+        connection.execute(
+            "INSERT INTO sessions (id, cwd) VALUES (?, ?)",
+            ("session-nonexistent-cwd", str(tmp_path / "nonexistent-dir")),
+        )
+        connection.execute(
+            "INSERT INTO sessions (id, cwd) VALUES (?, ?)",
+            ("session-non-git-cwd", str(non_git_dir)),
+        )
+        connection.execute(
+            "INSERT INTO sessions (id, cwd) VALUES (?, ?)",
+            ("session-unrelated-repo", str(unrelated_repo)),
+        )
+        connection.execute(
+            "INSERT INTO sessions (id, cwd) VALUES (?, ?)",
+            ("session-valid-worktree", str(worktree)),
+        )
+
+    def snapshot_tree(root: Path) -> dict[str, tuple[str, int, int]]:
+        """Map relative path to (sha256, mtime_ns, inode)."""
+        snapshot: dict[str, tuple[str, int, int]] = {}
+        for path in root.rglob("*"):
+            if ".git" in path.parts:
+                continue
+            if path.is_file():
+                st = path.stat()
+                digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                snapshot[str(path.relative_to(root))] = (digest, st.st_mtime_ns, st.st_ino)
+        return snapshot
+
+    negatives = [
+        (
+            "missing session row",
+            "session-missing-row",
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+        ),
+        (
+            "NULL cwd",
+            "session-null-cwd",
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+        ),
+        (
+            "empty cwd",
+            "session-empty-cwd",
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+        ),
+        (
+            "nonexistent cwd",
+            "session-nonexistent-cwd",
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+        ),
+        (
+            "existing non-Git cwd",
+            "session-non-git-cwd",
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+        ),
+        (
+            "unrelated project/worktree",
+            "session-unrelated-repo",
+            "AETHER-OBJECTIVE-CONTRACT-PROJECT-MARKER-INVALID",
+        ),
+    ]
+
+    for label, session_id, expected_code in negatives:
+        primary_snap_before = snapshot_tree(primary)
+        assert not (primary / ".aether" / "drafts").exists()
+        assert not (primary / ".aether" / "objective-contracts").exists()
+
+        # Attempt begin
+        begin_res = json.loads(
+            hermes_plugin._handle(
+                {"action": "begin", "project_id": PROJECT_A, "title": f"Fail closed: {label}"},
+                session_id=session_id,
+                author_profile="morfeo",
+            )
+        )
+        assert begin_res.get("success") is False, (
+            f"Expected failure for negative: {label}, got: {begin_res}"
+        )
+        assert begin_res.get("error", {}).get("code") == expected_code, (
+            f"Expected {expected_code} for negative: {label}, got: {begin_res.get('error')}"
+        )
+
+        # Attempt set_section fails closed
+        set_res = json.loads(
+            hermes_plugin._handle(
+                {
+                    "action": "set_section",
+                    "project_id": PROJECT_A,
+                    "contract_id": "oc_1111222233334444",
+                    "expected_revision": 1,
+                    "section": "overview",
+                    "content": "negative",
+                },
+                session_id=session_id,
+                author_profile="morfeo",
+            )
+        )
+        assert set_res.get("success") is False
+        assert set_res.get("error", {}).get("code") == expected_code
+
+        # Attempt finalize fails closed
+        finalize_neg_res = json.loads(
+            hermes_plugin._handle(
+                {
+                    "action": "finalize",
+                    "project_id": PROJECT_A,
+                    "contract_id": "oc_1111222233334444",
+                    "expected_revision": 1,
+                },
+                session_id=session_id,
+                author_profile="morfeo",
+            )
+        )
+        assert finalize_neg_res.get("success") is False
+        assert finalize_neg_res.get("error", {}).get("code") == expected_code
+
+        # Assert zero primary / draft / final changes
+        primary_snap_after = snapshot_tree(primary)
+        assert primary_snap_after == primary_snap_before, (
+            f"Primary tree was mutated during negative test: {label}"
+        )
+        assert not (primary / ".aether" / "drafts").exists(), (
+            f"Drafts created in primary during negative test: {label}"
+        )
+        assert not (primary / ".aether" / "objective-contracts").exists(), (
+            f"Contracts created in primary during negative test: {label}"
+        )
+
+    # Direct sessionless store use continues to work unchanged
+    direct_store = ObjectiveContractStore(registry=registry, clock=lambda: FIXED)
+    direct_started = direct_store.begin(
+        project_id=PROJECT_A, title="Direct Sessionless", session_id="s1"
+    )
+    assert direct_started.get("contract_id") is not None
+    assert (primary / ".aether" / "drafts" / f"{direct_started['contract_id']}.json").is_file()
+    # Clean up draft created by direct store use before positive worktree assertion
+    (primary / ".aether" / "drafts" / f"{direct_started['contract_id']}.json").unlink()
+    (primary / ".aether" / "drafts").rmdir()
+
+    # Positive test: valid linked worktree succeeds
+    primary_snap_before = snapshot_tree(primary)
+    valid_res = json.loads(
+        hermes_plugin._handle(
+            {"action": "begin", "project_id": PROJECT_A, "title": "Valid Contract"},
+            session_id="session-valid-worktree",
+            author_profile="morfeo",
+        )
+    )
+    assert valid_res.get("contract_id") is not None
+    contract_id = valid_res["contract_id"]
+    revision = 1
+    for section in REQUIRED_SECTIONS:
+        res = json.loads(
+            hermes_plugin._handle(
+                {
+                    "action": "set_section",
+                    "project_id": PROJECT_A,
+                    "contract_id": contract_id,
+                    "expected_revision": revision,
+                    "section": section,
+                    "content": f"Verified {section}.",
+                },
+                session_id="session-valid-worktree",
+                author_profile="morfeo",
+            )
+        )
+        revision = res["revision"]
+
+    final_res = json.loads(
+        hermes_plugin._handle(
+            {
+                "action": "finalize",
+                "project_id": PROJECT_A,
+                "contract_id": contract_id,
+                "expected_revision": revision,
+            },
+            session_id="session-valid-worktree",
+            author_profile="morfeo",
+        )
+    )
+    assert final_res["status"] == "final"
+
+    # Contract landed in the worktree
+    contract_file = worktree / ".aether" / "objective-contracts" / contract_id / "v1.md"
+    assert contract_file.is_file()
+
+    # Primary remains 100% untouched
+    primary_snap_after = snapshot_tree(primary)
+    assert primary_snap_after == primary_snap_before
+    assert not (primary / ".aether" / "drafts").exists()
+    assert not (primary / ".aether" / "objective-contracts").exists()
