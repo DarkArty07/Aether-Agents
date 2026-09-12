@@ -12,7 +12,7 @@ def _text(path: Path) -> str:
 
 def test_morfeo_receives_result_without_taking_supervisor_closeout() -> None:
     soul = _text(RESOURCES / "profiles/morfeo/SOUL.md")
-    receipt = soul.split("## Completing pipeline work", 1)[1].split("## ", 1)[0]
+    receipt = soul.split("### Final result acceptance", 1)[1].split("### ", 1)[0]
     for requirement in (
         "contract-result-review",
         "current owner instruction",
@@ -23,9 +23,14 @@ def test_morfeo_receives_result_without_taking_supervisor_closeout() -> None:
         "revision",
         "unverified",
         "Supervisor owns normal pipeline closeout",
-        "Do not weaken acceptance",
     ):
         assert requirement in receipt
+    assert "Return material discrepancies through sector 07" in receipt
+    rework = soul.split("### Objective discrepancies and incidental defects", 1)[1].split(
+        "### ", 1
+    )[0]
+    assert "Do not weaken acceptance or create an exception without owner authority" in rework
+    assert "instead of repairing product implementation or changing completed board state" in rework
 
 
 def test_receipt_skill_keeps_provenance_and_proportionate_verification_explicit() -> None:

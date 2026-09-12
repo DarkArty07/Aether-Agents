@@ -24,6 +24,18 @@ Current surfaces and limits belong to the capability registry, not this roadmap.
 See [the plan](specs/005-project-knowledge-graphify/plan.md) and
 [validation criteria](specs/005-project-knowledge-graphify/validation.md).
 
+## Telegram Monitor — bounded autonomous objective
+
+The owner authorized autonomous design, implementation and progress reporting for
+[Telegram Monitor](specs/telegram-monitor/spec.md): hourly narratives by Morfeo across
+project-bound sessions/contracts, one existing Telegram conversation, native cron reuse
+and an automatic/no-work-silent lifecycle with manual-off priority. This scoped feature
+exception includes documented tests and reversible local activation through provisioned
+access; it does not waive stabilization gates, permit unrelated changes or publish a
+release. Implementation and real delivery qualification remain pending. Technical design
+and runnable verification live beside the feature specification; current capability
+status continues to belong solely to `docs/capabilities.toml`.
+
 ## 1. What this roadmap means
 
 Stages are scopes of reasoning and ownership, not a workflow engine. The stage labels below preserve accepted planning history: `done` means its accepted decisions are explicit and mutually consistent, not that every related capability is currently implemented or released. Current behavior and status are tracked separately in the documentation registry. Tests provide evidence. Kanban provides durable coordination. Neither defines the method or grants authority.

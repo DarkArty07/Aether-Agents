@@ -1,6 +1,6 @@
 # Plugins and tools
 
-Aether declares three public [Hermes plugin entry points](https://hermes-agent.nousresearch.com/docs/). Generic plugin installation, configuration, and toolset behavior remain documented by Hermes; this page covers the Aether-owned registration rules.
+Aether declares four public [Hermes plugin entry points](https://hermes-agent.nousresearch.com/docs/). Generic plugin installation, configuration, and toolset behavior remain documented by Hermes; this page covers the Aether-owned registration rules.
 
 ## Default worker tool selection
 
@@ -40,6 +40,7 @@ verified separately from portable resource tests.
 | `aether-contract-observer` | `aether_agents.observation.capture.hermes_plugin` | Passive Contract Observation capture. A configured Morfeo resource can expose the curated `aether_observe` tool. |
 | `aether-objective-contracts` | `aether_agents.objective_contracts.hermes_plugin` | Morfeo-only transactional Objective Contract authoring and execution-board preparation. |
 | `aether-project-knowledge` | `aether_agents.knowledge.hermes_plugin` | Optional shared structural graph and project/role work notes; identical tools for all three roles, disabled in the portable templates until configured. |
+| `aether-telegram-monitor` | `aether_agents.monitor.hermes_plugin` | Morfeo-only hourly Telegram Monitor: control/read tool, restricted reporter read tool, and the lifecycle hooks that enroll direct work and commit reports. Enabled only by the Morfeo profile opt-in. |
 
 The entries are declared in `pyproject.toml` under `hermes_agent.plugins`. Presence in a portable resource bundle is not proof that a local live profile is activated.
 
@@ -127,6 +128,17 @@ Structural updates do not call a model. Configured updates may use the explicitl
 profile-scoped auxiliary task and publish semantic coverage, pending/failed paths, fingerprint
 and observed usage. Missing or ambiguous auxiliary access is unavailable/partial, with no
 primary-model fallback or watcher. This is not a token-saving or universal-superiority claim.
+
+## `aether_monitor` and `aether_monitor_report_snapshot`
+
+The monitor plugin registers exactly two tools and is enabled only when the native profile is `morfeo` and the plugin setting `enabled` is exactly `true`. The portable Supervisor and Implementer profiles do not enable it.
+
+- `aether_monitor` in toolset `aether_monitor` is the control tool for ordinary Morfeo sessions. Its action enum is `status`, `on`, `off`, `history`; the only optional argument is `limit` (1–200, valid only with `history`). It returns the same `aether.telegram-monitor.v1` envelope as the CLI, and refuses control from monitor/report runs with `MONITOR_RUN_CONTROL_REFUSED`. No token, destination, provider or model argument is accepted.
+- `aether_monitor_report_snapshot` in toolset `aether_monitor_reporting` is a read-only tool that returns the pending canonical snapshot for the monitor's own run. It is available only after that run's exact private handoff is claimed for the exact report, cutoff, persisted job and session; any other session — including a second cron session of the same job — is refused (`REPORTER_CONTEXT_REQUIRED` or `SNAPSHOT_UNAVAILABLE`).
+
+The hourly job's per-run toolset is exactly `["aether_monitor_reporting", "no_mcp"]`. The supported `no_mcp` sentinel keeps the native scheduler from default-expanding that list with provisioned MCP servers, so narration cannot reach terminal, file, messaging, board lifecycle, delegation, cron or control tools.
+
+Three lifecycle hooks back the monitor. `post_tool_call` enrolls a project-bound direct local-interactive (`tui`/`cli`) turn; `post_llm_call` validates and persists a reporter narrative, or attaches a bounded reported outcome to a direct interval; `on_session_end` closes a direct interval or commits the reporter outbox through the native Telegram sender. Every non-reporter path only records source evidence and never sends. Read [Telegram Monitor](../guides/telegram-monitor.md).
 
 ## Observer hook boundary
 

@@ -86,7 +86,7 @@ def test_supervisor_convergence_guidance_preserves_authority() -> None:
         "Own review convergence",
         "same failure class recurs",
         "assess the common cause and consolidate findings",
-        "return an unsuitable or missing material design",
+        "Return an unsuitable or missing material design",
         "Preserve the candidate and evidence",
         "Do not invent requirements, weaken existing guarantees",
     ):
