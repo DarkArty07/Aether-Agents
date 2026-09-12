@@ -228,6 +228,8 @@ def test_run_persistent_session_proves_native_wake_from_both_databases(tmp_path:
         kanban_db=kanban_db,
         timeout_seconds=3,
         poll_seconds=0.02,
+        run_root=tmp_path,
+        hermes_root=tmp_path,
     )
 
     assert receipt["status"] == "PASS"
@@ -251,6 +253,8 @@ def test_run_persistent_session_does_not_turn_missing_native_event_into_pass(
         kanban_db=kanban_db,
         timeout_seconds=0.5,
         poll_seconds=0.02,
+        run_root=tmp_path,
+        hermes_root=tmp_path,
     )
 
     assert receipt["status"] == "CAPABILITY_WALL"

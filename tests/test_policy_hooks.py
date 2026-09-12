@@ -5,7 +5,9 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import os
 import re
+import sqlite3
 import stat
 import subprocess
 import sys
@@ -593,24 +595,151 @@ class MinimalPolicyContractTests(unittest.TestCase):
             {"hook_event_name": "pre_tool_call", "tool_name": "", "tool_input": {}},
             {"hook_event_name": "pre_tool_call", "tool_name": "terminal", "tool_input": "bad"},
         ]
-        for payload in malformed:
-            with self.subTest(payload=payload):
-                if payload == "not-json":
-                    result = subprocess.run(
-                        [sys.executable, str(self.hook("morfeo"))],
-                        input="not-json",
-                        text=True,
-                        capture_output=True,
-                        cwd=self.root,
-                        check=False,
-                    )
-                else:
-                    result = self.run_hook(
-                        "morfeo",
-                        "terminal",
-                        payload_override=payload,
-                    )
-                self.assert_blocked(result, "PAYLOAD")
+        for role in PROFILES:
+            for payload in malformed:
+                with self.subTest(role=role, payload=payload):
+                    if payload == "not-json":
+                        result = subprocess.run(
+                            [sys.executable, str(self.hook(role))],
+                            input="not-json",
+                            text=True,
+                            capture_output=True,
+                            cwd=self.root,
+                            check=False,
+                        )
+                    else:
+                        result = self.run_hook(
+                            role,
+                            "terminal",
+                            payload_override=payload,
+                        )
+                    self.assert_blocked(result, "PAYLOAD")
+
+    def test_terminal_truncation_sentinel_in_kanban_create_is_blocked_for_all_roles(self) -> None:
+        sentinels = ("[truncated]", "...[truncated]", "\u2026[truncated]")
+        whitespace_variants = ("", " ", "\n", "  \r\n\t  ")
+
+        for role in PROFILES:
+            for sentinel in sentinels:
+                for ws in whitespace_variants:
+                    term = sentinel + ws
+                    # Case 1: title has terminal sentinel
+                    with self.subTest(role=role, field="title", sentinel=sentinel, ws=repr(ws)):
+                        result = self.run_hook(
+                            role,
+                            "kanban_create",
+                            {"title": f"Task {term}", "body": "Clean body"},
+                        )
+                        self.assert_blocked(result, "TRUNCATION")
+
+                    # Case 2: body has terminal sentinel
+                    with self.subTest(role=role, field="body", sentinel=sentinel, ws=repr(ws)):
+                        result = self.run_hook(
+                            role,
+                            "kanban_create",
+                            {"title": "Clean title", "body": f"Description {term}"},
+                        )
+                        self.assert_blocked(result, "TRUNCATION")
+
+                    # Case 3: both title and body have terminal sentinels
+                    with self.subTest(role=role, field="both", sentinel=sentinel, ws=repr(ws)):
+                        result = self.run_hook(
+                            role,
+                            "kanban_create",
+                            {"title": f"Task {term}", "body": f"Description {term}"},
+                        )
+                        self.assert_blocked(result, "TRUNCATION")
+
+    def test_ordinary_kanban_create_and_non_terminal_sentinels_are_allowed(self) -> None:
+        cases = [
+            {"title": "Clean task title", "body": "Clean description"},
+            {"title": "Task title only"},
+            {"title": "Card with [truncated] in middle of title", "body": "Clean body"},
+            {"title": "Card with ...[truncated] in title prose", "body": "Clean body"},
+            {"title": "Card with \u2026[truncated] in title prose", "body": "Clean body"},
+            {
+                "title": "Clean title",
+                "body": "Prose mentioning [truncated] before details follow.",
+            },
+            {
+                "title": "Clean title",
+                "body": "Prose mentioning ...[truncated] before continuing.",
+            },
+            {
+                "title": "Clean title",
+                "body": "Prose mentioning \u2026[truncated] before continuing.",
+            },
+        ]
+        for role in PROFILES:
+            for tool_input in cases:
+                with self.subTest(role=role, tool_input=tool_input):
+                    result = self.run_hook(role, "kanban_create", tool_input)
+                    self.assert_allowed(result)
+
+    def test_zero_write_on_disposable_board_when_truncation_blocked(self) -> None:
+        disposable_db = self.root / "disposable_kanban.db"
+        with sqlite3.connect(disposable_db) as conn:
+            conn.executescript(
+                """
+                CREATE TABLE tasks (
+                    id TEXT PRIMARY KEY,
+                    title TEXT,
+                    body TEXT,
+                    assignee TEXT,
+                    status TEXT
+                );
+                CREATE TABLE task_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id TEXT,
+                    kind TEXT,
+                    payload TEXT
+                );
+                CREATE TABLE task_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id TEXT,
+                    status TEXT
+                );
+                """
+            )
+
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if not k.startswith(("HERMES_KANBAN_", "HERMES_SESSION_"))
+            and k != "HERMES_DELEGATED_CHILD_CONTEXT"
+        }
+        env["HERMES_KANBAN_DB"] = str(disposable_db)
+
+        payload = {
+            "hook_event_name": "pre_tool_call",
+            "tool_name": "kanban_create",
+            "tool_input": {
+                "title": "Broken task ...[truncated]",
+                "body": "Persisted body ending in ...[truncated]",
+            },
+            "extra": {},
+        }
+
+        for role in PROFILES:
+            proc = subprocess.run(
+                [sys.executable, str(self.hook(role))],
+                input=json.dumps(payload),
+                text=True,
+                capture_output=True,
+                cwd=self.root,
+                env=env,
+                check=False,
+            )
+            self.assert_blocked(proc, "TRUNCATION")
+
+        with sqlite3.connect(disposable_db) as conn:
+            tasks_count = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
+            events_count = conn.execute("SELECT COUNT(*) FROM task_events").fetchone()[0]
+            runs_count = conn.execute("SELECT COUNT(*) FROM task_runs").fetchone()[0]
+
+        self.assertEqual(tasks_count, 0)
+        self.assertEqual(events_count, 0)
+        self.assertEqual(runs_count, 0)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ Aether is a product and method layered on [Hermes Agent](https://hermes-agent.no
 | --- | --- |
 | Agent conversation loop, profiles, tools, and hooks | A three-role responsibility model, Objective Contracts, portable role resources, and a small edge-effect policy |
 | Durable boards, dispatcher, cards, retries, reclaim, worktrees, review, and session support | Which role uses those primitives, how a finalized contract enters a project/version-specific board, and what evidence must accompany completion |
-| Plugin discovery and tool registration | The `aether-contract-observer`, `aether-objective-contracts` and optional `aether-project-knowledge` entry points and their bounded Aether tools |
+| Plugin discovery and tool registration | The `aether-contract-observer`, `aether-objective-contracts`, optional `aether-project-knowledge` and Morfeo-only `aether-telegram-monitor` entry points and their bounded Aether tools |
 | Generic configuration, provider, credential, and service behavior | Product-specific release/project/observation candidates and explicit limits; no duplicated generic manual |
 
 ## Aether-owned behavior

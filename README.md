@@ -12,7 +12,7 @@ Start with the [documentation index](docs/index.md). The current documentation o
 - [Roles and authority](docs/roles-and-authority.md), [lifecycle](docs/guides/lifecycle.md), and [execution](docs/guides/execution.md)
 - [Project initialization](docs/guides/project-initialization.md) and [Objective Contracts](docs/guides/objective-contracts.md)
 - [Optional project knowledge and role work memory](docs/guides/project-knowledge.md)
-- [Observation](docs/guides/observation.md) and [policy and recovery](docs/guides/policy-and-recovery.md)
+- [Observation](docs/guides/observation.md), [Telegram Monitor](docs/guides/telegram-monitor.md), and [policy and recovery](docs/guides/policy-and-recovery.md)
 - [CLI reference](docs/reference/cli.md), [plugins and tools](docs/reference/plugins-and-tools.md), [capabilities reference](docs/reference/capabilities.md), and [limitations and troubleshooting](docs/reference/limitations-and-troubleshooting.md)
 
 ## Current beta boundary
@@ -21,7 +21,7 @@ Aether uses Hermes-native Projects, boards, worktrees, review, lifecycle, profil
 
 The `aether init` command initializes **an existing Git repository root only**. It writes the portable project marker and binds it to exactly one non-archived native Hermes Project whose primary path matches exactly; `--hermes-project ID` resolves an otherwise ambiguous exact-path match. It neither initializes Git nor creates or changes a native Hermes Project.
 
-The operational `start`, `stop`, `restart`, `status`, and `reconcile` commands remain explicit unsupported placeholders. Public release publication, provider-backed live qualification, credentials, deployment, and activation of a managed service are outside this build's supported boundary.
+The operational `start`, `stop`, `restart`, `status`, and `reconcile` commands remain explicit unsupported placeholders. Public release publication, provider-backed live qualification, credentials, deployment, and activation of a managed service are outside this build's supported boundary. The Telegram Monitor (`aether monitor`, `docs/guides/telegram-monitor.md`) is implemented with deterministic packaging and an offline qualification lane; its real hourly model/Telegram qualification and installation-local activation remain pending terminal integration.
 
 Non-destructive inspection:
 

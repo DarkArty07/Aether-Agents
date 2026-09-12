@@ -87,6 +87,7 @@ def test_wheel_has_exact_official_plugin_entrypoints_and_role_profile_opt_ins(
             "aether-contract-observer": "aether_agents.observation.capture.hermes_plugin",
             "aether-objective-contracts": "aether_agents.objective_contracts.hermes_plugin",
             "aether-project-knowledge": "aether_agents.knowledge.hermes_plugin",
+            "aether-telegram-monitor": "aether_agents.monitor.hermes_plugin",
         }
         for profile in PROFILE_NAMES:
             data = archive.read(f"aether_agents/resources/profiles/{profile}/config.yaml").decode(
@@ -97,6 +98,16 @@ def test_wheel_has_exact_official_plugin_entrypoints_and_role_profile_opt_ins(
             ).read_text(encoding="utf-8")
             assert data == source
             assert ("aether-objective-contracts" in data) is (profile == "morfeo")
+            assert ("aether-telegram-monitor" in data) is (profile == "morfeo")
+        # The monitor's packaged deterministic pre-check and narration context ship in
+        # the same wheel as the entry point that consumes them.
+        for name in (
+            "aether_agents/resources/monitor/precheck.py",
+            "aether_agents/resources/monitor/narration-context.md",
+        ):
+            wheel_bytes = archive.read(name)
+            source_bytes = (ROOT / "src" / name).read_bytes()
+            assert wheel_bytes == source_bytes, name
         assert not any("aether_observer" in name for name in archive.namelist())
 
 
@@ -201,7 +212,7 @@ eps = sorted(
     for ep in importlib.metadata.entry_points().select(group='hermes_agent.plugins')
     if ep.dist and ep.dist.metadata['Name'] == 'aether-agents'
 )
-if len(eps) != 3:
+if len(eps) != 4:
     raise RuntimeError('Aether plugin entry-point set mismatch')
 observer = importlib.import_module('aether_agents.observation.capture.hermes_plugin')
 loaded = next(ep for ep in eps if ep.name == 'aether-contract-observer').load()
@@ -286,6 +297,7 @@ def test_same_wheel_installs_in_isolated_manager_and_runtime_without_path_shadow
         ["aether-contract-observer", "aether_agents.observation.capture.hermes_plugin"],
         ["aether-objective-contracts", "aether_agents.objective_contracts.hermes_plugin"],
         ["aether-project-knowledge", "aether_agents.knowledge.hermes_plugin"],
+        ["aether-telegram-monitor", "aether_agents.monitor.hermes_plugin"],
     ]
     assert manager_identity["observer_module"] == (
         "aether_agents.observation.capture.hermes_plugin"
@@ -332,6 +344,16 @@ def test_same_wheel_installs_in_isolated_manager_and_runtime_without_path_shadow
     )
     assert "--since" in help_result.stdout and "--watch" in help_result.stdout
 
+    monitor_help = subprocess.run(
+        [str(manager / "bin" / "aether"), "monitor", "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=manager_env,
+    )
+    for action in ("status", "on", "off", "history"):
+        assert action in monitor_help.stdout
+
     # External provenance can name and hash the one wheel; that final digest is not
     # embedded inside its own metadata or package resources.
     wheel_digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
@@ -372,9 +394,8 @@ def test_wheel_and_sdist_include_valid_portable_canonical_skill_resources(
             assert frontmatter["description"].endswith(".")
             # Packaged canonical resources carry an explicit, intentional version per
             # skill: a bump must be recorded here so accidental drift stays caught.
-            expected_version = (
-                "0.1.1" if skill_name == "supervisor-decomposition" else "0.1.0"
-            )
+            expected_version = "0.1.1" if skill_name == "supervisor-decomposition" else "0.1.0"
+
             assert frontmatter["version"] == expected_version
             assert isinstance(frontmatter["author"], str) and frontmatter["author"]
             assert frontmatter["license"] == "MIT"

@@ -28,12 +28,16 @@ import zipfile
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path, PurePosixPath
-from typing import Any, Iterator
+from typing import Any, Iterator, Sequence
 
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError, ValidationError
 
 from aether_agents.hermes_baseline import HermesBaseline, load_hermes_baseline
+from aether_agents.hermes_editable import (
+    EditableReconciliationReceipt,
+    reconcile_hermes_editable,
+)
 from aether_agents.observation.checkpoint import AuthorityContext
 from aether_agents.observation.contracts import (
     EVENT_SCHEMA_VERSION,
@@ -102,10 +106,17 @@ KNOWLEDGE_ENTRY_POINT: dict[str, str] = {
     "target": "aether_agents.knowledge.hermes_plugin",
 }
 
+MONITOR_ENTRY_POINT: dict[str, str] = {
+    "plugin_name": "aether-telegram-monitor",
+    "group": "hermes_agent.plugins",
+    "target": "aether_agents.monitor.hermes_plugin",
+}
+
 AETHER_PLUGIN_ENTRY_POINTS: dict[str, str] = {
     OBSERVER_ENTRY_POINT["plugin_name"]: OBSERVER_ENTRY_POINT["target"],
     OBJECTIVE_CONTRACT_ENTRY_POINT["plugin_name"]: OBJECTIVE_CONTRACT_ENTRY_POINT["target"],
     KNOWLEDGE_ENTRY_POINT["plugin_name"]: KNOWLEDGE_ENTRY_POINT["target"],
+    MONITOR_ENTRY_POINT["plugin_name"]: MONITOR_ENTRY_POINT["target"],
 }
 
 
@@ -4699,6 +4710,32 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             if payload["state"] == "pending":
                 details["pending_count"] += 1
         return details, permissions_ok
+
+    def reconcile_runtime_editable(
+        self,
+        source: Path | str,
+        interpreters: Sequence[Path | str],
+        *,
+        offline: bool = True,
+        verify_imports: bool = True,
+    ) -> EditableReconciliationReceipt:
+        """Refresh editable Hermes mappings through the shared package-owned operation.
+
+        The clean release install stays strict and separate: this entry point shares the
+        one transactional operation (``aether_agents.hermes_editable``) with an explicitly
+        authorized dirty-runtime reconciliation, for example after the maintained
+        source adds or removes a top-level module and every provisioned interpreter must
+        resolve it from the exact same source. It never resets the source, injects
+        ``PYTHONPATH``, changes dependencies, or restarts a service for metadata-only
+        repair.
+        """
+
+        return reconcile_hermes_editable(
+            source=source,
+            interpreters=interpreters,
+            offline=offline,
+            verify_imports=verify_imports,
+        )
 
     def doctor(self) -> DoctorResult:
         with self.store.mutation_lock():

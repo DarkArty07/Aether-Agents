@@ -19,6 +19,7 @@ from aether_agents.observation.context import ProjectRegistry
 from aether_agents.observation.contracts import validate_event
 from aether_agents.paths import ObservationPaths
 
+from .isolation import native_python_for, require_verified_writer_context
 from .validation import validate_evidence
 
 
@@ -505,6 +506,15 @@ def live_observation(
                 "AETHER_PROJECT_ID": project_id,
                 "AETHER_OBSERVATION_TRACE_ID": trace_id,
             }
+        )
+        # Before the first native writer: verify the disposable context this live
+        # invocation resolves, so an inherited selector cannot reach a live board.
+        require_verified_writer_context(
+            run_root=run_root,
+            hermes_root=hermes_root,
+            environ=env,
+            python=native_python_for(hermes),
+            cwd=run_root,
         )
         source_before = _source_status(command_log, env)
         _invoke_morfeo(

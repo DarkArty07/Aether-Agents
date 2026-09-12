@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
+from aether_agents.objective_contracts.execution_boards import execution_board_slug
 from aether_agents.observation.capture.collector import (
     Collector,
     observing,
@@ -73,6 +74,7 @@ from aether_agents.paths import (
     ObservationPaths,
     UnsafeObservationPath,
     _open_private_directory,
+    read_private_bytes,
 )
 
 __all__ = ["register"]
@@ -619,6 +621,8 @@ class _Observer:
     def __init__(self, ctx: Any) -> None:
         self._ctx = ctx
         self._collector: Collector | None = None
+        self._collectors: dict[str, Collector] = {}
+        self._contract_board_bindings: dict[str, tuple[str, str, int, str]] = {}
         self._resolver = ObservationContextResolver()
         self._category, self._normalizer_ref, self._native_normalizer = (
             _resolve_category_normalizer()
@@ -633,7 +637,7 @@ class _Observer:
         self._diagnosed_unbound_tasks: set[str] = set()
         self._diagnosed_native_rejections: set[tuple[str, str]] = set()
         self._native_seen: set[tuple[Any, ...]] = set()
-        self._retained_restored = False
+        self._retained_restored_projects: set[str] = set()
         self._pending_spans: OrderedDict[tuple[str, str], dict[str, Any]] = OrderedDict()
         self._pending_models: OrderedDict[tuple[str, str], dict[str, Any]] = OrderedDict()
         self._pending_approvals: OrderedDict[str, dict[str, Any]] = OrderedDict()
@@ -649,6 +653,7 @@ class _Observer:
         collector = self._resolve_collector({})
         if collector is not None:
             self._restore_launch_binding(collector)
+        self._reconstruct_board_bindings()
 
     @staticmethod
     def _bounded_put(
@@ -792,74 +797,234 @@ class _Observer:
         )
         self._emit_compatibility_diagnostics(collector, trace_id)
 
-    @staticmethod
-    def _objective_contract_project_hint(hook: str, payload: dict[str, Any]) -> str | None:
-        """Return the validated Project carried by a terminal contract result.
+    def _reconstruct_board_bindings(self) -> None:
+        """Reconstruct contract board bindings only from exact canonical board metadata."""
+        try:
+            from hermes_cli import kanban_db  # type: ignore[import-not-found]
 
-        Morfeo may author a contract from outside its repository. In that case
-        the tool result is the first exact Project binding available to the
-        observer, so collector resolution must consume it before projecting
-        the terminal hook. Other tools and non-terminal contract calls retain
-        the normal session/task/environment resolution path.
-        """
-        if hook != "post_tool_call":
-            return None
-        name = safe_ref(_pick(payload, "tool_name", "name"))
-        args = _pick(payload, "args", "arguments")
-        result = _pick(payload, "result", "tool_result")
-        if "objective_contract" not in (name or "") or not isinstance(args, dict):
-            return None
-        if args.get("action") not in {"finalize", "prepare_handoff"}:
-            return None
-        status, _ = normalize_native_status(_pick(payload, "status", "outcome"))
-        if status != "completed":
-            return None
-        if isinstance(result, str):
+            boards_root = kanban_db.boards_root()
+        except Exception:
+            return
+        if not boards_root.is_dir() or boards_root.is_symlink():
+            return
+        for entry in boards_root.iterdir():
+            if not entry.is_dir() or entry.is_symlink():
+                continue
+            metadata_file = entry / "board.json"
+            if not metadata_file.is_file() or metadata_file.is_symlink():
+                continue
             try:
-                result = json.loads(result)
-            except (TypeError, ValueError):
-                return None
-        if not isinstance(result, dict):
-            return None
-        return canonical_project_id(result.get("project_id"))
+                raw_bytes = read_private_bytes(metadata_file)
+                metadata = json.loads(raw_bytes.decode("utf-8"))
+            except Exception:
+                continue
+            if not isinstance(metadata, dict) or metadata.get("archived"):
+                continue
+            slug = metadata.get("slug")
+            aether_project_id = canonical_project_id(metadata.get("aether_project_id"))
+            contract_id = metadata.get("aether_contract_id")
+            version = metadata.get("aether_contract_version")
+            trace_id = metadata.get("observation_trace_id")
+            if (
+                not isinstance(slug, str)
+                or not aether_project_id
+                or not isinstance(contract_id, str)
+                or _CONTRACT_RE.fullmatch(contract_id) is None
+                or not isinstance(version, int)
+                or isinstance(version, bool)
+                or version < 1
+            ):
+                continue
+            try:
+                expected_slug = execution_board_slug(aether_project_id, contract_id, version)
+            except Exception:
+                continue
+            if slug != expected_slug:
+                continue
+            if (
+                not trace_id
+                or not isinstance(trace_id, str)
+                or _TRACE_RE.fullmatch(trace_id) is None
+            ):
+                project_path = self._resolver.registry.project_path(aether_project_id)
+                if project_path is not None:
+                    contract_path = (
+                        project_path
+                        / ".aether"
+                        / "objective-contracts"
+                        / contract_id
+                        / f"v{version}.md"
+                    )
+                    if contract_path.is_file() and not contract_path.is_symlink():
+                        try:
+                            content = read_private_bytes(contract_path).decode("utf-8")
+                            if content.startswith("---"):
+                                end_idx = content.find("\n---", 3)
+                                if end_idx != -1:
+                                    import yaml
 
-    def _resolve_collector(self, payload: dict[str, Any]) -> Collector | None:
+                                    parsed_meta = yaml.safe_load(content[3:end_idx])
+                                    if isinstance(parsed_meta, dict):
+                                        c_trace = parsed_meta.get("observation_trace_id")
+                                        if isinstance(c_trace, str) and _TRACE_RE.fullmatch(
+                                            c_trace
+                                        ):
+                                            trace_id = c_trace
+                        except Exception:
+                            pass
+            if trace_id and isinstance(trace_id, str) and _TRACE_RE.fullmatch(trace_id):
+                self._contract_board_bindings[trace_id] = (
+                    aether_project_id,
+                    contract_id,
+                    version,
+                    slug,
+                )
+
+    def _project_hint_for_hook(self, hook: str, payload: dict[str, Any]) -> str | None:
+        """Return the validated Project carried by an objective or kanban hook."""
+        # 1. Tool calls: check args and result
+        if hook in {"pre_tool_call", "post_tool_call"}:
+            args = _pick(payload, "args", "arguments")
+            if isinstance(args, dict):
+                hint = canonical_project_id(_pick(args, "aether_project_id", "project_id"))
+                if hint is not None and self._resolver.registry.knows(hint):
+                    return hint
+                token_parts = parse_correlation_token(args.get("idempotency_key"))
+                if token_parts is not None:
+                    trace_id = token_parts[0]
+                    if trace_id in self._contract_board_bindings:
+                        return self._contract_board_bindings[trace_id][0]
+                    for p_id, col in self._collectors.items():
+                        if col.binder.root_for(trace_id) is not None or _retained_trace_exists(
+                            col.paths, trace_id
+                        ):
+                            return p_id
+            result = _pick(payload, "result", "tool_result")
+            if isinstance(result, str):
+                try:
+                    result = json.loads(result)
+                except (TypeError, ValueError):
+                    result = None
+            if isinstance(result, dict):
+                hint = canonical_project_id(_pick(result, "aether_project_id", "project_id"))
+                if hint is not None and self._resolver.registry.knows(hint):
+                    return hint
+
+        # 2. Board in payload (kanban hooks or kanban tool calls)
+        raw_board = _pick(payload, "board", "board_slug")
+        if isinstance(raw_board, str):
+            m = re.fullmatch(r"oc-([0-9a-f]{32})-[0-9a-f]{16}-v[0-9a-f]+", raw_board)
+            if m:
+                hex_uuid = m.group(1)
+                cand = f"{hex_uuid[:8]}-{hex_uuid[8:12]}-{hex_uuid[12:16]}-{hex_uuid[16:20]}-{hex_uuid[20:]}"
+                hint = canonical_project_id(cand)
+                if hint is not None:
+                    return hint
+            try:
+                from hermes_cli import kanban_db  # type: ignore[import-not-found]
+
+                b_dir = kanban_db.board_dir(raw_board)
+                m_file = b_dir / "board.json"
+                if m_file.is_file() and not m_file.is_symlink():
+                    b_meta = json.loads(read_private_bytes(m_file).decode("utf-8"))
+                    hint = canonical_project_id(b_meta.get("aether_project_id"))
+                    if hint is not None:
+                        return hint
+            except Exception:
+                pass
+
+        # 3. Explicit aether_project_id in payload
+        raw_aether = _pick(payload, "aether_project_id")
+        if raw_aether:
+            hint = canonical_project_id(raw_aether)
+            if hint is not None:
+                return hint
+
+        # 4. Hermes project_id in payload
+        raw_proj = _pick(payload, "hermes_project_id", "project_id")
+        if raw_proj:
+            cand = canonical_project_id(raw_proj)
+            if cand is not None:
+                return cand
+            try:
+                for a_id, entry in self._resolver.registry._load().items():
+                    if isinstance(entry, dict) and entry.get("hermes_project_id") == raw_proj:
+                        return a_id
+                from hermes_cli import projects_db  # type: ignore[import-not-found]
+
+                with projects_db.connect_closing() as connection:
+                    for project in projects_db.list_projects(connection):
+                        if getattr(project, "id", None) == raw_proj:
+                            prim = getattr(project, "primary_path", None)
+                            if prim:
+                                p_path = Path(prim).resolve()
+                                from aether_agents.observation.context import read_project_marker
+
+                                marker = read_project_marker(p_path)
+                                if marker:
+                                    hint = canonical_project_id(marker.get("project_id"))
+                                    if hint is not None and self._resolver.registry.knows(hint):
+                                        return hint
+            except Exception:
+                pass
+
+        # 5. Task ID in payload
+        task_id = native_kanban_task_ref(_pick(payload, "task_id"))
+        if task_id:
+            for proj_id, col in self._collectors.items():
+                if col.binder.trace_for(task_id) is not None:
+                    return proj_id
+            if self._collector and self._collector.binder.trace_for(task_id) is not None:
+                return self._collector.paths.project_id
+
+        return None
+
+    def _collector_for_project(self, project_id: str) -> Collector:
+        canonical = canonical_project_id(project_id)
+        if canonical is None:
+            raise ValueError(f"Invalid project_id: {project_id}")
+        if canonical not in self._collectors:
+            collector = Collector(
+                paths=ObservationPaths.for_project(canonical),
+                runtime_fingerprint=self._runtime_fingerprint,
+                normalizer_ref=self._normalizer_ref,
+            )
+            collector.start(getattr(self._ctx, "spawn_task", None))
+            self._collectors[canonical] = collector
+            self._restore_all_retained_bindings(collector)
+            if self._collector is None:
+                self._collector = collector
+            self._reconciler.start()
+        return self._collectors[canonical]
+
+    def _resolve_collector(
+        self, payload: dict[str, Any], is_targeted_hook: bool = False
+    ) -> Collector | None:
         """Resolve exact project context; ambiguity writes no project event."""
         raw_candidates = (
             _pick(payload, "aether_project_id"),
             _pick(payload, "hermes_project_id", "project_id"),
             os.environ.get("AETHER_PROJECT_ID"),
         )
-        if self._collector is not None and not any(raw_candidates):
+        if not any(raw_candidates):
+            if is_targeted_hook:
+                return None
             return self._collector
         resolution = self._resolver.resolve(
             task_binding=raw_candidates[0],
             session_binding=raw_candidates[1],
             launch_binding=raw_candidates[2],
         )
-        if self._collector is not None:
-            if resolution.resolved and resolution.project_id == self._collector.paths.project_id:
-                return self._collector
-            self._collector.record_unresolved_context(
-                resolution.reason_code or "PROJECT_CONTEXT_CHANGED"
-            )
-            return None
         if not resolution.resolved:
             return None
         assert resolution.project_id is not None
-        collector = Collector(
-            paths=ObservationPaths.for_project(resolution.project_id),
-            runtime_fingerprint=self._runtime_fingerprint,
-            normalizer_ref=self._normalizer_ref,
-        )
-        collector.start(getattr(self._ctx, "spawn_task", None))
-        self._collector = collector
-        self._restore_all_retained_bindings(collector)
-        self._reconciler.start()
+        collector = self._collector_for_project(resolution.project_id)
+        if self._collector is None:
+            self._collector = collector
         return collector
 
     def _restore_all_retained_bindings(self, collector: Collector) -> None:
-        if self._retained_restored:
+        if collector.paths.project_id in self._retained_restored_projects:
             return
         for task_ref, (trace_id, relation) in _retained_bindings(collector.paths).items():
             collector.binder.restore(
@@ -868,7 +1033,7 @@ class _Observer:
                 relation=relation,
             )
             collector.restore_materialized_trace(trace_id)
-        self._retained_restored = True
+        self._retained_restored_projects.add(collector.paths.project_id)
 
     def _emit_compatibility_diagnostics(self, collector: Collector, trace_id: str) -> None:
         if trace_id in self._diagnosed_traces:
@@ -1077,7 +1242,7 @@ class _Observer:
                 )
 
     def _read_native_board(
-        self, collector: Collector
+        self, collector: Collector, board_slug: str
     ) -> tuple[
         dict[str, dict[str, Any]],
         dict[str, tuple[str, ...]],
@@ -1090,7 +1255,10 @@ class _Observer:
         Rejections carry only a fixed reason plus an already-validated task/trace
         reference.  Raw native values never cross this function's return boundary.
         """
-        from hermes_cli.kanban_db import kanban_db_path  # type: ignore[import-not-found]
+        from hermes_cli.kanban_db import (  # type: ignore[import-not-found]
+            kanban_db_path,
+            kanban_home,
+        )
 
         rejections: set[tuple[str, str | None, str | None]] = set()
 
@@ -1104,8 +1272,13 @@ class _Observer:
             if len(rejections) < 1024:
                 rejections.add((reason_code, task_ref, trace_id))
 
-        path = kanban_db_path()
-        if not path.is_file():
+        path = kanban_db_path(board_slug)
+        if not path.is_file() or path.is_symlink():
+            return {}, {}, {}, frozenset(), ()
+        try:
+            if path.resolve() == (kanban_home() / "kanban.db").resolve():
+                return {}, {}, {}, frozenset(), ()
+        except Exception:
             return {}, {}, {}, frozenset(), ()
         connection = sqlite3.connect(
             path.resolve().as_uri() + "?mode=ro",
@@ -1437,6 +1610,8 @@ class _Observer:
         status = run_outcome if run_outcome != "unknown" else run_status
         if status == "done":
             status = "completed"
+        elif status in {"review_requested", "changes_requested"}:
+            status = "completed"
         elif status == "protocol_violation":
             status = "failed"
         if status not in {
@@ -1451,8 +1626,6 @@ class _Observer:
             "released",
             "rate_limited",
             "stale",
-            "review_requested",
-            "changes_requested",
             "scheduled",
         }:
             status = "unknown"
@@ -1528,220 +1701,375 @@ class _Observer:
 
     def _reconcile_native(self) -> None:
         """Reconcile durable Kanban/SessionDB facts outside every hook callback."""
-        collector = self._collector
-        if collector is None:
+        self._reconstruct_board_bindings()
+
+        collectors = list(self._collectors.values())
+        if self._collector is not None and self._collector not in collectors:
+            collectors.append(self._collector)
+        if not collectors:
             return
+
+        for collector in collectors:
+            self._reconcile_native_for_collector(collector)
+
+    def _reconcile_native_for_collector(self, collector: Collector) -> None:
         try:
-            (
-                tasks,
-                parents,
-                runs_by_task,
-                protocol_violations,
-                native_rejections,
-            ) = self._read_native_board(collector)
-        except Exception:
-            collector.health.increment("KANBAN_RECONCILIATION_FAILED")
-            return
-        if not tasks:
-            self._emit_native_rejections(collector, native_rejections)
+            from hermes_cli import kanban_db  # type: ignore[import-not-found]
+        except ImportError:
+            collector.health.increment("KANBAN_RECONCILIATION_UNAVAILABLE")
             return
 
-        # Recover strict-token roots.  Hermes documents that idempotency keys are
-        # not unique, so zero/multiple matches never bind by recency.
-        token_groups: dict[tuple[str, str], list[str]] = {}
-        for task_id, task in tasks.items():
-            parsed = parse_correlation_token(task.get("idempotency_key"))
-            if parsed is not None and _TRACE_RE.fullmatch(parsed[0]):
-                token_groups.setdefault(parsed, []).append(task_id)
+        project_id = collector.paths.project_id
 
-        live_root_traces: list[str] = []
-        for token_parts, task_ids in sorted(token_groups.items()):
-            trace_id, unit_ref = token_parts
-            if len(task_ids) != 1:
-                collector.health.increment("BINDING_TOKEN_REUSED")
-                if _retained_trace_exists(collector.paths, trace_id):
-                    builder = collector.builder_for(trace_id)
+        # 1. Look for active traces in this collector that lack a board binding
+        for trace_id in sorted(self._active_traces):
+            if not _retained_trace_exists(collector.paths, trace_id):
+                continue
+            if trace_id not in self._contract_board_bindings:
+                collector.health.increment("KANBAN_BOARD_UNRESOLVED")
+                builder = collector.builder_for(trace_id)
+                self._emit_native_once(
+                    collector,
+                    ("board_binding_unresolved", trace_id),
+                    builder.coverage_gap(
+                        gap_class=CoverageClass.NATIVE_SOURCE_UNAVAILABLE,
+                        reason_code="KANBAN_BOARD_UNRESOLVED",
+                        source_kind="native_reconciliation",
+                        source_hook="kanban_read",
+                        monotonic=False,
+                    ),
+                )
+
+        # 2. Find all bindings for this project
+        bindings = [
+            (t_id, p_id, c_id, ver, b_slug)
+            for t_id, (p_id, c_id, ver, b_slug) in sorted(self._contract_board_bindings.items())
+            if p_id == project_id
+        ]
+        if not bindings:
+            return
+
+        for trace_id, b_proj_id, contract_id, version, board_slug in bindings:
+            builder = collector.builder_for(trace_id)
+
+            if not self._resolver.registry.verify_with_marker(project_id):
+                collector.health.increment("PROJECT_MARKER_UNVERIFIED")
+                self._emit_native_once(
+                    collector,
+                    ("board_validation_failed", trace_id, "PROJECT_MARKER_UNVERIFIED"),
+                    builder.coverage_gap(
+                        gap_class=CoverageClass.NATIVE_SOURCE_UNAVAILABLE,
+                        reason_code="PROJECT_MARKER_UNVERIFIED",
+                        source_kind="native_reconciliation",
+                        source_hook="kanban_read",
+                        monotonic=False,
+                    ),
+                )
+                continue
+
+            try:
+                expected_slug = execution_board_slug(project_id, contract_id, version)
+            except Exception:
+                expected_slug = ""
+            if board_slug != expected_slug:
+                collector.health.increment("KANBAN_BOARD_TUPLE_CONFLICT")
+                self._emit_native_once(
+                    collector,
+                    ("board_validation_failed", trace_id, "KANBAN_BOARD_TUPLE_CONFLICT"),
+                    builder.coverage_gap(
+                        gap_class=CoverageClass.COMPATIBILITY_MISMATCH,
+                        reason_code="KANBAN_BOARD_TUPLE_CONFLICT",
+                        source_kind="native_reconciliation",
+                        source_hook="kanban_read",
+                        monotonic=False,
+                    ),
+                )
+                continue
+
+            try:
+                board_dir = kanban_db.board_dir(board_slug)
+                metadata_file = board_dir / "board.json"
+                if (
+                    not board_dir.is_dir()
+                    or board_dir.is_symlink()
+                    or not metadata_file.is_file()
+                    or metadata_file.is_symlink()
+                ):
+                    collector.health.increment("KANBAN_BOARD_METADATA_MALFORMED")
                     self._emit_native_once(
                         collector,
-                        ("token_ambiguity", trace_id, unit_ref),
+                        ("board_validation_failed", trace_id, "KANBAN_BOARD_METADATA_MALFORMED"),
                         builder.coverage_gap(
-                            gap_class=CoverageClass.RECONCILIATION_AMBIGUOUS,
-                            reason_code="BINDING_TOKEN_REUSED",
+                            gap_class=CoverageClass.NATIVE_SOURCE_UNAVAILABLE,
+                            reason_code="KANBAN_BOARD_METADATA_MALFORMED",
                             source_kind="native_reconciliation",
                             source_hook="kanban_read",
                             monotonic=False,
                         ),
                     )
-                continue
-            task_id = task_ids[0]
-            task = tasks[task_id]
-            materialized_at = _native_datetime(task.get("created_at"))
-            session_id = native_pseudonym_ref(task.get("session_id"), kind="session")
-            retained = _retained_trace_exists(collector.paths, trace_id)
-            if retained:
-                collector.restore_materialized_trace(trace_id)
-            elif not collector.ensure_trace_opened(
-                trace_id,
-                session_lineage=(session_id,) if session_id else (),
-                materialized_at=materialized_at,
-                materialization_ref=binding_ref(trace_id, task_id),
-                source_kind="native_reconciliation",
-                source_hook="kanban_read",
-            ):
-                continue
-            already = collector.binder.trace_for(task_id)
-            decision = collector.binder.bind_root(
-                trace_id=trace_id,
-                task_ref=task_id,
-                token=f"aether.obs.v1:{trace_id}:{unit_ref}",
-                project_id=collector.paths.project_id,
-            )
-            if not decision.bound:
-                collector.health.increment(decision.reason_code or "BINDING_UNRESOLVED")
-                continue
-            if already is None:
-                builder = collector.builder_for(trace_id)
-                self._emit_binding_durable(
-                    collector,
-                    trace_id=trace_id,
-                    task_ref=task_id,
-                    relation="root",
-                    event=builder.work_unit(
-                        event_type="work_unit.bound",
-                        status="reported",
-                        task_ref=task_id,
-                        relation="root",
-                        required=None,
-                        binding=binding_ref(trace_id, task_id),
-                        parent_task_refs=parents.get(task_id, ()),
-                        task_status=safe_ref(task.get("status")) or "unknown",
-                        occurred_at=materialized_at,
-                        timestamp_source="native",
-                        monotonic=False,
-                        source_kind="native_reconciliation",
-                        source_hook="kanban_read",
-                        session_id=session_id,
-                        actor_kind="agent",
-                        actor_id=native_profile_ref(task.get("assignee")) or "unknown",
-                        profile=native_profile_ref(task.get("assignee")),
-                    ),
-                )
-            if task.get("status") not in ("done", "archived"):
-                live_root_traces.append(trace_id)
-
-        # Native descendants inherit only through durable parent edges. Iterate to
-        # a fixed point so a newly seen multi-level subtree binds in one scan.
-        changed = True
-        while changed:
-            changed = False
-            for task_id in sorted(tasks):
-                if collector.binder.trace_for(task_id) is not None:
                     continue
-                parent_refs = parents.get(task_id, ())
-                if not parent_refs:
-                    continue
-                decision = collector.binder.inherit(
-                    task_ref=task_id,
-                    parent_task_refs=parent_refs,
-                    relation="unknown",
-                    project_id=collector.paths.project_id,
-                )
-                if not decision.bound or decision.trace_id is None:
-                    continue
-                changed = True
-                task = tasks[task_id]
-                builder = collector.builder_for(decision.trace_id)
-                self._emit_binding_durable(
-                    collector,
-                    trace_id=decision.trace_id,
-                    task_ref=task_id,
-                    relation="unknown",
-                    event=builder.work_unit(
-                        event_type="work_unit.bound",
-                        status="reported",
-                        task_ref=task_id,
-                        relation="unknown",
-                        required=None,
-                        binding=decision.binding or binding_ref(decision.trace_id, task_id),
-                        parent_task_refs=decision.parent_task_refs,
-                        task_status=safe_ref(task.get("status")) or "unknown",
-                        occurred_at=_native_datetime(task.get("created_at")),
-                        timestamp_source="native",
-                        monotonic=False,
-                        source_kind="native_reconciliation",
-                        source_hook="kanban_read",
-                        session_id=native_pseudonym_ref(task.get("session_id"), kind="session"),
-                        actor_kind="agent",
-                        actor_id=native_profile_ref(task.get("assignee")) or "unknown",
-                        profile=native_profile_ref(task.get("assignee")),
-                    ),
-                )
-
-        self._emit_native_rejections(collector, native_rejections)
-
-        # Reconstruct every bound run attempt plus the latest task/heartbeat state.
-        for task_id in sorted(tasks):
-            trace_id = collector.binder.trace_for(task_id)
-            if trace_id is None:
-                continue
-            task = tasks[task_id]
-            task_runs = runs_by_task.get(task_id, ())
-            relation = "root" if collector.binder.root_for(trace_id) == task_id else "unknown"
-            profile = native_profile_ref(task.get("assignee"))
-            builder = collector.builder_for(trace_id)
-            for run in task_runs:
-                run_id = run.get("id")
-                if not isinstance(run_id, int) or isinstance(run_id, bool) or run_id <= 0:
-                    continue
-                run_profile = native_profile_ref(run.get("profile")) or profile
-                started_at = _native_datetime(run.get("started_at"))
-                self._emit_native_once(
-                    collector,
-                    ("run", trace_id, run_id, "started"),
-                    builder.work_unit(
-                        event_type="run.started",
-                        status="started",
-                        task_ref=task_id,
-                        relation=relation,
-                        required=None,
-                        binding=binding_ref(trace_id, task_id),
-                        parent_task_refs=parents.get(task_id, ()),
-                        task_status=safe_ref(task.get("status")) or "unknown",
-                        run_status="running",
-                        occurred_at=started_at,
-                        timestamp_source="native",
-                        monotonic=False,
-                        source_kind="native_reconciliation",
-                        source_hook="kanban_read",
-                        run_id=run_id,
-                        session_id=native_pseudonym_ref(task.get("session_id"), kind="session"),
-                        actor_kind="agent",
-                        actor_id=run_profile or "unknown",
-                        profile=run_profile,
-                    ),
-                )
-                ended_at = _native_datetime(run.get("ended_at"))
-                if ended_at is not None:
-                    status, run_status, run_outcome = self._native_run_terminal(run)
-                    if (task_id, run_id) in protocol_violations:
-                        status = "failed"
-                        run_status = "failed"
-                        run_outcome = "protocol_violation"
+                metadata = json.loads(read_private_bytes(metadata_file).decode("utf-8"))
+                if (
+                    not isinstance(metadata, dict)
+                    or metadata.get("archived")
+                    or metadata.get("slug") != board_slug
+                    or canonical_project_id(metadata.get("aether_project_id")) != project_id
+                    or metadata.get("aether_contract_id") != contract_id
+                    or metadata.get("aether_contract_version") != version
+                    or (
+                        metadata.get("observation_trace_id")
+                        and metadata.get("observation_trace_id") != trace_id
+                    )
+                ):
+                    collector.health.increment("KANBAN_BOARD_METADATA_MALFORMED")
                     self._emit_native_once(
                         collector,
-                        ("run", trace_id, run_id, "finished", status),
+                        ("board_validation_failed", trace_id, "KANBAN_BOARD_METADATA_MALFORMED"),
+                        builder.coverage_gap(
+                            gap_class=CoverageClass.NATIVE_SOURCE_UNAVAILABLE,
+                            reason_code="KANBAN_BOARD_METADATA_MALFORMED",
+                            source_kind="native_reconciliation",
+                            source_hook="kanban_read",
+                            monotonic=False,
+                        ),
+                    )
+                    continue
+            except Exception:
+                collector.health.increment("KANBAN_BOARD_METADATA_MALFORMED")
+                self._emit_native_once(
+                    collector,
+                    ("board_validation_failed", trace_id, "KANBAN_BOARD_METADATA_MALFORMED"),
+                    builder.coverage_gap(
+                        gap_class=CoverageClass.NATIVE_SOURCE_UNAVAILABLE,
+                        reason_code="KANBAN_BOARD_METADATA_MALFORMED",
+                        source_kind="native_reconciliation",
+                        source_hook="kanban_read",
+                        monotonic=False,
+                    ),
+                )
+                continue
+
+            try:
+                db_path = kanban_db.kanban_db_path(board_slug)
+                expected_db = board_dir / "kanban.db"
+                if (
+                    not db_path.is_file()
+                    or db_path.is_symlink()
+                    or db_path.resolve() == (kanban_db.kanban_home() / "kanban.db").resolve()
+                    or db_path != expected_db
+                ):
+                    collector.health.increment("KANBAN_BOARD_UNRESOLVED")
+                    self._emit_native_once(
+                        collector,
+                        ("board_validation_failed", trace_id, "KANBAN_BOARD_UNRESOLVED"),
+                        builder.coverage_gap(
+                            gap_class=CoverageClass.NATIVE_SOURCE_UNAVAILABLE,
+                            reason_code="KANBAN_BOARD_UNRESOLVED",
+                            source_kind="native_reconciliation",
+                            source_hook="kanban_read",
+                            monotonic=False,
+                        ),
+                    )
+                    continue
+            except Exception:
+                collector.health.increment("KANBAN_BOARD_UNRESOLVED")
+                self._emit_native_once(
+                    collector,
+                    ("board_validation_failed", trace_id, "KANBAN_BOARD_UNRESOLVED"),
+                    builder.coverage_gap(
+                        gap_class=CoverageClass.NATIVE_SOURCE_UNAVAILABLE,
+                        reason_code="KANBAN_BOARD_UNRESOLVED",
+                        source_kind="native_reconciliation",
+                        source_hook="kanban_read",
+                        monotonic=False,
+                    ),
+                )
+                continue
+
+            try:
+                (
+                    tasks,
+                    parents,
+                    runs_by_task,
+                    protocol_violations,
+                    native_rejections,
+                ) = self._read_native_board(collector, board_slug)
+            except Exception:
+                collector.health.increment("KANBAN_RECONCILIATION_FAILED")
+                continue
+
+            if not tasks:
+                self._emit_native_rejections(collector, native_rejections)
+                continue
+
+            token_groups: dict[tuple[str, str], list[str]] = {}
+            for task_id, task in tasks.items():
+                parsed = parse_correlation_token(task.get("idempotency_key"))
+                if parsed is not None and parsed[0] == trace_id:
+                    token_groups.setdefault(parsed, []).append(task_id)
+
+            if not token_groups:
+                collector.health.increment("BINDING_ROOT_TOKEN_MISSING")
+                self._emit_native_once(
+                    collector,
+                    ("root_token_missing", trace_id),
+                    builder.coverage_gap(
+                        gap_class=CoverageClass.RECONCILIATION_AMBIGUOUS,
+                        reason_code="BINDING_ROOT_TOKEN_MISSING",
+                        source_kind="native_reconciliation",
+                        source_hook="kanban_read",
+                        monotonic=False,
+                    ),
+                )
+
+            live_root_traces: list[str] = []
+            for token_parts, task_ids in sorted(token_groups.items()):
+                t_id, unit_ref = token_parts
+                if len(task_ids) != 1:
+                    collector.health.increment("BINDING_TOKEN_REUSED")
+                    if _retained_trace_exists(collector.paths, t_id):
+                        self._emit_native_once(
+                            collector,
+                            ("token_ambiguity", t_id, unit_ref),
+                            builder.coverage_gap(
+                                gap_class=CoverageClass.RECONCILIATION_AMBIGUOUS,
+                                reason_code="BINDING_TOKEN_REUSED",
+                                source_kind="native_reconciliation",
+                                source_hook="kanban_read",
+                                monotonic=False,
+                            ),
+                        )
+                    continue
+                task_id = task_ids[0]
+                task = tasks[task_id]
+                materialized_at = _native_datetime(task.get("created_at"))
+                session_id = native_pseudonym_ref(task.get("session_id"), kind="session")
+                retained = _retained_trace_exists(collector.paths, t_id)
+                if retained:
+                    collector.restore_materialized_trace(t_id)
+                elif not collector.ensure_trace_opened(
+                    t_id,
+                    session_lineage=(session_id,) if session_id else (),
+                    materialized_at=materialized_at,
+                    materialization_ref=binding_ref(t_id, task_id),
+                    source_kind="native_reconciliation",
+                    source_hook="kanban_read",
+                ):
+                    continue
+                already = collector.binder.trace_for(task_id)
+                decision = collector.binder.bind_root(
+                    trace_id=t_id,
+                    task_ref=task_id,
+                    token=f"aether.obs.v1:{t_id}:{unit_ref}",
+                    project_id=collector.paths.project_id,
+                )
+                if not decision.bound:
+                    collector.health.increment(decision.reason_code or "BINDING_UNRESOLVED")
+                    continue
+                if already is None:
+                    self._emit_binding_durable(
+                        collector,
+                        trace_id=t_id,
+                        task_ref=task_id,
+                        relation="root",
+                        event=builder.work_unit(
+                            event_type="work_unit.bound",
+                            status="reported",
+                            task_ref=task_id,
+                            relation="root",
+                            required=None,
+                            binding=binding_ref(t_id, task_id),
+                            parent_task_refs=parents.get(task_id, ()),
+                            task_status=safe_ref(task.get("status")) or "unknown",
+                            occurred_at=materialized_at,
+                            timestamp_source="native",
+                            monotonic=False,
+                            source_kind="native_reconciliation",
+                            source_hook="kanban_read",
+                            session_id=session_id,
+                            actor_kind="agent",
+                            actor_id=native_profile_ref(task.get("assignee")) or "unknown",
+                            profile=native_profile_ref(task.get("assignee")),
+                        ),
+                    )
+                if task.get("status") not in ("done", "archived"):
+                    live_root_traces.append(t_id)
+
+            changed = True
+            while changed:
+                changed = False
+                for task_id in sorted(tasks):
+                    if collector.binder.trace_for(task_id) is not None:
+                        continue
+                    parent_refs = parents.get(task_id, ())
+                    if not parent_refs:
+                        continue
+                    decision = collector.binder.inherit(
+                        task_ref=task_id,
+                        parent_task_refs=parent_refs,
+                        relation="unknown",
+                        project_id=collector.paths.project_id,
+                    )
+                    if not decision.bound or decision.trace_id is None:
+                        continue
+                    changed = True
+                    task = tasks[task_id]
+                    self._emit_binding_durable(
+                        collector,
+                        trace_id=decision.trace_id,
+                        task_ref=task_id,
+                        relation="unknown",
+                        event=builder.work_unit(
+                            event_type="work_unit.bound",
+                            status="reported",
+                            task_ref=task_id,
+                            relation="unknown",
+                            required=None,
+                            binding=decision.binding or binding_ref(decision.trace_id, task_id),
+                            parent_task_refs=decision.parent_task_refs,
+                            task_status=safe_ref(task.get("status")) or "unknown",
+                            occurred_at=_native_datetime(task.get("created_at")),
+                            timestamp_source="native",
+                            monotonic=False,
+                            source_kind="native_reconciliation",
+                            source_hook="kanban_read",
+                            session_id=native_pseudonym_ref(task.get("session_id"), kind="session"),
+                            actor_kind="agent",
+                            actor_id=native_profile_ref(task.get("assignee")) or "unknown",
+                            profile=native_profile_ref(task.get("assignee")),
+                        ),
+                    )
+
+            self._emit_native_rejections(collector, native_rejections)
+
+            for task_id in sorted(tasks):
+                bound_trace = collector.binder.trace_for(task_id)
+                if bound_trace != trace_id:
+                    continue
+                task = tasks[task_id]
+                task_runs = runs_by_task.get(task_id, ())
+                relation = "root" if collector.binder.root_for(trace_id) == task_id else "unknown"
+                profile = native_profile_ref(task.get("assignee"))
+                for run in task_runs:
+                    run_id = run.get("id")
+                    if not isinstance(run_id, int) or isinstance(run_id, bool) or run_id <= 0:
+                        continue
+                    run_profile = native_profile_ref(run.get("profile")) or profile
+                    started_at = _native_datetime(run.get("started_at"))
+                    self._emit_native_once(
+                        collector,
+                        ("run", trace_id, run_id, "started"),
                         builder.work_unit(
-                            event_type="run.finished",
-                            status=status,
+                            event_type="run.started",
+                            status="started",
                             task_ref=task_id,
                             relation=relation,
                             required=None,
                             binding=binding_ref(trace_id, task_id),
                             parent_task_refs=parents.get(task_id, ()),
                             task_status=safe_ref(task.get("status")) or "unknown",
-                            run_status=run_status,
-                            run_outcome=run_outcome,
-                            occurred_at=ended_at,
+                            run_status="running",
+                            occurred_at=started_at,
                             timestamp_source="native",
                             monotonic=False,
                             source_kind="native_reconciliation",
@@ -1753,110 +2081,145 @@ class _Observer:
                             profile=run_profile,
                         ),
                     )
+                    ended_at = _native_datetime(run.get("ended_at"))
+                    if ended_at is not None:
+                        status, run_status, run_outcome = self._native_run_terminal(run)
+                        if (task_id, run_id) in protocol_violations:
+                            status = "failed"
+                            run_status = "failed"
+                            run_outcome = "protocol_violation"
+                        self._emit_native_once(
+                            collector,
+                            ("run", trace_id, run_id, "finished", status),
+                            builder.work_unit(
+                                event_type="run.finished",
+                                status=status,
+                                task_ref=task_id,
+                                relation=relation,
+                                required=None,
+                                binding=binding_ref(trace_id, task_id),
+                                parent_task_refs=parents.get(task_id, ()),
+                                task_status=safe_ref(task.get("status")) or "unknown",
+                                run_status=run_status,
+                                run_outcome=run_outcome,
+                                occurred_at=ended_at,
+                                timestamp_source="native",
+                                monotonic=False,
+                                source_kind="native_reconciliation",
+                                source_hook="kanban_read",
+                                run_id=run_id,
+                                session_id=native_pseudonym_ref(
+                                    task.get("session_id"), kind="session"
+                                ),
+                                actor_kind="agent",
+                                actor_id=run_profile or "unknown",
+                                profile=run_profile,
+                            ),
+                        )
 
-            latest = task_runs[-1] if task_runs else None
-            current_run_id = task.get("current_run_id")
-            if not isinstance(current_run_id, int) and latest is not None:
-                current_run_id = latest.get("id")
-            run_status = safe_ref(latest.get("status")) if latest is not None else None
-            run_status = (
-                run_status
-                if run_status
-                in {
-                    "running",
-                    "done",
-                    "blocked",
-                    "crashed",
-                    "timed_out",
-                    "failed",
-                    "released",
-                    "rate_limited",
-                    "stale",
-                    "review_requested",
-                    "changes_requested",
-                    "scheduled",
-                }
-                else None
-            )
-            raw_outcome = safe_ref(latest.get("outcome")) if latest is not None else None
-            run_outcome = (
-                raw_outcome
-                if raw_outcome
-                in {
-                    "completed",
-                    "blocked",
-                    "crashed",
-                    "timed_out",
-                    "spawn_failed",
-                    "gave_up",
-                    "reclaimed",
-                    "rate_limited",
-                    "stale",
-                    "review_requested",
-                    "changes_requested",
-                    "scheduled",
-                }
-                else None
-            )
-            task_status = safe_ref(task.get("status")) or "unknown"
-            occurred_at = _native_datetime(
-                task.get("completed_at")
-                if task_status == "done"
-                else task.get("last_heartbeat_at")
-                if task_status == "running"
-                else (latest or {}).get("ended_at")
-                if latest is not None
-                else task.get("started_at") or task.get("created_at")
-            )
-            event_status = {
-                "done": "completed",
-                "running": "started",
-                "blocked": "blocked",
-            }.get(task_status, "reported")
-            state_event = builder.work_unit(
-                event_type="work_unit.status",
-                status=event_status,
-                task_ref=task_id,
-                relation=relation,
-                required=None,
-                binding=binding_ref(trace_id, task_id),
-                parent_task_refs=parents.get(task_id, ()),
-                task_status=task_status,
-                run_status=run_status,
-                run_outcome=run_outcome,
-                occurred_at=occurred_at,
-                timestamp_source="native",
-                monotonic=False,
-                source_kind="native_reconciliation",
-                source_hook="kanban_read",
-                run_id=current_run_id,
-                session_id=native_pseudonym_ref(task.get("session_id"), kind="session"),
-                actor_kind="agent",
-                actor_id=profile or "unknown",
-                profile=profile,
-            )
-            self._emit_native_once(
-                collector,
-                (
-                    "task_state",
-                    trace_id,
-                    task_id,
-                    current_run_id,
-                    task_status,
-                    run_status,
-                    run_outcome,
-                    state_event.get("occurred_at"),
-                ),
-                state_event,
-            )
+                latest = task_runs[-1] if task_runs else None
+                current_run_id = task.get("current_run_id")
+                if not isinstance(current_run_id, int) and latest is not None:
+                    current_run_id = latest.get("id")
+                run_status = safe_ref(latest.get("status")) if latest is not None else None
+                run_status = (
+                    run_status
+                    if run_status
+                    in {
+                        "running",
+                        "done",
+                        "blocked",
+                        "crashed",
+                        "timed_out",
+                        "failed",
+                        "released",
+                        "rate_limited",
+                        "stale",
+                        "review_requested",
+                        "changes_requested",
+                        "scheduled",
+                    }
+                    else None
+                )
+                raw_outcome = safe_ref(latest.get("outcome")) if latest is not None else None
+                run_outcome = (
+                    raw_outcome
+                    if raw_outcome
+                    in {
+                        "completed",
+                        "blocked",
+                        "crashed",
+                        "timed_out",
+                        "spawn_failed",
+                        "gave_up",
+                        "reclaimed",
+                        "rate_limited",
+                        "stale",
+                        "review_requested",
+                        "changes_requested",
+                        "scheduled",
+                    }
+                    else None
+                )
+                task_status = safe_ref(task.get("status")) or "unknown"
+                occurred_at = _native_datetime(
+                    task.get("completed_at")
+                    if task_status == "done"
+                    else task.get("last_heartbeat_at")
+                    if task_status == "running"
+                    else (latest or {}).get("ended_at")
+                    if latest is not None
+                    else task.get("started_at") or task.get("created_at")
+                )
+                event_status = {
+                    "done": "completed",
+                    "running": "started",
+                    "blocked": "blocked",
+                }.get(task_status, "reported")
+                state_event = builder.work_unit(
+                    event_type="work_unit.status",
+                    status=event_status,
+                    task_ref=task_id,
+                    relation=relation,
+                    required=None,
+                    binding=binding_ref(trace_id, task_id),
+                    parent_task_refs=parents.get(task_id, ()),
+                    task_status=task_status,
+                    run_status=run_status,
+                    run_outcome=run_outcome,
+                    occurred_at=occurred_at,
+                    timestamp_source="native",
+                    monotonic=False,
+                    source_kind="native_reconciliation",
+                    source_hook="kanban_read",
+                    run_id=current_run_id,
+                    session_id=native_pseudonym_ref(task.get("session_id"), kind="session"),
+                    actor_kind="agent",
+                    actor_id=profile or "unknown",
+                    profile=profile,
+                )
+                self._emit_native_once(
+                    collector,
+                    (
+                        "task_state",
+                        trace_id,
+                        task_id,
+                        current_run_id,
+                        task_status,
+                        run_status,
+                        run_outcome,
+                        state_event.get("occurred_at"),
+                    ),
+                    state_event,
+                )
 
-        current_task = native_kanban_task_ref(os.environ.get("HERMES_KANBAN_TASK"))
-        if current_task is not None:
-            current_trace = collector.binder.trace_for(current_task)
-            if current_trace is not None:
-                self._activate_trace(collector, current_trace)
-        elif self._active_trace is None and len(set(live_root_traces)) == 1:
-            self._activate_trace(collector, live_root_traces[0])
+            current_task = native_kanban_task_ref(os.environ.get("HERMES_KANBAN_TASK"))
+            if current_task is not None:
+                current_trace = collector.binder.trace_for(current_task)
+                if current_trace is not None:
+                    self._activate_trace(collector, current_trace)
+            elif self._active_trace is None and len(set(live_root_traces)) == 1:
+                self._activate_trace(collector, live_root_traces[0])
 
     def dispatch(self, hook: str, payload: dict[str, Any]) -> None:
         """Dispatch one public hook and always return no directive."""
@@ -1867,16 +2230,23 @@ class _Observer:
         handler = getattr(self, f"_on_{hook}", None)
         if handler is None:
             return
-        resolution_payload = payload
-        project_hint = self._objective_contract_project_hint(hook, payload)
+        resolution_payload = dict(payload)
+        project_hint = self._project_hint_for_hook(hook, payload)
+        tool_name = safe_ref(_pick(payload, "tool_name", "name")) or ""
+        is_targeted_hook = (
+            hook.startswith("kanban_")
+            or hook.startswith("on_kanban_")
+            or (
+                hook in {"pre_tool_call", "post_tool_call"}
+                and ("objective_contract" in tool_name or "kanban_" in tool_name)
+            )
+        )
         if project_hint is not None:
-            existing = _pick(payload, "aether_project_id")
-            if existing not in (None, ""):
-                if canonical_project_id(existing) != project_hint:
-                    return
-            else:
-                resolution_payload = {**payload, "aether_project_id": project_hint}
-        collector = self._resolve_collector(resolution_payload)
+            collector = self._collector_for_project(project_hint)
+        else:
+            collector = self._resolve_collector(
+                resolution_payload, is_targeted_hook=is_targeted_hook
+            )
         if collector is not None:
             self._record_native_payload_identity_rejections(collector, hook, payload)
             handler(collector, payload)
@@ -2063,6 +2433,16 @@ class _Observer:
         self._activate_trace(collector, trace_id)
         if pending is not None:
             self._emit_tool_terminal(collector, trace_id, payload, pending)
+        if action == "prepare_handoff":
+            board_slug = result.get("execution_board")
+            if project_id and isinstance(board_slug, str):
+                self._contract_board_bindings[trace_id] = (
+                    project_id,
+                    contract_id,
+                    version,
+                    board_slug,
+                )
+            return
         if action != "finalize":
             return
         event = collector.builder_for(trace_id).contract(
@@ -3041,9 +3421,12 @@ class _Observer:
     def unload(self) -> None:
         """Stop only plugin-owned work and preserve flushed segment bytes."""
         self._reconciler.stop()
-        if self._collector is not None:
+        for col in list(self._collectors.values()):
+            col.stop()
+        if self._collector is not None and self._collector not in self._collectors.values():
             self._collector.stop()
-            self._collector = None
+        self._collectors.clear()
+        self._collector = None
 
 
 def register(ctx: Any) -> None:
