@@ -65,6 +65,7 @@ jobs:
           .aether/objective-contracts/oc_ba23edf6f74b7b43/v1.md
           .aether/objective-contracts/oc_c0abec2179f6b09c/v1.md
           .aether/objective-contracts/oc_c53c85ffb6c24f69/v1.md
+          .aether/objective-contracts/oc_c780a10d94b78d85/v1.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v1.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v2.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v3.md
@@ -77,7 +78,7 @@ jobs:
           .aether/objective-contracts/oc_f8c9fc9320587cf3/v3.md
           .aether/objective-contracts/oc_f8c9fc9320587cf3/v4.md
           .aether/objective-contracts/oc_f8c9fc9320587cf3/v5.md
-          .aether/objective-contracts/oc_0084270d940c98d9/v1.md
+          .aether/objective-contracts/oc_0084270d940c98d9/tombstone.json
           .aether/objective-contracts/oc_fd2332ffe34aa5f7/v1.md
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v1.md
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v2.md
