@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import shutil
 import sqlite3
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from aether_agents.monitor import sources as sources_module
 from aether_agents.monitor.collector import (
     MonitorCollector,
     SnapshotBoundsError,
@@ -123,7 +127,7 @@ CREATE TABLE messages (
 def _write_project(
     project: Path, *, name: str = "Collision Name", project_id: str = PROJECT_ID
 ) -> None:
-    (project / ".aether").mkdir(parents=True)
+    (project / ".aether").mkdir(parents=True, exist_ok=True)
     (project / ".aether" / "project.toml").write_text(
         "\n".join(
             (
@@ -147,9 +151,10 @@ def _write_contract(
     contract_id: str = CONTRACT_ID,
     origin: str = ORIGIN,
     finalized: str = FINALIZER,
+    metadata_overrides: dict[str, Any] | None = None,
 ) -> None:
     contract_dir = project / ".aether" / "objective-contracts" / contract_id
-    contract_dir.mkdir(parents=True)
+    contract_dir.mkdir(parents=True, exist_ok=True)
     metadata = {
         "artifact_type": "aether.objective-contract.v1",
         "project_id": project_id,
@@ -168,6 +173,8 @@ def _write_contract(
         "change_reason": None,
         "observation_trace_id": "ctr_" + "1" * 32,
     }
+    if metadata_overrides is not None:
+        metadata.update(metadata_overrides)
     lines = ["---"] + [f"{key}: {json.dumps(value)}" for key, value in metadata.items()]
     lines += [
         "---",
@@ -1485,3 +1492,345 @@ def test_profile_shaped_hermes_home_resolves_kanban_boards_and_is_not_idle(
     collection_plain = sources_plain.collect(cutoff_utc="2026-09-09T15:00:00Z")
     assert len(collection_plain.items) > 0
     assert collection_plain.idle is False
+
+
+# ---------------------------------------------------------------------------
+# D18 — active contract resolution from the execution-board ``worktree_base_ref``
+# ---------------------------------------------------------------------------
+
+_CONTRACT_RELATIVE = Path(".aether") / "objective-contracts" / CONTRACT_ID / "v1.md"
+_VALID_SHA = "0123456789abcdef0123456789abcdef01234567"
+_WRITE_GIT_SUBCOMMANDS = frozenset(
+    {
+        "add",
+        "checkout",
+        "commit",
+        "fetch",
+        "gc",
+        "prune",
+        "repack",
+        "reset",
+        "restore",
+        "rm",
+        "stash",
+        "switch",
+        "update-ref",
+        "worktree",
+    }
+)
+
+
+def _git(project: Path, *arguments: str) -> str:
+    """Run one Git command against a disposable test repository."""
+    completed = subprocess.run(
+        ("git", "-C", str(project), *arguments),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
+def _git_init(project: Path) -> None:
+    subprocess.run(
+        ("git", "init", "-q", "-b", "main"), cwd=project, check=True, capture_output=True
+    )
+    subprocess.run(
+        ("git", "config", "user.email", "test@example.invalid"),
+        cwd=project,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ("git", "config", "user.name", "Test"), cwd=project, check=True, capture_output=True
+    )
+
+
+def _git_commit_all(project: Path, message: str) -> str:
+    subprocess.run(("git", "add", "-A"), cwd=project, check=True, capture_output=True)
+    subprocess.run(("git", "commit", "-qm", message), cwd=project, check=True, capture_output=True)
+    return _git(project, "rev-parse", "HEAD")
+
+
+def _git_commit_removal(project: Path, relative_path: str, message: str) -> str:
+    subprocess.run(
+        ("git", "rm", "-q", "-r", relative_path), cwd=project, check=True, capture_output=True
+    )
+    subprocess.run(("git", "commit", "-qm", message), cwd=project, check=True, capture_output=True)
+    return _git(project, "rev-parse", "HEAD")
+
+
+def _set_board_metadata(board_dir: Path, **updates: Any) -> None:
+    path = board_dir / "board.json"
+    metadata = json.loads(path.read_text(encoding="utf-8"))
+    metadata.update(updates)
+    path.write_text(json.dumps(metadata), encoding="utf-8")
+
+
+def _digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _ref_project_bindings(fixture: dict[str, Any]) -> tuple[Any, ...]:
+    projects, gaps = enumerate_project_bindings(
+        fixture["registry"],
+        native_projects_path=fixture["projects_db"],
+        hermes_home=fixture["hermes"],
+    )
+    assert gaps == ()
+    return projects
+
+
+def _read_ref_board(fixture: dict[str, Any]) -> tuple[tuple[Any, ...], tuple[str, ...]]:
+    return _read_board_bindings(
+        _ref_project_bindings(fixture),
+        board_paths=[(BOARD_SLUG, fixture["board_db"])],
+        hermes_home=fixture["hermes"],
+    )
+
+
+def _base_ref_fixture(
+    tmp_path: Path,
+    *,
+    contract_at_ref: bool = True,
+    contract_mutations: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the fixture set with the finalized contract committed only at a base ref.
+
+    The project is a real Git repository.  The commit recorded as ``base_ref`` carries
+    the marker and, unless ``contract_at_ref`` is false, the contract blob.  The
+    registered primary checkout never holds an acceptable contract: when the base-ref
+    contract is deliberately mutated, the canonical bytes remain only as a mutable
+    worktree copy, so any fallback to the primary artifact would be observable.
+    """
+    fixture = _fixture(tmp_path)
+    project = fixture["project"]
+    _git_init(project)
+    if not contract_at_ref:
+        shutil.rmtree(project / ".aether" / "objective-contracts")
+    elif contract_mutations is not None:
+        _write_contract(project, metadata_overrides=contract_mutations)
+    base_ref = _git_commit_all(project, "test: finalized contract at the execution-board base ref")
+    if contract_at_ref and contract_mutations is None:
+        _git_commit_removal(
+            project,
+            ".aether/objective-contracts",
+            "test: primary checkout without the finalized contract",
+        )
+    else:
+        _write_contract(project)
+    fixture["base_ref"] = base_ref
+    _set_board_metadata(fixture["board_dir"], worktree_base_ref=base_ref)
+    return fixture
+
+
+def test_board_contract_resolves_from_validated_base_ref_without_primary_artifact(
+    tmp_path: Path,
+) -> None:
+    """A contract committed only at the board base ref binds and produces a work item."""
+    fixture = _base_ref_fixture(tmp_path)
+    assert not (fixture["project"] / _CONTRACT_RELATIVE).exists()
+
+    bindings, gaps = _read_ref_board(fixture)
+    assert gaps == ()
+    assert len(bindings) == 1
+    binding = bindings[0]
+    assert binding.slug == BOARD_SLUG
+    assert binding.project.project_id == PROJECT_ID
+    assert binding.contract_id == CONTRACT_ID
+    assert binding.contract_version == "v1"
+    assert binding.contract_title == "Bound fixture objective"
+    assert binding.created_in_session == ORIGIN
+    assert binding.finalized_in_session == FINALIZER
+
+    source = _sources(fixture).collect(cutoff_utc="2026-09-09T14:00:00Z")
+    assert "BOARD_BASE_REF_UNREADABLE" not in source.coverage_gaps
+    assert "FINAL_CONTRACT_UNREADABLE" not in source.coverage_gaps
+    assert len(source.items) == 1
+    item = source.items[0]
+    assert item.project_id == PROJECT_ID
+    assert item.origin_session_id == ORIGIN
+    assert item.contract == {
+        "id": CONTRACT_ID,
+        "version": "v1",
+        "title": "Bound fixture objective",
+    }
+    assert item.observed_state == "review"
+
+
+def test_base_ref_contract_bytes_are_authoritative_over_a_valid_primary_copy(
+    tmp_path: Path,
+) -> None:
+    """Differing-but-valid bytes resolve from the base ref, never from the mutable copy."""
+    fixture = _base_ref_fixture(tmp_path, contract_mutations={"title": "Base ref objective"})
+    primary_text = (fixture["project"] / _CONTRACT_RELATIVE).read_text(encoding="utf-8")
+    assert '"Bound fixture objective"' in primary_text
+
+    bindings, gaps = _read_ref_board(fixture)
+    assert gaps == ()
+    assert len(bindings) == 1
+    assert bindings[0].contract_title == "Base ref objective"
+
+
+@pytest.mark.parametrize(
+    "invalid_ref",
+    [_VALID_SHA.upper(), _VALID_SHA[:39], _VALID_SHA[:8]],
+    ids=["uppercase", "truncated", "abbreviated"],
+)
+def test_present_but_invalid_base_ref_format_fails_closed_without_primary_fallback(
+    tmp_path: Path, invalid_ref: str
+) -> None:
+    """A present-but-invalid ref is a labeled gap even though the mutable copy is valid."""
+    fixture = _base_ref_fixture(tmp_path, contract_at_ref=False)
+    assert (fixture["project"] / _CONTRACT_RELATIVE).is_file()
+    _set_board_metadata(fixture["board_dir"], worktree_base_ref=invalid_ref)
+
+    bindings, gaps = _read_ref_board(fixture)
+    assert bindings == ()
+    assert gaps == ("BOARD_BASE_REF_UNREADABLE",)
+
+
+def test_base_ref_to_unknown_commit_is_a_labeled_gap_for_that_board(tmp_path: Path) -> None:
+    """An unreachable base ref object never falls back to another commit or the checkout."""
+    fixture = _base_ref_fixture(tmp_path)
+    _set_board_metadata(fixture["board_dir"], worktree_base_ref="0" * 40)
+
+    bindings, gaps = _read_ref_board(fixture)
+    assert bindings == ()
+    assert gaps == ("BOARD_BASE_REF_UNREADABLE",)
+
+
+def test_base_ref_without_contract_blob_does_not_use_mutable_worktree_artifact(
+    tmp_path: Path,
+) -> None:
+    """Mutable-worktree-only contract bytes cannot substitute for the base-ref object."""
+    fixture = _base_ref_fixture(tmp_path, contract_at_ref=False)
+    assert (fixture["project"] / _CONTRACT_RELATIVE).is_file()
+
+    bindings, gaps = _read_ref_board(fixture)
+    assert bindings == ()
+    assert gaps == ("BOARD_BASE_REF_UNREADABLE",)
+
+
+def test_base_ref_marker_project_mismatch_is_a_labeled_gap(tmp_path: Path) -> None:
+    """A marker at the base ref whose UUID disagrees with board metadata is rejected."""
+    fixture = _fixture(tmp_path)
+    project = fixture["project"]
+    _git_init(project)
+    _write_project(project, project_id=PROJECT_B)
+    base_ref = _git_commit_all(
+        project, "test: foreign project marker at the execution-board base ref"
+    )
+    _write_project(project)
+    _set_board_metadata(fixture["board_dir"], worktree_base_ref=base_ref)
+
+    bindings, gaps = _read_ref_board(fixture)
+    assert bindings == ()
+    assert gaps == ("BOARD_BASE_REF_UNREADABLE",)
+
+
+@pytest.mark.parametrize(
+    "mutations",
+    [
+        {"status": "draft"},
+        {"artifact_type": "aether.objective-contract.v2"},
+        {"contract_id": CONTRACT_B},
+        {"version": 2},
+        {"project_id": PROJECT_B},
+        {"created_in_session": ""},
+        {"finalized_in_session": ""},
+        {"title": ""},
+    ],
+    ids=[
+        "status",
+        "artifact-type",
+        "contract-id",
+        "version",
+        "project-id",
+        "created-session",
+        "finalized-session",
+        "title",
+    ],
+)
+def test_base_ref_contract_identity_mismatch_is_a_labeled_gap(
+    tmp_path: Path, mutations: dict[str, Any]
+) -> None:
+    """A base-ref contract whose identity disagrees with board metadata is a gap."""
+    fixture = _base_ref_fixture(tmp_path, contract_mutations=mutations)
+    assert (fixture["project"] / _CONTRACT_RELATIVE).is_file()
+
+    bindings, gaps = _read_ref_board(fixture)
+    assert bindings == ()
+    assert gaps == ("BOARD_BASE_REF_UNREADABLE",)
+
+
+def test_invalid_board_base_ref_does_not_erase_a_valid_base_ref_binding(
+    tmp_path: Path,
+) -> None:
+    """Unrelated invalid boards keep their own gap without suppressing valid bindings."""
+    fixture = _base_ref_fixture(tmp_path)
+    stale_board_db = _write_bound_board(
+        fixture,
+        project=fixture["project"],
+        project_id=PROJECT_ID,
+        native_project_id=NATIVE_PROJECT,
+        contract_id=CONTRACT_C,
+        board_slug=BOARD_SLUG_C,
+        origin=ORIGIN_C,
+        finalized=FINALIZER_C,
+        task_id="t_33333333",
+        title="Stale board work",
+    )
+    _set_board_metadata(stale_board_db.parent, worktree_base_ref="not-a-sha")
+    sources = ReadOnlySources(
+        registry=fixture["registry"],
+        native_projects_path=fixture["projects_db"],
+        board_paths=[(BOARD_SLUG, fixture["board_db"]), (BOARD_SLUG_C, stale_board_db)],
+        session_db_paths=[fixture["session_db"]],
+        hermes_home=fixture["hermes"],
+    )
+
+    source = sources.collect(cutoff_utc="2026-09-09T14:00:00Z")
+
+    assert "BOARD_BASE_REF_UNREADABLE" in source.coverage_gaps
+    assert len(source.items) == 1
+    item = source.items[0]
+    assert item.project_id == PROJECT_ID
+    assert item.origin_session_id == ORIGIN
+    assert item.contract is not None and item.contract["id"] == CONTRACT_ID
+
+
+def test_base_ref_collection_reads_objects_without_touching_repository_or_sources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Collection reads Git objects only, leaving the repository and sources unchanged."""
+    fixture = _base_ref_fixture(tmp_path)
+    project = fixture["project"]
+    sqlite_paths = (fixture["board_db"], fixture["session_db"], fixture["projects_db"])
+    before_status = _git(project, "status", "--porcelain=v1", "--untracked-files=all")
+    before_refs = _git(project, "for-each-ref", "--format=%(refname) %(objectname)")
+    before_digests = {path: _digest(path) for path in sqlite_paths}
+
+    recorded: list[list[str]] = []
+    real_run = subprocess.run
+
+    def _recording_run(command: Any, *args: Any, **kwargs: Any) -> Any:
+        if isinstance(command, (list, tuple)) and command and command[0] == "git":
+            recorded.append([str(part) for part in command])
+        return real_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(sources_module.subprocess, "run", _recording_run)
+    source = _sources(fixture).collect(cutoff_utc="2026-09-09T14:00:00Z")
+    monkeypatch.undo()
+
+    assert len(source.items) == 1
+    assert recorded, "the base-ref contract must be read through a Git object read"
+    for command in recorded:
+        assert command[0] == "git"
+        assert "show" in command
+        assert not _WRITE_GIT_SUBCOMMANDS.intersection(command)
+        assert fixture["base_ref"] in command[-1]
+    assert _git(project, "status", "--porcelain=v1", "--untracked-files=all") == before_status
+    assert _git(project, "for-each-ref", "--format=%(refname) %(objectname)") == before_refs
+    assert {path: _digest(path) for path in sqlite_paths} == before_digests
+    assert not (project / _CONTRACT_RELATIVE).exists()

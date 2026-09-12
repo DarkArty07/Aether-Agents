@@ -311,3 +311,105 @@ closeout.
 - The terminal phase spends the environment's single accelerated live qualification and
   stops on the contract's stop conditions; failure preserves integrated HEAD and keeps
   issue #367 open.
+
+## v5 continuation — D18 production attribution from the board base (Supervisor)
+
+**Status:** verified executable continuation/decomposition for Objective Contract
+`oc_f8c9fc9320587cf3@v5`.
+
+**Derived by:** Supervisor (root task `t_c8da0c97`, flow
+`aether.flow.v1:2d96ab2db76f5c515b051254662a0a1e1b46118177662ac13933072f4996a5e7`).
+
+**Source contract:** `.aether/objective-contracts/oc_f8c9fc9320587cf3/v5.md`
+(SHA-256 `709aebb5bf01d11f5e9758bcd9f4d5fd664b55fa50f222843fd9ac165e1107d5`) on base
+`fa164c5a4c7d5080378c28b19d80a74839850c05`.
+
+The v2–v4 sections above remain the accepted historical breakdown. This section is the
+executable continuation for the remaining work; it does not widen the contract,
+re-implement any accepted unit or record feature acceptance.
+
+### v5 receipt
+
+| Check | Observed |
+| --- | --- |
+| Portable project | `.aether/project.toml` `project_id` `12027989-a08f-41cd-a82c-54ff1bfb6b03` matches the envelope and the v5 board metadata; repository `DarkArty07/Aether-Agents` |
+| Contract bytes | SHA-256 `709aebb5…`; `status: final`, `version: 5`, supersedes the immutable v4, v1–v4 preserved |
+| Base / branch | Base `fa164c5` (clean objective worktree, branch `aether-agents-2/t_c8da0c97-telegram-monitor-v5-repair-production-at`), equal to the v5 board `worktree_base_ref` |
+| Defect | `sources.py::_contract_metadata` (lines 543-582) reads `.aether/objective-contracts/<contract>/v<version>.md` only from `project.path`; the reception board's contract was absent from the primary working tree, so `_read_board_bindings` reported `FINAL_CONTRACT_UNREADABLE` and the natural report carried `items: []` with 11 coverage gaps while reportable work existed (`rpt_26ad1a292db123d939ee37720c7075c8`) |
+| Design sufficiency | D18 (`spec.md` §D18, `plan.md` §4 "Canonical board contract before merge", `quickstart.md` §5, `evidence/authoring.md` §"v5 reception discrepancy") settles the Git-object source, the validated-ref authority, the marker/contract identity checks, the fail-closed gaps, the legacy primary fallback and the read-only rule; no missing material product decision |
+| Preserved state | Merged v4 monitor (main `42bf4b9` + docs `fa164c5`), paused production job `a3bfd97f92af` at `0 * * * *`, production store `~/.local/state/aether/monitor/monitor.sqlite3`, rollback backup `home/profiles/morfeo/backups/telegram-monitor-activation-20260911T211250Z`, recovery manifest `home/profiles/morfeo/recovery/monitor-production-activation/`, retained private v7 laboratory evidence |
+| Canary oracle | Boards whose contract exists only at their `worktree_base_ref`, verified at `fa164c5`: `oc_291b2fb34b413d92@v2` base `8d70acc8…` (2 open units), `oc_c780a10d94b78d85@v1` base `0a41438a…` (4 open), `oc_844dfc12880ee967@v1` base `9bce0d2…` (1 blocked); the v5 board itself also resolves from `fa164c5` |
+| Profiles / capacity | `implementer`, `supervisor`, `morfeo` exist; no new role or profile required |
+| Project Canonical Skills | `.aether/skills/aether-observe/SKILL.md` (observation procedure, Morfeo surface); no other `.aether/skills/` entry is relevant |
+| Tracker | issue #367 is open; tracking, not contract authority |
+
+### v5 continuation map
+
+| Source | Unit | Outcome |
+| --- | --- | --- |
+| D18 (`spec.md` §D18, `plan.md` §4, `quickstart.md` §5), the D18 half of the testing standard and of AC-6/AC-8 | **D18** `t_29621955` (Implementer, root-gated) | read-only source binding resolves the project marker and the finalized contract bytes from the board's validated `worktree_base_ref` Git object in the registered repository through an argument-array Git object read; marker and contract identity validated against board metadata before binding; invalid format, unreachable object, missing blob or mismatch fail closed as that board's labeled gap; ref-less legacy boards keep the current primary-filesystem path; real-temporary-Git-repository tests with fail-before/pass-after and negative controls; no live effect |
+| AC-1…AC-9 integrated verification, merged default-branch revision, provisioned-runtime update, monitor off/on and the one production attribution canary, #367 reconciliation, residue | **MON-V5-INT** `t_71d4b7c6` (Supervisor, terminal) | terminal integration and closeout |
+| Preservation, authority, privacy, no source mutation, no legacy cleanup, no new laboratory | every unit plus MON-V5-INT | bounded local and reversible work only |
+
+### v5 execution graph
+
+```text
+t_c8da0c97 (v5 root: receipt, v5 breakdown handoff)
+    └── D18 t_29621955 (Implementer; base fa164c5, board worktree_base_ref)
+
+D18 t_29621955  ->  MON-V5-INT t_71d4b7c6 (Supervisor, terminal=true, same flow affinity)
+```
+
+D18 is the only implementation unit: `src/aether_agents/monitor/sources.py` is the single
+writable product surface, so no second unit may touch it. MON-V5-INT is serialized by design
+— it consumes the reviewed unit, pins the exact merged revision, updates the provisioned
+runtime, re-enables the preserved job and spends the one production attribution canary before
+closeout.
+
+### Shared decisions stamped into the v5 unit cards
+
+1. Authority is Objective Contract `oc_f8c9fc9320587cf3@v5` plus the named owning artifacts
+   and this breakdown; skills provide procedure only.
+2. A present, format-valid (lowercase 40-character SHA-1) `worktree_base_ref` is
+   authoritative: `.aether/project.toml` and `.aether/objective-contracts/<contract>/v<version>.md`
+   are read from that exact commit in the registered repository through a read-only Git object
+   read passed as an argument array (no shell interpolation, no `checkout`/`worktree`/`fetch`).
+   The primary working tree, task workspaces, current branch, recency and other boards are
+   never authority.
+3. Marker UUID and contract identity/version/status/session fields must agree with the board
+   metadata and canonical board slug; a disagreement is that board's labeled gap.
+4. Absent ref = unchanged legacy primary-filesystem path. Present-but-invalid format,
+   unreachable object, missing marker/contract blob or mismatch = labeled gap for that board
+   only, never a silent fallback and never another board's contract.
+5. Unrelated invalid boards contribute their own gaps without erasing a separately valid
+   binding; SQLite sources stay `mode=ro` and no Git worktree, index, ref or object store is
+   modified.
+6. Implementation units make no live external effect: no `--live`, no model or Telegram call,
+   no job enable/disable, no scheduler, no profile/plugin/service change, no push/PR/issue
+   mutation, no runtime change.
+7. Unit review uses the native same-card lane; MON-V5-INT consumes the reviewed unit and does
+   not replace its review.
+8. D18 tests stay inside the existing `tests/test_telegram_monitor_sources.py` (no new tracked
+   non-spec path, so the policy manifest needs no addition) and use a real temporary Git
+   repository with canonical board metadata.
+9. The unit writes one evidence record under `specs/telegram-monitor/evidence/`; the sanitized
+   AC mapping and the aggregate release conclusions (`release_impact=patch`,
+   `release_action=defer`, `release_channel=none`, unless observed evidence requires
+   otherwise) belong to MON-V5-INT.
+10. D17 remains in force: no further live laboratory; the retained private v7 evidence stays
+    the laboratory record and only the production canary is spent.
+
+### Preservation and residue (v5)
+
+- Never edit, stage or exact-copy the canonical Objective Contract; immutable v1–v4 stay intact.
+- Preserve the installed/merged v4 monitor, the paused job `a3bfd97f92af`, its production
+  store/receipts, the activation rollback backup and recovery manifest, the retained private
+  laboratory evidence, and every concurrent or unrelated branch, worktree, stash, job, board,
+  profile and native source database.
+- No SOUL edits, no credential acquisition/widening or persisted copies, no
+  profile/config/provider/model/router/destination change, no new laboratory, no legacy-source
+  cleanup, no forced restart or active-worker interruption outside the authorized verified
+  zero-worker window, no package publication, tag or release.
+- The terminal phase re-enables the preserved job and spends the one immediate production
+  canary; failure preserves integrated HEAD, leaves issue #367 open and applies the documented
+  scoped rollback.
