@@ -2,6 +2,12 @@
 
 No daemon is introduced. The harness uses Hermes's existing one-pass dispatcher and
 polls its durable board until the scenario settles or reaches its explicit budget.
+
+``dispatch_until_settled`` invokes the native ``hermes kanban dispatch`` writer, so it
+never inherits an ambient environment: it requires the caller's declared disposable
+``run_root`` and verifies the effective writer context — through the provisioned
+interpreter's child probe when the native modules resolve, otherwise through the faithful
+environment-derived form — before the first dispatch.
 """
 
 from __future__ import annotations
@@ -13,6 +19,7 @@ from pathlib import Path
 from typing import Mapping
 
 from .collect import CommandResult, json_from_stdout, run_command, write_json
+from .isolation import HarnessError, native_python_for, require_verified_writer_context
 
 SETTLED_STATUSES = {"done", "archived", "blocked"}
 SUCCESS_STATUSES = {"done", "archived"}
@@ -106,7 +113,24 @@ def dispatch_until_settled(
     max_passes: int,
     timeout_seconds: int,
     poll_seconds: float = 0.5,
+    run_root: Path | None = None,
+    hermes_root: Path | None = None,
 ) -> BoardState:
+    # `hermes kanban dispatch` is a native writer.  Mirror `run_persistent_session`: a
+    # caller that declares no disposable roots cannot reach it, and the declared context
+    # is verified before the first dispatch.
+    if run_root is None:
+        raise HarnessError(
+            "the dispatch probe requires a disposable context: pass the declared "
+            "`run_root` (and `hermes_root`) its environment was built for"
+        )
+    require_verified_writer_context(
+        run_root=run_root,
+        hermes_root=hermes_root,
+        environ=env,
+        python=native_python_for(hermes),
+        cwd=cwd,
+    )
     started = time.monotonic()
     last_tasks: list[dict[str, object]] = []
     poll_seconds = max(poll_seconds, timeout_seconds / max(1, max_passes))

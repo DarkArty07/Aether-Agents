@@ -51,6 +51,13 @@ VERSION_FILE = ROOT / "VERSION"
 from .affinity import qualify_affinity_evidence  # noqa: E402
 from .collect import git_diff, git_snapshot, run_command, write_json  # noqa: E402
 from .dispatch import board_list, dispatch_until_settled, hermes_argv, snapshot_board  # noqa: E402
+from .isolation import (  # noqa: E402
+    HarnessError,
+    isolated_hermes_env,
+    native_python_for,
+    preflight_disposable_destinations,
+    require_verified_writer_context,
+)
 from .persistent import (  # noqa: E402
     qualify_persistent_evidence,
     run_persistent_session,
@@ -68,10 +75,6 @@ HOOK_COMMAND_RE = re.compile(
     r"^(?P<indent>\s*)command:\s*.*aether_pre_tool_policy\.py\s*$",
     re.MULTILINE,
 )
-
-
-class HarnessError(RuntimeError):
-    pass
 
 
 def _qualify_e2e15_record(record: Mapping[str, Any], receipts: Mapping[str, Any]) -> dict[str, Any]:
@@ -363,73 +366,6 @@ def _fault_recovered(known_good: Path | None) -> bool:
         return True
     active = known_good.with_name("aether_pre_tool_policy.py")
     return active.is_file() and active.read_bytes() == known_good.read_bytes()
-
-
-def preflight_disposable_destinations(run_root: Path, *destinations: Path) -> tuple[Path, ...]:
-    """Validate and resolve disposable destinations within the owned sandbox.
-
-    Rejects destinations that are symlinks, contain symlinks within the sandbox,
-    or resolve to locations outside the resolved run_root.
-    """
-    resolved_root = run_root.expanduser().resolve()
-    targets = destinations or (run_root / "kanban.db", run_root / "worktrees")
-    resolved_targets: list[Path] = []
-    for dest in targets:
-        expanded = dest.expanduser()
-        if expanded.is_symlink():
-            raise HarnessError(f"disposable destination cannot be a symlink: {dest}")
-        resolved_dest = expanded.resolve()
-        try:
-            if not (resolved_dest == resolved_root or resolved_dest.is_relative_to(resolved_root)):
-                raise HarnessError(
-                    f"disposable destination escapes sandbox: {dest} resolves to {resolved_dest} outside {resolved_root}"
-                )
-        except ValueError:
-            raise HarnessError(
-                f"disposable destination escapes sandbox: {dest} resolves to {resolved_dest} outside {resolved_root}"
-            )
-        chk = expanded
-        while chk != run_root and chk.resolve() != resolved_root and chk != chk.parent:
-            if chk.is_symlink():
-                raise HarnessError(f"disposable destination cannot contain a symlink: {dest}")
-            chk = chk.parent
-        resolved_targets.append(resolved_dest)
-    return tuple(resolved_targets)
-
-
-def isolated_hermes_env(run_root: Path, hermes_root: Path, hermes: Path) -> dict[str, str]:
-    """Return the disposable Hermes environment shared by laboratory lanes."""
-
-    preflight_disposable_destinations(run_root, run_root / "kanban.db", run_root / "worktrees")
-
-    env = dict(os.environ)
-    # The laboratory's --in directory is authoritative. Ambient cwd and
-    # dispatcher-worker identity belong to the outer process; carrying either
-    # into the isolated home/board would make the canary act on a foreign task.
-    scrub_names = {
-        "TERMINAL_CWD",
-        "HERMES_CWD",
-        "HERMES_DELEGATED_CHILD_CONTEXT",
-        "HERMES_PROJECT_ID",
-        "HERMES_TENANT",
-        "AETHER_PROJECT_ID",
-    }
-    for name in tuple(env):
-        if name.startswith(("HERMES_KANBAN_", "HERMES_SESSION_")) or name in scrub_names:
-            env.pop(name)
-    env.update(
-        {
-            "HERMES_HOME": str(hermes_root),
-            "HERMES_BIN": str(hermes.resolve()),
-            "HERMES_ACCEPT_HOOKS": "1",
-            "HERMES_KANBAN_DB": str(run_root / "kanban.db"),
-            "HERMES_KANBAN_WORKSPACES_ROOT": str(run_root / "worktrees"),
-            "XDG_STATE_HOME": str(run_root / "xdg-state"),
-            "XDG_DATA_HOME": str(run_root / "xdg-data"),
-            "PYTHONDONTWRITEBYTECODE": "1",
-        }
-    )
-    return env
 
 
 def _pid_uses_board(pid: int, board: Path) -> bool:
@@ -1527,24 +1463,8 @@ print(json.dumps(controls, separators=(",", ":")))
 
 def _native_python(hermes: Path | None) -> Path:
     """Resolve the interpreter belonging to the caller-supplied Hermes binary."""
-    if hermes and hermes.is_file():
-        try:
-            launcher = hermes.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            launcher = ""
-        first_line = launcher.splitlines()[0].strip() if launcher else ""
-        if first_line.startswith("#!") and first_line[2:].split():
-            candidate = Path(first_line[2:].split()[0])
-            if candidate.name != "env" and candidate.is_file():
-                return candidate
-        for line in launcher.splitlines():
-            match = re.search(r"\bexec\s+(?:\"([^\"]+)\"|'([^']+)'|(\S+))", line)
-            if not match:
-                continue
-            candidate = Path(next(value for value in match.groups() if value))
-            if candidate.is_file():
-                return candidate
-    return Path(sys.executable)
+
+    return native_python_for(hermes)
 
 
 def _observe_native_affinity_controls(
@@ -1612,6 +1532,15 @@ def _observe_native_affinity_controls(
         observer_env["HERMES_KANBAN_DB"] = str(board)
         observer_env["HERMES_KANBAN_HOME"] = str(board.parent)
         observer_env.pop("HERMES_KANBAN_BOARD", None)
+        # This child creates native boards, tasks and sessions.  Verify the disposable
+        # context it will resolve before it is launched.
+        require_verified_writer_context(
+            run_root=board.parent,
+            hermes_root=hermes_home,
+            environ=observer_env,
+            python=_native_python(hermes),
+            cwd=board.parent,
+        )
         result = subprocess.run(
             command,
             capture_output=True,
@@ -1813,6 +1742,8 @@ def _live_affinity_lane(
         evidence_dir=evidence,
         max_passes=scenario.max_dispatch_passes,
         timeout_seconds=scenario.timeout_seconds,
+        run_root=board.parent,
+        hermes_root=hermes_root,
     )
     final_tasks = board_list(hermes, cwd=repo, env=env, commands_log=commands)
     final_row = _board_affinity_row(board, flow_id)
@@ -2062,6 +1993,7 @@ def _live_persistent_lane(
     baseline_acceptance: bool,
     source_status_before: str,
     known_good_hook: Path | None,
+    run_root: Path | None = None,
 ) -> dict[str, Any]:
     """Run a persistent pipeline scenario through a real native TUI."""
     dispatch_result: dict[str, Any] = {}
@@ -2080,6 +2012,8 @@ def _live_persistent_lane(
                         evidence_dir=evidence,
                         max_passes=scenario.max_dispatch_passes,
                         timeout_seconds=scenario.timeout_seconds,
+                        run_root=run_root if run_root is not None else repo.parent,
+                        hermes_root=hermes_root,
                     )
                 except Exception as exc:  # surfaced after persistent cleanup
                     dispatch_result["error"] = f"{type(exc).__name__}: {exc}"
@@ -2101,6 +2035,8 @@ def _live_persistent_lane(
         timeout_seconds=scenario.timeout_seconds,
         session_db=hermes_root / "profiles" / "morfeo" / "state.db",
         kanban_db=Path(env["HERMES_KANBAN_DB"]),
+        run_root=run_root if run_root is not None else repo.parent,
+        hermes_root=hermes_root,
     )
     dispatch_thread.join(timeout=5)
     if dispatch_thread.is_alive():
@@ -2213,6 +2149,15 @@ def live_run(
     hermes_root = prepare_profiles(profile_root, run_root, commands)
     env = isolated_hermes_env(run_root, hermes_root, hermes)
     env["AETHER_HOOK_DENIAL_AUDIT_PATH"] = str(evidence / "hook-denials.jsonl")
+    # Before the first native writer: prove the disposable context this child resolves
+    # inside the laboratory instead of an inherited production selector.
+    require_verified_writer_context(
+        run_root=run_root,
+        hermes_root=hermes_root,
+        environ=env,
+        python=native_python_for(hermes),
+        cwd=repo,
+    )
     source_status_before = _source_status(commands, env)
     runtime_project_id = _initialize_runtime_project(
         hermes, hermes_root, repo, scenario, env, commands
@@ -2233,6 +2178,7 @@ def live_run(
             baseline_acceptance=baseline_acceptance,
             source_status_before=source_status_before,
             known_good_hook=known_good_hook,
+            run_root=run_root,
         )
 
     initial_query = scenario.owner_message
@@ -2334,6 +2280,8 @@ def live_run(
             evidence_dir=evidence,
             max_passes=scenario.max_dispatch_passes,
             timeout_seconds=scenario.timeout_seconds,
+            run_root=run_root,
+            hermes_root=hermes_root,
         )
         tasks = list(board_state.tasks)
         if board_state.settled:
