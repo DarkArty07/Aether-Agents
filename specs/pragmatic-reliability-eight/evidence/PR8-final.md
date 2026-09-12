@@ -169,3 +169,22 @@ other objectives' merged-but-retained branches).
   tag, package publication or deployment was performed or implied by this objective.
 - `release_channel = none` — no prerelease or stable artifact was produced; the
   runtime adoption in §4 is a local activation of source, not a published channel.
+
+## 11. Morfeo result reception
+
+Recorded at `2026-09-12T05:24:15+00:00` against Aether `053a5a8937d0cb40427b57a144ac6c15f01361a9`,
+the clean runtime checkout `de0a96826eae4022659aee9d943421e3226ec924`, and the restarted
+Morfeo gateway.
+
+| Criterion | Evidence and producer | Reception result |
+| --- | --- | --- |
+| #357 | Pipeline evidence: exact Python 3.13 lane, 466/466 plus real harness 1/1; GitHub issue state checked by Morfeo. | Supported; no speculative product change. |
+| #372/#385/#388/#393 | Direct Morfeo rerun on the activated Hermes source: the four focused files completed **25 passed**. Runtime imports and active gateway were also checked directly. | Supported at the active revision. |
+| #396/#397/#399 and #403 | Direct Morfeo rerun on the clean Aether runtime: affected files completed **197 passed / 1 skipped**; pipeline canaries supply the exact board, rollback and multi-interpreter effects. | Supported; live-effect claims are reused pipeline evidence where a second run would add mutation. |
+| Git/GitHub closeout | Morfeo checked fork PRs #9/#10 and Aether PRs #413/#414 as merged, all four required checks green on both Aether PRs, all eight issue states closed, and final-evidence bytes equal to the board attachment. | Supported. |
+| Preservation and cleanup | Morfeo independently removed the missed authoring worktree/branch, pruned already-deleted remote refs, archived the temporary Project and removed the finite gate jobs/scripts and its own scratch. Five archived incident rows and three Hermes rollback stashes remain intentionally. | Supported with the disclosed incident and rollback residue. |
+
+Direct reception did not repeat the full three-version matrix or the owner-origin wake; those are reused from
+revision-bound pipeline evidence. The optional observation matrix remains red only on the unchanged coverage
+floor defect #412. Incidental #404, #411 and #412 remain open and are not accepted as part of this objective.
+The five archived live-board canary rows remain a disclosed procedural incident, not a claim of zero live writes.
