@@ -810,6 +810,8 @@ _NATIVE_STATUS_MAP: Final = {
     "running": "started",
     "started": "started",
     "pending": "pending",
+    "review_requested": "completed",
+    "changes_requested": "completed",
 }
 
 

@@ -3,7 +3,7 @@
 
 Aether roles share one trusted local-user boundary. Ordinary local and reversible
 work is governed by scope, Git, tests, review, and rollback — not by this hook.
-The guard blocks only high-confidence edge effects plus malformed hook input.
+The guard blocks high-confidence edges, malformed input, or kanban_create truncation (TRUNCATION).
 
 It intentionally has no Kanban/SQLite/Git subprocess dependency and does not
 infer role ownership, task size, workspace confinement, or routing from shell
@@ -77,8 +77,7 @@ BROAD_SECRET_PATTERNS = (
     ),
 )
 
-# High-confidence credential creation/acquisition. These operations change the
-# authority available to the local agent and therefore stay outside normal work.
+# High-confidence credential acquisition changes local authority and stays outside normal work.
 CREDENTIAL_OPERATION_RE = re.compile(
     r"(?is)(?:"
     r"\bgh\b[^\n;&|]*\bauth\s+(?:login|refresh)\b|"
@@ -90,11 +89,8 @@ CREDENTIAL_OPERATION_RE = re.compile(
     r")"
 )
 
-# Protected remote/public mutations. Routine owner-preauthorized GitHub
-# collaboration (normal branch/tag push, PR lifecycle, issue reconciliation,
-# and non-destructive release creation/edit/upload) is intentionally omitted.
-# Role ownership remains semantic: Supervisor publishes pipeline work after
-# review; the hook is the common edge floor, not the org chart.
+# Protected remote/public mutations omit routine owner-preauthorized collaboration
+# and non-destructive release operations; the hook is not the role org chart.
 PROTECTED_REMOTE_MUTATION_RE = re.compile(
     r"(?is)(?:"
     r"\bgit\b[^\n;&|]*(?:--no-ver[a-z-]*|core\.hooksPath\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s;&|]+))|"
@@ -130,8 +126,7 @@ PROTECTED_REMOTE_MUTATION_RE = re.compile(
     r")"
 )
 
-# Only unambiguous local destruction is blocked. Project-local rm/mv/edit and
-# ordinary Git operations stay reversible workflow, not pre-tool policy.
+# Only unambiguous local destruction is blocked; ordinary Git operations stay reversible.
 DESTRUCTIVE_OPERATION_RE = re.compile(
     r"(?is)(?:"
     r"\bgit\s+clean\b[^\n;&|]*(?:-[A-Za-z]*f[A-Za-z]*d[A-Za-z]*x|-[A-Za-z]*x[A-Za-z]*d[A-Za-z]*f|--force[^\n;&|]*--ignored)|"
@@ -282,13 +277,18 @@ def main() -> None:
     if not isinstance(tool_name, str) or not tool_name.strip():
         _block("PAYLOAD", "tool_name is missing")
 
-    # Private Hermes runtime captures used tool_input while the selected public
-    # docs name args. Supporting both prevents compatibility drift from becoming
-    # a blanket denial; both must still be mappings when present.
+    # Runtime captures use tool_input; public docs use args. Both must be mappings.
     raw_args = payload.get("tool_input")
     args = payload.get("args") if raw_args is None else raw_args
     if not isinstance(args, dict):
         _block("PAYLOAD", "tool arguments are not an object")
+
+    if tool_name == "kanban_create" and any(
+        isinstance(value, str)
+        and value.rstrip().endswith(("[truncated]", "...[truncated]", "\u2026[truncated]"))
+        for value in (args.get("title"), args.get("body"))
+    ):
+        _block("TRUNCATION", "terminal transport truncation sentinel in kanban_create")
 
     targets = _target_paths(tool_name, args)
     is_doc = bool(targets) and all(_is_doc_path(t) for t in targets)

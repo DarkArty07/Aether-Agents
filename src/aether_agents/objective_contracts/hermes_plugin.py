@@ -144,6 +144,7 @@ def _create_metadata_exclusive(
     contract_id: str,
     version: int,
     worktree_base_ref: str | None = None,
+    observation_trace_id: str | None = None,
 ) -> bool:
     """Create board metadata without ever overwriting a competing writer."""
     payload: dict[str, Any] = {
@@ -160,6 +161,8 @@ def _create_metadata_exclusive(
         "created_at": int(time.time()),
         "archived": False,
     }
+    if observation_trace_id is not None:
+        payload["observation_trace_id"] = observation_trace_id
     if worktree_base_ref is not None:
         if (
             not isinstance(worktree_base_ref, str)
@@ -211,6 +214,7 @@ def _validate_execution_metadata(
     contract_id: str,
     version: int,
     worktree_base_ref: str | None = None,
+    observation_trace_id: str | None = None,
 ) -> None:
     if metadata.get("archived"):
         raise ExecutionBoardError(
@@ -236,6 +240,15 @@ def _validate_execution_metadata(
         raise ExecutionBoardError(
             "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT",
             "the execution board carries a different Objective Contract identity",
+        )
+    if (
+        observation_trace_id is not None
+        and metadata.get("observation_trace_id")
+        and metadata.get("observation_trace_id") != observation_trace_id
+    ):
+        raise ExecutionBoardError(
+            "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT",
+            "the execution board carries a different observation_trace_id",
         )
     if worktree_base_ref is not None:
         if (
@@ -387,6 +400,7 @@ def _provision_execution_board(
     contract_id: str,
     version: int,
     worktree_base_ref: str | None = None,
+    observation_trace_id: str | None = None,
 ) -> dict[str, str]:
     """Create or verify the one Hermes board for an executable contract version."""
     from hermes_cli import kanban_db  # type: ignore[import-untyped,import-not-found]
@@ -417,6 +431,7 @@ def _provision_execution_board(
                         contract_id=contract_id,
                         version=version,
                         worktree_base_ref=worktree_base_ref,
+                        observation_trace_id=observation_trace_id,
                     )
                     directory, metadata_path, db_path = _safe_board_paths(kanban_db, slug)
 
@@ -429,6 +444,7 @@ def _provision_execution_board(
                     contract_id=contract_id,
                     version=version,
                     worktree_base_ref=worktree_base_ref,
+                    observation_trace_id=observation_trace_id,
                 )
 
                 # Use the canonical explicit path, never Hermes's raw DB override. Idempotent
@@ -444,6 +460,7 @@ def _provision_execution_board(
                     contract_id=contract_id,
                     version=version,
                     worktree_base_ref=worktree_base_ref,
+                    observation_trace_id=observation_trace_id,
                 )
                 if not db_path.is_file():
                     raise ExecutionBoardError(
@@ -533,6 +550,8 @@ def _handle(
                         contract_id=str(prepared["contract_id"]),
                         version=int(prepared["version"]),
                         worktree_base_ref=str(prepared["base_commit"]),
+                        observation_trace_id=str(prepared.get("observation_trace_id") or "")
+                        or None,
                     )
                 except ExecutionBoardError as exc:
                     raise ContractError(exc.code, str(exc)) from exc

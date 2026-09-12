@@ -17,6 +17,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from .isolation import (
+    HarnessError,
+    isolated_hermes_env,
+    native_python_for,
+    require_verified_writer_context,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class PersistentProbeResult:
@@ -121,6 +128,8 @@ def run_persistent_session(
     session_db: Path | None = None,
     kanban_db: Path | None = None,
     poll_seconds: float = 0.25,
+    run_root: Path | None = None,
+    hermes_root: Path | None = None,
 ) -> dict[str, Any]:
     """Run one native TUI-gateway session and reconcile its durable wake.
 
@@ -128,6 +137,13 @@ def run_persistent_session(
     that same native contract directly: wait for ``gateway.ready``, call
     ``session.create`` once, and submit exactly one owner prompt. Qualification parses
     no model/terminal text; it accepts only SessionDB and Kanban evidence.
+
+    This helper may spawn a full native session, so it never falls back to the ambient
+    process environment.  Pass ``env`` from a verified disposable constructor together
+    with its private ``run_root`` (and ``hermes_root``), or pass an explicit disposable
+    ``run_root`` so the single-board constructor builds one.  The pre-write gate runs
+    before the child is launched and refuses a context that resolves outside those
+    private roots.
     """
     if not argv:
         raise ValueError("native surface command is required")
@@ -139,9 +155,19 @@ def run_persistent_session(
 
     session_path = Path(session_db) if session_db is not None else None
     board_path = Path(kanban_db) if kanban_db is not None else None
-    session_ids_before = _session_ids(session_path)
-    event_cursor = _event_cursor(board_path)
-    child_env = dict(env) if env is not None else os.environ.copy()
+    if run_root is None:
+        raise HarnessError(
+            "the persistent session probe requires a disposable context: pass an "
+            "isolated `env` with its private `run_root`, or an explicit disposable `run_root`"
+        )
+    resolved_run_root = Path(run_root)
+    resolved_hermes_root = (
+        Path(hermes_root) if hermes_root is not None else resolved_run_root / "hermes-home"
+    )
+    if env is None:
+        child_env = isolated_hermes_env(resolved_run_root, resolved_hermes_root, Path(str(argv[0])))
+    else:
+        child_env = dict(env)
     child_env.pop("HERMES_DELEGATED_CHILD_CONTEXT", None)
     child_env.pop("HERMES_UI_SESSION_ID", None)
     child_env.pop("HERMES_GATEWAY_SESSION", None)
@@ -155,6 +181,17 @@ def run_persistent_session(
         child_env["HERMES_PROFILE"] = profile
     if session_path is not None:
         child_env["HERMES_HOME"] = str(session_path.parent)
+    # Before the first writer (this child can create tasks and sessions), prove the
+    # effective roots it will resolve stay inside the declared disposable roots.
+    require_verified_writer_context(
+        run_root=resolved_run_root,
+        hermes_root=resolved_hermes_root,
+        environ=child_env,
+        python=native_python_for(Path(str(argv[0]))),
+        cwd=Path(cwd) if cwd is not None else None,
+    )
+    session_ids_before = _session_ids(session_path)
+    event_cursor = _event_cursor(board_path)
     command = _tui_gateway_command(argv)
     process = subprocess.Popen(
         command,

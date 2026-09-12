@@ -645,7 +645,9 @@ def test_observation_rebinds_aether_project_id_after_isolation(
     assert env["AETHER_PROJECT_ID"] != "poisoned-inherited-project"
 
 
-def test_dispatch_passes_are_spread_across_the_scenario_timeout(monkeypatch) -> None:
+def test_dispatch_passes_are_spread_across_the_scenario_timeout(
+    tmp_path: Path, monkeypatch
+) -> None:
     sleeps: list[float] = []
     monotonic = iter((0.0, 0.0, 0.0, 0.0))
     monkeypatch.setattr(dispatch.time, "monotonic", lambda: next(monotonic))
@@ -661,14 +663,22 @@ def test_dispatch_passes_are_spread_across_the_scenario_timeout(monkeypatch) -> 
         lambda *args, **kwargs: [{"id": "t_x", "status": "running"}],
     )
     monkeypatch.setattr(dispatch, "snapshot_board", lambda *args, **kwargs: [])
+    # The native dispatch writer requires the caller's declared disposable context.
+    hermes = Path("/hermes")
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    hermes_root = run_root / "hermes-home"
+    env = lab.isolated_hermes_env(run_root, hermes_root, hermes)
     state = dispatch.dispatch_until_settled(
-        Path("/hermes"),
+        hermes,
         cwd=Path("/repo"),
-        env={},
+        env=env,
         commands_log=Path("/commands"),
         evidence_dir=Path("/evidence"),
         max_passes=2,
         timeout_seconds=30,
+        run_root=run_root,
+        hermes_root=hermes_root,
     )
     assert state.reason == "pass_budget_exhausted"
     assert sleeps == [15.0, 15.0]
