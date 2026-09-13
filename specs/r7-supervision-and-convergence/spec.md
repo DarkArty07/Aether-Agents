@@ -78,7 +78,7 @@ The two defaults compose badly. The unblock-loop breaker routes a repeatedly-blo
 - **FR-714b**: All same-flow Supervisor phases MUST reuse one exact Hermes session and one canonical Supervisor workspace. Separate operating-system processes resume that session; they MUST NOT create a fresh task-keyed Supervisor worktree for review or integration.
 - **FR-714c**: A same-flow same-profile child inherits the flow and shared workspace as `workspace_kind=dir`; a cross-profile child MUST NOT inherit Supervisor affinity. Every Implementer card receives a fresh session and its own project worktree.
 - **FR-714d**: The runtime MUST fence the binding by board, Project, flow, profile, workspace, generation and lease. Resume MUST use the exact stored session with `--no-restore-cwd --in <canonical-workspace>` and reject missing, closed, corrupt, cross-profile, cross-Project, cross-flow, or stale-generation state.
-- **FR-714e**: Exactly one terminal Supervisor card uses `terminal=true`. Ordinary decomposition, implementation, review and rework milestones remain silent to the origin; only explicit `input`, `revision`, or `flow_terminal` routing returns to Morfeo's owner-facing session.
+- **FR-714e**: Exactly one terminal Supervisor card uses `terminal=true`. Ordinary decomposition, implementation, review and rework milestones remain silent to the origin as owner-facing notifications; explicit peer questions and coalesced evidence notices may reach the originating design steward without notifying the human owner. Only explicit `input`, `revision`, or `flow_terminal` routing returns to Morfeo's owner-facing session.
 
 ### Evidence-backed useful parallelism
 

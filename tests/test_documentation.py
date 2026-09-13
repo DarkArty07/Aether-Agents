@@ -276,6 +276,7 @@ def test_policy_workflow_admits_the_documentation_inventory_and_runs_the_checker
         "docs/reference/limitations-and-troubleshooting.md",
         "docs/reference/capabilities.md",
         "docs/capabilities.toml",
+        ".aether/objective-contracts/oc_a28ff9b7fa20d29d/v1.md",
         ".aether/objective-contracts/oc_b8865f5129d60535/v1.md",
         "src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md",
         "src/aether_agents/resources/skills/git-github-closeout/SKILL.md",

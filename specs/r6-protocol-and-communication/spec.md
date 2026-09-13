@@ -78,14 +78,14 @@ The runtime provides notification and wake delivery for registered gateway platf
 - **FR-615**: The owner channel is a configuration choice. The design MUST work when the only channel is the terminal the owner returns to, without pretending that an absent asynchronous delivery occurred.
 - **FR-616**: If a messaging channel is enabled alongside an authoritative TUI session, it MAY deliver a passive completion/defect alert from board state but MUST NOT create or wake a second Morfeo reasoning session. If an asynchronous gateway session is instead selected as the authoritative owner session, its platform/chat/session identity MUST be exact so a qualified wake resumes that session rather than a parallel one.
 - **FR-617**: A woken Morfeo MUST NOT act on the owner's behalf on anything the contract does not already authorise. Waking is a reporting event, not an authority event.
-- **FR-617a**: On a qualified asynchronous platform, review requests can wake subscribers in the same way as terminal events; those mid-flight wakes MUST be absorbed by Morfeo without reaching the owner (FR-619). This behavior is not available to the TUI path while issue `#212` remains open.
+- **FR-617a**: On a qualified asynchronous platform, review requests, explicit peer questions, and coalesced evidence notices can wake subscribers or route to Morfeo as internal collaboration in the same way as terminal events; those mid-flight wakes MUST be absorbed by Morfeo without reaching the owner (FR-619). Ordinary internal milestones stay silent to the origin as owner-facing notifications. This behavior is not available to the TUI path while issue `#212` remains open.
 
 ### Why the owner is not the first responder
 
 Christopher's instruction, recorded during this stage: an implementer that gets stuck is resolved *by the system through the supervisor*; only work that cannot be built because something was never defined returns to Morfeo and then to him.
 
 - **FR-618**: The owner MUST NOT be the first responder to a blocked unit. Tier 1 of R7 §5 resolves it without a human.
-- **FR-619**: A wake that reaches the owner MUST represent either the end of a body of work or a contract defect that Morfeo could not resolve. Any other wake is a design defect in the role that raised it.
+- **FR-619**: A wake that reaches the owner MUST represent either the end of a body of work or a contract defect that Morfeo could not resolve. Ordinary internal collaboration milestones and notices stay internal to Morfeo and MUST NOT generate owner notifications. Any other wake reaching the owner is a design defect in the role that raised it.
 
 ## 7. Evidence
 

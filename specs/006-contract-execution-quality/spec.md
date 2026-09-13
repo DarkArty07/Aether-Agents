@@ -1,6 +1,6 @@
 # Contract design and execution quality
 
-Status: source resources registered and native profile files adopted; behavior remains under organic observation in #317. Repository closeout evidence is tracked in #312.
+Status: source resources registered and native profile files adopted; open-ended observation gate closed under #317 at owner direction without claiming organic PASS. Repository closeout evidence is tracked in #312.
 Issue: [#312](https://github.com/DarkArty07/Aether-Agents/issues/312).
 Owners: Morfeo designs intent/procedures; Supervisor independently reviews and owns
 execution decomposition/integration; Implementer owns bounded application and tests.
@@ -17,8 +17,9 @@ its immutable bytes are preserved, and the withdrawn delegated flow stays stoppe
 
 Register and adopt the authored resources with ordinary destination/ownership checks,
 backup and exact-file readback. Adoption is experimental, not behaviorally qualified.
-Track subsequent real observations in [#317](https://github.com/DarkArty07/Aether-Agents/issues/317)
-and keep that issue open after mechanical delivery. This objective-local choice does
+Subsequent real observations were tracked in [#317](https://github.com/DarkArty07/Aether-Agents/issues/317);
+that open-ended observation requirement was closed at owner direction without claiming organic
+PASS, and unverified behavioral limits remain explicit. This objective-local choice does
 not change other projects' testing standards or authorize bypassing required checks.
 
 ## Intent and scope
@@ -73,7 +74,7 @@ even when the worker's prose says PASS, and owns integrated acceptance and close
   allowlist and lifecycle, preserving fail-closed path/hash/ownership/collision checks,
   all-role preflight and private learned skills. No new loader, registry or schema.
 - **CQ-08**: Observe behavior organically during subsequent authorized real work and
-  record expected versus observed outcomes in #317. No synthetic Q1–Q7 campaign,
+  record expected versus observed outcomes in #317 until closed at owner direction without claiming organic PASS. No synthetic Q1–Q7 campaign,
   test adapter, fixtures or model probes are required for current delivery. Structural
   tests, source installation or missing bug reports do not establish behavior quality.
 - **CQ-09**: Adopt only the intended source resources after actual destination and
@@ -93,11 +94,11 @@ even when the worker's prose says PASS, and owns integrated acceptance and close
 | Requirement | Acceptance evidence |
 |---|---|
 | CQ-01/02 | personally authored resource bytes and existing documentary evidence; adoption readback |
-| CQ-03 | authored decision/acceptance guidance; real completeness/proportionality outcomes pending in #317 |
-| CQ-04/05 | authored unit/independence guidance; actual graphs, overlap and justified ordering observed in #317 |
-| CQ-06 | authored evidence/rework guidance; real delivery quality observed in #317, not assumed at installation |
+| CQ-03 | authored decision/acceptance guidance; real completeness/proportionality outcomes tracked in #317 until closed without claiming organic PASS |
+| CQ-04/05 | authored unit/independence guidance; actual graphs, overlap and justified ordering observed in #317 until closed without claiming organic PASS |
+| CQ-06 | authored evidence/rework guidance; real delivery quality observed in #317, not assumed at installation; closed without claiming organic PASS |
 | CQ-07 | explicit registration/inventory changes and scoped installation/ownership/readback; no new test campaign |
-| CQ-08/09 | #317 open, honest experimental status, scoped backup/adoption receipts and preserved unrelated state |
+| CQ-08/09 | #317 closed at owner direction without claiming organic PASS; honest experimental status, scoped backup/adoption receipts and preserved unrelated state |
 | CQ-10/11 | exact diff, unchanged excluded surfaces, updated documentation and honest repository closeout |
 
 ## Exclusions
@@ -112,7 +113,7 @@ bounded owner-approved improvement, not a general lifting of the stabilization f
 
 The mechanical delivery is complete when source registration/inventories, scoped
 resource adoption, readback/preservation and authorized repository closeout have actual
-evidence. It is not a declaration that new behavior is qualified: organic observation
-remains open in #317. Report omitted tests explicitly; do not invent PASS results or
+evidence. It is not a declaration that new behavior is qualified: the open-ended observation
+requirement in #317 was closed at owner direction without claiming organic PASS. Report omitted tests explicitly; do not invent PASS results or
 bypass required repository checks. No new delegated flow or tasks.md is requested by
 this amendment, and the owner-stopped flow must not resume automatically.
