@@ -79,7 +79,7 @@ All nine shared editorial sector headings ("## 01. Identity and purpose" through
 | Formatter check on Python | `uv run --frozen ruff format --check tests/test_contract_quality_documents.py tests/test_contract_result_review.py` | 2 files already formatted | Ruff stdout |
 | Whitespace & conflict markers | `git diff --check` | Clean (exit code 0) | Git stdout |
 | Nine-sector headings check | `test_sectorized_souls_and_canonical_procedures_carry_d6_amendments` | PASS | Pytest assertion |
-| Packaging & Observation preservation | `uv run --frozen pytest -q tests/test_observation_packaging.py` | 134 passed in 0.52s | Pytest report |
+| Packaging & Observation preservation | `uv run --frozen pytest -q tests/test_observation_packaging.py` | 9 passed in 2.44s (9 collected) | Pytest report |
 
 ## Compatibility Conclusion
 - **Unit compatibility impact:** `minor` (compatible additive prompt and procedure guidance; skill versions preserved; no breaking interface changes).
