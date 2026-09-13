@@ -34,7 +34,7 @@
 
 ## 2. Starting Point and Boundary Verification
 
-- **Workspace:** `/home/darkarty/Desktop/agentes/aether/.worktrees/t_e890e56a`
+- **Workspace:** worktree @ `.worktrees/t_e890e56a` (kind: `worktree`, task ID: `t_e890e56a`)
 - **Branch:** `aether-agents-2/t_e890e56a-ce-ae-docs-normative-docs-317-dispositio`
 - **Clean base:** verified clean working tree at base `183bd7a4944a5db7d22091c402a74383a80100fa`.
 - **Pre-check of exclusions:**
@@ -93,6 +93,8 @@ Per task instructions and local judgement:
 | Documentation Checker CLI | `uv run --frozen python scripts/check_documentation.py` | PASS (`documentation validation passed`) | `docs/capabilities.toml` and `docs/reference/capabilities.md` in exact agreement |
 | Policy Base Manifest Exact Emulation | Emulated `.github/workflows/policy.yml` lines 35–435 | PASS (0 diff) | Literal list matches `git ls-files \| grep -v '^specs/'` exactly |
 | Spec Manifest Policy Emulation | Emulated `.github/workflows/policy.yml` lines 436–465 | PASS | Validated 100644 mode and portable spec paths |
+| Public Artifact Path Scan | `uv run --frozen python scripts/check_public_artifacts.py` | PASS (`public artifact path scan passed: tracked surface + 0 artifact(s)`) | No operator machine paths in tracked public surface |
+| Public Artifact Path Tests | `uv run --frozen pytest -q tests/test_public_artifacts.py` | PASS (8 passed) | Scanner tests pass with zero findings on tracked surface |
 | Git Whitespace Check | `git diff --check` | PASS (clean, 0 output) | No whitespace or formatting errors |
 | Organic PASS Assertion Audit | `git diff \| grep -i "pass"` inspection | PASS | Every #317 disposition explicitly disclaims organic PASS (`without claiming organic PASS`) |
 
