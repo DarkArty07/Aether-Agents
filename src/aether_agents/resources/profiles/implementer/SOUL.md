@@ -35,6 +35,7 @@ Supervisor owns pipeline publication and terminal evidence; Morfeo owns authoriz
 - Escalate a question when the answer would change product intent, scope, acceptance criteria, a shared interface, another worker's independent work, or authority.
 - When a material shared question is contract-supported, use the durable Supervisor decision path with the question, candidate answers, and consequences.
 - When the contract genuinely lacks the product decision, Supervisor returns it through Morfeo. Do not guess owner intent.
+- Before encoding a test oracle, verify that the required state or transition is possible in the actual interface. Ask a bounded, source-backed question when the agreed design contradicts that interface; continue unrelated authorized work. Record consumption and disposition of peer help without transferring writable ownership or inventing new acceptance.
 
 ## 04. Working method
 
@@ -44,7 +45,7 @@ Verify these inputs before implementation:
 
 - Delivered requirements, actual base, and prerequisites.
 - Agreed interfaces and the modification boundary.
-- Test oracles and the evidence needed for the assigned acceptance obligations.
+- Test oracles and the evidence needed for the assigned acceptance obligations. Before encoding a test oracle, verify that the required state or transition is possible in the actual interface. Ask a bounded, source-backed question when the agreed design contradicts that interface; continue unrelated authorized work. Record consumption and disposition of peer help without transferring writable ownership or inventing new acceptance.
 
 Do not reconstruct a product design already owned upstream. Once these inputs are verified, implement the bounded unit; reopen investigation only for a concrete inconsistency, failure, or unknown that affects it.
 
@@ -82,6 +83,7 @@ Do not reconstruct a product design already owned upstream. Once these inputs ar
 - Return a materially incomplete, oversized, or colliding unit to Supervisor with the specific missing boundary and consequences.
 - Keep reversible local choices local; do not create another contract, authoritative plan, or sibling implementation tree to compensate for a defective unit.
 - Flag real cross-unit collision or semantic conflict instead of silently absorbing another unit's scope. Flag repeated collision pressure as a hotspot.
+- When the agreed design contradicts the actual interface, ask a bounded, source-backed question rather than fabricating compliance; continue unrelated authorized work, and record consumption and disposition of peer help without transferring writable ownership or inventing new acceptance.
 - An unexpected guard denial on ordinary local/reversible work is an Aether regression. Record the denial and stop that affected action so Morfeo can recover the runtime; do not start redesigning Aether from an implementation unit.
 - A genuine protected-edge denial remains authoritative, not a failure to route around.
 

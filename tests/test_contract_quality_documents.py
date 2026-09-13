@@ -168,3 +168,84 @@ print(json.dumps(result, sort_keys=True))
     )
     assert run.returncode == 0, run.stderr
     assert json.loads(run.stdout) == expected
+
+
+def test_sectorized_souls_and_canonical_procedures_carry_d6_amendments() -> None:
+    """Document/source loading checks for D6 amendments in SOULs and four canonical procedures."""
+    morfeo_soul = (RESOURCES / "profiles/morfeo/SOUL.md").read_text(encoding="utf-8")
+    supervisor_soul = (RESOURCES / "profiles/supervisor/SOUL.md").read_text(encoding="utf-8")
+    implementer_soul = (RESOURCES / "profiles/implementer/SOUL.md").read_text(encoding="utf-8")
+
+    # D6 Morfeo amendment in working method / observation
+    assert "Remain the design steward after handoff" in morfeo_soul
+    assert "distinguish a local correction from a false premise" in morfeo_soul
+    assert "Acknowledge a sound continuation without duplicating Supervisor's review" in morfeo_soul
+    assert (
+        "Do not wait for the final result when current evidence already invalidates the approach; do not take over implementation"
+        in morfeo_soul
+    )
+
+    # D6 Supervisor amendment in communication / convergence
+    assert (
+        "Share concrete questions and material execution evidence with the originating design steward during the contract"
+        in supervisor_soul
+    )
+    assert "An existing design may be unsuitable even when no section is missing" in supervisor_soul
+    assert (
+        "Consume and disposition the answer against current sources; retain execution, review and integration ownership"
+        in supervisor_soul
+    )
+    assert (
+        "Peer advice never supplies owner authority or independent approval of coauthored changes"
+        in supervisor_soul
+    )
+
+    # D6 Implementer amendment in verification / escalation
+    assert (
+        "Before encoding a test oracle, verify that the required state or transition is possible in the actual interface"
+        in implementer_soul
+    )
+    assert (
+        "Ask a bounded, source-backed question when the agreed design contradicts that interface; continue unrelated authorized work"
+        in implementer_soul
+    )
+    assert (
+        "Record consumption and disposition of peer help without transferring writable ownership or inventing new acceptance"
+        in implementer_soul
+    )
+
+    # Nine-sector headings remain intact across all three SOULs
+    expected_headings = [
+        "## 01. Identity and purpose",
+        "## 02. Authority, scope, and boundaries",
+        "## 03. Decision criteria",
+        "## 04. Working method",
+        "## 05. Procedures, tools, and coordination",
+        "## 06. Evidence, acceptance, and closeout",
+        "## 07. Failures, rework, and recovery",
+        "## 08. Knowledge, memory, and learning",
+        "## 09. Portability and runtime boundaries",
+    ]
+    for soul_text in (morfeo_soul, supervisor_soul, implementer_soul):
+        headings = [line for line in soul_text.splitlines() if line.startswith("## ")]
+        assert headings == expected_headings
+        assert (
+            "Aether has exactly three product roles: Morfeo, Supervisor, and Implementer."
+            in soul_text
+        )
+
+    # Four canonical procedures carry collaboration comment lifecycle, action verbs, and distinction
+    oc_skill = (RESOURCES / "skills/objective-contract-design/SKILL.md").read_text(encoding="utf-8")
+    sd_skill = (RESOURCES / "skills/supervisor-decomposition/SKILL.md").read_text(encoding="utf-8")
+    ie_skill = (RESOURCES / "skills/implementation-evidence/SKILL.md").read_text(encoding="utf-8")
+    crr_skill = (RESOURCES / "skills/contract-result-review/SKILL.md").read_text(encoding="utf-8")
+
+    for skill_text in (oc_skill, sd_skill, ie_skill, crr_skill):
+        norm_text = " ".join(skill_text.split())
+        assert "kanban_comment" in norm_text
+        assert "Early advice is not final result acceptance" in norm_text
+
+    for skill_text in (oc_skill, sd_skill, ie_skill):
+        assert '"action": "request"' in skill_text or "'action': 'request'" in skill_text
+        assert '"action": "resolve"' in skill_text or "'action': 'resolve'" in skill_text
+        assert "disposition" in skill_text
