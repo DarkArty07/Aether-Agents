@@ -132,7 +132,7 @@ pair changed.
 | Applied patch | `patches/hermes/HLP-420-responses-terminal-fidelity.patch`, SHA-256 `e0caa198c9c61e1235cedbc021c6e1a4d35b114c9c155df3fe1515040c420fa6`; `git apply --check` passed at that revision; preimage `agent/auxiliary_client.py` SHA-256 `93275ed4d6c5d7a84b8607b3f0fcbad998bfdd2f52f6e2516372de66ca6b7ec0` equals the recorded reconstruction input; postimages `agent/auxiliary_client.py` `2c5dfee035dd47a8bb8f2e652983f53f3ebc3b90c06adc87176f4cbf3adc0a30` and `tests/agent/test_auxiliary_client_responses_terminal_420.py` `1c8a21d09950a7bef2fbbac3b03073970f23e3eab32fd15e6e2f12cc4a1434e6` equal the reviewed candidate's recorded hashes |
 | Merged Aether source | revision `3240bbac8e3835745541c8d062bd7bf289d76bc2` (this objective's merge), clean |
 | Runtime | fresh disposable Python 3.11.15 environment containing only those two source trees; the Aether plugin entry point resolved from installed distribution metadata, and the loaded adapter module proved inside the disposable fork tree |
-| Live state | no live profile, service, board, editable runtime or Router configuration was read, reloaded, modified or activated; Router telemetry was inspected read-only |
+| Live state | no live profile, service, board, editable runtime or Router configuration was read, reloaded, modified or activated; Router telemetry was inspected read-only. Read-only inspection of the three live Aether profile SessionDBs after the continuation shows zero `web_extract` usage rows in the canary window, so the accounting landed only in the disposable SessionDB |
 
 The disposable **Hermes SessionDB** is a real `SessionDB` instance created in the
 disposable profile home. Every session row it holds — the zero-call probe sessions and
