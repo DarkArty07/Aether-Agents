@@ -1,0 +1,912 @@
+diff --git a/agent/auxiliary_client.py b/agent/auxiliary_client.py
+index 93b185c9eb..e71d241ed7 100644
+--- a/agent/auxiliary_client.py
++++ b/agent/auxiliary_client.py
+@@ -1468,6 +1468,56 @@ def _is_chat_completions_directive(exc: Exception) -> bool:
+ # calls to the Codex Responses API so callers don't need any changes.
+
+
++class AuxiliaryResponsesTerminalError(RuntimeError):
++    """A terminal Responses failure (``failed``/``cancelled``) on the auxiliary path.
++
++    The provider ended the response without a usable answer, so the adapter
++    must not report it as a successful ``stop``.  The originating terminal
++    status, ``incomplete_details`` and provider error stay attached so the
++    caller can classify the attempt without parsing the message text.
++    """
++
++    def __init__(
++        self,
++        status: str,
++        incomplete_details: Any = None,
++        error: Any = None,
++    ) -> None:
++        from agent.codex_responses_adapter import _format_responses_error
++
++        self.status = status
++        self.incomplete_details = incomplete_details
++        self.error = error
++        super().__init__(_format_responses_error(error, status))
++
++
++def _responses_tool_choice_shape(tool_choice: Any) -> Any:
++    """Translate a chat.completions ``tool_choice`` into the Responses shape.
++
++    Returns ``None`` when the value has no representation on the Responses
++    wire, so unsupported fields are dropped instead of being sent: the
++    request keeps its default tool selection rather than failing.
++    """
++    if isinstance(tool_choice, str):
++        normalized = tool_choice.strip()
++        return normalized or None
++    if isinstance(tool_choice, dict):
++        choice_type = str(tool_choice.get("type") or "").strip().lower()
++        if choice_type == "function":
++            function = tool_choice.get("function")
++            name = (
++                function.get("name")
++                if isinstance(function, dict)
++                else tool_choice.get("name")
++            )
++            if isinstance(name, str) and name.strip():
++                return {"type": "function", "name": name.strip()}
++            return None
++        if choice_type in {"auto", "required", "none"}:
++            return choice_type
++    return None
++
++
+ class _CodexCompletionsAdapter:
+     """Drop-in shim that accepts chat.completions.create() kwargs and
+     routes them through the Codex Responses streaming API."""
+@@ -1629,6 +1679,13 @@ class _CodexCompletionsAdapter:
+                 })
+             if converted:
+                 resp_kwargs["tools"] = converted
++                # ``tool_choice`` is part of the certified Responses subset and
++                # is what makes a forced structured call deterministic (#420).
++                # Only shapes the Responses wire can represent are sent; a
++                # chat-only form degrades to the default tool selection.
++                tool_choice = _responses_tool_choice_shape(kwargs.get("tool_choice"))
++                if tool_choice is not None:
++                    resp_kwargs["tool_choice"] = tool_choice
+
+         # Stable prompt-cache routing for the Codex/Responses aux path, mirroring
+         # the main transport (agent/transports/codex.py::build_kwargs, which sets
+@@ -1894,29 +1951,126 @@ class _CodexCompletionsAdapter:
+             if final is None:
+                 raise RuntimeError("Codex auxiliary Responses stream did not return a final response")
+
+-            # Extract text and tool calls from the Responses output.
+-            # Items may be SimpleNamespace (raw-event path) or dicts
+-            # (some legacy fallback paths), so handle both shapes.
++            # Extract text and tool calls from the Responses output while
++            # preserving the real terminal/phase shape (#420, AC-07). Items may
++            # be SimpleNamespace (raw-event path) or dicts (some legacy
++            # fallback paths), so handle both shapes.
+             def _item_get(obj: Any, key: str, default: Any = None) -> Any:
+                 val = getattr(obj, key, None)
+                 if val is None and isinstance(obj, dict):
+                     val = obj.get(key, default)
+                 return val if val is not None else default
+
+-            for item in (getattr(final, "output", None) or []):
++            final_status = _item_get(final, "status")
++            final_status = (
++                final_status.strip().lower() if isinstance(final_status, str) else None
++            )
++            incomplete_details = _item_get(final, "incomplete_details")
++            if isinstance(incomplete_details, dict):
++                incomplete_reason = (
++                    str(incomplete_details.get("reason") or "").strip().lower()
++                )
++            elif incomplete_details is not None:
++                incomplete_reason = (
++                    str(getattr(incomplete_details, "reason", "") or "").strip().lower()
++                )
++            else:
++                incomplete_reason = ""
++
++            if final_status in {"failed", "cancelled"}:
++                # The provider ended the response without an answer. Reporting
++                # ``stop`` here would let an unfinished attempt pass as a
++                # complete one, so surface a typed terminal failure instead.
++                raise AuxiliaryResponsesTerminalError(
++                    final_status,
++                    incomplete_details=incomplete_details,
++                    error=_item_get(final, "error"),
++                )
++
++            output_items = _item_get(final, "output", None)
++            if not isinstance(output_items, list):
++                output_items = []
++
++            commentary_text_parts: List[str] = []
++            saw_commentary_phase = False
++            saw_final_answer_phase = False
++            saw_incomplete_item = False
++            # Server-side calls may legitimately stay ``in_progress`` while the
++            # response itself is completed, so they never mark the turn
++            # incomplete — the same guard the main Codex normalizer applies.
++            _server_side_call_types = {
++                "web_search_call",
++                "file_search_call",
++                "code_interpreter_call",
++                "image_generation_call",
++                "computer_call",
++                "local_shell_call",
++                "mcp_call",
++            }
++
++            for item in output_items:
+                 item_type = _item_get(item, "type")
++                item_status = _item_get(item, "status")
++                item_status = (
++                    item_status.strip().lower()
++                    if isinstance(item_status, str)
++                    else None
++                )
++                if (
++                    item_status in {"queued", "in_progress", "incomplete"}
++                    and item_type not in _server_side_call_types
++                ):
++                    saw_incomplete_item = True
++
+                 if item_type == "message":
+-                    for part in (_item_get(item, "content") or []):
+-                        ptype = _item_get(part, "type")
+-                        if ptype in {"output_text", "text"}:
+-                            text_parts.append(_item_get(part, "text", ""))
+-                elif item_type == "function_call":
++                    item_phase = _item_get(item, "phase")
++                    normalized_phase = (
++                        item_phase.strip().lower()
++                        if isinstance(item_phase, str)
++                        else None
++                    )
++                    is_commentary_phase = normalized_phase in {"commentary", "analysis"}
++                    if is_commentary_phase:
++                        saw_commentary_phase = True
++                    elif normalized_phase in {"final_answer", "final"}:
++                        saw_final_answer_phase = True
++                    parts = _item_get(item, "content")
++                    if not isinstance(parts, list):
++                        continue
++                    item_text_parts: List[str] = []
++                    for part in parts:
++                        if _item_get(part, "type") not in {"output_text", "text"}:
++                            continue
++                        text = _item_get(part, "text", "")
++                        if isinstance(text, str) and text:
++                            item_text_parts.append(text)
++                    if not item_text_parts:
++                        continue
++                    if is_commentary_phase:
++                        # Mid-turn narration is never the final answer. Keep it
++                        # out of assistant content, matching the main Codex
++                        # normalizer, so it cannot be concatenated into — or
++                        # leak as — the payload the caller parses.
++                        commentary_text_parts.extend(item_text_parts)
++                    else:
++                        text_parts.extend(item_text_parts)
++                elif item_type in {"function_call", "custom_tool_call"}:
++                    if item_status in {"queued", "in_progress", "incomplete"}:
++                        # An unfinished call is not a usable tool call.
++                        continue
++                    arguments = _item_get(
++                        item,
++                        "arguments" if item_type == "function_call" else "input",
++                        "{}",
++                    )
++                    if not isinstance(arguments, str):
++                        arguments = json.dumps(arguments, ensure_ascii=False)
+                     tool_calls_raw.append(SimpleNamespace(
+                         id=_item_get(item, "call_id", ""),
+                         type="function",
+                         function=SimpleNamespace(
+                             name=_item_get(item, "name", ""),
+-                            arguments=_item_get(item, "arguments", "{}"),
++                            arguments=arguments,
+                         ),
+                     ))
+
+@@ -1941,21 +2095,53 @@ class _CodexCompletionsAdapter:
+
+         content = "".join(text_parts).strip() or None
+
+-        # Build a response that looks like chat.completions
++        # A completed terminal may deliver its answer only through the
++        # top-level ``output_text`` field with an empty ``output`` list, unless
++        # the only visible text was commentary narration.
++        if content is None and not (
++            saw_commentary_phase and not saw_final_answer_phase
++        ):
++            out_text = _item_get(final, "output_text")
++            if isinstance(out_text, str) and out_text.strip():
++                content = out_text.strip()
++
++        if final_status == "incomplete":
++            # Incomplete/max-output is truncation (``length``); a content
++            # filter is a provider safety terminal. Neither is a successful
++            # answer, so neither may be reported as ``stop``.
++            finish_reason = (
++                "content_filter" if incomplete_reason == "content_filter" else "length"
++            )
++        elif final_status in {"queued", "in_progress"} or saw_incomplete_item:
++            finish_reason = "incomplete"
++        elif tool_calls_raw:
++            finish_reason = "tool_calls"
++        elif saw_commentary_phase and not saw_final_answer_phase:
++            # Narration without a final answer is not a finished turn.
++            finish_reason = "incomplete"
++        else:
++            finish_reason = "stop"
++
++        # Build a response that looks like chat.completions while preserving the
++        # Responses terminal shape for callers that classify outcomes.
+         message = SimpleNamespace(
+             role="assistant",
+             content=content,
+             tool_calls=tool_calls_raw or None,
++            reasoning="".join(commentary_text_parts).strip() or None,
+         )
+         choice = SimpleNamespace(
+             index=0,
+             message=message,
+-            finish_reason="stop" if not tool_calls_raw else "tool_calls",
++            finish_reason=finish_reason,
+         )
+         return SimpleNamespace(
+             choices=[choice],
+             model=model,
+             usage=usage,
++            status=final_status,
++            incomplete_details=incomplete_details,
++            incomplete_reason=incomplete_reason or None,
+         )
+
+
+@@ -4684,6 +4870,7 @@ def _retry_same_provider_sync(
+     effective_extra_body: dict,
+     reasoning_config: Optional[dict],
+     extra_headers: Optional[Dict[str, str]] = None,
++    tool_choice: Optional[Any] = None,
+ ) -> Any:
+     if task == "vision":
+         effective_provider, retry_client, retry_model = resolve_vision_provider_client(
+@@ -4718,6 +4905,7 @@ def _retry_same_provider_sync(
+         temperature=temperature,
+         max_tokens=max_tokens,
+         tools=tools,
++        tool_choice=tool_choice,
+         timeout=effective_timeout,
+         extra_body=effective_extra_body,
+         reasoning_config=reasoning_config,
+@@ -8524,6 +8712,7 @@ def _build_call_kwargs(
+     temperature: Optional[float] = None,
+     max_tokens: Optional[int] = None,
+     tools: Optional[list] = None,
++    tool_choice: Optional[Any] = None,
+     timeout: float = 30.0,
+     extra_body: Optional[dict] = None,
+     reasoning_config: Optional[dict] = None,
+@@ -8638,6 +8827,12 @@ def _build_call_kwargs(
+             _deduped.append(_t)
+         kwargs["tools"] = _deduped
+
++    # A forced/limited tool choice only means something alongside tools;
++    # providers reject it otherwise. The Responses adapter additionally
++    # translates chat-style forms into the wire shape it can carry (#420).
++    if tool_choice is not None and "tools" in kwargs:
++        kwargs["tool_choice"] = tool_choice
++
+     # Build provider-aware reasoning kwargs through the same profile hooks used
+     # by the standard chat-completions transport. Some providers require
+     # top-level controls (Kimi/custom ``reasoning_effort``), others use nested
+@@ -9250,6 +9445,7 @@ def call_llm(
+     temperature: Optional[float] = None,
+     max_tokens: int = None,
+     tools: list = None,
++    tool_choice: Optional[Any] = None,
+     timeout: float = None,
+     extra_body: dict = None,
+     reasoning_config: Optional[dict] = None,
+@@ -9275,6 +9471,7 @@ def call_llm(
+             temperature=temperature,
+             max_tokens=max_tokens,
+             tools=tools,
++            tool_choice=tool_choice,
+             timeout=timeout,
+             extra_body=extra_body,
+             reasoning_config=reasoning_config,
+@@ -9321,6 +9518,7 @@ def _call_llm_impl(
+     temperature: Optional[float] = None,
+     max_tokens: int = None,
+     tools: list = None,
++    tool_choice: Optional[Any] = None,
+     timeout: float = None,
+     extra_body: dict = None,
+     reasoning_config: Optional[dict] = None,
+@@ -9347,6 +9545,11 @@ def _call_llm_impl(
+         temperature: Sampling temperature (None = provider default).
+         max_tokens: Max output tokens (handles max_tokens vs max_completion_tokens).
+         tools: Tool definitions (for function calling).
++        tool_choice: Optional chat.completions tool_choice ("auto"/"required"/
++              "none" or {"type": "function", "function": {"name": ...}}).
++              Carried to the provider wire on the primary route and its
++              same-provider retry; the emergency fallback chain keeps the
++              route default. Only sent together with ``tools``.
+         timeout: Request timeout in seconds (None = read from auxiliary.{task}.timeout config).
+         extra_body: Additional request body fields.
+         reasoning_config: Optional Hermes reasoning config for direct model calls
+@@ -9484,7 +9687,8 @@ def _call_llm_impl(
+     kwargs = _build_call_kwargs(
+         request_provider, final_model, messages,
+         temperature=temperature, max_tokens=max_tokens,
+-        tools=tools, timeout=effective_timeout, extra_body=effective_extra_body,
++        tools=tools, tool_choice=tool_choice,
++        timeout=effective_timeout, extra_body=effective_extra_body,
+         reasoning_config=reasoning_config,
+         base_url=_base_info or resolved_base_url, task=task)
+     if extra_headers:
+@@ -9812,6 +10016,7 @@ def _call_llm_impl(
+                     effective_extra_body=effective_extra_body,
+                     reasoning_config=reasoning_config,
+                     extra_headers=extra_headers,
++                    tool_choice=tool_choice,
+                 )
+
+         # ── Same-provider credential-pool recovery ─────────────────────
+@@ -9861,6 +10066,7 @@ def _call_llm_impl(
+                         effective_extra_body=effective_extra_body,
+                         reasoning_config=reasoning_config,
+                         extra_headers=extra_headers,
++                        tool_choice=tool_choice,
+                     )
+                 except Exception as retry2_err:
+                     # The rotated key also hit a quota/auth wall.  Mark it
+diff --git a/tests/agent/test_auxiliary_client_responses_terminal_420.py b/tests/agent/test_auxiliary_client_responses_terminal_420.py
+new file mode 100644
+index 0000000000..b347d8577d
+--- /dev/null
++++ b/tests/agent/test_auxiliary_client_responses_terminal_420.py
+@@ -0,0 +1,539 @@
++"""Responses terminal/phase fidelity and ``tool_choice`` passthrough for the
++auxiliary Codex adapter (Aether issue #420, contract AC-07).
++
++The auxiliary ``_CodexCompletionsAdapter`` is the boundary between Hermes and
++the maintained Responses route.  Before this regression suite existed, the
++adapter:
++
++* synthesized ``finish_reason="stop"`` whenever the response carried no tool
++  calls, discarding ``status`` and ``incomplete_details`` — so a truncated
++  (``max_output_tokens``), content-filtered or cancelled terminal was
++  indistinguishable from a completed answer;
++* concatenated text from *every* ``message`` item, so ``commentary`` /
++  ``analysis`` narration contaminated the final payload;
++* ignored ``output_text`` when ``output`` was empty;
++* never forwarded ``tool_choice``.
++
++These tests drive the real adapter (and, for the passthrough check, the real
++``call_llm`` -> ``_build_call_kwargs`` -> adapter chain) with synthetic
++Responses objects.  No network, no provider, no credential.
++"""
++
++from __future__ import annotations
++
++import copy
++from types import SimpleNamespace
++from unittest.mock import patch
++
++import pytest
++
++import agent.auxiliary_client as aux
++from agent.auxiliary_client import (
++    CodexAuxiliaryClient,
++    _CodexCompletionsAdapter,
++    _build_call_kwargs,
++    call_llm,
++)
++
++TOOL_SCHEMA = {
++    "type": "function",
++    "function": {
++        "name": "submit_graph_fragment",
++        "description": "Submit one validated graph fragment.",
++        "parameters": {
++            "type": "object",
++            "properties": {"nodes": {"type": "array"}},
++            "required": ["nodes"],
++        },
++    },
++}
++
++
++def _message_item(text, *, phase=None, status=None, part_type="output_text"):
++    item = SimpleNamespace(
++        type="message",
++        content=[SimpleNamespace(type=part_type, text=text)],
++    )
++    if phase is not None:
++        item.phase = phase
++    if status is not None:
++        item.status = status
++    return item
++
++
++def _function_call_item(name, arguments, *, call_id="call_1", status=None):
++    item = SimpleNamespace(
++        type="function_call",
++        call_id=call_id,
++        name=name,
++        arguments=arguments,
++    )
++    if status is not None:
++        item.status = status
++    return item
++
++
++def _final(
++    *,
++    status,
++    output=None,
++    output_text="",
++    incomplete_details=None,
++    usage=None,
++    error=None,
++):
++    return SimpleNamespace(
++        output=[] if output is None else output,
++        output_text=output_text,
++        usage=usage,
++        status=status,
++        incomplete_details=incomplete_details,
++        error=error,
++    )
++
++
++class _CapturingResponses:
++    """Fake ``client.responses`` that records the request it was handed."""
++
++    def __init__(self, final):
++        self.final = final
++        self.kwargs = None
++
++    def create(self, **kwargs):
++        self.kwargs = kwargs
++        return self.final
++
++
++def _adapter(final, model="gpt-5.6-luna"):
++    responses = _CapturingResponses(final)
++    client = SimpleNamespace(responses=responses, close=lambda: None)
++    return _CodexCompletionsAdapter(client, model), responses
++
++
++def _extract(final, **kwargs):
++    adapter, _ = _adapter(final)
++    return adapter.create(messages=[{"role": "user", "content": "extract"}], **kwargs)
++
++
++class TestResponsesTerminalFidelity:
++    """A terminal that is not a completed answer must never read as ``stop``."""
++
++    def test_incomplete_max_output_tokens_is_length_not_stop(self):
++        final = _final(
++            status="incomplete",
++            incomplete_details={"reason": "max_output_tokens"},
++            output=[_message_item('{"nodes": [')],
++        )
++
++        response = _extract(final)
++
++        assert response.choices[0].finish_reason == "length"
++        assert response.status == "incomplete"
++        assert response.incomplete_reason == "max_output_tokens"
++        # The partial text is preserved for diagnosis; classifying it as a
++        # complete answer is the caller's decision, not the adapter's.
++        assert response.choices[0].message.content == '{"nodes": ['
++
++    def test_unknown_incomplete_reason_is_still_length_not_stop(self):
++        final = _final(
++            status="incomplete",
++            incomplete_details=SimpleNamespace(reason="safety_something"),
++            output=[_message_item("partial")],
++        )
++
++        response = _extract(final)
++
++        assert response.choices[0].finish_reason == "length"
++        assert response.incomplete_reason == "safety_something"
++
++    def test_content_filter_incomplete_is_not_stop(self):
++        final = _final(
++            status="incomplete",
++            incomplete_details={"reason": "content_filter"},
++            output=[],
++        )
++
++        response = _extract(final)
++
++        assert response.choices[0].finish_reason == "content_filter"
++        assert response.choices[0].message.content is None
++        assert response.status == "incomplete"
++        assert response.incomplete_reason == "content_filter"
++
++    def test_cancelled_terminal_raises_typed_failure(self):
++        final = _final(status="cancelled", output=[_message_item("partial")])
++        error_type = getattr(aux, "AuxiliaryResponsesTerminalError", None)
++
++        assert error_type is not None, (
++            "a cancelled Responses terminal must surface a typed failure, "
++            "never a successful finish_reason"
++        )
++        with pytest.raises(error_type) as excinfo:
++            _extract(final)
++
++        assert excinfo.value.status == "cancelled"
++        assert "cancelled" in str(excinfo.value)
++
++    def test_failed_terminal_raises_typed_failure_with_provider_error(self):
++        final = _final(
++            status="failed",
++            error={"code": "server_error", "message": "upstream exploded"},
++        )
++        error_type = getattr(aux, "AuxiliaryResponsesTerminalError", None)
++
++        assert error_type is not None, (
++            "a failed Responses terminal must surface a typed failure, "
++            "never a successful finish_reason"
++        )
++        with pytest.raises(error_type) as excinfo:
++            _extract(final)
++
++        assert excinfo.value.status == "failed"
++        assert "server_error" in str(excinfo.value)
++        assert "upstream exploded" in str(excinfo.value)
++
++    def test_stream_incomplete_frame_preserves_reason(self):
++        events = [
++            SimpleNamespace(type="response.created"),
++            SimpleNamespace(
++                type="response.output_item.done",
++                item=_message_item('{"nodes": ['),
++            ),
++            SimpleNamespace(
++                type="response.incomplete",
++                response=SimpleNamespace(
++                    status="incomplete",
++                    incomplete_details={"reason": "max_output_tokens"},
++                    id="resp_incomplete",
++                    usage=None,
++                ),
++            ),
++        ]
++
++        class _CreateStream:
++            def __iter__(self):
++                return iter(events)
++
++            def close(self):
++                pass
++
++        class _Responses:
++            def create(self, **kwargs):
++                return _CreateStream()
++
++        adapter = _CodexCompletionsAdapter(
++            SimpleNamespace(responses=_Responses()), "gpt-5.6-luna"
++        )
++        response = adapter.create(messages=[{"role": "user", "content": "extract"}])
++
++        assert response.choices[0].finish_reason == "length"
++        assert response.incomplete_reason == "max_output_tokens"
++
++
++class TestResponsesPhaseFidelity:
++    """Commentary/analysis narration must not reach the final payload."""
++
++    def test_commentary_phase_does_not_contaminate_final_answer(self):
++        final = _final(
++            status="completed",
++            output=[
++                _message_item(
++                    "I will inspect the sources before answering.",
++                    phase="commentary",
++                ),
++                _message_item('{"nodes": [{"id": "a"}]}', phase="final_answer"),
++            ],
++        )
++
++        response = _extract(final)
++        message = response.choices[0].message
++
++        assert message.content == '{"nodes": [{"id": "a"}]}'
++        assert "I will inspect the sources" not in message.content
++        assert message.reasoning == "I will inspect the sources before answering."
++        assert response.choices[0].finish_reason == "stop"
++
++    def test_analysis_phase_is_not_final_content(self):
++        final = _final(
++            status="completed",
++            output=[_message_item("thinking out loud", phase="analysis")],
++            output_text="thinking out loud",
++        )
++
++        response = _extract(final)
++
++        assert response.choices[0].message.content is None
++        assert response.choices[0].finish_reason == "incomplete"
++
++    def test_analysis_plus_final_answer_is_a_completed_answer(self):
++        final = _final(
++            status="completed",
++            output=[
++                _message_item("reasoning first", phase="analysis"),
++                _message_item('{"nodes": []}', phase="final_answer"),
++            ],
++        )
++
++        response = _extract(final)
++
++        assert response.choices[0].message.content == '{"nodes": []}'
++        assert response.choices[0].finish_reason == "stop"
++
++
++class TestResponsesOutputFallback:
++    def test_empty_output_with_output_text_is_recovered(self):
++        final = _final(
++            status="completed",
++            output=[],
++            output_text='{"nodes": [], "edges": []}',
++        )
++
++        response = _extract(final)
++
++        assert response.choices[0].message.content == '{"nodes": [], "edges": []}'
++        assert response.choices[0].finish_reason == "stop"
++
++    def test_commentary_only_response_is_not_recovered_as_final(self):
++        final = _final(
++            status="completed",
++            output=[_message_item("narrating progress", phase="commentary")],
++            output_text="narrating progress",
++        )
++
++        response = _extract(final)
++
++        assert response.choices[0].message.content is None
++        assert response.choices[0].finish_reason == "incomplete"
++
++    def test_completed_empty_response_stays_empty_not_incomplete(self):
++        final = _final(status="completed", output=[], output_text="")
++
++        response = _extract(final)
++
++        assert response.choices[0].message.content is None
++        assert response.choices[0].finish_reason == "stop"
++        assert response.status == "completed"
++
++
++class TestResponsesItemShape:
++    def test_completed_function_call_is_tool_calls(self):
++        final = _final(
++            status="completed",
++            output=[_function_call_item("submit_graph_fragment", '{"nodes": []}')],
++        )
++
++        response = _extract(final)
++
++        assert response.choices[0].finish_reason == "tool_calls"
++        tool_calls = response.choices[0].message.tool_calls
++        assert tool_calls and tool_calls[0].function.name == "submit_graph_fragment"
++        assert tool_calls[0].function.arguments == '{"nodes": []}'
++
++    def test_in_progress_function_call_is_not_a_completed_tool_call(self):
++        final = _final(
++            status="completed",
++            output=[
++                _function_call_item(
++                    "submit_graph_fragment", '{"nodes": []}', status="in_progress"
++                )
++            ],
++        )
++
++        response = _extract(final)
++
++        assert response.choices[0].message.tool_calls is None
++        assert response.choices[0].finish_reason == "incomplete"
++
++    def test_incomplete_message_item_never_reports_stop(self):
++        final = _final(
++            status="completed",
++            output=[_message_item("half a sentence", status="incomplete")],
++        )
++
++        response = _extract(final)
++
++        assert response.choices[0].finish_reason == "incomplete"
++
++    def test_malformed_items_do_not_fabricate_content(self):
++        final = _final(
++            status="completed",
++            output=[
++                SimpleNamespace(type="message", content="not-a-list"),
++                SimpleNamespace(
++                    type="message",
++                    content=[SimpleNamespace(type="output_text", text=None)],
++                ),
++                {"type": "message", "content": [{"type": "output_text", "text": "ok"}]},
++                SimpleNamespace(type="future_unknown_item"),
++            ],
++        )
++
++        response = _extract(final)
++
++        assert response.choices[0].message.content == "ok"
++        assert response.choices[0].finish_reason == "stop"
++
++    def test_non_list_output_is_treated_as_empty(self):
++        final = _final(status="completed", output="not-a-list", output_text="")
++
++        response = _extract(final)
++
++        assert response.choices[0].message.content is None
++        assert response.choices[0].finish_reason == "stop"
++
++
++class TestToolChoicePassthrough:
++    """``tool_choice`` reaches the Responses request; unsupported fields do not."""
++
++    def test_function_tool_choice_is_translated_to_responses_shape(self):
++        adapter, responses = _adapter(
++            _final(status="completed", output=[_message_item("ok")])
++        )
++
++        adapter.create(
++            messages=[{"role": "user", "content": "extract"}],
++            tools=[copy.deepcopy(TOOL_SCHEMA)],
++            tool_choice={
++                "type": "function",
++                "function": {"name": "submit_graph_fragment"},
++            },
++        )
++
++        assert responses.kwargs["tool_choice"] == {
++            "type": "function",
++            "name": "submit_graph_fragment",
++        }
++        assert responses.kwargs["tools"][0]["name"] == "submit_graph_fragment"
++
++    def test_string_tool_choice_is_forwarded(self):
++        adapter, responses = _adapter(
++            _final(status="completed", output=[_message_item("ok")])
++        )
++
++        adapter.create(
++            messages=[{"role": "user", "content": "extract"}],
++            tools=[copy.deepcopy(TOOL_SCHEMA)],
++            tool_choice="required",
++        )
++
++        assert responses.kwargs["tool_choice"] == "required"
++
++    def test_unrepresentable_tool_choice_is_not_sent(self):
++        adapter, responses = _adapter(
++            _final(status="completed", output=[_message_item("ok")])
++        )
++
++        adapter.create(
++            messages=[{"role": "user", "content": "extract"}],
++            tools=[copy.deepcopy(TOOL_SCHEMA)],
++            tool_choice={"type": "allowed_tools", "mode": "auto"},
++        )
++
++        assert "tool_choice" not in responses.kwargs
++        assert responses.kwargs["tools"]
++
++    def test_tool_choice_without_tools_is_not_sent(self):
++        adapter, responses = _adapter(
++            _final(status="completed", output=[_message_item("ok")])
++        )
++
++        adapter.create(
++            messages=[{"role": "user", "content": "extract"}],
++            tool_choice="required",
++        )
++
++        assert "tool_choice" not in responses.kwargs
++        assert "tools" not in responses.kwargs
++
++    def test_unsupported_router_fields_are_not_sent(self):
++        adapter, responses = _adapter(
++            _final(status="completed", output=[_message_item("ok")])
++        )
++
++        adapter.create(
++            messages=[{"role": "user", "content": "extract"}],
++            tools=[copy.deepcopy(TOOL_SCHEMA)],
++            tool_choice="required",
++            # Chat-style fields the certified Responses subset rejects.
++            max_output_tokens=512,
++            response_format={"type": "json_object"},
++            text={"format": {"type": "json_schema"}},
++        )
++
++        for unsupported in ("max_output_tokens", "response_format", "text"):
++            assert unsupported not in responses.kwargs
++        assert responses.kwargs["tool_choice"] == "required"
++
++
++class TestBuildCallKwargsToolChoice:
++    def test_tool_choice_is_carried_alongside_tools(self):
++        kwargs = _build_call_kwargs(
++            "openai",
++            "gpt-5.5",
++            [{"role": "user", "content": "extract"}],
++            tools=[copy.deepcopy(TOOL_SCHEMA)],
++            tool_choice="required",
++            timeout=30.0,
++        )
++
++        assert kwargs["tool_choice"] == "required"
++
++    def test_tool_choice_is_dropped_without_tools(self):
++        kwargs = _build_call_kwargs(
++            "openai",
++            "gpt-5.5",
++            [{"role": "user", "content": "extract"}],
++            tool_choice="required",
++            timeout=30.0,
++        )
++
++        assert "tool_choice" not in kwargs
++        assert "tools" not in kwargs
++
++
++class TestCallLlmToolChoicePassthrough:
++    def test_call_llm_delivers_tool_choice_to_the_responses_adapter(self):
++        responses = _CapturingResponses(
++            _final(
++                status="completed",
++                output=[_function_call_item("submit_graph_fragment", '{"nodes": []}')],
++            )
++        )
++        real_client = SimpleNamespace(
++            responses=responses,
++            api_key="test-key",
++            base_url="https://api.openai.com/v1",
++            close=lambda: None,
++        )
++        codex_client = CodexAuxiliaryClient(real_client, "gpt-5.5")
++
++        with (
++            patch(
++                "agent.auxiliary_client._resolve_task_provider_model",
++                return_value=("openai-codex", "gpt-5.5", None, "test-key", None),
++            ),
++            patch(
++                "agent.auxiliary_client._get_cached_client",
++                return_value=(codex_client, "gpt-5.5"),
++            ),
++            patch(
++                "agent.auxiliary_client._get_task_extra_body",
++                return_value={},
++            ),
++        ):
++            response = call_llm(
++                task="web_extract",
++                messages=[{"role": "user", "content": "extract"}],
++                tools=[copy.deepcopy(TOOL_SCHEMA)],
++                tool_choice={
++                    "type": "function",
++                    "function": {"name": "submit_graph_fragment"},
++                },
++                timeout=30.0,
++            )
++
++        assert responses.kwargs["tool_choice"] == {
++            "type": "function",
++            "name": "submit_graph_fragment",
++        }
++        assert response.choices[0].finish_reason == "tool_calls"
