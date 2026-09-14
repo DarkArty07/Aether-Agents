@@ -74,6 +74,7 @@ jobs:
           .aether/objective-contracts/oc_ddebf175a40251f7/v1.md
           .aether/objective-contracts/oc_df24bf0cd91490d5/v1.md
           .aether/objective-contracts/oc_e64cc79af0a649a2/v1.md
+          .aether/objective-contracts/oc_f2acfb5effb21f6d/v1.md
           .aether/objective-contracts/oc_f8c9fc9320587cf3/v1.md
           .aether/objective-contracts/oc_f8c9fc9320587cf3/v2.md
           .aether/objective-contracts/oc_f8c9fc9320587cf3/v3.md
@@ -140,6 +141,7 @@ jobs:
           patches/hermes/HLP-385-review-topology-guidance.patch
           patches/hermes/HLP-388-cron-session-launch-workdir.patch
           patches/hermes/HLP-393-cron-commissioning-origin-subscription.patch
+          patches/hermes/HLP-420-responses-terminal-fidelity.patch
           patches/hermes/HLP-369-goal-mode-review-recovery.patch
           patches/hermes/HLP-275-aux-image-prep-cap.patch
           patches/hermes/HLP-382-bounded-transcript-publication.patch
@@ -368,6 +370,7 @@ jobs:
           tests/test_knowledge_plugin_cli.py
           tests/test_knowledge_regressions.py
           tests/test_knowledge_resources.py
+          tests/test_knowledge_semantic_manager.py
           tests/test_observation_usage_guidance.py
           tests/test_worker_tool_defaults.py
           tests/test_knowledge_schema.py

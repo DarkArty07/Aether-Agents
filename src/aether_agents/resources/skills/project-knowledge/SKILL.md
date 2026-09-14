@@ -174,12 +174,23 @@ default across rebuilds.
 - Do not demand a complete reindex on every turn or hide failed/unfinished updates.
 - Structural update mode never calls a model. Configured update mode (`mode="configured"`, default)
   performs or resumes semantic extraction when enabled in the existing component configuration
-  (`semantic.auxiliary_task`, currently `web_extract`). Query, status, and greetings never
-  invoke a model, and no background watcher is installed. Missing or ambiguous auxiliary access is
-  reported as unavailable/deferred; there is no primary-model fallback. One bounded retry is
-  allowed for temporary failures; persistent unavailable/deferred work is reported, not looped.
-  Coverage, pending paths and observed usage remain explicit. This skill makes no token-saving or
-  universal quality claim.
+  (`semantic.auxiliary_task`, currently `web_extract`). One configured update is a single
+  bounded transaction: at most two concurrent auxiliary calls inside a 300-second total budget,
+  with cooperative cancellation, no hidden continuation and no publication of a cancelled or
+  unvalidated candidate. Accepted additions are an additive `origin=llm` overlay on an immutable
+  structural base — never a global graph merge — and the canonical structural projection is
+  compared before publication. Only a response whose effective route matches the configured
+  primary auxiliary is cached or applied. Query, status, and greetings never invoke a model, and
+  no background watcher is installed. Missing or ambiguous auxiliary access is reported as
+  unavailable/deferred; there is no primary-model fallback. One bounded retry is allowed for
+  temporary failures; persistent unavailable/deferred work is reported, not looped.
+  Snapshot warnings describe the immutable snapshot state (`complete`, `partial`, `pending`,
+  `unavailable`, `disabled`, or unknown/inconsistent) rather than the configuration loaded at
+  read time, so a pending snapshot never means extraction is disabled. A semantic snapshot
+  without the current integrity identity is not trusted: report it as legacy/structural, keep
+  the retained artifacts, and rebuild the revision. Structural query and status stay available
+  when semantic work fails. Coverage, pending paths and observed usage remain explicit. This
+  skill makes no token-saving or universal quality claim.
 - A component error is not a reason to stop otherwise authorized development. Continue
   with direct inspection and report the knowledge limitation accurately.
 
