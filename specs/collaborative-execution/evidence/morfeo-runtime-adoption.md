@@ -4,9 +4,9 @@
 
 The owner explicitly asked Morfeo to finish the bounded runtime adoption and operational closeout directly, rather than have Supervisor restart its own parent gateway. Supervisor CE-INT is parked; the separate accidentally duplicated recovery lane was also asked to stop expanding work. No product implementation is taken over here.
 
-**State at this record:** the installation is prepared and mechanically verified; cutover is waiting for a zero-worker/compute-process window in the shared gateway. This is not an adoption-complete receipt and does not close CE-11/CE-12 or issues #334/#317.
+**Adoption state:** completed at `2026-09-14T05:22:44Z`. After the initial zero-worker wait, the owner explicitly authorized an abrupt restart, overriding the wait requirement for this one maintenance action. The service was stopped, the reviewed/reconciled sources and resources were adopted, installed checks passed, and the gateway restarted with a new process. CE-11 is now directly supported; CE-12 issue/residue closeout is recorded separately, not inferred from this receipt.
 
-The finite cutover runs outside the gateway. It checks all service compute processes (including foreground campaigns), uses the native pause-new-work mechanism only at an idle window, checks preimage hashes again, stops the service, installs reconciled sources/resources, re-runs native tests against installed bytes, verifies isolated interpreter/optional tool-argument loading, starts a new service process and lifts its own pause. A changed preimage, another operator's pause, failure or unavailable idle window is not permission to force the update. Rollback images remain retained; it never stops running workers to manufacture a window.
+The cutover ran outside the gateway. It recorded the owner's explicit interruption authority, paused new work natively, rechecked preimage hashes, stopped the service, installed reconciled sources/resources, re-ran native tests against installed bytes, verified isolated interpreter/optional tool-argument loading, started a new service process and lifted its own pause. The owner's latest instruction authorized interrupting the two active jobs; it did not authorize discarding their persisted work, resetting usage counters or changing acceptance. No unrelated configuration/source was overwritten. The prior finite wait process was ended before the authorized cutover; rollback images remain retained.
 
 ## Exact reviewed inputs
 
@@ -42,6 +42,11 @@ All native tests below used freshly isolated HOME/XDG/Hermes state with no inher
 | Positive import receipt | All four modules resolve inside the exact reconstruction | Explicit nonempty receipt; not assumed from PYTHONPATH alone |
 | Merged Aether resource/result-review/documentation/patch-reconciliation tests | **56 passed** | Resource/mechanical checks, not behavior or installed-session adoption |
 | Native preimage/resource/config preservation checks | Passed before arming the cutover | Rechecked immediately before mutation; concurrent changes abort |
+| Four collaboration test files against actual installed module paths | **53 passed** | Disposable state and fake delivery sinks; no live model campaign |
+| Production interpreter with `-I`, without `PYTHONPATH` | All five native/Aether paths resolve to the installed trees; collaboration helpers and create/comment optional arguments present | New-process loader/registry evidence, not a cached TUI refresh |
+| Installed resource/native fingerprints and unrelated-config preservation | Four native files and 13 role resources match the recorded adopted hashes; other recorded source and profile-config hashes preserved | One pre-existing local procedure overlay retained explicitly |
+| Restart readiness | New gateway process active/running; Telegram connected; native pause absent | No claim of long-term uptime or agent obedience |
+| Interrupted-task continuation | Both the unrelated Aether unit and Asclepio campaign obtained new native runs/processes on the same cards | A task relaunch is not proof that every interrupted model call or interview resumed at the exact instruction |
 
 The first native test attempt used the production interpreter without the async test plugin; those async failures were a test-environment limitation, not product evidence. The existing candidate development interpreter supplied that test plugin for the passing reconstruction. The live production interpreter is separately checked with isolated import resolution at adoption. No plausible output was substituted for a failed run.
 
@@ -51,7 +56,7 @@ GitHub required-check configuration was read directly: `pull-request-target` and
 
 ## Remaining acceptance
 
-CE-01..10 have the existing attributed implementation/review/integration evidence in CE-HF-CORE, CE-HF-DELIVER, CE-AE-RES, CE-AE-DOCS and CE-INT, with the direct reconstruction checks above. CE-11 still needs the actual installed-byte/new-process receipt. CE-12 still needs the resulting operational handoff, objective-owned residue audit and issue reconciliation. A complete board or source merge alone is not acceptance.
+CE-01..10 have the existing attributed implementation/review/integration evidence in CE-HF-CORE, CE-HF-DELIVER, CE-AE-RES, CE-AE-DOCS and CE-INT, with the direct reconstruction/installed checks above. CE-11 is directly verified by Morfeo. CE-12 still needs the resulting operational handoff, objective-owned residue audit and issue reconciliation. A complete board or source merge alone is not acceptance. Non-required CI failures are tracked separately in #428 and are not reported as PASS.
 
 Existing cached TUI sessions are not forcibly restarted or described as upgraded. New process/session loading, mechanical delivery tests, and long-term agent collaboration remain distinct conclusions. The owner expressly accepted unverified long-term efficacy; there is no organic/non-recurrence PASS and no Telegram Monitor reactivation.
 
