@@ -4,8 +4,8 @@ index 93b185c9eb..e71d241ed7 100644
 +++ b/agent/auxiliary_client.py
 @@ -1468,6 +1468,56 @@ def _is_chat_completions_directive(exc: Exception) -> bool:
  # calls to the Codex Responses API so callers don't need any changes.
- 
- 
+
+
 +class AuxiliaryResponsesTerminalError(RuntimeError):
 +    """A terminal Responses failure (``failed``/``cancelled``) on the auxiliary path.
 +
@@ -70,13 +70,13 @@ index 93b185c9eb..e71d241ed7 100644
 +                tool_choice = _responses_tool_choice_shape(kwargs.get("tool_choice"))
 +                if tool_choice is not None:
 +                    resp_kwargs["tool_choice"] = tool_choice
- 
+
          # Stable prompt-cache routing for the Codex/Responses aux path, mirroring
          # the main transport (agent/transports/codex.py::build_kwargs, which sets
 @@ -1894,29 +1951,126 @@ class _CodexCompletionsAdapter:
              if final is None:
                  raise RuntimeError("Codex auxiliary Responses stream did not return a final response")
- 
+
 -            # Extract text and tool calls from the Responses output.
 -            # Items may be SimpleNamespace (raw-event path) or dicts
 -            # (some legacy fallback paths), so handle both shapes.
@@ -89,7 +89,7 @@ index 93b185c9eb..e71d241ed7 100644
                  if val is None and isinstance(obj, dict):
                      val = obj.get(key, default)
                  return val if val is not None else default
- 
+
 -            for item in (getattr(final, "output", None) or []):
 +            final_status = _item_get(final, "status")
 +            final_status = (
@@ -209,11 +209,11 @@ index 93b185c9eb..e71d241ed7 100644
 +                            arguments=arguments,
                          ),
                      ))
- 
+
 @@ -1941,21 +2095,53 @@ class _CodexCompletionsAdapter:
- 
+
          content = "".join(text_parts).strip() or None
- 
+
 -        # Build a response that looks like chat.completions
 +        # A completed terminal may deliver its answer only through the
 +        # top-level ``output_text`` field with an empty ``output`` list, unless
@@ -264,8 +264,8 @@ index 93b185c9eb..e71d241ed7 100644
 +            incomplete_details=incomplete_details,
 +            incomplete_reason=incomplete_reason or None,
          )
- 
- 
+
+
 @@ -4684,6 +4870,7 @@ def _retry_same_provider_sync(
      effective_extra_body: dict,
      reasoning_config: Optional[dict],
@@ -293,7 +293,7 @@ index 93b185c9eb..e71d241ed7 100644
 @@ -8638,6 +8827,12 @@ def _build_call_kwargs(
              _deduped.append(_t)
          kwargs["tools"] = _deduped
- 
+
 +    # A forced/limited tool choice only means something alongside tools;
 +    # providers reject it otherwise. The Responses adapter additionally
 +    # translates chat-style forms into the wire shape it can carry (#420).
@@ -355,7 +355,7 @@ index 93b185c9eb..e71d241ed7 100644
                      extra_headers=extra_headers,
 +                    tool_choice=tool_choice,
                  )
- 
+
          # ── Same-provider credential-pool recovery ─────────────────────
 @@ -9861,6 +10066,7 @@ def _call_llm_impl(
                          effective_extra_body=effective_extra_body,

@@ -22,7 +22,7 @@
       {
         "kind": "source",
         "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/agent/auxiliary_client.py",
-        "result": "The inspected revision is unchanged at the boundary: line 2040 concatenates every message item of the Responses output, line 2087 sets finish_reason=\"stop\" if not tool_calls_raw else \"tool_calls\" with no status/incomplete_details mapping, and call_llm (line 9691) and _build_call_kwargs (line 8946) accept no tool_choice."
+        "result": "The inspected revision is unchanged at the boundary: concatenation is near line 1963, finish_reason=\"stop\" if not tool_calls_raw else \"tool_calls\" is near line 2010 with no status/incomplete_details mapping, and _build_call_kwargs (near line 8688) accepts no tool_choice."
       },
       {
         "kind": "source",
@@ -59,8 +59,8 @@
         "kind": "patch",
         "reference": "patches/hermes/HLP-420-responses-terminal-fidelity.patch",
         "result": "passed",
-        "ledger_sha256": "a81d0126b8afe625490be21fbf345732d7bcd307382de15202f68a1fcb4645c5",
-        "computed_sha256": "a81d0126b8afe625490be21fbf345732d7bcd307382de15202f68a1fcb4645c5",
+        "ledger_sha256": "e0caa198c9c61e1235cedbc021c6e1a4d35b114c9c155df3fe1515040c420fa6",
+        "computed_sha256": "e0caa198c9c61e1235cedbc021c6e1a4d35b114c9c155df3fe1515040c420fa6",
         "checksum_status": "passed",
         "parse_status": "passed"
       },
