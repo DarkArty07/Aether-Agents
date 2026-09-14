@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import tomllib
@@ -575,3 +576,77 @@ def test_monitor_guide_documents_the_isolated_laboratory_and_its_retention() -> 
     # Live evidence is still pending: the laboratory is not production acceptance.
     assert "is not qualified" in guide
     assert "not production acceptance" in guide
+
+
+SEMANTIC_MAINTENANCE_SURFACES = (
+    "specs/005-project-knowledge-graphify/contracts/expanded-tools-and-semantic.md",
+    "specs/005-project-knowledge-graphify/spec.md",
+    "docs/guides/project-knowledge.md",
+    "docs/reference/plugins-and-tools.md",
+    "docs/reference/cli.md",
+    "docs/reference/limitations-and-troubleshooting.md",
+    "docs/capabilities.toml",
+    "src/aether_agents/resources/skills/project-knowledge/SKILL.md",
+)
+
+
+def test_semantic_maintenance_documentation_states_the_corrected_transaction() -> None:
+    """Semantic user-facing text owns the corrected transaction, never the withdrawn design.
+
+    The stage-005 semantic correction replaced the fragment-merge application path and the
+    600-second invocation deadline with an additive overlay and one 300-second total budget.
+    These surfaces are the place a reader learns that behavior, so a re-asserted withdrawal
+    or an unstated bound is a documentation defect rather than a wording preference.
+    """
+
+    texts = {
+        path: (ROOT / path).read_text(encoding="utf-8") for path in SEMANTIC_MAINTENANCE_SURFACES
+    }
+
+    for path, text in texts.items():
+        for match in re.finditer(r"(?i)600[-\s]seconds?", text):
+            window = text[max(0, match.start() - 200) : match.end() + 200].lower()
+            assert "withdraw" in window, f"{path} re-asserts the retired 600-second bound"
+        for line in text.splitlines():
+            if "build_merge" in line:
+                assert re.search(r"(?i)\b(never|not|no|without)\b", line), (
+                    f"{path} presents the global merge path outside a prohibition"
+                )
+        assert "/home/" not in text
+
+    for path in (
+        "specs/005-project-knowledge-graphify/contracts/expanded-tools-and-semantic.md",
+        "specs/005-project-knowledge-graphify/spec.md",
+        "docs/guides/project-knowledge.md",
+        "docs/reference/plugins-and-tools.md",
+        "docs/reference/cli.md",
+        "docs/capabilities.toml",
+        "src/aether_agents/resources/skills/project-knowledge/SKILL.md",
+    ):
+        assert "300-second" in texts[path], path
+
+    contract = texts[
+        "specs/005-project-knowledge-graphify/contracts/expanded-tools-and-semantic.md"
+    ]
+    for marker in (
+        "additive overlay",
+        "origin=llm",
+        "structural projection",
+        "fail-closed",
+        "not served as a trusted semantic result",
+    ):
+        assert marker in contract, marker
+
+    guide = texts["docs/guides/project-knowledge.md"]
+    for marker in ("semantic_trusted", "semantic_pending", "origin=llm", "legacy"):
+        assert marker in guide, marker
+
+    skill = texts["src/aether_agents/resources/skills/project-knowledge/SKILL.md"]
+    for marker in ("300-second", "origin=llm", "never a global graph merge", "legacy/structural"):
+        assert marker in skill, marker
+
+    registry = tomllib.loads(texts["docs/capabilities.toml"])
+    record = {row["id"]: row for row in registry["capabilities"]}["knowledge.shared-project-graph"]
+    for marker in ("300-second", "origin=llm", "route-qualified", "snapshot state"):
+        assert marker in record["notes"], marker
+    assert "tests/test_knowledge_semantic_manager.py" in record["verification"]
