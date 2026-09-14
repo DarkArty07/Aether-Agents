@@ -1241,16 +1241,12 @@ def test_executor_shutdown_does_not_block_past_budget(
     """ThreadPoolExecutor does not block past the budget when in-flight workers sleep.
 
     AC-05 requires return within the configured budget from entry through return.
-    When deadline fires, in-flight workers unwind promptly via the cancel event,
-    allowing worker threads to join without adding auxiliary timeout delay.
+    When deadline fires, an uncooperative worker that ignores timeout and cancel
+    cannot hold the executor join past the deadline.
     """
     root, state = project(tmp_path)
     ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
     sem_mod = _semantic_module()
-    from agent.auxiliary_client import (  # type: ignore[import-not-found,import-untyped]
-        AuxiliaryExplicitCancellation,
-        _aux_interrupt_cancel_requested,
-    )
 
     chunks = [_chunk(0, ["README.md"]), _chunk(1, ["module.py"])]
     backend: Any = _StubBackend(chunks)
@@ -1258,16 +1254,16 @@ def test_executor_shutdown_does_not_block_past_budget(
     cache_root = tmp_path / "cache"
     inputs = _inputs(["README.md", "module.py"])
 
-    def slow_worker_ignoring_timeout(*args: Any, **kwargs: Any) -> Any:
-        # Ignores the call timeout kwargs and would sleep 2.5s, but unwinds
-        # promptly when cancel_event is signaled upon deadline exhaustion.
-        for _ in range(50):
-            if _aux_interrupt_cancel_requested():
-                raise AuxiliaryExplicitCancellation()
-            time.sleep(0.05)
+    worker_started = threading.Event()
+
+    def slow_worker_ignoring_timeout_and_cancel(*args: Any, **kwargs: Any) -> Any:
+        # Uncooperative worker: ignores call timeout AND does not poll cancel.
+        # Sleeps for 2.5s regardless of cancel/interrupt signals.
+        worker_started.set()
+        time.sleep(2.5)
         return _text_usage(_fragment_json("slow", "README.md"))
 
-    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", slow_worker_ignoring_timeout)
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", slow_worker_ignoring_timeout_and_cancel)
 
     t0 = time.monotonic()
     receipt = sem_mod.run_semantic_extraction(
@@ -1277,12 +1273,13 @@ def test_executor_shutdown_does_not_block_past_budget(
         inputs=inputs,
         cache_root=cache_root,
         ctx=ctx,
-        configuration=CONFIGURED | {"semantic_deadline_seconds": 0.2},
+        configuration=CONFIGURED | {"semantic_deadline_seconds": 0.5},
     )
     elapsed = time.monotonic() - t0
 
-    # Must return well before 2.5s (typically ~0.2s - 0.3s)
-    assert elapsed < 1.0, f"Execution took {elapsed:.2f}s; exceeded budget on shutdown"
+    assert worker_started.is_set(), "worker must have started before deadline"
+    # Must return well before 2.5s (typically ~0.5s - 0.7s)
+    assert elapsed < 1.5, f"Execution took {elapsed:.2f}s; exceeded budget on shutdown"
     assert receipt["state"] in ("pending", "partial")
     assert receipt["pipeline"]["deadline_exhausted"] is True
     assert receipt["observed_usage"]["categories"]["deadline"] > 0

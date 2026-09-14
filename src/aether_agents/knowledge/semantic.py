@@ -1807,8 +1807,7 @@ def run_semantic_extraction(
             )
             return
 
-        if _budget_expired():
-            _mark(chunk_id, pending=True, deferred=True, category="deadline", reason="deadline")
+        if _cancel_requested() or shared_cancel.is_set() or _budget_expired():
             return
 
         try:
@@ -1843,6 +1842,9 @@ def run_semantic_extraction(
             )
             return
 
+        if _cancel_requested() or shared_cancel.is_set() or _budget_expired():
+            return
+
         cache.put_qualified(
             fingerprint,
             fragment,
@@ -1856,8 +1858,9 @@ def run_semantic_extraction(
     # ── Bounded scheduling: at most two in flight, polled on the owning thread ──
     queue = deque(scheduled_records)
     if queue:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_AUXILIARY_CONCURRENCY) as pool:
-            in_flight: dict[concurrent.futures.Future[Any], dict[str, Any]] = {}
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=MAX_AUXILIARY_CONCURRENCY)
+        in_flight: dict[concurrent.futures.Future[Any], dict[str, Any]] = {}
+        try:
             while True:
                 while (
                     queue
@@ -1985,7 +1988,9 @@ def run_semantic_extraction(
                         chunk_id = int(record["chunk_id"])
                         try:
                             future.result()
-                        except (Exception, BaseException):
+                        except CANCELLATION_EXCEPTIONS:
+                            pass
+                        except Exception:
                             pass
                 for future, record in list(in_flight.items()):
                     if future.done():
@@ -2001,6 +2006,10 @@ def run_semantic_extraction(
                             category="deadline",
                             reason="deadline",
                         )
+        finally:
+            has_running = any(not f.done() for f in in_flight)
+            wait_for_workers = not has_running and not shared_cancel.is_set()
+            pool.shutdown(wait=wait_for_workers, cancel_futures=True)
 
     # ── One composition per update over every accepted fragment ───────────────
     accepted: dict[int, dict[str, Any]] = dict(cached_fragments)
@@ -2059,6 +2068,7 @@ def run_semantic_extraction(
         if _cancel_requested():
             _mark(chunk_id, pending=True, cancelled=True)
         elif _budget_expired() or _now() >= deadline - reserve:
+            deadline_exhausted = True
             _mark(chunk_id, pending=True, deferred=True, category="deadline", reason="deadline")
         else:
             _mark(chunk_id, pending=True, category="incomplete", reason="not_scheduled")
