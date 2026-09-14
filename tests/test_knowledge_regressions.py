@@ -3351,6 +3351,98 @@ def test_corrupt_overlay_is_replaced_by_a_pure_structural_base(tmp_path: Path) -
     assert base_file.is_file(), "damaged historical evidence is retained, never deleted"
 
 
+def _wait_for_process_exit(pid: int, timeout: float = 5.0) -> bool:
+    import os
+    import time
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def test_component_timeout_and_cancel_kill_the_whole_process_group(tmp_path: Path) -> None:
+    import os
+    import threading
+    import time
+
+    component = tmp_path / "slow-component"
+    component.write_text('#!/bin/sh\necho $$ > "$0.pid"\nsleep 30 &\necho $! >> "$0.pid"\nwait\n')
+    component.chmod(0o755)
+    pid_file = tmp_path / "slow-component.pid"
+
+    timed_out = GraphifyBackend(component, timeout=1.0)
+    started = time.monotonic()
+    with pytest.raises(KnowledgeError) as timeout_failure:
+        timed_out.run("probe")
+    assert timeout_failure.value.code == "TIMEOUT"
+    assert time.monotonic() - started < 10, "an unresponsive component must not block the caller"
+
+    cancelled = GraphifyBackend(component, timeout=60.0)
+    cancel_event = threading.Event()
+    threading.Timer(0.3, cancel_event.set).start()
+    started = time.monotonic()
+    with pytest.raises(KnowledgeError) as cancel_failure:
+        cancelled.run("probe", cancel_event=cancel_event)
+    assert cancel_failure.value.code == "OPERATION_CANCELLED"
+    assert time.monotonic() - started < 10, "a cancelled component must not block the caller"
+
+    deadline = time.monotonic() + 5.0
+    while not pid_file.exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    recorded = [int(line) for line in pid_file.read_text().split()] if pid_file.exists() else []
+    assert len(recorded) == 2, "the stand-in component records its shell and its child"
+    for pid in recorded:
+        assert _wait_for_process_exit(pid), f"detached component process survived: {pid}"
+    assert os.name == "posix"
+
+
+def test_host_interrupt_during_composition_publishes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aether_agents.knowledge.semantic as sem_mod
+
+    def interrupted(**_kwargs: Any) -> dict[str, Any]:
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(sem_mod, "run_semantic_extraction", interrupted)
+
+    backend = _LifecycleStandInBackend()
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    store = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        backend,
+        configuration={"enabled": True, "semantic_enabled": True},
+    )
+    view = state / "knowledge" / PROJECT / "views" / ctx.view_id
+    pointer = view / f"{ctx.source_revision}.json"
+
+    with pytest.raises(KeyboardInterrupt):
+        store.execute(ctx, "update", {"mode": "configured"})
+    assert not pointer.exists(), "an interrupted update must not publish a candidate"
+    journal = json.loads((view / "operation.json").read_text(encoding="utf-8"))
+    assert journal["phase"] == "compose"
+    assert journal["terminal_outcome"] == "failed"
+    assert journal["failure_category"] == "keyboardinterrupt"
+    assert "published_snapshot_id" not in journal
+    assert store.execute(ctx, "status", {})["available"] is False
+    with stable_lock(view / "update.lock", timeout=1.0):
+        pass
+
+    monkeypatch.setattr(
+        sem_mod, "run_semantic_extraction", lambda **_kwargs: _complete_semantic_meta()
+    )
+    recovered = store.execute(ctx, "update", {"mode": "configured"})
+    assert recovered["outcome"] == "updated"
+    assert pointer.exists()
+
+
 def test_unknown_snapshot_state_fails_closed_and_never_says_disabled(tmp_path: Path) -> None:
     backend = _LifecycleStandInBackend()
     root, state = project(tmp_path)
