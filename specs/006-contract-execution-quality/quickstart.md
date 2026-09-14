@@ -30,9 +30,9 @@ Canonical outcome and authority are in `spec.md`; material design is in `plan.md
 
 ## 2. Future-session awareness
 
-[Issue #317](https://github.com/DarkArty07/Aether-Agents/issues/317) is the durable tracker
-for organic validation of these new behaviors. Link its pending-observation status from
-the implementation closeout. Installation must not be described as behaviorally qualified.
+[Issue #317](https://github.com/DarkArty07/Aether-Agents/issues/317) tracked
+organic observation of these behaviors; its open-ended observation requirement was closed
+at owner direction without claiming organic PASS. Installation must not be described as behaviorally qualified.
 
 During normal authorized work, record material observations of:
 - whether Morfeo resolves important design questions without endless investigation;
@@ -52,7 +52,7 @@ No fixed observation count, universal test waiver or unmeasured speedup target i
 ## 3. Honest completion
 
 The source/adoption work can close once its actual registration, scoped resource writes,
-backup/readback and authorized repository disposition are recorded. Issue #317 remains
-open for real-use evidence. The 52 previous tests remain historical documentary/loading
+backup/readback and authorized repository disposition are recorded. The open-ended observation
+requirement in issue #317 was closed at owner direction without claiming organic PASS. The 52 previous tests remain historical documentary/loading
 evidence; no new tests are executed under the current instruction. Normal test standards
 for future product objectives remain unchanged.

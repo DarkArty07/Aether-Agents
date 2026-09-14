@@ -978,7 +978,7 @@ Eight Aether Canonical Skills are explicitly registered for packaging and native
 
 ### Notes / current limits
 
-The resource mechanism and explicit eight-skill inventory are covered by wheel, sdist, profile-bundle, native-directory, byte-identity and privacy checks. The three contract/execution procedures remain under owner-directed organic behavior observation in issue #317; knowledge-skill packaging does not establish live-agent adoption. Private live-profile activation is separate runtime evidence, and the public installed lifecycle remains unqualified.
+The resource mechanism and explicit eight-skill inventory are covered by wheel, sdist, profile-bundle, native-directory, byte-identity and privacy checks. The three contract/execution procedures had their open-ended observation requirement in issue #317 closed at owner direction without claiming organic PASS; knowledge-skill packaging does not establish live-agent adoption. Private live-profile activation is separate runtime evidence, and the public installed lifecycle remains unqualified.
 
 ## `skills.project-canonical-discovery`
 

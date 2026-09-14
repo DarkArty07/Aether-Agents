@@ -1,9 +1,9 @@
 # R2 Specification: The Contract and the Handoff
 
 **Roadmap ID**: R2  
-**Stage status**: in-progress — installed contract-quality procedures under owner-selected organic observation (#317)
+**Stage status**: in-progress — installed contract-quality procedures; open-ended observation requirement closed under #317 at owner direction without claiming organic PASS
 **Amended**: 2026-08-24 — Objective Contract identity/materialization added after #227; prior 2026-08-18 pipeline scoping retained
-**Owner-approved refinement**: contract-design sufficiency, canonical procedure and focused role guidance; organic observation replaces the synthetic qualification campaign for this adoption, and implementation/readback evidence is separate from behavioral qualification
+**Owner-approved refinement**: contract-design sufficiency, canonical procedure and focused role guidance; open-ended observation in #317 waived at owner direction without claiming organic PASS, and implementation/readback evidence remains separate from behavioral qualification
 **Decision authority**: Christopher  
 **Autonomous design delegate for this stage**: Hermes  
 **Future role owner**: Morfeo  

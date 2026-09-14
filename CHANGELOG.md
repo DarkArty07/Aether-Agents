@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Active Morfeo collaboration through native contract execution (#334/#317/#407)
+
+- Added optional native collaboration on the maintained Hermes fork: same-board `kanban_collaboration` adjunct table, optional `kanban_create(..., collaboration="advisory")` root opt-in, request/respond/ack/resolve on `kanban_comment`, and origin-bound TUI/gateway delivery that matches a runtime-derived `origin_route` before claim. Extra notify subscribers are not recipients. Legacy roots, ordinary comments, and the terminal-notification cursor remain unchanged.
+- Reconciled the three sectorized SOULs and four existing canonical procedures with D6 stewardship wording. Independent review, three-role boundary, and owner authority remain intact. Early advice is not final result acceptance.
+- Distinguished internal Morfeo collaboration from owner-facing notifications in DESIGN, R6/R7, AGENTS, and the execution guide. #317's open-ended observation gate is retired at owner direction without an organic PASS claim; #407 remains a closed postmortem.
+- Exact maintained-fork merge: `DarkArty07/aether-hermes` PR #11, `bb5e9a422f3135371557e75bcd1db01c5f8fc3ba`. Portable patch `patches/hermes/HLP-334-native-collaboration.patch`.
+- No version bump, package publication, tag, or live runtime activation is implied by this changelog entry (`release_action=defer`, `release_channel=none`).
+
 ### Hourly Telegram Monitor — implementation, offline qualification and documentation
 
 - Added the principal `aether monitor status|on|off|history` control surface and the matching Morfeo-only `aether_monitor` tool over one private monitor state (`<state>/monitor/monitor.sqlite3`, 0700/0600) with an opaque pin on the existing Telegram destination, durable per-part delivery outcomes and thirty-day resolved retention.
