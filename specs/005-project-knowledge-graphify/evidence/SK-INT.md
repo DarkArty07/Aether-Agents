@@ -49,6 +49,47 @@ reviewed cumulative tip plus only that breakdown.
 No failure touches `src/aether_agents/knowledge/`, and none reproduces on the
 candidate in isolation with the CI-equivalent environment.
 
+### Supervisor integration repair — route fixture binding (public CI)
+
+The first pull-request run of the non-required `observation-qualification` job
+showed five knowledge oracles failing only in the credential-free CI environment:
+`test_d36_semantic_lifecycle_cache_and_enrichment`,
+`test_d37_failure_preservation_timeout_exhaustion_malformed`,
+`test_large_corpus_semantic_prepare_bounded_paging`,
+`test_gx06_mixed_case_distinct_counts_and_paths` and
+`test_gx06_split_file_conservative_coverage`.
+
+Cause: those deterministic oracles bound only `semantic_auxiliary_task` and relied
+on the pre-repair permissive routing. The accepted fail-closed route gate refuses to
+cache or apply output whose effective route is unresolved, which is exactly what a
+credential-free environment resolves to, so the oracles observed pending states
+instead of the enrichment path they assert. This is a fixture gap, not a product
+defect: the unresolved and mismatched route cases keep their own dedicated tests.
+
+Supervisor integration repair (authored by Supervisor, therefore not covered by the
+independent unit review): one explicit deterministic non-secret expected route
+constant bound at the nine configuration sites inside those five oracles. No product
+behavior, interface, acceptance criterion or shared decision changed.
+
+Re-verification of the repair:
+
+| Check | Command | Observed |
+| --- | --- | --- |
+| Five repaired oracles, credential-free | `env -u HERMES_HOME … HOME=<clean> scripts/run_tests.py -- -q tests/test_knowledge_regressions.py -k "<five>"` | 5 passed |
+| Five repaired oracles, configured | same selection with the provisioned profile | 5 passed |
+| Full knowledge lane, credential-free | `scripts/run_tests.py -- -q tests/test_knowledge_regressions.py tests/test_knowledge_semantic_manager.py tests/test_knowledge_failures.py tests/test_knowledge_plugin_cli.py tests/test_project_knowledge_engine.py tests/test_work_memory.py tests/test_knowledge_resources.py tests/test_knowledge_schema.py` | 362 passed, 3 skipped (GH unauthenticated, live auxiliary unprovisioned, networked install lane) |
+| Knowledge lane, configured | same modules | 67 passed / 1 skipped (regression + manager modules) |
+| Static | `ruff check`, `ruff format --check`, `mypy src/aether_agents` | clean; the test-invocation typing notes are identical on the clean base |
+
+### Pre-existing CI failures on `main` (unchanged by this objective)
+
+The `observation-qualification` job is red on `main` itself for the collaboration
+scope (`tests/test_hermes_editable.py` ×11 and
+`tests/test_same_card_phase_predicates.py::test_initial_review_requires_an_independent_reviewer`).
+Those failures are reproduced on an untouched `origin/main` checkout and are not
+caused by this objective; the required merge checks (`policy (3.11)`, `policy (3.12)`,
+`policy (3.13)`, `pull-request-target`) pass on this pull request.
+
 ## Bounded live semantic canary
 
 Machine-readable record: `specs/005-project-knowledge-graphify/evidence/SK-INT-live-canary.json`.

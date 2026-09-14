@@ -24,6 +24,21 @@ from aether_agents.knowledge.snapshots import (
     semantic_snapshot_warnings,
 )
 
+# A deterministic, non-secret expected route for configured-update oracles.
+#
+# The accepted repair makes route qualification fail-closed: output whose effective
+# non-secret provider/model/protocol identity is unresolved or mismatched is neither
+# cached nor applied. A credential-free environment (public CI) resolves no concrete
+# route, which is the correct product behavior but would leave these deterministic
+# oracles in the pending state instead of exercising the accepted enrichment path.
+# Binding one explicit expected route keeps the oracle deterministic in both
+# environments; the unresolved and mismatched cases keep their own dedicated tests.
+DETERMINISTIC_ROUTE = {
+    "provider": "openrouter",
+    "model": "meta-llama/llama-3-70b-instruct",
+    "api_mode": "chat_completions",
+}
+
 
 class _ComposeStandInBackend(GraphifyBackend):
     """Stand-in for the `semantic_compose` action owned by the overlay unit.
@@ -1158,6 +1173,7 @@ def test_d36_semantic_lifecycle_cache_and_enrichment(
             "enabled": True,
             "semantic_enabled": True,
             "semantic_auxiliary_task": "web_extract",
+            "semantic": dict(DETERMINISTIC_ROUTE),
         },
     )
     # Re-running structural with semantic enabled on same inputs reports semantic_pending=True
@@ -1208,6 +1224,7 @@ def test_d36_semantic_lifecycle_cache_and_enrichment(
             "enabled": True,
             "semantic_enabled": True,
             "semantic_auxiliary_task": "web_extract",
+            "semantic": dict(DETERMINISTIC_ROUTE),
         },
     )
     enriched_res = semantic_store.execute(ctx, "update", {"mode": "configured"})
@@ -1239,6 +1256,7 @@ def test_d36_semantic_lifecycle_cache_and_enrichment(
             "enabled": True,
             "semantic_enabled": True,
             "semantic_auxiliary_task": "other_task",
+            "semantic": dict(DETERMINISTIC_ROUTE),
         },
     )
     other_res = other_store.execute(ctx, "update", {"mode": "configured"})
@@ -1298,6 +1316,7 @@ def test_d37_failure_preservation_timeout_exhaustion_malformed(
             "enabled": True,
             "semantic_enabled": True,
             "semantic_auxiliary_task": "web_extract",
+            "semantic": dict(DETERMINISTIC_ROUTE),
         },
     )
     res_429 = exhaust_store.execute(ctx, "update", {"mode": "configured"})
@@ -1360,6 +1379,7 @@ def test_d37_failure_preservation_timeout_exhaustion_malformed(
             "enabled": True,
             "semantic_enabled": True,
             "semantic_auxiliary_task": "refresh_task",
+            "semantic": dict(DETERMINISTIC_ROUTE),
         },
     )
     refresh_res = refresh_store.execute(ctx, "update", {"mode": "configured"})
@@ -1788,6 +1808,7 @@ def test_large_corpus_semantic_prepare_bounded_paging(
             "enabled": True,
             "semantic_enabled": True,
             "semantic_auxiliary_task": "web_extract",
+            "semantic": dict(DETERMINISTIC_ROUTE),
         },
     )
     res = store.execute(ctx, "update", {"mode": "configured"})
@@ -2090,7 +2111,10 @@ def test_gx06_mixed_case_distinct_counts_and_paths(
         },
         cache_root=cache_root,
         ctx=ctx,
-        configuration={"semantic_auxiliary_task": "web_extract"},
+        configuration={
+            "semantic_auxiliary_task": "web_extract",
+            "semantic": dict(DETERMINISTIC_ROUTE),
+        },
         deadline_seconds=500.0,
     )
 
@@ -2219,7 +2243,10 @@ def test_gx06_split_file_conservative_coverage(
         inputs=inputs,
         cache_root=cache_root / "case_a",
         ctx=ctx,
-        configuration={"semantic_auxiliary_task": "web_extract"},
+        configuration={
+            "semantic_auxiliary_task": "web_extract",
+            "semantic": dict(DETERMINISTIC_ROUTE),
+        },
     )
     assert "only0.md" in res_a["covered_paths"]
     assert "shared.md" not in res_a["covered_paths"]
@@ -2252,7 +2279,10 @@ def test_gx06_split_file_conservative_coverage(
         inputs=inputs,
         cache_root=cache_root / "case_b",
         ctx=ctx,
-        configuration={"semantic_auxiliary_task": "web_extract"},
+        configuration={
+            "semantic_auxiliary_task": "web_extract",
+            "semantic": dict(DETERMINISTIC_ROUTE),
+        },
         deadline_seconds=500.0,
     )
     assert scheduled_b, "chunk 0 was attempted"
