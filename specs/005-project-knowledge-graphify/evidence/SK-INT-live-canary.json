@@ -65,6 +65,129 @@
     "source": "readme",
     "target": "workflow_canary_process"
   },
+  "native_continuation": {
+    "adapter_terminal": {
+      "calls": 1,
+      "content_present": true,
+      "finish_reason": "stop",
+      "incomplete_reason": null,
+      "model": "gpt-5.6-luna",
+      "observed_at": "in-process observation of the auxiliary response the patched adapter returned",
+      "status": "completed",
+      "typed_terminal_error": null,
+      "usage_present": true
+    },
+    "authorization": {
+      "calls_authorized_by_continuation": 1,
+      "calls_used": 1,
+      "contract_ceiling": 4,
+      "contract_calls_used_before_continuation": 1,
+      "repeat_calls_used": 0
+    },
+    "conclusions": {
+      "ac_07_ac_08_420": "qualified live on the patched adapter boundary; the Router 'cancelled' classification is a stream-close/telemetry artifact after a completed final, not an accepted incomplete/cancelled terminal",
+      "ac_10_423": "qualified live: exactly one usage-bearing attribution to the originating session/task, reconciled with the receipt",
+      "code_defect_found": false,
+      "repair_required": false
+    },
+    "invocation": {
+      "accounting_context": "agent.aux_accounting.set_accounting_context(session_db, session_id) - the same publication the agent loop performs at turn entry",
+      "discovery": "hermes_cli.plugins.discover_plugins (hermes_agent.plugins entry points)",
+      "dispatch": "model_tools.handle_function_call -> tools.registry.dispatch with the runtime task/session kwargs",
+      "handler_module": "aether_agents.knowledge.hermes_plugin",
+      "surface": "registered native plugin tool, not KnowledgeService",
+      "tool": "project_knowledge",
+      "toolset": "aether_knowledge"
+    },
+    "limits": [
+      "one canary attempt; a live provider-side cancelled/incomplete terminal was not induced live, so the deterministic fixture matrix remains the mapping authority for that case",
+      "the provider-reported reasoning detail (271, Router side) is not surfaced to the Aether layer because the auxiliary Responses shim synthesizes input/output/total usage only; receipt and SessionDB therefore record 0 in the separate reasoning column (pre-existing aux-transport detail gap, unchanged by HLP-420)"
+    ],
+    "receipt": {
+      "elapsed_seconds": 13.678,
+      "input_tokens": 948,
+      "model_calls": 1,
+      "outcome": "updated",
+      "output_tokens": 578,
+      "reasoning_tokens": 0,
+      "semantic_state": "complete",
+      "source_revision": "b0166ab3ba1453cd7f241f6c2d75de1d5a6969cf",
+      "total_tokens": 1526,
+      "validated_chunks": 1,
+      "within_host_bound": true
+    },
+    "repeat": {
+      "elapsed_seconds": 0.1,
+      "model_calls_attempted": 0,
+      "new_router_requests": 0,
+      "outcome": "unchanged",
+      "session_db_row_unchanged": true
+    },
+    "router_attempt": {
+      "api_mode": "responses",
+      "attempts": 1,
+      "input_tokens": 948,
+      "operation_label": "web_extract",
+      "outcome": "cancelled",
+      "output_tokens": 578,
+      "provider": "codex",
+      "provider_model": "gpt-5.6-luna",
+      "provider_reasoning_tokens": 271,
+      "provider_total_tokens": 1526,
+      "streamed": true,
+      "telemetry_state": "partial",
+      "usage_source": "provider_response"
+    },
+    "runtime": {
+      "aether_source_revision": "3240bbac8e3835745541c8d062bd7bf289d76bc2",
+      "hermes_patch": "patches/hermes/HLP-420-responses-terminal-fidelity.patch",
+      "hermes_patch_applies_cleanly": true,
+      "hermes_patch_sha256": "e0caa198c9c61e1235cedbc021c6e1a4d35b114c9c155df3fe1515040c420fa6",
+      "hermes_revision": "bb5e9a422f3135371557e75bcd1db01c5f8fc3ba",
+      "isolation": "fresh disposable Python 3.11.15 environment containing only that fork revision plus the patch and the merged Aether source; no live profile, service, board, editable runtime or Router configuration read, reloaded or modified",
+      "patched_adapter_symbol_present": true,
+      "postimage_auxiliary_client_sha256": "2c5dfee035dd47a8bb8f2e652983f53f3ebc3b90c06adc87176f4cbf3adc0a30",
+      "postimage_terminal_fixture_sha256": "1c8a21d09950a7bef2fbbac3b03073970f23e3eab32fd15e6e2f12cc4a1434e6",
+      "preimage_auxiliary_client_sha256": "93275ed4d6c5d7a84b8607b3f0fcbad998bfdd2f52f6e2516372de66ca6b7ec0"
+    },
+    "session_db": {
+      "api_call_count": 1,
+      "attribution": "exactly once to the originating session/task",
+      "billing_provider": "custom",
+      "exactly_once": true,
+      "input_tokens": 948,
+      "model": "gpt-5.6-luna",
+      "output_tokens": 578,
+      "reconciles_with_receipt": true,
+      "reasoning_column_present": true,
+      "reasoning_tokens": 0,
+      "row_count_for_session_and_task": 1,
+      "store": "real disposable Hermes SessionDB (session_model_usage), read-only read-back",
+      "task": "web_extract"
+    },
+    "structural": {
+      "base_structural_links": 4,
+      "base_structural_nodes": 5,
+      "composed_structural_links": 4,
+      "composed_structural_nodes": 5,
+      "inspected_relation": {
+        "code_side": "workflow_canary_process",
+        "confidence": "INFERRED",
+        "document_side": "readme",
+        "kind": "semantic_document_to_code_edge",
+        "relation": "references"
+      },
+      "llm_field_contamination": [],
+      "llm_links": 1,
+      "llm_nodes": 0,
+      "missing_structural_links": [],
+      "missing_structural_nodes": [],
+      "projection_digest_base": "f27db7dfe3f72f16ae61e67c10726ec4876dbc96488e916ee4a6f763ae58cbb1",
+      "projection_digest_composed": "f27db7dfe3f72f16ae61e67c10726ec4876dbc96488e916ee4a6f763ae58cbb1",
+      "projection_method": "independent analyzer over the persisted snapshots, nodes and links, LLM-origin records excluded",
+      "projection_equal": true
+    }
+  },
   "objective_contract": "oc_f2acfb5effb21f6d@v1",
   "overlay": {
     "llm_links_persisted": 1,
@@ -73,6 +196,34 @@
   },
   "purpose": "Bounded live semantic canary for the corrected semantic-maintenance transaction.",
   "raw_content_persisted": false,
+  "reception_record": {
+    "closed_issues_preserved": [
+      416,
+      418,
+      419,
+      424
+    ],
+    "continuation_scope": "one bounded continuation with at most one additional live semantic auxiliary call on the unchanged configured primary route",
+    "direct_reception_evidence": [
+      "the merged canary receipt records one complete semantic result at 949 input + 630 output = 1579 provider total tokens",
+      "router request history for the uniquely matching attempt reports outcome=cancelled with the same 949/630 totals and 335 reasoning tokens",
+      "SK-INT.md recorded that the canary invoked KnowledgeService directly rather than the registered native plugin",
+      "all three Aether profile SessionDBs contained no matching web_extract row after the canary window",
+      "HERMES_LOCAL_PATCHES.md records HLP-420 as source-only, so the patched adapter was not active in that canary"
+    ],
+    "disposition": {
+      "ac_07_ac_08": "ambiguous on the live boundary because the patched adapter was not active in that canary",
+      "ac_10": "not demonstrated live; an evidence gap, explicitly distinguished from a code defect"
+    },
+    "reopened_pending_continuation": [
+      420,
+      423
+    ],
+    "reused_pipeline_evidence_retained": [
+      "deterministic HLP-420 fixture matrix (unaffected, not the basis of the reopening)",
+      "portable patch reconciliation and artifact digests"
+    ]
+  },
   "repeat_run": {
     "elapsed_seconds": 0.34,
     "new_model_calls": 0,
