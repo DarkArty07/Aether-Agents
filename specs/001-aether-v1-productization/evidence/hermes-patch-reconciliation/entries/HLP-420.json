@@ -1,0 +1,87 @@
+{
+  "id": "HLP-420",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-420--auxiliary-responses-terminal-and-phase-fidelity",
+  "components": [
+    "HLP-420",
+    "agent/auxiliary_client.py",
+    "tests/agent/test_auxiliary_client_responses_terminal_420.py"
+  ],
+  "required_behavior": "The auxiliary Responses adapter preserves the real terminal and phase shape: a failed/cancelled terminal raises a typed failure instead of a successful stop; status=incomplete maps to content_filter (reason content_filter) or length (any other reason, including max_output_tokens); queued/in_progress and unfinished items map to incomplete; commentary/analysis message items never enter assistant content and never satisfy the output-text fallback; a completed empty output with a valid top-level output_text is recovered; completed function_call items become tool_calls. call_llm, _build_call_kwargs and the adapter carry tool_choice (chat-style function form translated to the Responses shape, only sent with tools), and the unsupported Router fields max_output_tokens, response_format and text are never sent on the Responses request.",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/420"
+      }
+    ],
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/agent/auxiliary_client.py",
+        "result": "The inspected revision is unchanged at the boundary: line 2040 concatenates every message item of the Responses output, line 2087 sets finish_reason=\"stop\" if not tool_calls_raw else \"tool_calls\" with no status/incomplete_details mapping, and call_llm (line 9691) and _build_call_kwargs (line 8946) accept no tool_choice."
+      },
+      {
+        "kind": "source",
+        "reference": "selected public release v2026.8.18 at commit e624e9fde561e1add9388384012b295fde669ade (agent/auxiliary_client.py)",
+        "result": "The selected public release carries the same adapter shape: per-item concatenation at line 1839 and finish_reason=\"stop\" if not tool_calls_raw else \"tool_calls\" at line 1886, with no phase, status, incomplete_details, output-text fallback or tool_choice handling."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Retire only when an adopted exact Hermes release maps Responses status/incomplete_details into non-stop chat finish reasons, fails failed/cancelled terminals closed, keeps commentary/analysis items out of assistant content, recovers a top-level output_text for empty output, forwards tool_choice through call_llm/_build_call_kwargs/the Responses adapter, and passes tests/agent/test_auxiliary_client_responses_terminal_420.py without this patch.",
+    "status": "not_executed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "tests/agent/test_auxiliary_client_responses_terminal_420.py on unchanged maintained-fork revision 3b81e9d91cc3a0662b910726a44c94ed328b1e90",
+        "result": "Causal RED: 20 failed / 5 passed. The acceptance case fails exactly assert 'stop' == 'length' for status=incomplete + incomplete_details.reason=max_output_tokens; the cancelled case reports a successful response instead of a typed failure; the output-text fallback returns no content."
+      },
+      {
+        "kind": "test",
+        "reference": "tests/agent/test_auxiliary_client_responses_terminal_420.py on the reviewed candidate reconstructed from patches/hermes/HLP-420-responses-terminal-fidelity.patch at the same base",
+        "result": "25 passed. The complete existing tests/agent/test_auxiliary_client.py suite is green (181 passed) and the affected tests/agent selection is 852 passed / 4 failed against the identical four anthropic-SDK-missing environment failures reproduced on the clean base (827 passed / 4 failed)."
+      },
+      {
+        "kind": "test",
+        "reference": "retirement gate not executed on an adopted release; upstream source inspection at 4f22543509d1b91dc45bcb369447126c5eb14fb7 and v2026.8.18 still reproduces the defect",
+        "result": "Not retired: both inspected upstream revisions retain the stop-synthesizing mapping and the per-item concatenation, so the local guarantee is still required."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "unavailable",
+    "artifacts": [
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-420-responses-terminal-fidelity.patch",
+        "result": "passed",
+        "ledger_sha256": "a81d0126b8afe625490be21fbf345732d7bcd307382de15202f68a1fcb4645c5",
+        "computed_sha256": "a81d0126b8afe625490be21fbf345732d7bcd307382de15202f68a1fcb4645c5",
+        "checksum_status": "passed",
+        "parse_status": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "maintained fork revision 3b81e9d91cc3a0662b910726a44c94ed328b1e90 with agent/auxiliary_client.py preimage SHA-256 93275ed4d6c5d7a84b8607b3f0fcbad998bfdd2f52f6e2516372de66ca6b7ec0",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "git apply --check and full application against a freshly materialized clean tree at revision 3b81e9d91cc3a0662b910726a44c94ed328b1e90",
+        "result": "passed"
+      }
+    ],
+    "blocker": "Portable reconstruction passed and the focused candidate checks are green, but public upstream equivalence is unavailable: both inspected upstream revisions still synthesize finish_reason=stop for incomplete/cancelled terminals and still concatenate every message item. No live runtime was activated by this unit."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "tool_choice passthrough covers call_llm, _call_llm_impl, _build_call_kwargs, the Responses adapter and the synchronous same-provider retry; the asynchronous auxiliary entry point and the emergency fallback candidate builders still omit tool_choice, so a fallback attempt keeps the route default instead of forcing the structured call.",
+    "The forced submit_graph_fragment structured-call contingency is not implemented here; this unit only makes the transport capable of carrying it deterministically, and the async path would need its own change before a forced call could be proven there.",
+    "A completed response with empty output and no top-level output_text still returns no content with finish_reason=stop; classifying that hollow response as retryable remains the caller's decision."
+  ],
+  "summary": "Retain HLP-420. The auxiliary Responses adapter now preserves phase, top-level and item status, incomplete reason, output-text fallback and tool calls, never turns incomplete/cancelled output into finish_reason=stop, keeps commentary/analysis narration out of assistant content, and carries tool_choice through call_llm/_build_call_kwargs without sending the unsupported Router fields."
+}
