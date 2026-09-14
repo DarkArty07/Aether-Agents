@@ -1,0 +1,85 @@
+{
+  "artifact_verification": {
+    "artifacts": [
+      {
+        "checksum_status": "passed",
+        "computed_sha256": "94b95f2153bce69947a9f7369cebe559b56826c49fa22f4aa1eb2b587acdef30",
+        "kind": "patch",
+        "ledger_sha256": "94b95f2153bce69947a9f7369cebe559b56826c49fa22f4aa1eb2b587acdef30",
+        "parse_status": "passed",
+        "reference": "patches/hermes/HLP-334-native-collaboration.patch",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "maintained fork base 3b81e9d91cc3a0662b910726a44c94ed328b1e90",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "git apply --check against maintained fork base 3b81e9d91cc3a0662b910726a44c94ed328b1e90; eight changed files byte-equal to 2ec004ea54ab2401f63f1885a7c26f59bf1eb7db",
+        "result": "passed"
+      }
+    ],
+    "blocker": "The exact maintained-fork reconstruction, focused candidate checks, and PR #11 merge passed, but public upstream equivalence remains unavailable because upstream lacks optional collaboration opt-in, the adjunct table, origin-route matching, and labeled peer delivery.",
+    "status": "unavailable"
+  },
+  "blocking_uncertainty": [
+    "Upstream Hermes at the inspected public revision has no optional collaboration store or origin-bound TUI/gateway delivery."
+  ],
+  "components": [
+    "HLP-334",
+    "hermes_cli/kanban_db.py",
+    "tools/kanban_tools.py",
+    "gateway/kanban_watchers.py",
+    "tui_gateway/server.py",
+    "tests/hermes_cli/test_kanban_collaboration.py",
+    "tests/tools/test_kanban_collaboration.py",
+    "tests/gateway/test_kanban_collaboration_delivery.py",
+    "tests/tui_gateway/test_kanban_collaboration_poller.py"
+  ],
+  "id": "HLP-334",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-334--native-collaboration-store-tool-surface-and-origin-bound-delivery",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+  "required_behavior": "Optional advisory collaboration on a trusted originating root persists exact board/Project/contract binding and a runtime-derived origin_route; request/respond/ack/resolve are distinguishable in the existing board; TUI and gateway match that one origin before claim; extra notify subscribers are not recipients; legacy roots and the terminal-notification cursor remain unchanged.",
+  "retirement_gate": {
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "collaboration suites on maintained-fork candidate 2ec004ea54ab2401f63f1885a7c26f59bf1eb7db",
+        "result": "53 passed in 8.07s."
+      },
+      {
+        "kind": "test",
+        "reference": "neighboring kanban/TUI/gateway regressions on the same candidate",
+        "result": "671 passed in 39.66s."
+      }
+    ],
+    "status": "not_executed",
+    "summary": "Retire only when an adopted exact Hermes release provides equivalent optional collaboration semantics and passes the focused collaboration suites without this patch."
+  },
+  "retirement_recommendation": "retain",
+  "summary": "Retain HLP-334. Optional native collaboration adds an adjunct same-board table, optional create/comment arguments, and origin-bound TUI/gateway delivery without replacing the terminal-notification cursor or promoting peer evidence to owner authority.",
+  "upstream": {
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/tools/kanban_tools.py",
+        "result": "The inspected revision persists comments and injects them as operator notes; it has no optional collaboration object, adjunct table, origin_route matching, or labeled peer-evidence delivery (verified also at 31d0a2428e9db346d6781da66f5b37ff3e12def2)."
+      }
+    ],
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/334"
+      },
+      {
+        "kind": "pull_request",
+        "url": "https://github.com/DarkArty07/aether-hermes/pull/11"
+      }
+    ],
+    "repository": "https://github.com/NousResearch/hermes-agent"
+  }
+}
