@@ -23,9 +23,11 @@ Supervisor phases for one flow use the runtime's same-profile session-affinity
 boundary and canonical Supervisor workspace. Implementer cards receive fresh
 sessions and isolated worktrees, so a worker does not inherit a Supervisor
 conversation or a sibling checkout. A final Supervisor terminal phase depends on
-the root and all implementation units and is marked `terminal=true`; internal
-milestones stay internal and do not signal the origin unless a genuine owner
-input or contract revision is required.
+the root and all implementation units and is marked `terminal=true`. Ordinary
+internal milestones stay silent to the origin as owner-facing notifications;
+explicit peer questions and coalesced evidence notices may reach the originating
+design steward without notifying the human owner. Only explicit owner input,
+contract revision, or terminal outcomes return to the owner-facing session.
 
 ## Card inputs and canonical procedures
 
@@ -95,7 +97,9 @@ do not interrupt healthy independent work or approve because a round count was r
 The existing `supervisor-decomposition` canonical skill owns the detailed procedure and
 illustrative contrasts. This introduces no new engine, form, judge, automatic threshold,
 authority grant or weakened preservation rule. Document and loader tests establish
-instructional consistency, not observed improvement; organic adoption stays in #317.
+instructional consistency, not observed improvement; the open-ended observation
+gate in #317 was closed at owner direction without claiming organic PASS, and
+unverified behavioral efficacy remains explicit.
 See R7 FR-736b for the owning requirement.
 
 ## Contract/execution procedure adoption
@@ -106,15 +110,14 @@ alongside the existing governance and closeout procedures. Native distribution m
 the canonical files available to all roles; each role loads the applicable procedure,
 without gaining another role's authority.
 
-These three procedures and the related role wording are under organic observation in
-[issue #317](https://github.com/DarkArty07/Aether-Agents/issues/317). The owner chose real
-future work rather than a synthetic qualification campaign for this adoption. Consult
-that tracker before claiming proven behavior or throughput; resource installation and
-historical document/loading checks are not behavioral qualification. Record actual
-expected-versus-observed outcomes from authorized objectives, not invented metrics.
-This is not a global no-testing rule for future work or permission to bypass required
-checks. Do not restart the owner-withdrawn #312 delegated flow or recreate its retired
-test adapter merely to clear the observation issue. See the current
+Adoption of these three procedures and the related role wording was tracked in
+[issue #317](https://github.com/DarkArty07/Aether-Agents/issues/317). The owner directed
+closure of that open-ended observation requirement without claiming organic PASS;
+resource installation and historical document/loading checks do not establish
+behavioral qualification or proven throughput. Historical expected-versus-observed
+records remain preserved as evidence, not active gates. This is not a global
+no-testing rule for future work or permission to bypass required checks. Do not restart
+the owner-withdrawn #312 delegated flow or recreate its retired test adapter. See the
 [objective specification](../../specs/006-contract-execution-quality/spec.md).
 
 ## Qualification limit

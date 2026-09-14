@@ -68,15 +68,16 @@ the Project Canonical Skill `.aether/skills/aether-observe/SKILL.md`. It selects
 compact observation view first and expands only the relevant authoritative evidence;
 it does not replace independent review or final contract-result acceptance.
 
-Current adoption status for the contract/execution procedures is tracked in
+Adoption of the contract/execution procedures was tracked in
 [issue #317](https://github.com/DarkArty07/Aether-Agents/issues/317) and
-[the execution guide](docs/guides/execution.md#contractexecution-procedure-adoption).
-The owner chose organic observation during real work for this adoption; do not claim
-the new behavior is qualified merely because resources are installed, or recreate the
-retired synthetic campaign. This does not alter testing authority for other objectives.
-Morfeo's final result reception uses `contract-result-review` before owner-objective
-acceptance; see `DESIGN.md` section 10.1. Execution closeout remains Supervisor-owned.
-Keep evidence attributed and distinguish resource tests from observed agent behavior.
+[the execution guide](docs/guides/execution.md#contractexecution-procedure-adoption);
+its open-ended observation requirement was closed at owner direction without claiming
+organic PASS. Do not claim the behavior is qualified merely because resources are
+installed, or recreate the retired synthetic campaign. This does not alter testing
+authority for other objectives. Morfeo's final result reception uses
+`contract-result-review` before owner-objective acceptance; see `DESIGN.md` section 10.1.
+Execution closeout remains Supervisor-owned. Keep evidence attributed and distinguish
+resource tests from observed agent behavior.
 
 ## External research sources
 
