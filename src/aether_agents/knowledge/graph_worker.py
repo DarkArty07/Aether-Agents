@@ -274,6 +274,577 @@ def _parse_and_validate_semantic(
     )
 
 
+# --- Additive semantic overlay composition (#419) ---------------------------
+#
+# The committed graph.json is the immutable base of the semantic transaction.
+# Composition re-adds every loaded baseline record verbatim and appends only
+# explicit `origin=llm` additions, so Graphify global merge/dedup/ghost/re-key
+# passes cannot rewrite structural identities, source/provenance attributes or
+# edge endpoints/relation/site. A canonical projection of the loaded baseline is
+# compared with the composed candidate before publication; any mismatch aborts
+# without writing graph.json.
+
+_OVERLAY_DERIVED_NODE_KEYS = frozenset({"community", "community_name", "norm_label"})
+_OVERLAY_ENDPOINT_KEYS = frozenset({"source", "target", "from", "to", "_src", "_tgt"})
+_OVERLAY_ORIGIN_KEYS = ("_origin", "origin")
+_OVERLAY_MEMBER_SAMPLE = 5
+
+
+def _is_hashable(value: Any) -> bool:
+    """Mirror graphify.build._hashable for values coming from untrusted JSON."""
+    try:
+        hash(value)
+    except TypeError:
+        return False
+    return True
+
+
+def _coerce_record_id(value: Any) -> Any:
+    """Mirror graphify.build._coerce_id: numeric ids become str, bool is not a number."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value
+    return str(value)
+
+
+def _canonical_origin(item: dict) -> str:
+    """Collapse the equivalent provenance spellings used by Graphify and Aether."""
+    for key in _OVERLAY_ORIGIN_KEYS:
+        value = item.get(key)
+        if value is None:
+            continue
+        text = str(value).strip().lower()
+        if text in ("ast", "structural"):
+            return "ast"
+        return "llm" if text in ("llm", "semantic") else f"unrecognized:{text}"
+    import graphify.build as _gbuild  # type: ignore[import-untyped]
+
+    return "ast" if getattr(_gbuild, "_is_ast_tier")(item) else "llm"
+
+
+def _overlay_anchor(member: dict) -> "tuple[str, str] | None":
+    """(source_file, exact label) key used to prove an existing structural identity."""
+    source_file = member.get("source_file")
+    label = member.get("label")
+    if not source_file or not isinstance(label, str) or not label.strip():
+        return None
+    return str(source_file), label.strip()
+
+
+def _split_node_record(node: Any) -> "tuple[Any, dict[str, Any]] | None":
+    if not isinstance(node, dict):
+        return None
+    node_id = _coerce_record_id(node.get("id"))
+    if node_id is None or not _is_hashable(node_id):
+        return None
+    return node_id, _with_explicit_origin(
+        {key: value for key, value in node.items() if key != "id"}
+    )
+
+
+def _with_explicit_origin(attributes: dict[str, Any]) -> dict[str, Any]:
+    """Backfill Aether's explicit ``origin`` alias from the stored Graphify marker.
+
+    Same self-heal Graphify applies to ``_origin`` on load: consumers then read
+    one explicit tier field, and an absent alias cannot be mistaken for unknown
+    provenance. The projection normalizes both spellings, so this is an alias
+    write, not a provenance change.
+    """
+    stored = attributes.get("_origin")
+    if stored is not None and attributes.get("origin") is None:
+        return {**attributes, "origin": stored}
+    return attributes
+
+
+def _split_edge_record(edge: Any) -> "tuple[Any, Any, dict[str, Any]] | None":
+    if not isinstance(edge, dict):
+        return None
+    source = _coerce_record_id(edge.get("_src", edge.get("source", edge.get("from"))))
+    target = _coerce_record_id(edge.get("_tgt", edge.get("target", edge.get("to"))))
+    if source is None or target is None:
+        return None
+    if not _is_hashable(source) or not _is_hashable(target):
+        return None
+    attributes = {key: value for key, value in edge.items() if key not in _OVERLAY_ENDPOINT_KEYS}
+    return source, target, _with_explicit_origin(attributes)
+
+
+def _normalize_base_records(
+    nodes: list[Any], edges: list[Any], hyperedges: list[Any]
+) -> "tuple[list[tuple[Any, dict[str, Any]]], list[tuple[Any, Any, dict[str, Any]]], list[dict]]":
+    """Normalize the loaded base into graph-independent records.
+
+    Endpoint keys are stripped from attribute dicts and edges are bound to
+    ``(source, target)`` exactly as ``export.to_json`` persists them, so the same
+    records drive both the candidate graph and the projection. A missing edge
+    endpoint is materialized as an attribute-less record: an already-dangling
+    baseline edge is preserved rather than silently dropped, and the projection
+    stays self-consistent.
+    """
+    node_records: "list[tuple[Any, dict[str, Any]]]" = []
+    node_ids: set[Any] = set()
+    for node in nodes:
+        split = _split_node_record(node)
+        if split is None:
+            continue
+        node_id, attributes = split
+        if node_id in node_ids:
+            continue
+        node_ids.add(node_id)
+        node_records.append((node_id, attributes))
+    edge_records: "list[tuple[Any, Any, dict[str, Any]]]" = []
+    for edge in edges:
+        split_edge = _split_edge_record(edge)
+        if split_edge is None:
+            continue
+        source, target, attributes = split_edge
+        edge_records.append((source, target, attributes))
+        for endpoint in (source, target):
+            if endpoint not in node_ids:
+                node_ids.add(endpoint)
+                node_records.append((endpoint, {}))
+    hyperedge_records = [edge for edge in hyperedges if isinstance(edge, dict)]
+    return node_records, edge_records, hyperedge_records
+
+
+def _projection_sort_key(record: Any) -> str:
+    return json.dumps(record, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def _canonical_hyperedge(hyperedge: dict) -> dict:
+    record = {key: value for key, value in hyperedge.items() if key not in _OVERLAY_ORIGIN_KEYS}
+    record["#origin"] = _canonical_origin(hyperedge)
+    members = record.get("nodes")
+    if isinstance(members, list):
+        record["nodes"] = sorted(
+            members, key=lambda member: _projection_sort_key({"member": member})
+        )
+    return record
+
+
+def _canonical_overlay_projection(
+    node_records: "list[tuple[Any, dict[str, Any]]]",
+    edge_records: "list[tuple[Any, Any, dict[str, Any]]]",
+    hyperedge_records: "list[dict]",
+    directed: bool,
+) -> "tuple[str, str]":
+    """Canonical projection of a graph and its SHA-256 digest.
+
+    Node identity/attributes, edge endpoints/relation/site and graph direction
+    are covered. Derived community fields and the additive ``confidence_score``
+    written by ``export.to_json`` are excluded, and the equivalent
+    ``origin=ast``/``_origin=ast`` aliases are normalized. Everything else is
+    compared exactly, so an identity, source or provenance loss aborts
+    publication.
+    """
+    nodes_payload = []
+    for node_id, attributes in node_records:
+        canonical = {
+            key: value
+            for key, value in attributes.items()
+            if key not in _OVERLAY_DERIVED_NODE_KEYS and key not in _OVERLAY_ORIGIN_KEYS
+        }
+        canonical["#origin"] = _canonical_origin(attributes)
+        nodes_payload.append({"id": node_id, "attributes": canonical})
+    edges_payload = []
+    for source, target, attributes in edge_records:
+        canonical = {
+            key: value
+            for key, value in attributes.items()
+            if key not in _OVERLAY_ENDPOINT_KEYS
+            and key not in _OVERLAY_ORIGIN_KEYS
+            and key != "confidence_score"
+        }
+        canonical["#origin"] = _canonical_origin(attributes)
+        edges_payload.append({"source": source, "target": target, "attributes": canonical})
+    hyperedges_payload = [_canonical_hyperedge(hyperedge) for hyperedge in hyperedge_records]
+    payload = {
+        "directed": bool(directed),
+        "nodes": sorted(nodes_payload, key=_projection_sort_key),
+        "edges": sorted(edges_payload, key=_projection_sort_key),
+        "hyperedges": sorted(hyperedges_payload, key=_projection_sort_key),
+    }
+    text = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str
+    )
+    return text, hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _compose_candidate_graph(
+    node_records: "list[tuple[Any, dict[str, Any]]]",
+    edge_records: "list[tuple[Any, Any, dict[str, Any]]]",
+    hyperedge_records: list[dict],
+    directed: bool,
+    additions: dict,
+) -> Any:
+    """In-memory candidate graph: baseline records verbatim plus accepted overlay."""
+    import networkx as nx  # type: ignore[import-untyped]
+
+    graph = nx.DiGraph() if directed else nx.Graph()
+    for node_id, attributes in node_records:
+        graph.add_node(node_id, **dict(attributes))
+    for source, target, attributes in edge_records:
+        data = dict(attributes)
+        data["_src"] = source
+        data["_tgt"] = target
+        graph.add_edge(source, target, **data)
+    graph.graph["hyperedges"] = [
+        *hyperedge_records,
+        *(dict(hyperedge) for hyperedge in additions["hyperedges"]),
+    ]
+    for node in additions["nodes"]:
+        graph.add_node(node["id"], **{key: value for key, value in node.items() if key != "id"})
+    for edge in additions["edges"]:
+        data = {key: value for key, value in edge.items() if key not in _OVERLAY_ENDPOINT_KEYS}
+        data["_src"] = edge["source"]
+        data["_tgt"] = edge["target"]
+        graph.add_edge(edge["source"], edge["target"], **data)
+    return graph
+
+
+def _candidate_baseline_records(
+    graph: Any,
+    node_records: "list[tuple[Any, dict[str, Any]]]",
+    edge_records: "list[tuple[Any, Any, dict[str, Any]]]",
+    hyperedge_records: list[dict],
+) -> "tuple[list[tuple[Any, dict[str, Any]]], list[tuple[Any, Any, dict[str, Any]]], list[dict]]":
+    """Re-extract the baseline records back out of the composed candidate graph.
+
+    Only the loaded baseline identities are projected, so overlay additions do
+    not enter the comparison. A baseline record the candidate no longer carries
+    surfaces as a placeholder, which the projection digests as a mismatch
+    instead of ignoring the loss.
+    """
+    graph_nodes = {node_id: dict(attributes) for node_id, attributes in graph.nodes(data=True)}
+    candidate_nodes = [
+        (node_id, graph_nodes.get(node_id, {"#missing": True}))
+        for node_id, _attributes in node_records
+    ]
+    graph_edges: "dict[tuple[Any, Any], dict]" = {}
+    for source, target, attributes in graph.edges(data=True):
+        graph_edges.setdefault(
+            (attributes.get("_src", source), attributes.get("_tgt", target)), attributes
+        )
+    candidate_edges = []
+    for source, target, _attributes in edge_records:
+        attributes = graph_edges.get((source, target))
+        candidate_edges.append(
+            (
+                source,
+                target,
+                {
+                    key: value
+                    for key, value in (attributes or {"#missing": True}).items()
+                    if key not in _OVERLAY_ENDPOINT_KEYS
+                },
+            )
+        )
+    graph_hyperedges = [
+        edge for edge in graph.graph.get("hyperedges", []) if isinstance(edge, dict)
+    ]
+    candidate_hyperedges = []
+    for baseline_hyperedge in hyperedge_records:
+        match = next(
+            (edge for edge in graph_hyperedges if edge == baseline_hyperedge), {"#missing": True}
+        )
+        candidate_hyperedges.append(match)
+    return candidate_nodes, candidate_edges, candidate_hyperedges
+
+
+def _stamp_overlay_member(raw: dict, *, with_location: bool) -> dict:
+    """Force the accepted-overlay provenance contract onto one incoming member."""
+    member = dict(raw)
+    member["_origin"] = "llm"
+    member["origin"] = "llm"
+    confidence = str(member.get("confidence") or "").upper()
+    member["confidence"] = "INFERRED" if confidence in ("", "EXTRACTED") else confidence
+    if with_location and not member.get("source_location"):
+        member["source_location"] = None
+    return member
+
+
+def _edge_omission(edge: dict, source: Any, target: Any, reason: str) -> dict:
+    return {
+        "source": source,
+        "target": target,
+        "relation": edge.get("relation"),
+        "reason": reason,
+    }
+
+
+def _hyperedge_members(hyperedge: dict) -> "list[Any] | None":
+    for key in ("nodes", "members", "node_ids"):
+        members = hyperedge.get(key)
+        if isinstance(members, list):
+            return list(members)
+    return None
+
+
+def _plan_overlay_additions(
+    fragments: list[Any],
+    *,
+    allowed_sources: "list[str] | None",
+    base_node_ids: set[Any],
+    anchors: "dict[tuple[str, str], list[Any]]",
+    base_directed_edges: "set[tuple[Any, Any]]",
+    base_edge_pairs: "set[frozenset]",
+    base_hyperedge_ids: set[Any],
+) -> "tuple[dict, list[dict], list[dict], list[dict]]":
+    """Decide which incoming members become overlay additions, in fragment order.
+
+    Only uniquely proven label anchors (one existing identity for the exact
+    source_file/label pair) are remapped onto an existing identity; ambiguous
+    anchors, existing identities, edges that collide with an existing endpoint
+    pair, self references, dangling endpoints and hyperedges whose members do not
+    all resolve are omitted with a bounded reason instead of overwriting or
+    silently dropping evidence.
+    """
+    allowed = set(allowed_sources) if allowed_sources else None
+    additions: "dict[str, list[dict]]" = {"nodes": [], "edges": [], "hyperedges": []}
+    omitted_nodes: list[dict] = []
+    omitted_edges: list[dict] = []
+    omitted_hyperedges: list[dict] = []
+    remapped: dict[Any, Any] = {}
+    known_ids = set(base_node_ids)
+    added_edge_pairs: "set[frozenset]" = set()
+    added_hyperedge_ids: set[Any] = set()
+
+    def source_allowed(member: dict) -> bool:
+        source_file = member.get("source_file")
+        return allowed is None or not source_file or source_file in allowed
+
+    for fragment in fragments:
+        if not isinstance(fragment, dict):
+            raise ValueError("Each semantic fragment must be a dictionary.")
+
+        for raw_node in fragment.get("nodes") or []:
+            if not isinstance(raw_node, dict):
+                continue
+            node = _stamp_overlay_member(raw_node, with_location=True)
+            node_id = node.get("id")
+            if not source_allowed(node):
+                omitted_nodes.append({"id": node_id, "reason": "source_not_allowed"})
+                continue
+            if node_id is None or not _is_hashable(node_id):
+                omitted_nodes.append({"id": node_id, "reason": "unusable_id"})
+                continue
+            if node_id in base_node_ids:
+                omitted_nodes.append({"id": node_id, "reason": "existing_identity_collision"})
+                continue
+            if node_id in known_ids:
+                omitted_nodes.append({"id": node_id, "reason": "duplicate_within_compose"})
+                continue
+            anchor = _overlay_anchor(node)
+            matched = anchors.get(anchor, []) if anchor is not None else []
+            if len(matched) == 1:
+                remapped[node_id] = matched[0]
+                omitted_nodes.append({"id": node_id, "reason": f"remapped_onto:{matched[0]}"})
+                continue
+            if len(matched) > 1:
+                omitted_nodes.append({"id": node_id, "reason": "ambiguous_label_anchor"})
+                continue
+            additions["nodes"].append(node)
+            known_ids.add(node_id)
+
+        for raw_edge in fragment.get("edges") or []:
+            if not isinstance(raw_edge, dict):
+                continue
+            edge = _stamp_overlay_member(raw_edge, with_location=True)
+            source = edge.get("source", edge.get("from"))
+            target = edge.get("target", edge.get("to"))
+            if not source_allowed(edge):
+                omitted_edges.append(_edge_omission(edge, source, target, "source_not_allowed"))
+                continue
+            if (
+                source is None
+                or target is None
+                or not _is_hashable(source)
+                or not _is_hashable(target)
+            ):
+                omitted_edges.append(_edge_omission(edge, source, target, "unusable_endpoint"))
+                continue
+            source = remapped.get(source, source)
+            target = remapped.get(target, target)
+            if source == target:
+                omitted_edges.append(_edge_omission(edge, source, target, "self_reference"))
+                continue
+            if source not in known_ids or target not in known_ids:
+                omitted_edges.append(_edge_omission(edge, source, target, "dangling_endpoint"))
+                continue
+            pair = frozenset((source, target))
+            if (
+                (source, target) in base_directed_edges
+                or (target, source) in base_directed_edges
+                or pair in base_edge_pairs
+            ):
+                omitted_edges.append(
+                    _edge_omission(edge, source, target, "structural_edge_collision")
+                )
+                continue
+            if pair in added_edge_pairs:
+                omitted_edges.append(
+                    _edge_omission(edge, source, target, "duplicate_within_compose")
+                )
+                continue
+            accepted = dict(edge)
+            accepted["source"] = source
+            accepted["target"] = target
+            additions["edges"].append(accepted)
+            added_edge_pairs.add(pair)
+
+        for raw_hyperedge in fragment.get("hyperedges") or []:
+            if not isinstance(raw_hyperedge, dict):
+                continue
+            hyperedge = _stamp_overlay_member(raw_hyperedge, with_location=False)
+            hyperedge_id = hyperedge.get("id")
+            if not source_allowed(hyperedge):
+                omitted_hyperedges.append({"id": hyperedge_id, "reason": "source_not_allowed"})
+                continue
+            if hyperedge_id is not None and hyperedge_id in base_hyperedge_ids:
+                omitted_hyperedges.append(
+                    {"id": hyperedge_id, "reason": "structural_hyperedge_collision"}
+                )
+                continue
+            if hyperedge_id is not None and hyperedge_id in added_hyperedge_ids:
+                omitted_hyperedges.append(
+                    {"id": hyperedge_id, "reason": "duplicate_within_compose"}
+                )
+                continue
+            members = _hyperedge_members(hyperedge)
+            if not members:
+                omitted_hyperedges.append({"id": hyperedge_id, "reason": "no_valid_members"})
+                continue
+            resolved: list[Any] = []
+            unresolved: list[Any] = []
+            for member in members:
+                member_id = _coerce_record_id(member)
+                if not _is_hashable(member_id):
+                    unresolved.append(member)
+                    continue
+                member_id = remapped.get(member_id, member_id)
+                if member_id in known_ids:
+                    resolved.append(member_id)
+                else:
+                    unresolved.append(member)
+            if unresolved:
+                omitted_hyperedges.append(
+                    {
+                        "id": hyperedge_id,
+                        "reason": "unresolved_members",
+                        "members": unresolved[:_OVERLAY_MEMBER_SAMPLE],
+                    }
+                )
+                continue
+            accepted = {
+                key: value for key, value in hyperedge.items() if key not in ("members", "node_ids")
+            }
+            accepted["nodes"] = resolved
+            additions["hyperedges"].append(accepted)
+            if hyperedge_id is not None:
+                added_hyperedge_ids.add(hyperedge_id)
+
+    return additions, omitted_nodes, omitted_edges, omitted_hyperedges
+
+
+def _compose_additive_overlay(
+    graph_path: Path,
+    fragments: list[Any],
+    *,
+    allowed_sources: "list[str] | None" = None,
+) -> dict[str, Any]:
+    """One load, one in-memory overlay, one cluster/export publication transaction."""
+    import graphify.build as _gbuild  # type: ignore[import-untyped]
+    import graphify.cluster as cluster
+    import graphify.export as export
+
+    _load_existing_graph = getattr(_gbuild, "_load_existing_graph")
+    loaded = _load_existing_graph(graph_path)
+    if loaded is None:
+        raise ValueError("No structural base graph exists for additive semantic composition.")
+    node_records, edge_records, hyperedge_records = _normalize_base_records(
+        loaded[0], loaded[1], loaded[2]
+    )
+    directed = bool(loaded[3])
+    _baseline_text, baseline_digest = _canonical_overlay_projection(
+        node_records, edge_records, hyperedge_records, directed
+    )
+
+    anchors: "dict[tuple[str, str], list[Any]]" = {}
+    for node_id, attributes in node_records:
+        anchor = _overlay_anchor(attributes)
+        if anchor is not None:
+            anchors.setdefault(anchor, []).append(node_id)
+
+    base_directed_edges: "set[tuple[Any, Any]]" = set()
+    base_edge_pairs: "set[frozenset]" = set()
+    for source, target, _attributes in edge_records:
+        base_directed_edges.add((source, target))
+        base_edge_pairs.add(frozenset((source, target)))
+
+    base_hyperedge_ids = {
+        hyperedge.get("id") for hyperedge in hyperedge_records if hyperedge.get("id") is not None
+    }
+
+    additions, omitted_nodes, omitted_edges, omitted_hyperedges = _plan_overlay_additions(
+        fragments,
+        allowed_sources=allowed_sources,
+        base_node_ids={node_id for node_id, _attributes in node_records},
+        anchors=anchors,
+        base_directed_edges=base_directed_edges,
+        base_edge_pairs=base_edge_pairs,
+        base_hyperedge_ids=base_hyperedge_ids,
+    )
+
+    structural_preserved = True
+    if additions["nodes"] or additions["edges"] or additions["hyperedges"]:
+        candidate = _compose_candidate_graph(
+            node_records, edge_records, hyperedge_records, directed, additions
+        )
+        candidate_nodes, candidate_edges, candidate_hyperedges = _candidate_baseline_records(
+            candidate, node_records, edge_records, hyperedge_records
+        )
+        _candidate_text, candidate_digest = _canonical_overlay_projection(
+            candidate_nodes, candidate_edges, candidate_hyperedges, directed
+        )
+        structural_preserved = candidate_digest == baseline_digest
+        if not structural_preserved:
+            raise ValueError(
+                "Structural projection changed during semantic composition; refusing to publish "
+                f"(baseline {baseline_digest[:16]}, candidate {candidate_digest[:16]})."
+            )
+        communities = cluster.cluster(candidate)
+        if not export.to_json(candidate, communities, str(graph_path), force=True):
+            raise ValueError("Graphify refused to publish the composed semantic candidate.")
+
+    references = []
+    seen = set()
+    for node in additions["nodes"]:
+        if node.get("source_file"):
+            path = str(node["source_file"])
+            location = str(node.get("source_location") or "")
+            if (path, location) not in seen:
+                seen.add((path, location))
+                references.append({"path": path, "location": location})
+
+    content = (
+        f"Composed semantic overlay: {len(additions['nodes'])} nodes, "
+        f"{len(additions['edges'])} edges merged, {len(additions['hyperedges'])} hyperedges added; "
+        f"omitted {len(omitted_nodes)} nodes, {len(omitted_edges)} edges and "
+        f"{len(omitted_hyperedges)} hyperedges with bounded reasons."
+    )
+    return {
+        "content": content,
+        "references": references,
+        "applied_nodes": len(additions["nodes"]),
+        "applied_edges": len(additions["edges"]),
+        "applied_hyperedges": len(additions["hyperedges"]),
+        "omitted_nodes": omitted_nodes,
+        "omitted_edges": omitted_edges,
+        "omitted_hyperedges": omitted_hyperedges,
+        "structural_digest": baseline_digest,
+        "structural_preserved": structural_preserved,
+    }
+
+
 def execute(request: dict) -> dict:
     if importlib.metadata.version("graphifyy") != "0.9.54":
         raise ValueError("The configured Graphify version is not qualified.")
@@ -899,189 +1470,36 @@ def execute(request: dict) -> dict:
             "fragment": parsed,
         }
 
-    if action == "semantic_apply":
-        import graphify.build as _gbuild  # type: ignore[import-untyped]
-        import graphify.cluster as cluster
-        import graphify.export as export
-        from graphify.build import build_from_json, build_merge  # type: ignore[import-untyped]
-
-        _is_ast_tier = getattr(_gbuild, "_is_ast_tier")
-        _load_existing_graph = getattr(_gbuild, "_load_existing_graph")
-
-        model_text = args.get("model_text")
-        fragment = args.get("fragment")
-        if model_text is not None:
-            fragment = _parse_and_validate_semantic(
-                model_text=model_text,
-                allowed_sources=args.get("allowed_sources"),
-                allow_empty=bool(args.get("allow_empty", False)),
-                graph_path=graph_path,
-                source_root=source_root,
-            )
-        elif fragment is None:
-            raise ValueError("model_text or fragment is required for semantic_apply.")
+    if action in ("semantic_compose", "semantic_apply"):
+        if action == "semantic_compose":
+            fragments = args.get("fragments")
+            if not isinstance(fragments, list):
+                raise ValueError("fragments must be a list of validated semantic fragments.")
         else:
-            fragment = _sanitize_and_validate_fragment(
-                fragment,
-                allowed_sources=args.get("allowed_sources"),
-                allow_empty=bool(args.get("allow_empty", False)),
-                graph_path=graph_path,
-                source_root=source_root,
-            )
-
-        loaded = _load_existing_graph(graph_path)
-        if loaded is None:
-            existing_nodes, existing_edges, existing_hyperedges, existing_directed = (
-                [],
-                [],
-                [],
-                False,
-            )
-        else:
-            existing_nodes, existing_edges, existing_hyperedges, existing_directed = loaded
-
-        structural_pairs = set()
-        structural_directed = set()
-        structural_edge_records: dict[tuple[str, str], dict] = {}
-        structural_node_records: dict[str, dict] = {}
-        for n in existing_nodes:
-            if not isinstance(n, dict):
-                continue
-            nid = n.get("id")
-            if not nid:
-                continue
-            is_structural = (
-                n.get("_origin") in ("ast", "structural")
-                or n.get("origin") in ("ast", "structural")
-                or _is_ast_tier(n)
-            )
-            if is_structural:
-                structural_node_records[str(nid)] = dict(n)
-
-        for e in existing_edges:
-            if not isinstance(e, dict):
-                continue
-            is_structural = (
-                e.get("_origin") in ("ast", "structural")
-                or e.get("origin") in ("ast", "structural")
-                or _is_ast_tier(e)
-            )
-            if is_structural:
-                es = str(e.get("source", e.get("from", "")))
-                et = str(e.get("target", e.get("to", "")))
-                if es and et:
-                    structural_directed.add((es, et))
-                    structural_pairs.add(frozenset({es, et}))
-                    structural_edge_records[(es, et)] = dict(e)
-
-        raw_edges = fragment.get("edges", [])
-        fragment_nodes = fragment.get("nodes", [])
-        kept_edges = []
-        omitted_edges = []
-        for e in raw_edges:
-            test_G = build_from_json(
-                {"nodes": list(existing_nodes) + list(fragment_nodes), "edges": [e]},
-                directed=True,
-                root=source_root,
-            )
-            if test_G.number_of_edges() == 0:
-                omitted_edges.append(e)
-                continue
-            norm_u, norm_v = list(test_G.edges())[0]
-            if not existing_directed:
-                is_collision = frozenset({norm_u, norm_v}) in structural_pairs
-            else:
-                is_collision = (
-                    (norm_u, norm_v) in structural_directed
-                    or (norm_v, norm_u) in structural_directed
-                    or frozenset({norm_u, norm_v}) in structural_pairs
+            model_text = args.get("model_text")
+            fragment = args.get("fragment")
+            if model_text is not None:
+                fragment = _parse_and_validate_semantic(
+                    model_text=model_text,
+                    allowed_sources=args.get("allowed_sources"),
+                    allow_empty=bool(args.get("allow_empty", False)),
+                    graph_path=graph_path,
+                    source_root=source_root,
                 )
-            if is_collision:
-                omitted_edges.append(e)
-                continue
-            kept_edges.append(e)
-
-        fragment_to_merge = dict(fragment, edges=kept_edges)
-        merged_G = build_merge([fragment_to_merge], graph_path=graph_path, root=source_root)
-
-        # Guarantee every structural relation/site/provenance field is preserved
-        for (es, et), orig_data in structural_edge_records.items():
-            if merged_G.has_edge(es, et):
-                edata = merged_G.get_edge_data(es, et)
-                edata["_origin"] = orig_data.get("_origin", "ast")
-                edata["origin"] = orig_data.get("origin", orig_data.get("_origin", "ast"))
-                if orig_data.get("relation"):
-                    edata["relation"] = orig_data["relation"]
-                if orig_data.get("source_location"):
-                    edata["source_location"] = orig_data["source_location"]
-                if orig_data.get("confidence"):
-                    edata["confidence"] = orig_data["confidence"]
-
-        for nid, orig_data in structural_node_records.items():
-            if merged_G.has_node(nid):
-                ndata = merged_G.nodes[nid]
-                ndata["_origin"] = orig_data.get("_origin", "ast")
-                ndata["origin"] = orig_data.get("origin", orig_data.get("_origin", "ast"))
-                if orig_data.get("label"):
-                    ndata["label"] = orig_data["label"]
-                if orig_data.get("source_file"):
-                    ndata["source_file"] = orig_data["source_file"]
-                if orig_data.get("source_location"):
-                    ndata["source_location"] = orig_data["source_location"]
-                if orig_data.get("confidence"):
-                    ndata["confidence"] = orig_data["confidence"]
-
-        comms = cluster.cluster(merged_G)
-        export.to_json(merged_G, comms, str(graph_path), force=True)
-
-        applied_edges_count = 0
-        for e in kept_edges:
-            test_G = build_from_json(
-                {"nodes": list(existing_nodes) + list(fragment_nodes), "edges": [e]},
-                directed=True,
-                root=source_root,
-            )
-            if test_G.number_of_edges() > 0:
-                nu, nv = list(test_G.edges())[0]
-                if merged_G.has_edge(nu, nv):
-                    edata = merged_G.get_edge_data(nu, nv)
-                    if edata.get("origin") == "llm" or edata.get("_origin") == "llm":
-                        applied_edges_count += 1
-
-        existing_node_ids = {
-            str(n.get("id")) for n in existing_nodes if isinstance(n, dict) and n.get("id")
-        }
-        applied_nodes_count = 0
-        for nid, ndata in merged_G.nodes(data=True):
-            nid_str = str(nid)
-            if (
-                nid_str not in existing_node_ids
-                and nid_str not in structural_node_records
-                and (ndata.get("origin") == "llm" or ndata.get("_origin") == "llm")
-            ):
-                applied_nodes_count += 1
-
-        references = []
-        seen = set()
-        for node in fragment_nodes:
-            if node.get("source_file"):
-                p = str(node["source_file"])
-                loc = str(node.get("source_location") or "")
-                if (p, loc) not in seen:
-                    seen.add((p, loc))
-                    references.append({"path": p, "location": loc})
-
-        content = (
-            f"Applied semantic fragment: {applied_nodes_count} nodes, "
-            f"{applied_edges_count} edges merged, {len(omitted_edges)} colliding structural edges preserved."
+            elif fragment is None:
+                raise ValueError("model_text or fragment is required for semantic_apply.")
+            else:
+                fragment = _sanitize_and_validate_fragment(
+                    fragment,
+                    allowed_sources=args.get("allowed_sources"),
+                    allow_empty=bool(args.get("allow_empty", False)),
+                    graph_path=graph_path,
+                    source_root=source_root,
+                )
+            fragments = [fragment]
+        return _compose_additive_overlay(
+            graph_path, fragments, allowed_sources=args.get("allowed_sources")
         )
-        return {
-            "content": content,
-            "references": references,
-            "applied_nodes": applied_nodes_count,
-            "applied_edges": applied_edges_count,
-            "omitted_edges": omitted_edges,
-        }
 
     from graphify.serve import (
         _bfs,
