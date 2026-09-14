@@ -25,6 +25,10 @@ provides method only and cannot grant authority, change acceptance or add a boar
   independent reviewer or manufacturing a contract/card that the objective did not need.
 - Not for contract extraction, Supervisor's incoming contract receipt, or claimed
   same-card implementation review. Do not apply another role's lifecycle verdict here.
+- Early advice is not final result acceptance. Intermediate collaboration advice, sound
+  continuation acknowledgments, or proactive lifecycle notices exchanged during execution
+  guide work in flight but never replace independent terminal review or final contract-result
+  acceptance.
 
 ## Prerequisites
 
@@ -74,15 +78,28 @@ proof of the rendered or running result. Use only the existing permitted tool su
    authorized omissions and who authorized them. Keep private identities, paths, runtime
    state, credentials and raw logs out of public evidence. Reference existing evidence
    rather than duplicating it; update verification applicability if reception adds a commit.
-6. **Decide and report.** Accept only when material outcomes have sufficient evidence
-   and no unresolved material mismatch. Summarize what was delivered, direct versus reused
-   verification and remaining limits. Distinguish execution complete, objective accepted
-   and publication/deployment authorized; do not invent a completion percentage. A clean
-   result ends reception without another card or review loop. For a material discrepancy,
-   provide criterion, expected/observed result and reproducible evidence to Supervisor via
-   supported continuation/rework. Do not issue a same-card review verdict from an unclaimed
-   or finished task, write the board DB, or take over product implementation. If the native
-   path is unavailable, report the real blocker rather than inventing a parallel lifecycle.
+6. **Decide and report.** Early advice is not final result acceptance. Intermediate
+   collaboration advice, sound continuation acknowledgments, or proactive lifecycle
+   notices exchanged during execution do not replace independent terminal review or
+   final contract-result acceptance. Accept only when material outcomes have sufficient
+   evidence and no unresolved material mismatch. Summarize what was delivered, direct
+   versus reused verification and remaining limits. Distinguish execution complete,
+   objective accepted and publication/deployment authorized; do not invent a completion
+   percentage. A clean result ends reception without another card or review loop. For
+   a material discrepancy, provide criterion, expected/observed result and reproducible
+   evidence to Supervisor via supported continuation/rework. Do not issue a same-card
+   review verdict from an unclaimed or finished task, write the board DB, or take over
+   product implementation. If the native path is unavailable, report the real blocker
+   rather than inventing a parallel lifecycle.
+
+### Collaboration comment lifecycle and reception distinction (illustrative)
+
+During contract execution, Morfeo may have responded to intermediate questions:
+- `kanban_comment(task_id="t_...", body="Direction: ...", collaboration={"action": "respond", "request_id": 10, "disposition": "advice", "evidence_refs": [...]})`
+
+Such intermediate advice remains advisory. Final contract-result reception independently
+verifies delivered artifacts against owner intent and the finalized contract regardless
+of prior intermediate guidance.
 
 ## Pitfalls
 
@@ -93,6 +110,7 @@ proof of the rendered or running result. Use only the existing permitted tool su
 - Reviewing your own direct work is self-review, not independent pipeline evidence.
 - A procedure on disk is not a behavioral guarantee. No extra agent, hook, loader or
   acceptance engine is implied. Do not repeatedly review a correct result for ceremony.
+- Treating intermediate collaboration advice or continuation acknowledgment as final contract acceptance.
 
 ## Verification
 

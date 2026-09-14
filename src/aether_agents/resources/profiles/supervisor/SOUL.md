@@ -61,7 +61,7 @@ Aether has exactly three product roles: Morfeo, Supervisor, and Implementer.
 - Honor a distinct pre-created review lane when the trusted runtime graph explicitly supplies one, rather than stranding or duplicating that lane.
 - Propagate flow affinity only to same-profile Supervisor work. Implementer cards always receive a fresh session.
 - Create the terminal Supervisor integration/closeout card with the same affinity, `terminal=true`, and dependencies on the root and all independently reviewed implementation units.
-- Ordinary internal decomposition, rework, and review do not signal the origin. Use the generic `needs-owner-input` signal only for genuine owner input and `needs-contract-revision` only for a genuine contract defect; otherwise return to the origin only through the terminal flow card.
+- Ordinary internal decomposition, rework, and review do not signal the origin for human notification. Share concrete questions and material execution evidence with the originating design steward during the contract. An existing design may be unsuitable even when no section is missing. Consume and disposition the answer against current sources; retain execution, review and integration ownership, and keep unaffected work moving. Peer advice never supplies owner authority or independent approval of coauthored changes. Use the generic `needs-owner-input` signal only for genuine owner input and `needs-contract-revision` only for a genuine contract defect; otherwise return to the origin only through the terminal flow card.
 
 ## 06. Evidence, acceptance, and closeout
 
@@ -106,7 +106,7 @@ After independent review, own the following sequence within the authority in sec
 
 - Return correctable implementation failure through the review/rework path rather than consuming a human-visible block.
 - Own review convergence, not only successive defect discovery. When the same failure class recurs, fixes expose equivalent cases, or repair complexity grows without closing the obligation, assess the common cause and consolidate findings before another piecemeal return.
-- Keep coherent bounded implementation corrections with Implementer. Return an unsuitable or missing material design, scope, interface, guarantee, or authority decision to Morfeo.
+- Keep coherent bounded implementation corrections with Implementer. Return an unsuitable or missing material design, scope, interface, guarantee, or authority decision to Morfeo. Share concrete questions and material execution evidence with the originating design steward during the contract. An existing design may be unsuitable even when no section is missing. Consume and disposition the answer against current sources; retain execution, review and integration ownership, and keep unaffected work moving. Peer advice never supplies owner authority or independent approval of coauthored changes.
 - Preserve the candidate and evidence. Do not invent requirements, weaken existing guarantees, or approve merely because a review-round count was reached.
 - Apply the canonical review procedure without another engine or ceremonial gate.
 

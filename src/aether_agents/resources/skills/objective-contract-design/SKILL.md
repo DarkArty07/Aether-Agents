@@ -101,6 +101,19 @@ or their delegated project policy; a skill does not supply universal defaults.
     do not claim cross-artifact task coverage before that breakdown exists. If review
     returns a contract defect, repair the owning artifact and supersede final bytes
     when required; never patch an immutable contract in place.
+11. **Remain design steward after handoff.** On an addressed question or intermediate
+    evidence notice (such as lifecycle notices on `review_requested`, `changes_requested`,
+    `blocked`, or root decomposition handoff), inspect the exact current obligation
+    and candidate. Distinguish a local correction from a false premise, and provide
+    a bounded direction or canonical design revision. Acknowledge a sound continuation
+    without duplicating Supervisor's review. Do not wait for the final result when
+    current evidence already invalidates the approach; do not take over implementation.
+    Early advice is not final result acceptance. Clarifications within existing accepted
+    obligations go in the owning plan/evidence and addressed response; material changes
+    to finalized contract terms use `objective_contract supersede`, not an in-place edit.
+    For future root handoffs on supported runtimes, opt in via `kanban_create(..., collaboration="advisory")`
+    from the trusted originating session; this objective starts on the old runtime
+    bootstrap where existing explicit observation and comments are used.
 
 ## Writing rules and compact evidence
 
@@ -123,6 +136,22 @@ and references; do not create a separate file or new identifier system just for 
 If design is incomplete, return the specific question, why it changes the outcome,
 known alternatives and evidence, and which owner can decide. Do not ask the owner to
 repeat context that the repository or prior accepted artifact can answer.
+
+### Collaboration comment lifecycle and examples (illustrative)
+
+Peer collaboration uses an optional `collaboration` object on `kanban_comment`:
+
+- **Addressed request to origin:**
+  `kanban_comment(task_id="t_...", body="Design question: ...", collaboration={"action": "request", "recipient": "origin", "evidence_refs": ["specs/plan.md#L10"]})`
+- **Morfeo response:**
+  `kanban_comment(task_id="t_...", body="Direction: ...", collaboration={"action": "respond", "request_id": 12, "disposition": "advice", "evidence_refs": ["specs/spec.md#L45"]})`
+- **Requester ack and resolution:**
+  `kanban_comment(task_id="t_...", body="...", collaboration={"action": "ack", "message_id": 12})`
+  `kanban_comment(task_id="t_...", body="Applied design clarification", collaboration={"action": "resolve", "request_id": 12, "disposition": "applied"})`
+
+Dispositions for respond include `advice`, `continue`, `design_revision`, `owner_input`,
+or `unavailable`. Early advice is not final result acceptance; peer responses provide
+guidance, never owner authority or independent review approval.
 
 ## Worked contrast (illustrative, not executed evidence)
 
@@ -148,6 +177,8 @@ additional applicable state/atomicity decisions; this example does not supply th
 - Treating an expected objective-owned test mutation as damage to unrelated user state.
 - Claiming every revision is a design failure: new owner intent and corrected repository
   baselines are different from an initially contradictory acceptance criterion.
+- Treating intermediate collaboration advice or continuation acknowledgment as final contract acceptance.
+- Taking over product implementation or directly editing board tasks during post-handoff stewardship.
 
 ## Verification
 
