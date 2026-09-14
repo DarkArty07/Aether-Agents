@@ -21,6 +21,56 @@ from aether_agents.knowledge.memory import WorkMemoryStore
 from aether_agents.knowledge.snapshots import KnowledgeStore
 
 
+class _ComposeStandInBackend(GraphifyBackend):
+    """Stand-in for the `semantic_compose` action owned by the overlay unit.
+
+    The manager now composes once per update. The native compositor lands with the
+    overlay unit, so on this base the stand-in records that single call and forwards
+    each fragment through the pre-existing `semantic_apply`, which is what keeps these
+    lifecycle oracles (states, cache reuse, queryable content) runnable. The real
+    action is exercised by the native worker lane.
+    """
+
+    def __init__(self, inner: GraphifyBackend) -> None:
+        super().__init__(inner.python)
+        self.inner = inner
+        self.compose_calls: list[dict[str, Any]] = []
+
+    def run(self, action: str, **kwargs: Any) -> Any:
+        if action != "semantic_compose":
+            return self.inner.run(action, **kwargs)
+        arguments = dict(kwargs.get("arguments") or {})
+        fragments = list(arguments.get("fragments") or [])
+        self.compose_calls.append(arguments)
+        for fragment in fragments:
+            self.inner.run(
+                "semantic_apply",
+                source_root=kwargs.get("source_root"),
+                graph_path=kwargs.get("graph_path"),
+                arguments={
+                    "fragment": fragment,
+                    "allowed_sources": arguments.get("allowed_sources"),
+                    "allow_empty": True,
+                },
+            )
+        graph_file = kwargs.get("graph_path")
+        digest = None
+        if isinstance(graph_file, Path) and graph_file.is_file():
+            digest = hashlib.sha256(graph_file.read_bytes()).hexdigest()
+        return {
+            "ok": True,
+            "content": f"composed {len(fragments)} fragments",
+            "applied_nodes": len(fragments),
+            "structural_digest": digest,
+            "structural_preserved": True,
+        }
+
+
+def semantic_backend(native_python: Path) -> GraphifyBackend:
+    """Real worker plus the compose stand-in, for manager lifecycle regressions."""
+    return _ComposeStandInBackend(GraphifyBackend(native_python))
+
+
 def test_native_markdown_and_all_graph_query_actions(tmp_path: Path, native_python: Path) -> None:
     _root, state = project(tmp_path)
     ctx = resolve_context(PROJECT, "morfeo", state_root=state)
@@ -1075,7 +1125,7 @@ def test_d36_semantic_lifecycle_cache_and_enrichment(
     store = KnowledgeStore(
         state,
         tmp_path / "cache",
-        GraphifyBackend(native_python),
+        semantic_backend(native_python),
         configuration={"enabled": True, "semantic_enabled": False},
     )
     struct_res = store.execute(ctx, "update", {"mode": "structural"})
@@ -1099,7 +1149,7 @@ def test_d36_semantic_lifecycle_cache_and_enrichment(
     store_pending = KnowledgeStore(
         state,
         tmp_path / "cache",
-        GraphifyBackend(native_python),
+        semantic_backend(native_python),
         configuration={
             "enabled": True,
             "semantic_enabled": True,
@@ -1149,7 +1199,7 @@ def test_d36_semantic_lifecycle_cache_and_enrichment(
     semantic_store = KnowledgeStore(
         state,
         tmp_path / "cache",
-        GraphifyBackend(native_python),
+        semantic_backend(native_python),
         configuration={
             "enabled": True,
             "semantic_enabled": True,
@@ -1180,7 +1230,7 @@ def test_d36_semantic_lifecycle_cache_and_enrichment(
     other_store = KnowledgeStore(
         state,
         tmp_path / "cache",
-        GraphifyBackend(native_python),
+        semantic_backend(native_python),
         configuration={
             "enabled": True,
             "semantic_enabled": True,
@@ -1239,7 +1289,7 @@ def test_d37_failure_preservation_timeout_exhaustion_malformed(
     exhaust_store = KnowledgeStore(
         state,
         tmp_path / "cache",
-        GraphifyBackend(native_python),
+        semantic_backend(native_python),
         configuration={
             "enabled": True,
             "semantic_enabled": True,
@@ -1301,7 +1351,7 @@ def test_d37_failure_preservation_timeout_exhaustion_malformed(
     refresh_store = KnowledgeStore(
         state,
         tmp_path / "cache",
-        GraphifyBackend(native_python),
+        semantic_backend(native_python),
         configuration={
             "enabled": True,
             "semantic_enabled": True,
@@ -1330,7 +1380,7 @@ def test_d37_failure_preservation_timeout_exhaustion_malformed(
     cancel_evt.set()
     with pytest.raises(KnowledgeError) as exc_info:
         sem_mod.run_semantic_extraction(
-            backend=GraphifyBackend(native_python),
+            backend=semantic_backend(native_python),
             source_root=tmp_path
             / "cache"
             / "knowledge"
@@ -1396,7 +1446,7 @@ def test_d35_cross_project_isolation_and_symbol_collision(
     store_a = KnowledgeStore(
         state_a,
         tmp_path / "cache_a",
-        GraphifyBackend(native_python),
+        semantic_backend(native_python),
         configuration={
             "enabled": True,
             "semantic_enabled": True,
@@ -1411,7 +1461,7 @@ def test_d35_cross_project_isolation_and_symbol_collision(
     store_b = KnowledgeStore(
         state_b,
         tmp_path / "cache_b",
-        GraphifyBackend(native_python),
+        semantic_backend(native_python),
         configuration={
             "enabled": True,
             "semantic_enabled": True,
@@ -1481,7 +1531,7 @@ def test_d35_missing_or_ambiguous_auxiliary_task_unbound(
     store_missing = KnowledgeStore(
         state,
         tmp_path / "cache",
-        GraphifyBackend(native_python),
+        semantic_backend(native_python),
         configuration={"enabled": True, "semantic_enabled": True},
     )
     res_missing = store_missing.execute(ctx, "update", {"mode": "configured"})
@@ -1495,7 +1545,7 @@ def test_d35_missing_or_ambiguous_auxiliary_task_unbound(
     store_auto = KnowledgeStore(
         state,
         tmp_path / "cache",
-        GraphifyBackend(native_python),
+        semantic_backend(native_python),
         configuration={
             "enabled": True,
             "semantic_enabled": True,
@@ -1511,7 +1561,7 @@ def test_d35_missing_or_ambiguous_auxiliary_task_unbound(
     store_ambiguous = KnowledgeStore(
         state,
         tmp_path / "cache",
-        GraphifyBackend(native_python),
+        semantic_backend(native_python),
         configuration={
             "enabled": True,
             "semantic_enabled": True,
@@ -1609,7 +1659,7 @@ def test_d35_live_auxiliary_document_code_relation(tmp_path: Path, native_python
     store = KnowledgeStore(
         state,
         tmp_path / "cache",
-        GraphifyBackend(native_python),
+        semantic_backend(native_python),
         configuration={
             "enabled": True,
             "semantic_enabled": True,
@@ -1643,7 +1693,7 @@ def test_large_corpus_semantic_prepare_bounded_paging(
     git_at(root, "add", ".")
     git_at(root, "commit", "-qm", "large corpus")
 
-    backend = GraphifyBackend(native_python)
+    backend = semantic_backend(native_python)
 
     # 1. Monolithic simulation (#332 failure mode):
     # Retrieve all chunks across pages and assert that returning them monolithically
@@ -1757,7 +1807,7 @@ def test_gx06_deadline_seconds_zero_pending_honest_coverage(
     git_at(root, "commit", "-qm", "add doc1")
     ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
     cache_root = tmp_path / "cache"
-    backend = GraphifyBackend(native_python)
+    backend = semantic_backend(native_python)
 
     model_calls = 0
 
@@ -1875,7 +1925,18 @@ def test_gx06_deadline_seconds_zero_pending_honest_coverage(
             "allow_empty": False,
         },
     )
-    cache.put(fp0, val_res["fragment"])
+    cache.put_qualified(
+        fp0,
+        val_res["fragment"],
+        usage={},
+        route=expected_route,
+        model_digest=sem_mod.get_model_identity_digest(
+            "web_extract",
+            provider=expected_route.get("provider"),
+            model=expected_route.get("model"),
+            api_mode=expected_route.get("api_mode"),
+        ),
+    )
 
     class ChunkBackend(GraphifyBackend):
         def __init__(self, inner: GraphifyBackend) -> None:
@@ -1908,21 +1969,25 @@ def test_gx06_deadline_seconds_zero_pending_honest_coverage(
             },
         },
     )
-    assert res_partial["state"] == "partial"
+    assert res_partial["state"] == "pending"
     assert res_partial["observed_usage"]["model_calls"] == 0
     assert res_partial["failed_paths"] == []
-    assert set(res_partial["covered_paths"]) == set(c0_files)
+    # Nothing is composed after the budget is spent: the cached fragment stays
+    # pending work (retained on disk), never claimed as covered.
+    assert res_partial["covered_paths"] == []
+    assert res_partial["compose"]["invoked"] is False
+    assert set(c0_files).issubset(set(res_partial["pending_paths"]))
     assert len(res_partial["pending_paths"]) > 0
     assert res_partial["observed_usage"]["chunk_counts"]["cached"] == 1
-    assert res_partial["observed_usage"]["chunk_counts"]["pending"] == len(chunks) - 1
+    assert res_partial["observed_usage"]["chunk_counts"]["pending"] == len(chunks)
     assert res_partial["observed_usage"]["chunk_counts"]["failed"] == 0
 
 
 def test_gx06_mixed_case_distinct_counts_and_paths(
     tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """GX-06: Mixed case with one successful chunk, one failed validation, and one not attempted
-    due to deadline yields distinct counts, categories, and paths.
+    """GX-06: Mixed case with one successful chunk, one failed validation, and one
+    route-rejected chunk yields distinct counts, categories, and paths.
     """
     root, state = project(tmp_path)
     (root / "doc1.md").write_text("# Doc 1\n")
@@ -1932,7 +1997,7 @@ def test_gx06_mixed_case_distinct_counts_and_paths(
     git_at(root, "commit", "-qm", "add docs")
     ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
     cache_root = tmp_path / "cache"
-    backend = GraphifyBackend(native_python)
+    backend = semantic_backend(native_python)
 
     store = KnowledgeStore(state, cache_root, backend)
     struct_res = store.execute(ctx, "update", {"mode": "structural"})
@@ -1973,25 +2038,29 @@ def test_gx06_mixed_case_distinct_counts_and_paths(
     )
     invalid_json = json.dumps({"nodes": [], "edges": [{"source": "X", "target": "Y"}]})
 
-    import time
-
-    original_time = time.time
-    mock_clock = [original_time()]
-
-    def mock_time() -> float:
-        return mock_clock[0]
-
     def mock_aux(
-        task: str, system_prompt: str, user_prompt: str, timeout: float = 120.0
+        task: str,
+        system_prompt: str,
+        user_prompt: str,
+        timeout: float = 120.0,
+        route_info: dict[str, Any] | None = None,
+        api_mode: str | None = None,
     ) -> tuple[str, dict[str, Any]]:
         if "s0" in system_prompt:
             return valid_json, {"total_tokens": 100}
         if "s1" in system_prompt:
-            mock_clock[0] += 1000.0  # Expire deadline so chunk 2 is deferred
             return invalid_json, {"total_tokens": 50}
+        # Third chunk answers from a different effective route: rejected, not applied.
+        if isinstance(route_info, dict):
+            route_info.update(
+                {
+                    "provider": "other-provider",
+                    "model": "other-model",
+                    "api_mode": "chat_completions",
+                }
+            )
         return valid_json, {"total_tokens": 100}
 
-    monkeypatch.setattr(time, "time", mock_time)
     monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_aux)
 
     class MockBackend(GraphifyBackend):
@@ -2038,7 +2107,8 @@ def test_gx06_mixed_case_distinct_counts_and_paths(
 
     cats = res["observed_usage"]["categories"]
     assert cats["validation_failed"] == 1
-    assert cats["deadline_deferred"] == 1
+    assert cats["route"] == 1, "the mismatched route stays pending and is never applied"
+    assert cats["deadline_deferred"] == 0
     assert cats["auxiliary_failed"] == 0
     assert cats["apply_failed"] == 0
 
@@ -2057,7 +2127,7 @@ def test_gx06_split_file_conservative_coverage(
     git_at(root, "commit", "-qm", "add docs")
     ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
     cache_root = tmp_path / "cache"
-    backend = GraphifyBackend(native_python)
+    backend = semantic_backend(native_python)
 
     store = KnowledgeStore(state, cache_root, backend)
     struct_res = store.execute(ctx, "update", {"mode": "structural"})
@@ -2152,10 +2222,10 @@ def test_gx06_split_file_conservative_coverage(
     assert "shared.md" in res_a["failed_paths"]
     assert "only1.md" in res_a["failed_paths"]
 
-    # Case B: Chunk 0 succeeds, Chunk 1 is pending due to deadline
-    import time
-
-    mock_clock = [time.time()]
+    # Case B: the budget is spent while chunk 0 is in flight. No response is
+    # validated or composed afterwards, and every split file stays pending.
+    mock_clock = [sem_mod._now()]
+    scheduled_b: list[str] = []
 
     def mock_time_b() -> float:
         return mock_clock[0]
@@ -2163,12 +2233,12 @@ def test_gx06_split_file_conservative_coverage(
     def mock_aux_b(
         task: str, system_prompt: str, user_prompt: str, timeout: float = 120.0
     ) -> tuple[str, dict[str, Any]]:
+        scheduled_b.append(system_prompt)
         if "s0" in system_prompt:
-            mock_clock[0] += 1000.0  # Expire deadline before chunk 1 can run
-            return valid_json0, {"total_tokens": 100}
-        raise AssertionError("Chunk 1 must not be called")
+            mock_clock[0] += 1000.0  # Expire the budget while this response is in flight
+        return valid_json0, {"total_tokens": 100}
 
-    monkeypatch.setattr(time, "time", mock_time_b)
+    monkeypatch.setattr(sem_mod, "_now", mock_time_b)
     monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_aux_b)
 
     res_b = sem_mod.run_semantic_extraction(
@@ -2181,11 +2251,15 @@ def test_gx06_split_file_conservative_coverage(
         configuration={"semantic_auxiliary_task": "web_extract"},
         deadline_seconds=500.0,
     )
-    assert "only0.md" in res_b["covered_paths"]
+    assert scheduled_b, "chunk 0 was attempted"
+    assert res_b["compose"]["invoked"] is False, "never compose after the budget is spent"
+    assert res_b["covered_paths"] == [], "nothing is composed after the budget is spent"
+    assert res_b["failed_paths"] == []
+    assert "only0.md" in res_b["pending_paths"]
     assert "shared.md" not in res_b["covered_paths"]
     assert "shared.md" in res_b["pending_paths"]
     assert "only1.md" in res_b["pending_paths"]
-    assert "shared.md" not in res_b["failed_paths"]
+    assert res_b["observed_usage"]["categories"]["deadline"] > 0
 
 
 def test_gx06_resume_uses_validated_cache_and_progresses_pending(
@@ -2201,7 +2275,7 @@ def test_gx06_resume_uses_validated_cache_and_progresses_pending(
     git_at(root, "commit", "-qm", "add docs")
     ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
     cache_root = tmp_path / "cache"
-    backend = GraphifyBackend(native_python)
+    backend = semantic_backend(native_python)
 
     store = KnowledgeStore(state, cache_root, backend)
     struct_res = store.execute(ctx, "update", {"mode": "structural"})
@@ -2261,23 +2335,14 @@ def test_gx06_resume_uses_validated_cache_and_progresses_pending(
                 return {"chunks": chunks}
             return self.inner.run(action, **kwargs)
 
-    # Run 1: Chunk 0 succeeds, Chunk 1 deferred by deadline
-    import time
-
-    mock_clock = [time.time()]
-
-    def mock_time() -> float:
-        return mock_clock[0]
-
+    # Run 1: Chunk 0 succeeds (validated and composed), Chunk 1 fails transport.
     def mock_aux_run1(
         task: str, system_prompt: str, user_prompt: str, timeout: float = 120.0
     ) -> tuple[str, dict[str, Any]]:
         if "s0" in system_prompt:
-            mock_clock[0] += 1000.0  # Expire deadline
             return valid_json0, {"total_tokens": 100}
-        raise AssertionError("Chunk 1 must not be called in Run 1")
+        raise KnowledgeError("AUXILIARY_FAILED", "stub transport failure")
 
-    monkeypatch.setattr(time, "time", mock_time)
     monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_aux_run1)
 
     gx06_resume_cfg = {
@@ -2301,13 +2366,13 @@ def test_gx06_resume_uses_validated_cache_and_progresses_pending(
     )
     assert res1["state"] == "partial"
     assert res1["covered_paths"] == ["doc1.md"]
-    assert res1["pending_paths"] == ["doc2.md"]
-    assert res1["failed_paths"] == []
+    assert res1["pending_paths"] == []
+    assert res1["failed_paths"] == ["doc2.md"]
     assert res1["observed_usage"]["chunk_counts"]["validated"] == 1
-    assert res1["observed_usage"]["chunk_counts"]["pending"] == 1
+    assert res1["observed_usage"]["chunk_counts"]["failed"] == 1
 
     # Run 2: Resume with deadline_seconds=0
-    # Zero model calls, cached chunk 0 is applied and not failed, chunk 1 remains pending
+    # Zero model calls, cached chunk 0 is retained, nothing is composed.
     calls_run2 = 0
 
     def mock_aux_run2(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
@@ -2326,13 +2391,14 @@ def test_gx06_resume_uses_validated_cache_and_progresses_pending(
         ctx=ctx,
         configuration=gx06_resume_cfg | {"semantic_deadline_seconds": 0.0},
     )
-    assert res2["state"] == "partial"
+    assert res2["state"] == "pending"
     assert calls_run2 == 0
-    assert res2["covered_paths"] == ["doc1.md"]
-    assert res2["pending_paths"] == ["doc2.md"]
+    assert res2["covered_paths"] == []
+    assert res2["compose"]["invoked"] is False
+    assert set(res2["pending_paths"]) == {"doc1.md", "doc2.md"}
     assert res2["failed_paths"] == []
     assert res2["observed_usage"]["chunk_counts"]["cached"] == 1
-    assert res2["observed_usage"]["chunk_counts"]["pending"] == 1
+    assert res2["observed_usage"]["chunk_counts"]["pending"] == 2
     assert res2["observed_usage"]["chunk_counts"]["failed"] == 0
 
     # Run 3: Resume with normal deadline, chunk 1 succeeds
@@ -2374,7 +2440,7 @@ def test_ae_345_semantic_route_fingerprint_invalidation_and_caching(
 ) -> None:
     root, state = project(tmp_path)
     ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
-    backend = GraphifyBackend(native_python)
+    backend = semantic_backend(native_python)
     source_root = root
     graph_path = tmp_path / "graph.json"
     inputs = {"README.md": "sha1"}
@@ -2510,17 +2576,21 @@ def test_ae_345_semantic_route_fingerprint_invalidation_and_caching(
     assert res3["outcome"] == "updated"
     assert call_count > recorded_calls, "Changed route must trigger new model calls"
 
-    # 4. Unresolved or mismatched route is not reused or published to cache
+    # 4. Unresolved or mismatched route is neither cached nor inserted: the graph
+    #    bytes stay exactly as they were, not just the cache directory.
     unresolved_cache_root = tmp_path / "unresolved_cache"
     unresolved_cfg = {
         "semantic_auxiliary_task": "web_extract",
         "semantic": {"provider": "unresolved", "model": "unresolved", "api_mode": "unresolved"},
     }
+    unresolved_graph = tmp_path / "graph_unres.json"
+    unresolved_graph.write_text('{"nodes": [{"id": "structural"}], "edges": []}', encoding="utf-8")
+    unresolved_before = hashlib.sha256(unresolved_graph.read_bytes()).hexdigest()
     actual_route = {"provider": "unresolved", "model": "unresolved", "api_mode": "unresolved"}
-    sem_mod.run_semantic_extraction(
+    unresolved_res = sem_mod.run_semantic_extraction(
         backend=backend,
         source_root=root,
-        graph_path=tmp_path / "graph_unres.json",
+        graph_path=unresolved_graph,
         inputs={"README.md": "sha1"},
         cache_root=unresolved_cache_root,
         ctx=ctx,
@@ -2529,6 +2599,11 @@ def test_ae_345_semantic_route_fingerprint_invalidation_and_caching(
     cache_dir = unresolved_cache_root / "knowledge" / ctx.project_id / "semantic_cache"
     cached_files = list(cache_dir.glob("*.json")) if cache_dir.exists() else []
     assert len(cached_files) == 0, "Unresolved route must not publish to cache"
+    assert unresolved_res["observed_usage"]["categories"]["route"] > 0
+    assert unresolved_res["compose"]["invoked"] is False
+    assert hashlib.sha256(unresolved_graph.read_bytes()).hexdigest() == unresolved_before, (
+        "Unresolved route must not change the candidate graph bytes"
+    )
 
     mismatch_cache_root = tmp_path / "mismatch_cache"
     mismatch_cfg = {
@@ -2539,15 +2614,18 @@ def test_ae_345_semantic_route_fingerprint_invalidation_and_caching(
             "api_mode": "chat_completions",
         },
     }
+    mismatch_graph = tmp_path / "graph_mismatch.json"
+    mismatch_graph.write_text('{"nodes": [{"id": "structural"}], "edges": []}', encoding="utf-8")
+    mismatch_before = hashlib.sha256(mismatch_graph.read_bytes()).hexdigest()
     actual_route = {
         "provider": "different_provider",
         "model": "different_model",
         "api_mode": "chat_completions",
     }
-    sem_mod.run_semantic_extraction(
+    mismatch_res = sem_mod.run_semantic_extraction(
         backend=backend,
         source_root=root,
-        graph_path=tmp_path / "graph_mismatch.json",
+        graph_path=mismatch_graph,
         inputs={"README.md": "sha1"},
         cache_root=mismatch_cache_root,
         ctx=ctx,
@@ -2558,6 +2636,11 @@ def test_ae_345_semantic_route_fingerprint_invalidation_and_caching(
         list(mismatch_cache_dir.glob("*.json")) if mismatch_cache_dir.exists() else []
     )
     assert len(mismatch_cached_files) == 0, "Mismatched route must not publish to cache"
+    assert mismatch_res["observed_usage"]["categories"]["route"] > 0
+    assert mismatch_res["compose"]["invoked"] is False
+    assert hashlib.sha256(mismatch_graph.read_bytes()).hexdigest() == mismatch_before, (
+        "Mismatched route must not change the candidate graph bytes"
+    )
 
 
 def test_ae_345_incomplete_finish_reason_not_cached_or_applied(
@@ -2565,7 +2648,7 @@ def test_ae_345_incomplete_finish_reason_not_cached_or_applied(
 ) -> None:
     root, state = project(tmp_path)
     ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
-    backend = GraphifyBackend(native_python)
+    backend = semantic_backend(native_python)
 
     import aether_agents.knowledge.semantic as sem_mod
 
