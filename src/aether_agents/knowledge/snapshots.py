@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import hashlib
 import json
 import re
-import shutil
+import threading
 import time
 import uuid
 from pathlib import Path, PurePosixPath
@@ -23,13 +25,20 @@ from .common import (
     stable_lock,
 )
 from .context import KnowledgeContext
-from .graphify import GraphifyBackend
+from .graphify import GraphifyBackend, graphify_cancel_scope
 
 MAX_FILES = 5000
 MAX_FILE_BYTES = 256_000
 MAX_SOURCE_BYTES = 32_000_000
 MAX_GRAPH_BYTES = 64_000_000
 _SCOPE_VERSION = "regular-tracked-v1"
+SNAPSHOT_INTEGRITY_VERSION = "aether.project-knowledge.integrity.v1"
+SEMANTIC_PIPELINE_VERSION = "aether.semantic-pipeline.v2"
+SEMANTIC_CACHE_VERSION = "aether.semantic-cache.v2"
+_OPERATION_SCHEMA_VERSION = 1
+_CANCEL_EVENT: contextvars.ContextVar[threading.Event | None] = contextvars.ContextVar(
+    "aether_knowledge_cancel_event", default=None
+)
 _EXTENSIONS = frozenset(
     ".py .pyi .js .jsx .ts .tsx .go .rs .java .c .h .cpp .hpp .cs .rb .php .swift .kt "
     ".scala .lua .sh .sql .md .txt .rst .toml .yaml .yml .json .ini .cfg .html .css .vue .svelte".split()
@@ -172,6 +181,123 @@ def _dirty(context: KnowledgeContext) -> list[str]:
     return sorted({p.decode("utf-8", "replace") for p in (changed + new).split(b"\0") if p})[:500]
 
 
+def _bounded_count(value: Any, *, maximum: int = MAX_FILES) -> int | None:
+    """Return a safe count for warning metadata without exposing arbitrary values."""
+    if isinstance(value, list):
+        return min(len(value), maximum)
+    if type(value) is int and 0 <= value <= maximum:
+        return value
+    return None
+
+
+def _semantic_integrity(manifest: dict[str, Any]) -> tuple[bool, str]:
+    """Classify whether a semantic overlay is covered by the v1 integrity envelope."""
+    semantic = manifest.get("semantic")
+    if not isinstance(semantic, dict):
+        return False, "missing"
+    if manifest.get("_base_integrity_invalid") is True:
+        return False, "inconsistent"
+    if manifest.get("integrity_version") != SNAPSHOT_INTEGRITY_VERSION:
+        return False, "legacy"
+    if not re.fullmatch(r"[a-f0-9]{32}", str(manifest.get("base_structural_snapshot_id", ""))):
+        return False, "inconsistent"
+    for key in ("base_structural_digest", "structural_digest", "pipeline_version"):
+        if not isinstance(manifest.get(key), str) or not manifest[key]:
+            return False, "inconsistent"
+    pipeline = semantic.get("pipeline")
+    if not isinstance(pipeline, dict):
+        return False, "legacy"
+    if pipeline.get("version") != manifest.get("pipeline_version"):
+        return False, "inconsistent"
+    if semantic.get("cache_version") not in (None, SEMANTIC_CACHE_VERSION):
+        return False, "inconsistent"
+    if semantic.get("version") not in (None, manifest.get("pipeline_version")):
+        return False, "inconsistent"
+    if semantic.get("state") not in {"disabled", "pending", "complete", "partial", "unavailable"}:
+        return False, "inconsistent"
+    return True, ""
+
+
+def semantic_snapshot_warnings(manifest: dict[str, Any] | None) -> list[str]:
+    """Describe immutable snapshot state, never the current component configuration."""
+    if not isinstance(manifest, dict):
+        return [
+            "Semantic snapshot state is unknown or inconsistent; current document results are structural."
+        ]
+    semantic = manifest.get("semantic")
+    trusted, integrity_reason = _semantic_integrity(manifest)
+    if not isinstance(semantic, dict):
+        return [
+            "Semantic snapshot state is unknown or inconsistent; current document results are structural."
+        ]
+    if not trusted:
+        if integrity_reason == "legacy":
+            return [
+                "Legacy semantic snapshot is not trusted; current document results are structural."
+            ]
+        return [
+            "Semantic snapshot state is unknown or inconsistent; current document results are structural."
+        ]
+
+    state = semantic.get("state")
+    coverage = manifest.get("coverage")
+    documents = coverage.get("documents") if isinstance(coverage, dict) else None
+    if state == "complete":
+        if documents == "semantic":
+            return []
+        return [
+            "Semantic snapshot state is unknown or inconsistent; current document results are structural."
+        ]
+    if state == "partial":
+        counts: list[str] = []
+        for label, key in (
+            ("covered", "covered_paths"),
+            ("pending", "pending_paths"),
+            ("failed", "failed_paths"),
+        ):
+            count = _bounded_count(semantic.get(key))
+            if count is not None:
+                counts.append(f"{label}={count}")
+        suffix = f" ({', '.join(counts)})" if counts else ""
+        return [
+            "Documents have partial semantic coverage; remaining paths stay structural"
+            + suffix
+            + "."
+        ]
+    if state == "pending":
+        return [
+            "Semantic enrichment is pending for this snapshot; current document results are structural."
+        ]
+    if state == "unavailable":
+        category = semantic.get("reason_category")
+        if not isinstance(category, str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,31}", category):
+            category = None
+        suffix = f" (reason={category})" if category else ""
+        return [
+            "Semantic enrichment was unavailable when this snapshot was built; current results are structural"
+            + suffix
+            + "."
+        ]
+    if state == "disabled":
+        return ["Semantic extraction was disabled when this snapshot was built."]
+    return [
+        "Semantic snapshot state is unknown or inconsistent; current document results are structural."
+    ]
+
+
+# Private alias retained for focused lifecycle tests and downstream callers.
+_semantic_warnings = semantic_snapshot_warnings
+
+
+@contextlib.contextmanager
+def knowledge_cancel_scope(event: threading.Event | None):
+    token = _CANCEL_EVENT.set(event)
+    try:
+        yield
+    finally:
+        _CANCEL_EVENT.reset(token)
+
+
 class KnowledgeStore:
     def __init__(
         self,
@@ -193,6 +319,103 @@ class KnowledgeStore:
             return load_json(config_file)
         except Exception:
             return {}
+
+    def _operation_path(self, ctx: KnowledgeContext) -> Path:
+        return self._view(ctx) / "operation.json"
+
+    def _load_operation(self, ctx: KnowledgeContext) -> dict[str, Any] | None:
+        try:
+            operation = load_json(self._operation_path(ctx), limit=64_000)
+        except FileNotFoundError:
+            return None
+        except KnowledgeError:
+            return {"phase": "unknown", "outcome": "invalid"}
+        if not isinstance(operation, dict):
+            return {"phase": "unknown", "outcome": "invalid"}
+        if operation.get("source_revision") not in (None, ctx.source_revision):
+            return None
+        # Operation metadata is deliberately content-free and bounded before exposure.
+        allowed = {
+            key: operation[key]
+            for key in (
+                "schema_version",
+                "operation_id",
+                "phase",
+                "source_revision",
+                "input_sha256",
+                "candidate_snapshot_id",
+                "base_structural_snapshot_id",
+                "outcome",
+                "terminal_outcome",
+                "failure_category",
+                "published_snapshot_id",
+            )
+            if key in operation
+        }
+        allowed["active"] = operation.get("outcome") == "running"
+        return allowed
+
+    def _write_operation(
+        self,
+        ctx: KnowledgeContext,
+        *,
+        operation_id: str,
+        phase: str,
+        outcome: str,
+        source_revision: str,
+        input_sha256: str | None = None,
+        candidate_snapshot_id: str | None = None,
+        base_structural_snapshot_id: str | None = None,
+        terminal_outcome: str | None = None,
+        failure_category: str | None = None,
+        published_snapshot_id: str | None = None,
+    ) -> None:
+        data: dict[str, Any] = {
+            "schema_version": _OPERATION_SCHEMA_VERSION,
+            "operation_id": operation_id,
+            "phase": phase,
+            "source_revision": source_revision,
+            "input_sha256": input_sha256,
+            "candidate_snapshot_id": candidate_snapshot_id,
+            "base_structural_snapshot_id": base_structural_snapshot_id,
+            "outcome": outcome,
+            "terminal_outcome": terminal_outcome,
+        }
+        if failure_category:
+            data["failure_category"] = failure_category[:64]
+        if published_snapshot_id:
+            data["published_snapshot_id"] = published_snapshot_id
+        atomic_json(self._operation_path(ctx), data)
+
+    def _safe_finish_operation(
+        self,
+        ctx: KnowledgeContext,
+        *,
+        operation_id: str,
+        phase: str,
+        source_revision: str,
+        outcome: str,
+        terminal_outcome: str,
+        input_sha256: str | None = None,
+        candidate_snapshot_id: str | None = None,
+        base_structural_snapshot_id: str | None = None,
+        failure_category: str | None = None,
+        published_snapshot_id: str | None = None,
+    ) -> None:
+        with contextlib.suppress(Exception):
+            self._write_operation(
+                ctx,
+                operation_id=operation_id,
+                phase=phase,
+                outcome=outcome,
+                source_revision=source_revision,
+                input_sha256=input_sha256,
+                candidate_snapshot_id=candidate_snapshot_id,
+                base_structural_snapshot_id=base_structural_snapshot_id,
+                terminal_outcome=terminal_outcome,
+                failure_category=failure_category,
+                published_snapshot_id=published_snapshot_id,
+            )
 
     def _view(self, ctx: KnowledgeContext) -> Path:
         if not re.fullmatch(r"[a-f0-9-]{36}", ctx.project_id) or not re.fullmatch(
@@ -237,12 +460,23 @@ class KnowledgeStore:
             manifest.get(k)
             for k in ("project_id", "view_id", "source_revision", "engine_version", "scope_version")
         )
-        if actual != expected or manifest.get("complete") is not True:
+        if (
+            actual != expected
+            or manifest.get("snapshot_id") != pointer.get("snapshot_id")
+            or manifest.get("complete") is not True
+        ):
             raise KnowledgeError(
                 "INDEX_CORRUPT", "The snapshot does not belong to this project revision."
             )
         graph = location / "graphify-out" / "graph.json"
-        if graph.is_symlink() or not graph.is_file() or graph.stat().st_size > MAX_GRAPH_BYTES:
+        try:
+            graph_is_file = graph.is_file()
+            graph_size = graph.stat().st_size if graph_is_file else 0
+        except OSError as exc:
+            raise KnowledgeError(
+                "INDEX_CORRUPT", "The snapshot graph is missing or unsafe."
+            ) from exc
+        if graph.is_symlink() or not graph_is_file or graph_size > MAX_GRAPH_BYTES:
             raise KnowledgeError("INDEX_CORRUPT", "The snapshot graph is missing or unsafe.")
         try:
             graph_bytes = read_private_bytes(graph)
@@ -250,12 +484,48 @@ class KnowledgeStore:
             raise KnowledgeError("INDEX_CORRUPT", "The snapshot graph path is unsafe.") from exc
         if hashlib.sha256(graph_bytes).hexdigest() != manifest.get("graph_sha256"):
             raise KnowledgeError("INDEX_CORRUPT", "The snapshot graph changed after publication.")
+        if isinstance(manifest.get("semantic"), dict) and not self._base_is_valid(ctx, manifest):
+            manifest["_base_integrity_invalid"] = True
         return location, manifest
+
+    def _manifest_for_recovery(self, ctx: KnowledgeContext) -> tuple[Path, dict[str, Any]] | None:
+        """Read only pointer/manifest identity when the published graph is corrupt."""
+        try:
+            pointer = load_json(self._pointer(ctx), limit=64_000)
+            snapshot_id = str(pointer.get("snapshot_id", "")) if isinstance(pointer, dict) else ""
+            if not _SNAPSHOT_ID.fullmatch(snapshot_id):
+                return None
+            location = self._cache_location(ctx, snapshot_id)
+            manifest = load_json(location / "manifest.json")
+            if not isinstance(manifest, dict):
+                return None
+            if (
+                manifest.get("project_id") != ctx.project_id
+                or manifest.get("view_id") != ctx.view_id
+                or manifest.get("source_revision") != ctx.source_revision
+            ):
+                return None
+            return location, manifest
+        except (FileNotFoundError, KnowledgeError, OSError, ValueError):
+            return None
 
     def _envelope(
         self, ctx: KnowledgeContext, action: str, manifest: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         dirty = _dirty(ctx)
+        operation = self._load_operation(ctx)
+        warnings = ["Derived navigation only; verify current sources and tests."]
+        if manifest is not None:
+            # Snapshot wording is selected from immutable manifest state, never from the
+            # configuration that happens to be loaded now.
+            warnings.extend(semantic_snapshot_warnings(manifest))
+        if operation and operation.get("active") and action != "update":
+            warnings.append(
+                "A knowledge update is in progress or was interrupted; this result comes "
+                "from the last immutable snapshot."
+            )
+        if dirty:
+            warnings.append("Files changed since this indexed revision require direct inspection.")
         return {
             "schema_version": "aether.project-knowledge.v1",
             "ok": True,
@@ -270,19 +540,21 @@ class KnowledgeStore:
             "content": "",
             "references": [],
             "truncated": False,
-            "warnings": ["Derived navigation only; verify current sources and tests."]
-            + (
-                ["Files changed since this indexed revision require direct inspection."]
-                if dirty
-                else []
-            ),
+            "operation": operation,
+            "warnings": warnings,
         }
 
     def execute(
-        self, context: KnowledgeContext, action: str, arguments: dict[str, Any]
+        self,
+        context: KnowledgeContext,
+        action: str,
+        arguments: dict[str, Any],
+        *,
+        cancel_event: threading.Event | None = None,
     ) -> dict[str, Any]:
+        cancel_event = cancel_event or _CANCEL_EVENT.get()
         if action == "update":
-            return self.update(context, arguments)
+            return self.update(context, arguments, cancel_event=cancel_event)
         if action not in (
             "status",
             "query",
@@ -314,9 +586,15 @@ class KnowledgeStore:
             result["indexed_files"] = len(manifest["inputs"])
             if "semantic" in manifest:
                 result["semantic"] = manifest["semantic"]
-                result["semantic_pending"] = manifest["semantic"].get("state") not in (
-                    "complete",
-                    "disabled",
+                trusted, _reason = _semantic_integrity(manifest)
+                result["semantic_trusted"] = trusted
+                result["semantic_pending"] = (
+                    manifest["semantic"].get("state")
+                    not in (
+                        "complete",
+                        "disabled",
+                    )
+                    or not trusted
                 )
             return result
         if action == "stats":
@@ -461,18 +739,315 @@ class KnowledgeStore:
             result["resolved_node"] = native["resolved_node"]
         if "community" in native:
             result["community"] = native["community"]
-        documents = manifest["coverage"].get("documents")
-        if documents == "partial":
-            result["warnings"].append(
-                "Documents have partial semantic coverage; remaining paths stay structural."
-            )
-        elif documents != "semantic":
-            result["warnings"].append(
-                "Documents have structural navigation only; semantic extraction is not enabled."
-            )
         return result
 
-    def update(self, ctx: KnowledgeContext, args: dict[str, Any]) -> dict[str, Any]:
+    def _backend_run(
+        self,
+        action: str,
+        *,
+        cancel_event: threading.Event | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        if self.backend is None:
+            raise KnowledgeError(
+                "COMPONENT_UNAVAILABLE", "Configure Graphify before graph updates."
+            )
+        if cancel_event is None:
+            return self.backend.run(action, **kwargs)
+        try:
+            return self.backend.run(action, cancel_event=cancel_event, **kwargs)
+        except TypeError as exc:
+            # Small test doubles and older private adapters may not expose the additive
+            # keyword. Do not hide a TypeError raised by the action itself.
+            if "cancel_event" not in str(exc):
+                raise
+            return self.backend.run(action, **kwargs)
+
+    def _base_location(self, ctx: KnowledgeContext, base_id: str) -> Path:
+        return self.cache_root / "knowledge" / ctx.project_id / base_id
+
+    def _write_structural_base(
+        self,
+        ctx: KnowledgeContext,
+        *,
+        base_id: str,
+        graph_bytes: bytes,
+        inputs: dict[str, str],
+        input_sha256: str,
+    ) -> str:
+        digest = hashlib.sha256(graph_bytes).hexdigest()
+        location = self._base_location(ctx, base_id)
+        graph_path = location / "graphify-out" / "graph.json"
+        atomic_private_write(graph_path, graph_bytes)
+        atomic_json(
+            location / "manifest.json",
+            {
+                "schema_version": 1,
+                "kind": "structural-base",
+                "complete": True,
+                "integrity_version": SNAPSHOT_INTEGRITY_VERSION,
+                "project_id": ctx.project_id,
+                "view_id": ctx.view_id,
+                "snapshot_id": base_id,
+                "source_revision": ctx.source_revision,
+                "engine_version": GRAPHIFY_VERSION,
+                "scope_version": _SCOPE_VERSION,
+                "inputs": inputs,
+                "input_sha256": input_sha256,
+                "graph_sha256": digest,
+                "created_at": time.time(),
+            },
+        )
+        return digest
+
+    def _base_is_valid(self, ctx: KnowledgeContext, manifest: dict[str, Any]) -> bool:
+        base_id = str(manifest.get("base_structural_snapshot_id", ""))
+        if not _SNAPSHOT_ID.fullmatch(base_id):
+            return False
+        try:
+            base_location = self._base_location(ctx, base_id)
+            base_manifest = load_json(base_location / "manifest.json")
+            base_graph = base_location / "graphify-out" / "graph.json"
+            if (
+                not isinstance(base_manifest, dict)
+                or base_manifest.get("kind") != "structural-base"
+            ):
+                return False
+            if (
+                base_manifest.get("project_id") != ctx.project_id
+                or base_manifest.get("view_id") != ctx.view_id
+                or base_manifest.get("source_revision") != ctx.source_revision
+                or base_manifest.get("inputs") != manifest.get("inputs")
+            ):
+                return False
+            if base_graph.is_symlink() or not base_graph.is_file():
+                return False
+            payload = read_private_bytes(base_graph)
+            digest = hashlib.sha256(payload).hexdigest()
+            return (
+                len(payload) <= MAX_GRAPH_BYTES
+                and digest == base_manifest.get("graph_sha256")
+                and digest == manifest.get("base_structural_digest")
+            )
+        except (KnowledgeError, OSError, ValueError):
+            return False
+
+    def _restore_structural_base(
+        self,
+        ctx: KnowledgeContext,
+        *,
+        base_id: str,
+        graph_path: Path,
+        inputs: dict[str, str],
+    ) -> str | None:
+        if not _SNAPSHOT_ID.fullmatch(base_id):
+            return None
+        location = self._base_location(ctx, base_id)
+        try:
+            base_manifest = load_json(location / "manifest.json")
+            base_graph = location / "graphify-out" / "graph.json"
+            if (
+                not isinstance(base_manifest, dict)
+                or base_manifest.get("kind") != "structural-base"
+            ):
+                return None
+            if (
+                base_manifest.get("project_id") != ctx.project_id
+                or base_manifest.get("view_id") != ctx.view_id
+                or base_manifest.get("source_revision") != ctx.source_revision
+                or base_manifest.get("inputs") != inputs
+            ):
+                return None
+            if base_graph.is_symlink() or not base_graph.is_file():
+                return None
+            payload = read_private_bytes(base_graph)
+            digest = hashlib.sha256(payload).hexdigest()
+            if digest != base_manifest.get("graph_sha256") or len(payload) > MAX_GRAPH_BYTES:
+                return None
+            atomic_private_write(graph_path, payload)
+            return digest
+        except (KnowledgeError, OSError, ValueError):
+            return None
+
+    def _validate_candidate(
+        self,
+        ctx: KnowledgeContext,
+        location: Path,
+        manifest: dict[str, Any],
+        *,
+        inputs: dict[str, str],
+    ) -> tuple[dict[str, Any], bytes]:
+        if manifest.get("integrity_version") != SNAPSHOT_INTEGRITY_VERSION:
+            raise KnowledgeError("INDEX_CORRUPT", "Candidate integrity metadata is missing.")
+        if manifest.get("project_id") != ctx.project_id or manifest.get("view_id") != ctx.view_id:
+            raise KnowledgeError(
+                "INDEX_CORRUPT", "Candidate identity does not match the bound view."
+            )
+        if (
+            manifest.get("source_revision") != ctx.source_revision
+            or manifest.get("inputs") != inputs
+        ):
+            raise KnowledgeError(
+                "INDEX_CORRUPT", "Candidate inputs do not match the bound revision."
+            )
+        if manifest.get("complete") is not True or not _SNAPSHOT_ID.fullmatch(
+            str(manifest.get("snapshot_id", ""))
+        ):
+            raise KnowledgeError("INDEX_CORRUPT", "Candidate manifest is not publishable.")
+        semantic = manifest.get("semantic")
+        trusted, _reason = _semantic_integrity(manifest)
+        if not trusted or not isinstance(semantic, dict):
+            raise KnowledgeError("INDEX_CORRUPT", "Candidate semantic integrity is invalid.")
+        graph = location / "graphify-out" / "graph.json"
+        try:
+            graph_is_file = graph.is_file()
+            graph_size = graph.stat().st_size if graph_is_file else 0
+        except OSError as exc:
+            raise KnowledgeError("INDEX_CORRUPT", "Candidate graph is missing or unsafe.") from exc
+        if graph.is_symlink() or not graph_is_file or graph_size > MAX_GRAPH_BYTES:
+            raise KnowledgeError("INDEX_CORRUPT", "Candidate graph is missing or unsafe.")
+        graph_bytes = read_private_bytes(graph)
+        if hashlib.sha256(graph_bytes).hexdigest() != manifest.get("graph_sha256"):
+            raise KnowledgeError(
+                "INDEX_CORRUPT", "Candidate graph digest does not match its manifest."
+            )
+        base_id = str(manifest.get("base_structural_snapshot_id"))
+        base_location = self._base_location(ctx, base_id)
+        base_manifest = load_json(base_location / "manifest.json")
+        base_graph = base_location / "graphify-out" / "graph.json"
+        try:
+            base_is_file = base_graph.is_file()
+            base_size = base_graph.stat().st_size if base_is_file else 0
+        except OSError as exc:
+            raise KnowledgeError("INDEX_CORRUPT", "Candidate structural base is invalid.") from exc
+        if not isinstance(base_manifest, dict) or base_manifest.get("inputs") != inputs:
+            raise KnowledgeError("INDEX_CORRUPT", "Candidate structural base is invalid.")
+        if base_graph.is_symlink() or not base_is_file or base_size > MAX_GRAPH_BYTES:
+            raise KnowledgeError("INDEX_CORRUPT", "Candidate structural base is invalid.")
+        base_bytes = read_private_bytes(base_graph)
+        base_digest = hashlib.sha256(base_bytes).hexdigest()
+        if base_manifest.get("graph_sha256") != base_digest:
+            raise KnowledgeError("INDEX_CORRUPT", "Candidate structural base is invalid.")
+        if base_digest != manifest.get("base_structural_digest"):
+            raise KnowledgeError(
+                "INDEX_CORRUPT", "Candidate structural base digest does not match."
+            )
+        return manifest, graph_bytes
+
+    def _publish_candidate(self, ctx: KnowledgeContext, manifest: dict[str, Any]) -> None:
+        manifest_path = self._cache_location(ctx, str(manifest["snapshot_id"])) / "manifest.json"
+        manifest_bytes = read_private_bytes(manifest_path)
+        atomic_json(
+            self._pointer(ctx),
+            {
+                "schema_version": 1,
+                "snapshot_id": manifest["snapshot_id"],
+                "source_revision": ctx.source_revision,
+                "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+            },
+        )
+
+    def _cache_location(self, ctx: KnowledgeContext, snapshot_id: str) -> Path:
+        if not _SNAPSHOT_ID.fullmatch(snapshot_id):
+            raise KnowledgeError("INDEX_CORRUPT", "Invalid snapshot identity.")
+        return self.cache_root / "knowledge" / ctx.project_id / snapshot_id
+
+    def _semantic_versions(self, semantic_meta: dict[str, Any]) -> tuple[str, str]:
+        pipeline = semantic_meta.get("pipeline")
+        pipeline_version = (
+            pipeline.get("version") if isinstance(pipeline, dict) else None
+        ) or SEMANTIC_PIPELINE_VERSION
+        cache_version = semantic_meta.get("cache_version") or SEMANTIC_CACHE_VERSION
+        semantic_meta["pipeline_version"] = pipeline_version
+        semantic_meta["cache_version"] = cache_version
+        semantic_meta.setdefault("version", pipeline_version)
+        if not isinstance(semantic_meta.get("pipeline"), dict):
+            semantic_meta["pipeline"] = {"version": pipeline_version}
+        else:
+            semantic_meta["pipeline"]["version"] = pipeline_version
+        return str(pipeline_version), str(cache_version)
+
+    @contextlib.contextmanager
+    def _operation_scope(self, ctx: KnowledgeContext, operation_id: str):
+        state: dict[str, Any] = {
+            "phase": "prepare",
+            "input_sha256": None,
+            "candidate": None,
+            "base": None,
+        }
+        self._write_operation(
+            ctx,
+            operation_id=operation_id,
+            phase="prepare",
+            outcome="running",
+            source_revision=ctx.source_revision,
+        )
+        try:
+            yield state
+        except BaseException as exc:
+            category = exc.code if isinstance(exc, KnowledgeError) else type(exc).__name__.lower()
+            terminal = "cancelled" if category == "OPERATION_CANCELLED" else "failed"
+            self._safe_finish_operation(
+                ctx,
+                operation_id=operation_id,
+                phase=str(state["phase"]),
+                source_revision=ctx.source_revision,
+                outcome=terminal,
+                terminal_outcome=terminal,
+                input_sha256=state.get("input_sha256"),
+                candidate_snapshot_id=state.get("candidate"),
+                base_structural_snapshot_id=state.get("base"),
+                failure_category=category,
+            )
+            raise
+        else:
+            terminal = str(
+                state.get("terminal") or ("published" if state.get("published") else "completed")
+            )
+            self._safe_finish_operation(
+                ctx,
+                operation_id=operation_id,
+                phase=str(state["phase"]),
+                source_revision=ctx.source_revision,
+                outcome=terminal,
+                terminal_outcome=terminal,
+                input_sha256=state.get("input_sha256"),
+                candidate_snapshot_id=state.get("candidate"),
+                base_structural_snapshot_id=state.get("base"),
+                published_snapshot_id=state.get("published"),
+            )
+
+    def _operation_phase(
+        self,
+        ctx: KnowledgeContext,
+        operation_id: str,
+        state: dict[str, Any],
+        phase: str,
+        *,
+        cancel_event: threading.Event | None = None,
+    ) -> None:
+        """Record one lifecycle boundary, then refuse to continue past a cancellation."""
+        state["phase"] = phase
+        self._write_operation(
+            ctx,
+            operation_id=operation_id,
+            phase=phase,
+            outcome="running",
+            source_revision=ctx.source_revision,
+            input_sha256=state.get("input_sha256"),
+            candidate_snapshot_id=state.get("candidate"),
+            base_structural_snapshot_id=state.get("base"),
+        )
+        if cancel_event is not None and cancel_event.is_set():
+            raise KnowledgeError("OPERATION_CANCELLED", "Knowledge update was cancelled.")
+
+    def update(
+        self,
+        ctx: KnowledgeContext,
+        args: dict[str, Any],
+        *,
+        cancel_event: threading.Event | None = None,
+    ) -> dict[str, Any]:
         mode = args.get("mode", "configured")
         if mode not in ("structural", "configured"):
             raise KnowledgeError("ARGUMENT_INVALID", "Invalid update mode.")
@@ -482,20 +1057,32 @@ class KnowledgeStore:
             raise KnowledgeError(
                 "COMPONENT_UNAVAILABLE", "Configure Graphify before graph updates."
             )
-        self.backend.probe()
         view = self._view(ctx)
-        with stable_lock(view / "update.lock", timeout=10.0):
+        operation_cancel = cancel_event or threading.Event()
+        operation_id = uuid.uuid4().hex
+        with (
+            stable_lock(view / "update.lock", timeout=10.0),
+            self._operation_scope(ctx, operation_id) as operation,
+        ):
+            self._backend_run("probe", cancel_event=operation_cancel)
+            if operation_cancel.is_set():
+                raise KnowledgeError("OPERATION_CANCELLED", "Knowledge update was cancelled.")
             cfg = self.configuration()
             sem_cfg = cfg.get("semantic", {})
             sem_enabled = bool(cfg.get("semantic_enabled") or sem_cfg.get("enabled"))
 
             existing_manifest = None
             existing_location = None
+            existing_snapshot_valid = True
             try:
                 existing_location, existing_manifest = self._snapshot(ctx)
             except KnowledgeError as exc:
+                existing_snapshot_valid = False
                 if exc.code not in ("INDEX_MISSING", "INDEX_CORRUPT"):
                     raise
+                recovered = self._manifest_for_recovery(ctx)
+                if recovered is not None:
+                    existing_location, existing_manifest = recovered
 
             sources, excluded = _sources(ctx)
             if not sources:
@@ -505,14 +1092,32 @@ class KnowledgeStore:
                 path: hashlib.sha256(content).hexdigest() for path, content in sources.items()
             }
             input_sha256 = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
+            if operation_cancel.is_set():
+                raise KnowledgeError("OPERATION_CANCELLED", "Knowledge update was cancelled.")
+            operation["input_sha256"] = input_sha256
+            self._operation_phase(
+                ctx, operation_id, operation, "prepare", cancel_event=operation_cancel
+            )
 
-            # Check if existing snapshot matches the exact current inputs
+            # Check if existing snapshot matches the exact current inputs. A legacy or
+            # incomplete semantic envelope is deliberately not eligible for the fast path.
+            existing_semantic = (
+                existing_manifest.get("semantic") if isinstance(existing_manifest, dict) else None
+            )
+            existing_trusted = (
+                _semantic_integrity(existing_manifest)[0]
+                if isinstance(existing_manifest, dict) and isinstance(existing_semantic, dict)
+                else False
+            )
             same_inputs = (
                 existing_manifest is not None
                 and existing_location is not None
                 and existing_manifest.get("complete") is True
                 and existing_manifest.get("source_revision") == ctx.source_revision
                 and existing_manifest.get("inputs") == inputs
+                and existing_snapshot_valid
+                and existing_trusted
+                and self._base_is_valid(ctx, existing_manifest)
                 and (existing_location / "graphify-out" / "graph.json").is_file()
             )
 
@@ -539,6 +1144,7 @@ class KnowledgeStore:
                     )
                     if "semantic" in existing_manifest:
                         result["semantic"] = existing_manifest["semantic"]
+                    operation["terminal"] = "unchanged"
                     return result
 
                 if mode == "configured":
@@ -553,6 +1159,7 @@ class KnowledgeStore:
                             )
                             if "semantic" in existing_manifest:
                                 result["semantic"] = existing_manifest["semantic"]
+                            operation["terminal"] = "unchanged"
                             return result
                     else:
                         # Semantic is enabled: compare expected fingerprint
@@ -579,10 +1186,12 @@ class KnowledgeStore:
                             )
                             if "semantic" in existing_manifest:
                                 result["semantic"] = existing_manifest["semantic"]
+                            operation["terminal"] = "unchanged"
                             return result
 
-            # Create a brand-new immutable snapshot directory (never mutate in-place)
+            # Create a brand-new immutable snapshot directory (never mutate in-place).
             new_snapshot_id = uuid.uuid4().hex
+            operation["candidate"] = new_snapshot_id
             new_location = self.cache_root / "knowledge" / ctx.project_id / new_snapshot_id
             new_source_root = new_location / "sources"
             ensure_private_dir(new_source_root)
@@ -593,13 +1202,44 @@ class KnowledgeStore:
 
             new_output = new_location / "graphify-out" / "graph.json"
             ensure_private_dir(new_output.parent)
-            self.backend.run("update", source_root=new_source_root, graph_path=new_output)
+            self._operation_phase(
+                ctx, operation_id, operation, "validate", cancel_event=operation_cancel
+            )
+            base_id = uuid.uuid4().hex
+            operation["base"] = base_id
+            structural_digest = None
+            # A prior v1 snapshot may carry a pure base. Prefer it when recovering a
+            # legacy/corrupt semantic overlay; otherwise ask Graphify for a fresh base.
+            prior_base_id = (
+                str(existing_manifest.get("base_structural_snapshot_id", ""))
+                if isinstance(existing_manifest, dict)
+                else ""
+            )
+            if mode == "structural" and prior_base_id:
+                structural_digest = self._restore_structural_base(
+                    ctx,
+                    base_id=prior_base_id,
+                    graph_path=new_output,
+                    inputs=inputs,
+                )
+            if structural_digest is None:
+                self._backend_run(
+                    "update",
+                    source_root=new_source_root,
+                    graph_path=new_output,
+                    cancel_event=operation_cancel,
+                )
+            if operation_cancel.is_set():
+                raise KnowledgeError("OPERATION_CANCELLED", "Knowledge update was cancelled.")
 
-            if (
-                new_output.is_symlink()
-                or not new_output.is_file()
-                or new_output.stat().st_size > MAX_GRAPH_BYTES
-            ):
+            try:
+                output_is_file = new_output.is_file()
+                output_size = new_output.stat().st_size if output_is_file else 0
+            except OSError as exc:
+                raise KnowledgeError(
+                    "INDEX_CORRUPT", "Graphify did not create a bounded regular graph."
+                ) from exc
+            if new_output.is_symlink() or not output_is_file or output_size > MAX_GRAPH_BYTES:
                 raise KnowledgeError(
                     "INDEX_CORRUPT", "Graphify did not create a bounded regular graph."
                 )
@@ -629,6 +1269,19 @@ class KnowledgeStore:
                     raise KnowledgeError(
                         "INDEX_CORRUPT", "A graph source escaped its captured project."
                     )
+            if structural_digest is None:
+                structural_digest = self._write_structural_base(
+                    ctx,
+                    base_id=base_id,
+                    graph_bytes=graph_bytes,
+                    inputs=inputs,
+                    input_sha256=input_sha256,
+                )
+            else:
+                # Recovery used an old base id; retain it as the published candidate's
+                # reference and record a fresh base manifest only when necessary.
+                base_id = prior_base_id
+                operation["base"] = base_id
 
             from .semantic import _ELIGIBLE_EXTENSIONS
 
@@ -673,18 +1326,62 @@ class KnowledgeStore:
                 else:
                     from .semantic import run_semantic_extraction
 
+                    self._operation_phase(
+                        ctx, operation_id, operation, "compose", cancel_event=operation_cancel
+                    )
+
+                    def revalidate_legacy_fragment(fragment: dict[str, Any]) -> bool:
+                        if not isinstance(fragment, dict):
+                            return False
+                        try:
+                            checked = self._backend_run(
+                                "semantic_validate",
+                                source_root=new_source_root,
+                                graph_path=new_output,
+                                arguments={
+                                    "model_text": json.dumps(fragment, ensure_ascii=False),
+                                    "allowed_sources": list(inputs),
+                                    "allow_empty": False,
+                                },
+                                cancel_event=operation_cancel,
+                            )
+                        except Exception:
+                            return False
+                        return bool(checked.get("ok") and isinstance(checked.get("fragment"), dict))
+
                     try:
-                        semantic_meta = run_semantic_extraction(
-                            backend=self.backend,
-                            source_root=new_source_root,
-                            graph_path=new_output,
-                            inputs=inputs,
-                            cache_root=self.cache_root,
-                            ctx=ctx,
-                            configuration=cfg,
-                        )
+                        with graphify_cancel_scope(operation_cancel):
+                            semantic_meta = run_semantic_extraction(
+                                backend=self.backend,
+                                source_root=new_source_root,
+                                graph_path=new_output,
+                                inputs=inputs,
+                                cache_root=self.cache_root,
+                                ctx=ctx,
+                                configuration=cfg,
+                                cancel_event=operation_cancel,
+                                legacy_cache_revalidator=revalidate_legacy_fragment,
+                            )
+                        if operation_cancel.is_set():
+                            raise KnowledgeError(
+                                "OPERATION_CANCELLED", "Semantic extraction was cancelled."
+                            )
                         if semantic_meta.get("state") != "complete":
                             semantic_failed_or_incomplete = True
+                    except KnowledgeError as exc:
+                        if exc.code == "OPERATION_CANCELLED":
+                            raise
+                        semantic_failed_or_incomplete = True
+                        semantic_meta = {
+                            "state": "unavailable",
+                            "fingerprint": None,
+                            "covered_paths": [],
+                            "pending_paths": sorted(eligible_files),
+                            "failed_paths": [],
+                            "validated_chunk_ids": [],
+                            "reason_category": exc.code.lower(),
+                            "observed_usage": {},
+                        }
                     except Exception as exc:
                         semantic_failed_or_incomplete = True
                         semantic_meta = {
@@ -694,18 +1391,32 @@ class KnowledgeStore:
                             "pending_paths": sorted(eligible_files),
                             "failed_paths": [],
                             "validated_chunk_ids": [],
-                            "observed_usage": {"error": str(exc)},
+                            "reason_category": type(exc).__name__.lower(),
+                            "observed_usage": {},
                         }
 
             # If semantic refresh failed or was incomplete on an existing complete snapshot:
-            # RETAIN THE PRIOR COMPLETE SNAPSHOT!
+            # retain the prior complete snapshot and keep the new candidate as diagnostic evidence.
             if (
                 semantic_failed_or_incomplete
                 and same_inputs
                 and existing_manifest is not None
                 and existing_manifest.get("semantic", {}).get("state") == "complete"
             ):
-                shutil.rmtree(new_location, ignore_errors=True)
+                with contextlib.suppress(Exception):
+                    atomic_json(
+                        new_location / "candidate-operation.json",
+                        {
+                            "schema_version": _OPERATION_SCHEMA_VERSION,
+                            "integrity_version": SNAPSHOT_INTEGRITY_VERSION,
+                            "source_revision": ctx.source_revision,
+                            "input_sha256": input_sha256,
+                            "candidate_snapshot_id": new_snapshot_id,
+                            "base_structural_snapshot_id": base_id,
+                            "terminal_outcome": "not_published",
+                            "reason_category": semantic_meta.get("reason_category", "incomplete"),
+                        },
+                    )
                 result = self._envelope(ctx, "update", existing_manifest)
                 result.update(
                     outcome="unchanged",
@@ -716,9 +1427,38 @@ class KnowledgeStore:
                 result["warnings"].append("Refresh failed; retained previously complete snapshot.")
                 if "semantic" in existing_manifest:
                     result["semantic"] = existing_manifest["semantic"]
+                operation["terminal"] = "retained"
                 return result
 
             sem_state = semantic_meta.get("state")
+            compose_receipt = semantic_meta.get("compose")
+            if sem_state == "complete" and isinstance(compose_receipt, dict):
+                if compose_receipt.get("structural_preserved") is False or (
+                    compose_receipt.get("invoked") and not compose_receipt.get("structural_digest")
+                ):
+                    sem_state = "unavailable"
+                    semantic_meta["state"] = sem_state
+                    semantic_meta["reason_category"] = "integrity"
+                    semantic_failed_or_incomplete = True
+            if sem_state == "unavailable":
+                restored_digest = self._restore_structural_base(
+                    ctx,
+                    base_id=base_id,
+                    graph_path=new_output,
+                    inputs=inputs,
+                )
+                if restored_digest is None:
+                    raise KnowledgeError(
+                        "INDEX_CORRUPT", "Semantic failure could not restore the structural base."
+                    )
+                structural_digest = restored_digest
+            pipeline_version, cache_version = self._semantic_versions(semantic_meta)
+            semantic_meta["integrity_version"] = SNAPSHOT_INTEGRITY_VERSION
+            semantic_meta["base_structural_snapshot_id"] = base_id
+            semantic_meta["base_structural_digest"] = structural_digest
+            semantic_digest = semantic_meta.get("structural_digest")
+            if not isinstance(semantic_digest, str) or not semantic_digest:
+                semantic_digest = structural_digest
             if sem_state == "complete":
                 coverage = {"code": "structural", "documents": "semantic"}
                 semantic_pending = False
@@ -735,6 +1475,9 @@ class KnowledgeStore:
             graph_bytes = read_private_bytes(new_output)
             manifest = {
                 "schema_version": 1,
+                "integrity_version": SNAPSHOT_INTEGRITY_VERSION,
+                "pipeline_version": pipeline_version,
+                "cache_version": cache_version,
                 "complete": True,
                 "project_id": ctx.project_id,
                 "view_id": ctx.view_id,
@@ -745,16 +1488,40 @@ class KnowledgeStore:
                 "inputs": inputs,
                 "input_sha256": input_sha256,
                 "graph_sha256": hashlib.sha256(graph_bytes).hexdigest(),
+                "base_structural_snapshot_id": base_id,
+                "base_structural_digest": structural_digest,
+                "structural_digest": semantic_digest,
                 "coverage": coverage,
                 "semantic": semantic_meta,
                 "excluded_count": len(excluded),
                 "created_at": time.time(),
                 "publisher_role": ctx.role_id,
             }
+            if operation_cancel.is_set():
+                raise KnowledgeError("OPERATION_CANCELLED", "Knowledge update was cancelled.")
+            self._operation_phase(
+                ctx, operation_id, operation, "manifest", cancel_event=operation_cancel
+            )
             atomic_json(new_location / "manifest.json", manifest)
-            atomic_json(
-                self._pointer(ctx),
-                {"snapshot_id": new_snapshot_id, "source_revision": ctx.source_revision},
+            self._validate_candidate(ctx, new_location, manifest, inputs=inputs)
+            if operation_cancel.is_set():
+                raise KnowledgeError("OPERATION_CANCELLED", "Knowledge update was cancelled.")
+            self._operation_phase(
+                ctx, operation_id, operation, "pointer", cancel_event=operation_cancel
+            )
+            self._publish_candidate(ctx, manifest)
+            operation["published"] = new_snapshot_id
+            self._safe_finish_operation(
+                ctx,
+                operation_id=operation_id,
+                phase="pointer",
+                source_revision=ctx.source_revision,
+                outcome="published",
+                terminal_outcome="published",
+                input_sha256=input_sha256,
+                candidate_snapshot_id=new_snapshot_id,
+                base_structural_snapshot_id=base_id,
+                published_snapshot_id=new_snapshot_id,
             )
             result = self._envelope(ctx, "update", manifest)
             result.update(

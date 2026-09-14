@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from typing import Any
 
 from .bindings import context_for_session
 from .common import ROLES, KnowledgeError
 from .service import KnowledgeService, error_response, parameters, validate_arguments
+from .snapshots import knowledge_cancel_scope
 
 
 def _call(ctx: Any, tool: str, arguments: dict[str, Any], **runtime: Any) -> str:
@@ -38,7 +40,10 @@ def _call(ctx: Any, tool: str, arguments: dict[str, Any], **runtime: Any) -> str
             task_id=str(runtime.get("task_id") or ""),
             run_id=str(runtime.get("run_id") or ""),
         )
-        result = service.execute(context, tool, arguments)
+        raw_cancel_event = runtime.get("cancel_event") or runtime.get("cancellation_event")
+        cancel_event = raw_cancel_event if isinstance(raw_cancel_event, threading.Event) else None
+        with knowledge_cancel_scope(cancel_event):
+            result = service.execute(context, tool, arguments)
     except KnowledgeError as exc:
         result = error_response(tool, str(action), exc)
     except Exception:
