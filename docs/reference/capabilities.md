@@ -401,7 +401,7 @@ An optional hash-locked Graphify Python component is installed outside Hermes an
 
 ### Notes / current limits
 
-Portable profile templates are opt-in. Managed installation currently uses local Python 3.11 on Linux; external configure validates the engine version, not a third-party environment's full provenance. Semantic extraction, live-profile activation and model-backed quality/cost qualification remain pending.
+Portable profile templates are opt-in. Managed installation currently uses local Python 3.11 on Linux; external configure validates the engine version, not a third-party environment's full provenance. Live-profile activation, live auxiliary yield and model-backed quality/cost qualification remain pending.
 
 ## `knowledge.role-work-memory`
 
@@ -544,11 +544,12 @@ All three roles share a 14-action project-knowledge catalog plus five unchanged 
 - [tests/test_knowledge_regressions.py](../../tests/test_knowledge_regressions.py)
 - [tests/test_knowledge_resources.py](../../tests/test_knowledge_resources.py)
 - [tests/test_knowledge_schema.py](../../tests/test_knowledge_schema.py)
+- [tests/test_knowledge_semantic_manager.py](../../tests/test_knowledge_semantic_manager.py)
 - [tests/test_project_knowledge_engine.py](../../tests/test_project_knowledge_engine.py)
 
 ### Notes / current limits
 
-The fourteen project actions are status/query/explain/neighbors/community/path/impact/update/stats/god_nodes/list_prs/pr_impact/triage_prs/visualize; work-memory retains save/search/read/correct/reflect. Structural updates are no-model; configured semantic maintenance requires the existing profile-scoped auxiliary and reports coverage, pending paths, failures and usage. Read-only GitHub and managed HTML exports are optional. Missing live access, live-agent adoption, token savings and universal superiority remain unclaimed.
+The fourteen project actions are status/query/explain/neighbors/community/path/impact/update/stats/god_nodes/list_prs/pr_impact/triage_prs/visualize; work-memory retains save/search/read/correct/reflect. Structural updates are no-model; one configured semantic update is a single 300-second bounded transaction (at most two concurrent auxiliary calls) that composes an additive `origin=llm` overlay onto an immutable structural base, publishes only a structurally preserved candidate and never publishes cancelled work. Semantic warnings describe the immutable snapshot state - complete, partial, pending, unavailable, disabled or unknown/inconsistent - so a pending snapshot never reports extraction as disabled, and a snapshot without the current integrity identity is not served as a trusted semantic result while retained artifacts stay on disk. Only a route-qualified response is cached or applied; unresolved or mismatched routes stay pending with no fallback account. Read-only GitHub and managed HTML exports are optional, and structural query/status stay available when semantic work fails. Missing live access, live-agent adoption, token savings and universal superiority remain unclaimed.
 
 ## `lifecycle.conditional-issue-intake-reconciliation`
 

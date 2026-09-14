@@ -1,10 +1,15 @@
 # 005: Shared project knowledge and role work memory
 
-**Status:** structural baseline integrated; expanded semantic/tool scope authorized in
-issue #330 and undergoing contract design. The owner approved autonomous implementation,
-live qualification through the provisioned auxiliary connection and scoped local activation
-for this expansion. This is not an implementation or release receipt. The bounded PD-74
-exception applies only to this capability, not unrelated features or public publication.
+**Status:** structural baseline integrated; the expanded semantic/tool scope authorized in
+issue #330 is implemented in the current candidate, and its semantic-maintenance behavior is
+corrected under Objective Contract `oc_f2acfb5effb21f6d@v1` (immutable structural base with an
+additive `origin=llm` overlay, one 300-second total budget from entry through pointer
+publication, primary-only fail-closed routing, and snapshot-state wording). The owner approved
+autonomous implementation, live qualification through the provisioned auxiliary connection and
+scoped local activation for this expansion. This is not an implementation or release receipt;
+integration, qualification and closeout remain with that objective's terminal card. The
+bounded PD-74 exception applies only to this capability, not unrelated features or public
+publication.
 
 ## Outcome
 
@@ -71,15 +76,22 @@ Experiences belong to the project and role, not to a shared owner-personalizatio
   plugin dispatch. Separate deterministic/component results from model-driven E2E,
   semantic extraction and measured cost/quality improvement.
 
-## Expanded requirements (owner-authorized, not yet delivered)
+## Expanded requirements (owner-authorized; current behavior owned by the expanded contract)
 
 - **KG-13 Semantic maintenance:** all bound projects can enrich supported committed code
   and documentation through the existing configured text auxiliary; configured graph
-  updates perform/resume this work without a separate human request. Structural-only mode
-  remains available and has no model calls. No watcher or cross-project graph is added.
+  updates perform/resume this work without a separate human request. One configured update
+  stays inside a single 300-second total budget from entry through pointer publication, at
+  concurrency of at most two, with cooperative cancellation and no hidden continuation.
+  Structural-only mode remains available and has no model calls. No watcher or
+  cross-project graph is added.
 - **KG-14 Provenance and recovery:** semantic origin is explicit and never promoted to AST
-  fact because an LLM labels it EXTRACTED. Safe references, actual coverage, bounded retries,
-  chunk reuse/invalidation and failure preservation apply to every semantic snapshot.
+  fact because an LLM labels it EXTRACTED. The committed structural projection is preserved
+  by additive `origin=llm` composition and verified before publication; only a
+  route-qualified response is cached or applied; a semantic snapshot without the current
+  integrity identity is not served as a trusted semantic result. Safe references, actual
+  coverage, bounded retries, chunk reuse/invalidation and failure preservation apply to
+  every semantic snapshot.
 - **KG-15 Exploration:** add stats and central-node ranking and expose native query traversal,
   depth/context controls, impact relation filters and optional undirected paths.
 - **KG-16 GitHub context:** optionally expose read-only PR list, impact and triage for the
@@ -96,10 +108,16 @@ freedom. It supersedes only conflicting initial scope statements for this object
 
 ## Initial implementation boundary (historical structural baseline)
 
-Structural extraction and document navigation are local. Rich semantic document
-extraction is not implemented or enabled in this candidate. It requires a separately
-qualified backend, corpus policy and explicit spending/data-egress authority. Outputs
-must show structural-only coverage rather than claim semantic understanding.
+This section records the initial structural baseline. Current configured semantic behavior is
+owned by the [expanded tools and semantic contract](contracts/expanded-tools-and-semantic.md),
+including the bounded 300-second transaction and the withdrawal of the earlier 600-second and
+fragment-merge statements.
+
+Structural extraction and document navigation are local. At that baseline, rich semantic
+document extraction was not implemented or enabled; it required a separately qualified backend,
+corpus policy and explicit spending/data-egress authority. Outputs show structural-only coverage
+rather than claim semantic understanding, and the current bounded semantics stay governed by the
+expanded contract and the operator's opt-in configuration.
 
 The component is opt-in and profile activation remains explicit. MCP transport,
 provider-backed learning, automatic skill promotion, global/cross-project graph merging,

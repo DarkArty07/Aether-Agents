@@ -125,9 +125,18 @@ All roles can update; a stable lock coordinates writes, not role permissions. Wo
 Errors use `ok: false` and a typed `error.code`; identity conflicts return no substitute data. The integration falls back to ordinary file work, never to a different graph. See [project knowledge](../guides/project-knowledge.md) for setup, coverage, privacy and qualification limits. Graphify's global graph merging, HTTP serving and automatic learning sidecars are not exposed by this plugin.
 
 Structural updates do not call a model. Configured updates may use the explicitly enabled,
-profile-scoped auxiliary task and publish semantic coverage, pending/failed paths, fingerprint
-and observed usage. Missing or ambiguous auxiliary access is unavailable/partial, with no
-primary-model fallback or watcher. This is not a token-saving or universal-superiority claim.
+profile-scoped auxiliary task: one bounded transaction of at most two concurrent calls inside a
+300-second total budget whose memory calls, validation, composition and pointer publication all
+complete inside that bound; a cancelled or unvalidated candidate is never published. Accepted
+additions are an additive `origin=llm` overlay over an immutable structural base whose canonical
+projection is compared before publication, and Graphify's global graph merge is not part of the
+path. Semantic coverage, pending/failed paths, fingerprint and observed usage are reported;
+warnings are selected from the immutable snapshot state (`complete`, `partial`, `pending`,
+`unavailable`, `disabled`, or unknown/inconsistent), and a legacy snapshot without the current
+integrity identity is not served as a trusted semantic result while structural results stay
+available. Missing or ambiguous auxiliary access, an unresolved route or budget exhaustion is
+unavailable/partial/route-pending, with no primary-model fallback, fallback account or watcher.
+This is not a token-saving or universal-superiority claim.
 
 ## `aether_monitor` and `aether_monitor_report_snapshot`
 
