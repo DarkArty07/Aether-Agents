@@ -437,7 +437,9 @@ def test_cancel_stops_scheduling_retains_cache_and_never_composes(
         assert _aux_interrupt_cancel_requested() is True, (
             "an in-flight call is cancellable through the existing transport hook"
         )
-        return _text_usage(_fragment_json("late", "README.md"))
+        from agent.auxiliary_client import AuxiliaryExplicitCancellation
+
+        raise AuxiliaryExplicitCancellation()
 
     monkeypatch.setattr(sem_mod, "_call_auxiliary_model", cancelling_aux)
     new_chunk = _chunk(0, ["docs/extra.md"])
@@ -1152,3 +1154,136 @@ def test_validation_failure_categories_are_content_free() -> None:
         "deadline",
     ):
         assert name in module._CATEGORY_NAMES
+
+
+def test_auxiliary_explicit_cancellation_does_not_leak_and_joins_workers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """In-flight AuxiliaryExplicitCancellation (BaseException) never leaks out of extraction.
+
+    Host cancel converts to OPERATION_CANCELLED, natural budget abort returns an honest
+    pending receipt with deadline_exhausted, no compose is run, and workers are joined.
+    """
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    sem_mod = _semantic_module()
+    from agent.auxiliary_client import (  # type: ignore[import-not-found,import-untyped]
+        AuxiliaryExplicitCancellation,
+        _aux_interrupt_cancel_requested,
+    )
+
+    chunks = [_chunk(0, ["README.md"]), _chunk(1, ["module.py"])]
+    backend: Any = _StubBackend(chunks)
+    graph_path = _graph_file(root)
+    cache_root = tmp_path / "cache"
+    inputs = _inputs(["README.md", "module.py"])
+
+    # 1. Host cancel while in flight
+    cancel_event = threading.Event()
+    worker_started = threading.Event()
+    scheduled_calls = 0
+
+    def cancelling_worker(*args: Any, **kwargs: Any) -> Any:
+        nonlocal scheduled_calls
+        scheduled_calls += 1
+        worker_started.set()
+        cancel_event.set()
+        assert _aux_interrupt_cancel_requested() is True
+        raise AuxiliaryExplicitCancellation()
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", cancelling_worker)
+
+    with pytest.raises(KnowledgeError) as exc_info:
+        sem_mod.run_semantic_extraction(
+            backend=backend,
+            source_root=root,
+            graph_path=graph_path,
+            inputs=inputs,
+            cache_root=cache_root,
+            ctx=ctx,
+            configuration=CONFIGURED,
+            cancel_event=cancel_event,
+        )
+    assert exc_info.value.code == "OPERATION_CANCELLED"
+    assert scheduled_calls == 1, "no further chunk is scheduled after in-flight cancel"
+    assert backend.action_calls("semantic_compose") == [], "compose never runs on cancel"
+
+    # 2. Budget exhaustion while in flight
+    backend_budget: Any = _StubBackend([_chunk(0, ["README.md"])])
+    clock = [1000.0]
+    monkeypatch.setattr(sem_mod, "_now", lambda: clock[0])
+
+    def budget_worker(*args: Any, **kwargs: Any) -> Any:
+        clock[0] += 500.0  # exhaust the budget while in flight
+        assert _aux_interrupt_cancel_requested() is True
+        raise AuxiliaryExplicitCancellation()
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", budget_worker)
+
+    receipt = sem_mod.run_semantic_extraction(
+        backend=backend_budget,
+        source_root=root,
+        graph_path=graph_path,
+        inputs=_inputs(["README.md"]),
+        cache_root=cache_root,
+        ctx=ctx,
+        configuration=CONFIGURED | {"semantic_deadline_seconds": 300.0},
+    )
+    assert receipt["state"] in ("pending", "partial")
+    assert receipt["pipeline"]["deadline_exhausted"] is True
+    assert receipt["observed_usage"]["categories"]["deadline"] > 0
+    assert backend_budget.action_calls("semantic_compose") == []
+
+
+def test_executor_shutdown_does_not_block_past_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ThreadPoolExecutor does not block past the budget when in-flight workers sleep.
+
+    AC-05 requires return within the configured budget from entry through return.
+    When deadline fires, in-flight workers unwind promptly via the cancel event,
+    allowing worker threads to join without adding auxiliary timeout delay.
+    """
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    sem_mod = _semantic_module()
+    from agent.auxiliary_client import (  # type: ignore[import-not-found,import-untyped]
+        AuxiliaryExplicitCancellation,
+        _aux_interrupt_cancel_requested,
+    )
+
+    chunks = [_chunk(0, ["README.md"]), _chunk(1, ["module.py"])]
+    backend: Any = _StubBackend(chunks)
+    graph_path = _graph_file(root)
+    cache_root = tmp_path / "cache"
+    inputs = _inputs(["README.md", "module.py"])
+
+    def slow_worker_ignoring_timeout(*args: Any, **kwargs: Any) -> Any:
+        # Ignores the call timeout kwargs and would sleep 2.5s, but unwinds
+        # promptly when cancel_event is signaled upon deadline exhaustion.
+        for _ in range(50):
+            if _aux_interrupt_cancel_requested():
+                raise AuxiliaryExplicitCancellation()
+            time.sleep(0.05)
+        return _text_usage(_fragment_json("slow", "README.md"))
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", slow_worker_ignoring_timeout)
+
+    t0 = time.monotonic()
+    receipt = sem_mod.run_semantic_extraction(
+        backend=backend,
+        source_root=root,
+        graph_path=graph_path,
+        inputs=inputs,
+        cache_root=cache_root,
+        ctx=ctx,
+        configuration=CONFIGURED | {"semantic_deadline_seconds": 0.2},
+    )
+    elapsed = time.monotonic() - t0
+
+    # Must return well before 2.5s (typically ~0.2s - 0.3s)
+    assert elapsed < 1.0, f"Execution took {elapsed:.2f}s; exceeded budget on shutdown"
+    assert receipt["state"] in ("pending", "partial")
+    assert receipt["pipeline"]["deadline_exhausted"] is True
+    assert receipt["observed_usage"]["categories"]["deadline"] > 0
+    assert backend.action_calls("semantic_compose") == []

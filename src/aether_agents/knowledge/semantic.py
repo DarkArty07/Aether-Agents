@@ -820,6 +820,28 @@ def _normalize_auxiliary_result(result: Any) -> tuple[str, dict[str, Any], dict[
     return text, usage, meta
 
 
+try:
+    from agent.auxiliary_client import (  # type: ignore[import-not-found,import-untyped]  # pyright: ignore[reportMissingImports]
+        AuxiliaryExplicitCancellation,
+    )
+except Exception:
+
+    class AuxiliaryExplicitCancellation(BaseException):  # type: ignore[no-redef]
+        """Fallback cancellation exception type when Hermes is unimported."""
+
+
+CANCELLATION_EXCEPTIONS: tuple[type[BaseException], ...] = (
+    AuxiliaryExplicitCancellation,
+    InterruptedError,
+)
+
+
+def _is_cancellation_exception(exc: BaseException) -> bool:
+    if isinstance(exc, CANCELLATION_EXCEPTIONS):
+        return True
+    return exc.__class__.__name__ in ("AuxiliaryExplicitCancellation", "ExplicitCancellation")
+
+
 def _call_auxiliary_model(
     task: str,
     system_prompt: str,
@@ -852,8 +874,24 @@ def _call_auxiliary_model(
             route_info=local_route_info,
         )
     except TypeError:
-        response = call_llm(task=task, messages=messages, timeout=timeout)
+        try:
+            response = call_llm(task=task, messages=messages, timeout=timeout)
+        except CANCELLATION_EXCEPTIONS:
+            raise
+        except Exception as exc:
+            if _is_cancellation_exception(exc):
+                raise
+            err_msg = str(exc)
+            if "429" in err_msg or "rate" in err_msg.casefold() or "quota" in err_msg.casefold():
+                raise KnowledgeError(
+                    "ROUTER_EXHAUSTION", f"Auxiliary model rate limit/quota: {exc}"
+                ) from exc
+            raise KnowledgeError("AUXILIARY_FAILED", f"Auxiliary model call failed: {exc}") from exc
+    except CANCELLATION_EXCEPTIONS:
+        raise
     except Exception as exc:
+        if _is_cancellation_exception(exc):
+            raise
         err_msg = str(exc)
         if "429" in err_msg or "rate" in err_msg.casefold() or "quota" in err_msg.casefold():
             raise KnowledgeError(
@@ -1617,7 +1655,7 @@ def run_semantic_extraction(
         if _cancel_requested():
             _mark(chunk_id, pending=True, cancelled=True, reason="cancelled_response")
             return
-        if _budget_expired():
+        if _budget_expired() or shared_cancel.is_set():
             _mark(chunk_id, pending=True, deferred=True, category="deadline", reason="deadline")
             return
 
@@ -1627,12 +1665,17 @@ def run_semantic_extraction(
         meta: dict[str, Any] = {}
         chunk_route_info: dict[str, Any] = {}
         last_error: Exception | None = None
+        cancelled_by_transport = False
 
         for _attempt in range(AUXILIARY_ATTEMPT_LIMIT):
-            if _cancel_requested() or _budget_expired():
+            if _cancel_requested():
+                cancelled_by_transport = True
+                break
+            if shared_cancel.is_set() or _budget_expired():
                 break
             remaining = deadline - _now()
             if remaining <= 0:
+                _budget_expired(abort_in_flight=True)
                 break
             attempts += 1
             usage.add_call()
@@ -1656,17 +1699,29 @@ def run_semantic_extraction(
                             user_prompt=str(chunk.get("user_prompt") or ""),
                             timeout=min(AUXILIARY_TIMEOUT_SECONDS, max(1.0, remaining)),
                         )
+                except CANCELLATION_EXCEPTIONS:
+                    cancelled_by_transport = True
+                    break
                 except Exception as exc:
+                    if _is_cancellation_exception(exc):
+                        cancelled_by_transport = True
+                        break
                     last_error = exc
                     if _is_router_exhaustion(exc):
                         break
-                    time.sleep(0.5)
+                    shared_cancel.wait(0.5)
                     continue
+            except CANCELLATION_EXCEPTIONS:
+                cancelled_by_transport = True
+                break
             except Exception as exc:
+                if _is_cancellation_exception(exc):
+                    cancelled_by_transport = True
+                    break
                 last_error = exc
                 if _is_router_exhaustion(exc):
                     break
-                time.sleep(0.5)
+                shared_cancel.wait(0.5)
                 continue
 
             try:
@@ -1676,8 +1731,11 @@ def run_semantic_extraction(
                 continue
             break
 
-        if _cancel_requested():
-            _mark(chunk_id, pending=True, cancelled=True, reason="cancelled_response")
+        if cancelled_by_transport or _cancel_requested() or shared_cancel.is_set():
+            if _cancel_requested():
+                _mark(chunk_id, pending=True, cancelled=True, reason="cancelled_response")
+            else:
+                _mark(chunk_id, pending=True, deferred=True, category="deadline", reason="deadline")
             return
         if attempts == 0:
             _mark(chunk_id, pending=True, deferred=True, category="deadline", reason="deadline")
@@ -1816,39 +1874,125 @@ def run_semantic_extraction(
                     break
                 done, _pending = concurrent.futures.wait(
                     list(in_flight),
-                    timeout=SCHEDULER_POLL_SECONDS,
+                    timeout=min(
+                        SCHEDULER_POLL_SECONDS,
+                        max(0.005, deadline - _now()) if _now() < deadline else 0.005,
+                    ),
                     return_when=concurrent.futures.FIRST_COMPLETED,
                 )
                 for future in done:
                     record = in_flight.pop(future)
+                    chunk_id = int(record["chunk_id"])
                     try:
                         future.result()
+                    except CANCELLATION_EXCEPTIONS:
+                        if _cancel_requested():
+                            _mark(
+                                chunk_id, pending=True, cancelled=True, reason="cancelled_response"
+                            )
+                        else:
+                            _mark(
+                                chunk_id,
+                                pending=True,
+                                deferred=True,
+                                category="deadline",
+                                reason="deadline",
+                            )
                     except Exception as exc:  # pragma: no cover - defensive
-                        logger.warning("Semantic chunk worker failed (%s).", _failure_label(exc))
-                        _mark(
-                            int(record["chunk_id"]),
-                            failed=True,
-                            category="incomplete",
-                            reason="worker_error",
-                        )
-                _cancel_requested()
+                        if _is_cancellation_exception(exc):
+                            if _cancel_requested():
+                                _mark(
+                                    chunk_id,
+                                    pending=True,
+                                    cancelled=True,
+                                    reason="cancelled_response",
+                                )
+                            else:
+                                _mark(
+                                    chunk_id,
+                                    pending=True,
+                                    deferred=True,
+                                    category="deadline",
+                                    reason="deadline",
+                                )
+                        else:
+                            logger.warning(
+                                "Semantic chunk worker failed (%s).", _failure_label(exc)
+                            )
+                            _mark(
+                                chunk_id,
+                                failed=True,
+                                category="incomplete",
+                                reason="worker_error",
+                            )
+                    except BaseException as exc:  # pragma: no cover - defensive
+                        if _is_cancellation_exception(exc):
+                            if _cancel_requested():
+                                _mark(
+                                    chunk_id,
+                                    pending=True,
+                                    cancelled=True,
+                                    reason="cancelled_response",
+                                )
+                            else:
+                                _mark(
+                                    chunk_id,
+                                    pending=True,
+                                    deferred=True,
+                                    category="deadline",
+                                    reason="deadline",
+                                )
+                        else:
+                            logger.warning(
+                                "Semantic chunk worker failed with BaseException (%s).",
+                                _failure_label(exc),
+                            )
+                            _mark(
+                                chunk_id,
+                                failed=True,
+                                category="incomplete",
+                                reason="worker_error",
+                            )
+                if _cancel_requested():
+                    break
                 if _budget_expired(abort_in_flight=bool(in_flight)):
                     break
                 if shared_cancel.is_set() or _now() >= deadline - reserve:
                     break
             if in_flight:
+                if not shared_cancel.is_set():
+                    if _now() >= deadline or _now() >= deadline - reserve:
+                        deadline_exhausted = True
+                        budget_abort = True
+                    shared_cancel.set()
                 drain_window = (
                     CANCEL_DRAIN_SECONDS
-                    if shared_cancel.is_set() and not deadline_exhausted
-                    else max(0.0, deadline - _now())
+                    if host_cancelled or (_cancel_requested() and not budget_abort)
+                    else max(
+                        0.01,
+                        min(
+                            CANCEL_DRAIN_SECONDS,
+                            deadline - _now() if _now() < deadline else 0.05,
+                        ),
+                    )
                 )
-                concurrent.futures.wait(list(in_flight), timeout=max(0.0, drain_window))
+                done, _pending = concurrent.futures.wait(
+                    list(in_flight), timeout=max(0.01, drain_window)
+                )
+                for future in done:
+                    if future in in_flight:
+                        record = in_flight.pop(future)
+                        chunk_id = int(record["chunk_id"])
+                        try:
+                            future.result()
+                        except (Exception, BaseException):
+                            pass
                 for future, record in list(in_flight.items()):
                     if future.done():
                         continue
                     chunk_id = int(record["chunk_id"])
-                    if shared_cancel.is_set() and not deadline_exhausted:
-                        _mark(chunk_id, pending=True, cancelled=True)
+                    if host_cancelled or (_cancel_requested() and not budget_abort):
+                        _mark(chunk_id, pending=True, cancelled=True, reason="cancelled_response")
                     else:
                         _mark(
                             chunk_id,
