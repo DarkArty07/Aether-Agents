@@ -57,3 +57,10 @@ def test_design_distinguishes_terminal_execution_from_owner_acceptance() -> None
     design = _text(ROOT / "DESIGN.md")
     assert "Pipeline execution completion is not automatically owner-objective acceptance" in design
     assert "contract-result-review" in design
+
+
+def test_contract_result_review_distinguishes_early_advice_from_final_acceptance() -> None:
+    path = RESOURCES / "skills/contract-result-review/SKILL.md"
+    skill = _text(path)
+    assert "Early advice is not final result acceptance" in skill
+    assert "Such intermediate advice remains advisory" in skill

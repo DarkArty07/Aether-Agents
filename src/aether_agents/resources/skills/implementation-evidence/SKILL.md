@@ -52,6 +52,11 @@ Supervisor-owned delivery defines scope; reading more context does not enlarge i
    back through Supervisor to Morfeo. A missing prerequisite is a dependency, not a
    request for owner permission. An oversized or colliding unit needs Supervisor's
    re-decomposition, not hidden sibling agents or a new Objective Contract.
+   Before encoding a test oracle, verify that the required state or transition is
+   possible in the actual interface. Ask a bounded, source-backed question when the
+   agreed design contradicts that interface; continue unrelated authorized work.
+   Record consumption and disposition of peer help without transferring writable
+   ownership or inventing new acceptance.
 3. **Make a short local execution approach.** Identify the smallest behavior changes
    and tests needed for this unit, using the existing code and conventions. This is
    working reasoning, not another authoritative `plan.md` or `tasks.md`. Do not require
@@ -60,9 +65,12 @@ Supervisor-owned delivery defines scope; reading more context does not enlarge i
    framework or absorb incidental defects that do not block acceptance.
 4. **Implement with the resolved test discipline.** Follow test-first only when the
    project's standard requires it. Reproduce a defect when that is the acceptance
-   basis. Exercise normal and required negative/boundary cases. Keep changes within
-   the unit, preserve shared interfaces, and avoid mass staging or unrelated cleanup.
-   A mock is useful for its stated boundary; it does not prove a required real integration.
+   basis. Exercise normal and required negative/boundary cases. Before encoding a test
+   oracle, verify that the required state or transition is possible in the actual
+   interface; ask a bounded, source-backed question when the agreed design contradicts
+   that interface. Keep changes within the unit, preserve shared interfaces, and avoid
+   mass staging or unrelated cleanup. A mock is useful for its stated boundary; it
+   does not prove a required real integration.
 5. **Verify behavior, not just buildability.** Run the assigned checks using the actual
    project environment. Record command/action, candidate revision, exit/result and
    evidence location. Distinguish compile/lint, unit checks, integrated behavior and
@@ -104,6 +112,20 @@ Example distinction:
 The Supervisor owns the unit-delivery template. Consume it; do not redefine its shared
 interfaces or create a competing acceptance schema to make implementation easier.
 
+### Collaboration comment lifecycle and examples (illustrative)
+
+When an interface contradiction or material ambiguity arises:
+- **Implementer question to controller or origin:**
+  `kanban_comment(task_id="t_...", body="Contradiction in interface: ...", collaboration={"action": "request", "recipient": "controller", "evidence_refs": ["src/module.py:50"]})`
+- **Acknowledging peer response:**
+  `kanban_comment(task_id="t_...", body="...", collaboration={"action": "ack", "message_id": 25})`
+- **Recording attributable disposition:**
+  `kanban_comment(task_id="t_...", body="Disposition: applied interface adjustment", collaboration={"action": "resolve", "request_id": 25, "disposition": "applied"})`
+
+Early advice is not final result acceptance. Continue unrelated authorized work while
+awaiting an answer. Peer advice never transfers writable ownership, invents new
+acceptance criteria, or bypasses unit review.
+
 ## Pitfalls
 
 - Treating the card as a vague suggestion or treating inspected files as new scope.
@@ -113,6 +135,8 @@ interfaces or create a competing acceptance schema to make implementation easier
 - Reporting test counts or success prose without mapping the actual required behavior.
 - Using heartbeats as proof of progress, or discarding useful work because a run is long.
 - Publishing, integrating, or claiming an aggregate release decision from a unit role.
+- Encoding test oracles against impossible interface transitions without verifying the real interface.
+- Treating peer advice as authority to widen unit scope or invent new acceptance criteria.
 
 ## Verification
 

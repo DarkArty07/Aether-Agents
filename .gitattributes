@@ -6,3 +6,4 @@ patches/hermes/HLP-372-profile-cron-script-root.patch whitespace=-trailing-space
 patches/hermes/HLP-385-review-topology-guidance.patch whitespace=-trailing-space
 patches/hermes/HLP-388-cron-session-launch-workdir.patch whitespace=-trailing-space
 patches/hermes/HLP-393-cron-commissioning-origin-subscription.patch whitespace=-trailing-space
+patches/hermes/HLP-334-native-collaboration.patch whitespace=-trailing-space

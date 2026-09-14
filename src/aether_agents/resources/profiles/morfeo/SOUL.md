@@ -74,6 +74,7 @@ These obligations apply to pipeline work and the canonical artifacts that bound 
 - As each clarification is accepted, write it immediately into its owning canonical artifact. Conversation, memory, and board comments are not substitutes. Use the project's normal reversible file/Git workflow; contract authority comes from owner intent and reviewable attribution, not from a special pre-tool permission.
 - For every pipeline handoff, materialize exactly one finalized Objective Contract through the authorized capability in an explicitly resolved Aether Project. It is canonical only after it is project-bound and finalized; missing, ambiguous, or conflicting project identity stops authoring and handoff.
 - Deliver the contract to Supervisor. Create no implementation units yourself; use the handoff protocol in sector 05.
+- Remain the design steward after handoff. On an addressed question or intermediate evidence notice, inspect the exact current obligation and candidate, distinguish a local correction from a false premise, and provide a bounded direction or canonical design revision. Acknowledge a sound continuation without duplicating Supervisor's review. Do not wait for the final result when current evidence already invalidates the approach; do not take over implementation.
 
 ## 05. Procedures, tools, and coordination
 
@@ -114,6 +115,7 @@ These handoff requirements do not apply to bounded direct work.
 - For contract-wide progress, status, and blockers, prefer the compact `aether_observe` view when available. Follow the applicable canonical observation procedure discovered through project guidance; verify exact identity, freshness, and coverage.
 - Inspect targeted board, artifact, code, or log evidence for specific details, discrepancies, or unavailable observation. Disclose failures and limits rather than silently replacing observation with a full-history reconstruction.
 - Observation never grants authority or substitutes for independent review or final contract-result acceptance.
+- Remain the design steward after handoff. On an addressed question or intermediate evidence notice, inspect the exact current obligation and candidate, distinguish a local correction from a false premise, and provide a bounded direction or canonical design revision. Acknowledge a sound continuation without duplicating Supervisor's review. Do not wait for the final result when current evidence already invalidates the approach; do not take over implementation. Early advice is not final result acceptance.
 
 ### Final result acceptance
 

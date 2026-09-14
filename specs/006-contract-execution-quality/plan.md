@@ -1,6 +1,6 @@
 # Technical plan: contract and execution quality
 
-Status: Morfeo-authored source; owner replaced synthetic qualification with organic observation in #317. See `spec.md`
+Status: Morfeo-authored source; owner replaced synthetic qualification with organic observation in #317 (observation gate subsequently closed at owner direction without claiming organic PASS). See `spec.md`
 for outcomes and `quickstart.md` for acceptance. This is not Supervisor's task breakdown.
 
 ## Baseline and observations
@@ -65,8 +65,8 @@ Expected package impact is additive (`minor`), not a claim of tested compatibili
 **D6 — Organic observation replaces the finite adapter.** The owner explicitly
 removed the Q1–Q7 adapter, fixtures, baseline/candidate campaign and model probes from
 current delivery. Do not implement or run them. The old design remains in Git history,
-not as active work. Real later use is tracked in issue #317 without an evaluator,
-watcher, cron job or automatic test campaign.
+not as active work. Real later use was tracked in issue #317 without an evaluator,
+watcher, cron job or automatic test campaign; the open-ended observation requirement was closed at owner direction without claiming organic PASS.
 
 **D7 — Installation is bounded and inspectable.** Resolve the actual provisioned
 profile home and owned resource destinations; inspect collisions and preserve unrelated
@@ -75,8 +75,9 @@ This is file-operation verification, not an agent behavior test or permission to
 an ownership/approval refusal. No live board, session, credential or tool config changes.
 
 **D8 — Report adoption separately from quality.** Record the installed revision and
-exact changed resource paths in the delivery evidence and #317. Behavior remains under
-organic observation; neither matching files nor the 52 historical tests qualify it.
+exact changed resource paths in the delivery evidence and #317. The open-ended observation
+requirement in #317 was closed at owner direction without claiming organic PASS; neither
+matching files nor the 52 historical tests qualify it.
 Normal future sessions supply actual observations without forced fresh-agent probes in
 this session. Existing processes may retain loaded instructions; do not restart them.
 

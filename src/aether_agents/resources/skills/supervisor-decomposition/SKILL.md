@@ -84,6 +84,11 @@ current limits and authority as constraints, not settings to tune during decompo
    run evidence, not current assignee totals or heartbeats alone, to distinguish queue
    wait, useful work, external failure and rework. Route problems using the existing
    review/dependency/contract-defect paths. Do not interrupt healthy active workers.
+   Share concrete questions and material execution evidence with the originating design
+   steward during the contract. An existing design may be unsuitable even when no section
+   is missing. Consume and disposition the answer against current sources; retain
+   execution, review and integration ownership, and keep unaffected work moving. Peer
+   advice never supplies owner authority or independent approval of coauthored changes.
 8. **Revisit a bad split proportionately.** Investigate repeated hotspots or a unit
    that now demonstrably spans independently deliverable outcomes. Reconcile future
    work in `tasks.md` and the board under the existing lifecycle; do not duplicate active
@@ -127,8 +132,13 @@ classifier, judge, automatic approval threshold or new lifecycle.
    or a common-cause repair that stays within the agreed design and unit boundary,
    remains Implementer rework. If the evidence challenges an existing material design,
    shared interface, scope, guarantee or authority decision, return it to Morfeo even
-   when the contract is complete. State the failing premise, evidence, preserved
-   requirements and the decision needed; do not silently redesign it or weaken it.
+   when the contract is complete. Share concrete questions and material execution
+   evidence with the originating design steward during the contract; an existing design
+   may be unsuitable even when no section is missing. Consume and disposition the
+   answer against current sources; retain execution, review and integration ownership,
+   and keep unaffected work moving. Peer advice never supplies owner authority or
+   independent approval of coauthored changes. State the failing premise, evidence,
+   preserved requirements and the decision needed; do not silently redesign it or weaken it.
    Suspend the failing patch-by-patch strategy, not healthy independent work. Preserve
    the candidate and unfinished work through the native lifecycle.
 5. **Consolidate the handoff.** Give the known findings together, the common mechanism
@@ -163,6 +173,19 @@ cleanup: it destroys the audit trail of the accident. Preserve the rows and the 
 mutation evidence, and escalate through the supported lifecycle so the owning flow can
 decide. Reproduce the isolation defect only against disposable boards, and require a
 byte/row-stable live-board fingerprint from the unit that fixes it.
+
+### Collaboration comment lifecycle and examples (illustrative)
+
+When addressing Morfeo (origin) or coordinating with Implementer:
+- **Supervisor question to origin:**
+  `kanban_comment(task_id="t_...", body="Design question: ...", collaboration={"action": "request", "recipient": "origin", "evidence_refs": ["specs/plan.md#L20"]})`
+- **Consuming origin response:**
+  `kanban_comment(task_id="t_...", body="...", collaboration={"action": "ack", "message_id": 15})`
+  `kanban_comment(task_id="t_...", body="Disposition: applied to breakdown", collaboration={"action": "resolve", "request_id": 15, "disposition": "applied"})`
+
+Proactive lifecycle notices on opted-in roots automatically notify origin on `review_requested`,
+`changes_requested`, `blocked`, and root decomposition completion. Early advice is not
+final result acceptance; peer collaboration never overrides independent review or parent gating.
 
 ## Compact unit delivery (template, not another schema)
 
@@ -223,6 +246,8 @@ Actual overlap still needs run evidence; this table demonstrates only graph reas
 - Counting currently Supervisor-assigned reviewed cards as Supervisor implementation.
 - Closing a root before its decomposition exists, or leaving it running until its own
   parent-gated implementation finishes. Follow the native lifecycle, not a new one.
+- Treating peer advice as owner authority or independent approval of coauthored changes.
+- Waiting for origin collaboration before releasing ready, independent implementation units.
 
 ## Verification
 

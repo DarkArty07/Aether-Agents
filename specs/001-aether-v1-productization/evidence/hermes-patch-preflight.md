@@ -1,10 +1,10 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-09-11T22:55:11Z`
+Observation timestamp: `2026-09-14T05:41:09Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `43b25f9497e9b84b7108d40878b1e2f09694c7a70edab7bd75759000d66b0890`
+Source ledger SHA-256: `37afa83980312080e5e7a990c250305ce26e54bdc7513f0dff996760738b9ea1`
 
 ## Remaining local guarantees
 
@@ -24,6 +24,7 @@ Source ledger SHA-256: `43b25f9497e9b84b7108d40878b1e2f09694c7a70edab7bd75759000
 - `HLP-280`: Retain the bounded HLP-280 recovery. Local 15 recovery probes, 129 affected tests with one Windows skip, 44 notifier tests and a native-origin canary passed. This records a downstream repair, not the rejected v4/v5 architecture or a Hermes release upgrade.
 - `HLP-305`: Retain HLP-305 in maintained fork c185ee3bb. Source hash readback and normal SessionDB activation passed after consistent backup/quick_check/SHA-256. Live owner TUI tool result retains complete11576-character message with8203-character index(prefix+metadata), proving writer-side activation without restarting TUI. Existing Python processes still require graceful reload for their cached code paths. Expanded testing retains baseline failure #349.
 - `HLP-310`: Retain HLP-310. Inspected upstream does not exclude delegated child identity or Kanban environment variables from terminal snapshots. Maintained fork commit 25cabeb25327199a03aa3cf1613ed2f815f646cb provides the causal repair in PR #4.
+- `HLP-334`: Retain HLP-334. Optional native collaboration adds an adjunct same-board table, optional create/comment arguments, and origin-bound TUI/gateway delivery without replacing the terminal-notification cursor or promoting peer evidence to owner authority.
 - `HLP-335`: Retain HLP-335. The local respawn-guard recovery releases only independently verifiable CLOSED/MERGED PR references so Graphify closeout can resume; OPEN/unknown/auth failures stay guarded. This records a downstream repair, not a Hermes upgrade or a Graphify product delivery.
 - `HLP-354`: Retain HLP-354. Inspected upstream lacks worktree_base_ref materialization and fail-closed validation. Maintained fork commit 7d3173e1f3dba107f9a389d4e35c95f215775ee1 provides the causal repair in PR #4.
 - `HLP-362`: Retain HLP-362. Initial same-card review requires an explicit independent reviewer; self-review is rejected and legacy unassigned review claims remain parked. Verified by regression tests on the maintained fork and candidate testing in Aether.
@@ -95,6 +96,9 @@ Source ledger SHA-256: `43b25f9497e9b84b7108d40878b1e2f09694c7a70edab7bd75759000
 - `HLP-310` (retirement_gate): Retirement gate status is failed.
 - `HLP-310` (uncertainty): The inspected upstream lacks snapshot exclusions for HERMES_DELEGATED_CHILD_CONTEXT and HERMES_KANBAN_*.
 - `HLP-310` (uncertainty): Maintained fork commit 25cabeb25327199a03aa3cf1613ed2f815f646cb is downstream-only; no equivalent upstream change exists.
+- `HLP-334` (artifact): The exact maintained-fork reconstruction, focused candidate checks, and PR #11 merge passed, but public upstream equivalence remains unavailable because upstream lacks optional collaboration opt-in, the adjunct table, origin-route matching, and labeled peer delivery.
+- `HLP-334` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-334` (uncertainty): Upstream Hermes at the inspected public revision has no optional collaboration store or origin-bound TUI/gateway delivery.
 - `HLP-335` (artifact): No public portable patch exists under patches/hermes. The exact dirty runtime preimage is private and not a public release artifact. Public readers must not infer clean upstream applicability from the recorded hashes.
 - `HLP-335` (retirement_gate): Retirement gate status is failed.
 - `HLP-335` (uncertainty): Upstream PR 95199 remains open and is not an exact-revision behavioral pass of this local delta.
@@ -144,6 +148,7 @@ Source ledger SHA-256: `43b25f9497e9b84b7108d40878b1e2f09694c7a70edab7bd75759000
 - `HLP-280`: unavailable
 - `HLP-305`: unavailable
 - `HLP-310`: unavailable
+- `HLP-334`: unavailable
 - `HLP-335`: unavailable
 - `HLP-354`: unavailable
 - `HLP-362`: unavailable
