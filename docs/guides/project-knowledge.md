@@ -96,7 +96,7 @@ All three roles can request an update after relevant committed changes:
 {"action":"update","reason":"Refresh the map after the interface and tests changed","mode":"configured"}
 ```
 
-Skills and agents are instructed to perform or resume configured updates (`mode="configured"`, default) at coherent committed checkpoints whenever covered code or documentation changed, including on integrated main before closeout. Ordinary queries, status checks, and greetings never call a model, and no background watcher is installed.
+Skills and agents are instructed to perform or resume configured updates (`mode="configured"`, default) at coherent committed checkpoints whenever covered code or documentation changed, including on integrated main before closeout. Ordinary queries, status checks, and greetings never call a model, and no background watcher is installed. One configured update is a single bounded transaction — at most two concurrent auxiliary calls inside a 300-second total budget — and it publishes only a fully validated, structurally preserved candidate.
 
 `changed_paths` may be supplied as a hint, but it is not trusted as a complete change list. Updates capture the selected committed revision from Git objects. Ordinary updates and note writes require no additional per-role approval once the component, task and profile are authorized. If temporary failures occur, at most one bounded retry is allowed; persistent unavailable or deferred work is reported rather than looping to force completion.
 
@@ -170,13 +170,50 @@ Structural update mode never invokes a model. Configured mode (`mode="configured
 uses the existing component configuration: when `semantic.enabled` is true it performs or resumes
 the selected `semantic.auxiliary_task` (the qualified activation uses `web_extract`) through the
 profile-scoped auxiliary connection. Ordinary queries, status checks, and greetings never call a
-model, and no background watcher is installed. Semantic metadata reports `state`, covered/pending/
-failed paths, a fingerprint and observed usage. Missing, ambiguous or exhausted auxiliary
-access is `unavailable`/`partial`, never a primary-model fallback. One bounded retry is allowed
-for temporary failures; persistent unavailable/deferred work is reported, not looped.
-Rebuilding a new revision captures the selected corpus again; reuse is guaranteed for an
-unchanged view/revision, not every possible incremental optimization. This behavior does
-not establish token savings or universal quality superiority.
+model, and no background watcher is installed.
+
+One configured update is one bounded transaction. It prepares or reuses a private plan for the
+compatible revision, runs at most two auxiliary calls at a time, and completes preparation,
+model calls, validation, composition and pointer publication inside a single 300-second total
+budget; a configured lower deadline is allowed, a higher one is not. Cancellation stops
+scheduling new calls, keeps already validated cache fragments and never publishes the cancelled
+candidate. Natural budget exhaustion returns a partial receipt instead of leaving detached work,
+and no hidden continuation runs after the call returns.
+
+Semantic additions are an overlay on an immutable structural base. Accepted nodes, edges and
+hyperedges carry `origin=llm`, bind only to captured sources and anchors, and are never promoted
+to AST facts because a model labelled them EXTRACTED. The committed structural nodes, edges and
+provenance are compared as a canonical projection before publication; a mismatch aborts the
+update instead of rewriting the graph. Graphify's global graph merge and label deduplication are
+not part of this path, and ambiguous or colliding additions are omitted with a bounded reason.
+
+Only a response whose effective route matches the configured primary auxiliary is cached or
+applied. An unresolved or mismatched route leaves that chunk pending/rejected with a bounded
+`route` reason; there is no fallback account, no mixed-route snapshot and no primary-model
+fallback.
+
+Semantic metadata reports `state`, covered/pending/failed paths, a fingerprint and observed
+usage; `status` additionally reports `semantic_trusted` and `semantic_pending`. Warnings are
+selected from the immutable snapshot state, not from whatever configuration is loaded when you
+read the result: `complete` carries no limitation warning, `partial` reports that remaining
+paths stay structural (with bounded covered/pending/failed counts), `pending` reports that
+enrichment is pending for that snapshot, `unavailable` reports that enrichment was unavailable
+when the snapshot was built, `disabled` reports extraction disabled at build time, and missing
+or inconsistent metadata is described as unknown/inconsistent. A pending snapshot never says
+extraction is disabled. A semantic snapshot that lacks the current integrity identity is not
+served as a trusted semantic result — it is reported as legacy/untrusted, its retained
+artifacts are not deleted, and structural results remain available. A separate content-free
+operation record (`phase`, `outcome`) reports an update that is in progress or was interrupted,
+and an operation record alone is never published evidence. Structural query, status and
+ordinary file work keep functioning when semantic preparation, transport, validation,
+accounting or composition fails.
+
+Missing, ambiguous or exhausted auxiliary access is `unavailable`/`partial`, never a
+primary-model fallback. One bounded retry is allowed for temporary failures; persistent
+unavailable/deferred work is reported, not looped. Rebuilding a new revision captures the
+selected corpus again; reuse is guaranteed for an unchanged view/revision, not every possible
+incremental optimization. This behavior does not establish token savings or universal quality
+superiority.
 
 
 Role search is lexical and limited to 10,000 active notes. Reflection rejects generations above 1,000,000 raw note bytes instead of silently dropping history. Pagination preserves full notes. Further scale and semantic retrieval require separate qualification.
@@ -233,6 +270,10 @@ Export writes the selected namespace to stdout, not an automatically chosen file
 | `COMPONENT_UNAVAILABLE` | Run component doctor, check the exact isolated interpreter and enablement. No install occurs inside a tool call. |
 | `INDEX_MISSING`, `INDEX_CORRUPT` | Rebuild the selected revision; continue with direct files meanwhile. |
 | `BUSY`, `TIMEOUT` | Another update or a bounded component operation did not complete; inspect status before retrying. |
+| `OPERATION_CANCELLED`, or an operation record with a running/interrupted outcome | A host or caller cancellation stopped the update before publication. The previous snapshot stays current and validated cache is retained; retry when appropriate. |
+| Warning: semantic enrichment is pending or partial | The immutable snapshot's semantic work is incomplete or covers only part of the eligible documents. Treat document results as structural and run a configured update when appropriate; this is never a statement that extraction is disabled. |
+| Warning: legacy semantic snapshot is not trusted | The published snapshot predates the current semantic integrity identity. Document results are structural and retained artifacts are evidence; rebuild or update the revision to refresh semantics. |
+| `route` outcome category | The effective auxiliary route was unresolved or did not match the configured primary route. No fragment was cached or applied and no fallback route is used; check the configured auxiliary task. |
 | `REVISION_CONFLICT` | Read the current note version before applying a correction. |
 | `IDEMPOTENCY_CONFLICT` | Reuse a save key only with its original payload; assign a new key to a distinct note. |
 | `SCOPE_UNAVAILABLE`, `RESULT_TOO_LARGE` | Narrow the operation or review documented limits; coverage is not silently invented. |

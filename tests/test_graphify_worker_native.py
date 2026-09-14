@@ -888,3 +888,674 @@ def test_native_worker_semantic_prepare_pagination(tmp_path: Path) -> None:
     assert res_none["total_chunks"] == 0
     assert res_none["chunks"] == []
     assert res_none["has_more"] is False
+
+
+# --- Additive overlay composition (#419) -----------------------------------
+
+_OVERLAY_DERIVED_KEYS = ("community", "community_name", "norm_label")
+_OVERLAY_ORIGIN_KEYS = ("_origin", "origin")
+
+
+def _overlay_node(
+    node_id: str,
+    label: str,
+    source_file: str,
+    location: str,
+    *,
+    file_type: str = "document",
+    node_kind: str = "heading",
+    community: int = 0,
+) -> dict:
+    return {
+        "id": node_id,
+        "label": label,
+        "_origin": "ast",
+        "community": community,
+        "community_name": source_file,
+        "file_type": file_type,
+        "node_kind": node_kind,
+        "norm_label": label.lower(),
+        "origin": "ast",
+        "source_file": source_file,
+        "source_location": location,
+    }
+
+
+def _overlay_link(source: str, target: str, relation: str, source_file: str, location: str) -> dict:
+    return {
+        "source": source,
+        "target": target,
+        "relation": relation,
+        "_origin": "ast",
+        "confidence": "EXTRACTED",
+        "confidence_score": 1.0,
+        "origin": "ast",
+        "source_file": source_file,
+        "source_location": location,
+        "weight": 1.0,
+    }
+
+
+def _overlay_graph_data(directed: bool) -> dict:
+    hyperedges = [
+        {
+            "id": "flow_structural",
+            "nodes": ["order_reserve", "order_charge"],
+            "relation": "flow",
+            "confidence": "EXTRACTED",
+            "_origin": "ast",
+            "source_file": "order.py",
+        }
+    ]
+    nodes = [
+        _overlay_node("readme", "README.md", "README.md", "L1", node_kind="page"),
+        _overlay_node("readme_reservations", "Reservations", "README.md", "L1"),
+        _overlay_node("readme_current_documentation", "Current documentation", "README.md", "L3"),
+        _overlay_node("readme_current_documentation_7", "Current documentation", "README.md", "L7"),
+        _overlay_node(
+            "readme_current_documentation_11", "Current documentation", "README.md", "L11"
+        ),
+        _overlay_node("docs_helper", "helper.md", "docs/helper.md", "L1", node_kind="page"),
+        _overlay_node(
+            "docs_helper_current_documentation", "Current documentation", "docs/helper.md", "L3"
+        ),
+        _overlay_node("order", "order.py", "order.py", "L1", file_type="code", node_kind="file"),
+        _overlay_node("order_charge", "charge()", "order.py", "L1", file_type="code"),
+        _overlay_node("order_reserve", "reserve()", "order.py", "L5", file_type="code"),
+        _overlay_node("alpha", "alpha.py", "alpha.py", "L1", file_type="code", node_kind="file"),
+        _overlay_node("alpha_retry", "Retry policy", "alpha.py", "L1", file_type="concept"),
+        _overlay_node("beta", "beta.py", "beta.py", "L1", file_type="code", node_kind="file"),
+        _overlay_node("beta_retry", "Retry policy", "beta.py", "L1", file_type="concept"),
+    ]
+    links = [
+        _overlay_link("readme", "readme_reservations", "contains", "README.md", "L1"),
+        _overlay_link(
+            "readme_reservations", "readme_current_documentation", "contains", "README.md", "L3"
+        ),
+        _overlay_link(
+            "readme_reservations", "readme_current_documentation_7", "contains", "README.md", "L7"
+        ),
+        _overlay_link(
+            "readme_reservations", "readme_current_documentation_11", "contains", "README.md", "L11"
+        ),
+        _overlay_link(
+            "docs_helper",
+            "docs_helper_current_documentation",
+            "contains",
+            "docs/helper.md",
+            "L3",
+        ),
+        _overlay_link("order", "order_charge", "contains", "order.py", "L1"),
+        _overlay_link("order", "order_reserve", "contains", "order.py", "L5"),
+        _overlay_link("order_reserve", "order_charge", "calls", "order.py", "L6"),
+        _overlay_link("alpha", "alpha_retry", "references", "alpha.py", "L1"),
+        _overlay_link("beta", "beta_retry", "references", "beta.py", "L1"),
+    ]
+    return {
+        "directed": directed,
+        "multigraph": False,
+        "graph": {"hyperedges": hyperedges},
+        "nodes": nodes,
+        "links": links,
+        "hyperedges": hyperedges,
+    }
+
+
+@pytest.fixture(scope="module")
+def overlay_corpus(tmp_path_factory: pytest.TempPathFactory):
+    root = tmp_path_factory.mktemp("native-overlay")
+    source = root / "sources"
+    (source / "docs").mkdir(parents=True)
+    (source / "README.md").write_text(
+        "# Reservations\n\n"
+        "## Current documentation\n\nfirst\n\n"
+        "## Current documentation\n\nsecond\n\n"
+        "## Current documentation\n\nthird\n\n"
+        "See [implementation](order.py).\n",
+        encoding="utf-8",
+    )
+    (source / "docs" / "helper.md").write_text(
+        "# Helper\n\n## Current documentation\n\nshared label\n", encoding="utf-8"
+    )
+    (source / "order.py").write_text(
+        "def charge():\n    return 1\n\n\ndef reserve():\n    return charge()\n", encoding="utf-8"
+    )
+    (source / "alpha.py").write_text("RETRY_POLICY = 'alpha'\n", encoding="utf-8")
+    (source / "beta.py").write_text("RETRY_POLICY = 'beta'\n", encoding="utf-8")
+    graph = root / "graphify-out" / "graph.json"
+    graph.parent.mkdir(parents=True)
+    graph.write_text(json.dumps(_overlay_graph_data(directed=False), indent=2), encoding="utf-8")
+    return {"source_root": str(source), "graph_path": str(graph)}
+
+
+def _structural_attrs(record: dict) -> dict:
+    return {
+        key: value
+        for key, value in record.items()
+        if key not in _OVERLAY_DERIVED_KEYS and key not in _OVERLAY_ORIGIN_KEYS
+    }
+
+
+def _prepare_overlay_request(overlay_corpus, tmp_path: Path) -> dict:
+    import shutil
+
+    graph_path = tmp_path / "graph.json"
+    shutil.copy(overlay_corpus["graph_path"], graph_path)
+    return {**overlay_corpus, "graph_path": str(graph_path)}
+
+
+def _read_graph(graph_path: Path) -> dict:
+    return json.loads(graph_path.read_text(encoding="utf-8"))
+
+
+def test_native_compose_preserves_repeated_headings_and_cross_file_labels(
+    overlay_corpus, tmp_path: Path
+) -> None:
+    request = _prepare_overlay_request(overlay_corpus, tmp_path)
+    graph_path = Path(request["graph_path"])
+    baseline = _read_graph(graph_path)
+    baseline_nodes = {node["id"]: node for node in baseline["nodes"]}
+    baseline_links = {
+        (link["source"], link["target"], link["relation"]): link for link in baseline["links"]
+    }
+
+    canary = {
+        "nodes": [
+            {
+                "id": "notes_overview",
+                "label": "Overview notes",
+                "source_file": "README.md",
+                "file_type": "document",
+            }
+        ],
+        "edges": [],
+    }
+    result = graph_worker.execute(
+        {**request, "action": "semantic_apply", "arguments": {"fragment": canary}}
+    )
+
+    after = _read_graph(graph_path)
+    after_nodes = {node["id"]: node for node in after["nodes"]}
+    assert set(baseline_nodes) <= set(after_nodes)
+    for node_id, baseline_node in baseline_nodes.items():
+        assert _structural_attrs(after_nodes[node_id]) == _structural_attrs(baseline_node)
+        assert after_nodes[node_id]["_origin"] == baseline_node["_origin"]
+        assert after_nodes[node_id]["origin"] == baseline_node["origin"]
+    for node_id in (
+        "readme_current_documentation",
+        "readme_current_documentation_7",
+        "readme_current_documentation_11",
+        "docs_helper_current_documentation",
+        "alpha_retry",
+        "beta_retry",
+    ):
+        assert node_id in after_nodes
+
+    after_links = {
+        (link["source"], link["target"], link["relation"]): link for link in after["links"]
+    }
+    for key, baseline_link in baseline_links.items():
+        assert key in after_links
+        assert _structural_attrs(after_links[key]) == _structural_attrs(baseline_link)
+
+    assert after_nodes["notes_overview"]["origin"] == "llm"
+    assert after_nodes["notes_overview"]["_origin"] == "llm"
+    assert [hyperedge["id"] for hyperedge in after["hyperedges"]] == ["flow_structural"]
+
+    assert result["applied_nodes"] == 1
+    assert result["applied_edges"] == 0
+    assert result["applied_hyperedges"] == 0
+    assert result["structural_preserved"] is True
+    assert result["references"] == [{"path": "README.md", "location": ""}]
+    assert re.fullmatch(r"[0-9a-f]{64}", result["structural_digest"])
+
+    stats = graph_worker.execute({**request, "action": "stats"})
+    assert stats["stats"]["origin_counts"]["llm"] >= 1
+    assert stats["stats"]["origin_counts"]["structural"] > 0
+
+
+def test_native_compose_requires_an_existing_structural_base(
+    overlay_corpus, tmp_path: Path
+) -> None:
+    graph_path = tmp_path / "missing-graph.json"
+    request = {**overlay_corpus, "graph_path": str(graph_path)}
+    with pytest.raises(ValueError, match="[Nn]o structural base"):
+        graph_worker.execute(
+            {
+                **request,
+                "action": "semantic_compose",
+                "arguments": {
+                    "fragments": [
+                        {
+                            "nodes": [
+                                {
+                                    "id": "notes_overview",
+                                    "label": "Overview notes",
+                                    "source_file": "README.md",
+                                    "file_type": "document",
+                                }
+                            ],
+                            "edges": [],
+                        }
+                    ]
+                },
+            }
+        )
+    assert not graph_path.exists()
+
+
+def test_native_compose_exact_identity_collision_keeps_structural_records(
+    overlay_corpus, tmp_path: Path
+) -> None:
+    request = _prepare_overlay_request(overlay_corpus, tmp_path)
+    graph_path = Path(request["graph_path"])
+    before_bytes = graph_path.read_bytes()
+    baseline = _read_graph(graph_path)
+    baseline_node = next(node for node in baseline["nodes"] if node["id"] == "order_reserve")
+    baseline_edge = next(link for link in baseline["links"] if link["relation"] == "calls")
+
+    fragment = {
+        "nodes": [
+            {
+                "id": "order_reserve",
+                "label": "reserve()",
+                "source_file": "order.py",
+                "file_type": "code",
+                "rationale": "model reasoning about reserve",
+                "author": "llm-author",
+                "source_url": "https://example.invalid/spec",
+                "confidence": "EXTRACTED",
+            }
+        ],
+        "edges": [],
+    }
+    result = graph_worker.execute(
+        {**request, "action": "semantic_apply", "arguments": {"fragment": fragment}}
+    )
+
+    after = _read_graph(graph_path)
+    node = next(item for item in after["nodes"] if item["id"] == "order_reserve")
+    assert _structural_attrs(node) == _structural_attrs(baseline_node)
+    assert node["_origin"] == "ast"
+    assert node["origin"] == "ast"
+    for forbidden in ("rationale", "author", "source_url", "confidence"):
+        assert forbidden not in node
+    edge = next(link for link in after["links"] if link["relation"] == "calls")
+    assert _structural_attrs(edge) == _structural_attrs(baseline_edge)
+    # Nothing was accepted, so no publication transaction rewrites the graph.
+    assert graph_path.read_bytes() == before_bytes
+
+    assert result["applied_nodes"] == 0
+    assert result["applied_edges"] == 0
+    assert result["structural_preserved"] is True
+    assert [entry["id"] for entry in result["omitted_nodes"]] == ["order_reserve"]
+    assert result["omitted_nodes"][0]["reason"] == "existing_identity_collision"
+
+
+def test_native_compose_fuzzy_ghost_collision_remaps_without_copying_llm_fields(
+    overlay_corpus, tmp_path: Path
+) -> None:
+    request = _prepare_overlay_request(overlay_corpus, tmp_path)
+    graph_path = Path(request["graph_path"])
+    before_bytes = graph_path.read_bytes()
+    baseline = _read_graph(graph_path)
+    baseline_node = next(node for node in baseline["nodes"] if node["id"] == "order_reserve")
+    baseline_edge = next(link for link in baseline["links"] if link["relation"] == "calls")
+
+    fragment = {
+        "nodes": [
+            {
+                "id": "ghost_reserve",
+                "label": "reserve()",
+                "source_file": "order.py",
+                "file_type": "code",
+                "rationale": "model reasoning about reserve",
+                "author": "llm-author",
+            },
+            {
+                "id": "ghost_charge",
+                "label": "charge()",
+                "source_file": "order.py",
+                "file_type": "code",
+            },
+        ],
+        "edges": [
+            {
+                "source": "ghost_reserve",
+                "target": "ghost_charge",
+                "relation": "calls",
+                "confidence": "EXTRACTED",
+                "source_file": "order.py",
+            }
+        ],
+    }
+    result = graph_worker.execute(
+        {**request, "action": "semantic_apply", "arguments": {"fragment": fragment}}
+    )
+
+    after = _read_graph(graph_path)
+    after_ids = {node["id"] for node in after["nodes"]}
+    assert not {"ghost_reserve", "ghost_charge"} & after_ids
+    node = next(item for item in after["nodes"] if item["id"] == "order_reserve")
+    assert _structural_attrs(node) == _structural_attrs(baseline_node)
+    for forbidden in ("rationale", "author"):
+        assert forbidden not in node
+    edge = next(link for link in after["links"] if link["relation"] == "calls")
+    assert _structural_attrs(edge) == _structural_attrs(baseline_edge)
+    # Nothing was accepted, so no publication transaction rewrites the graph.
+    assert graph_path.read_bytes() == before_bytes
+
+    assert result["applied_nodes"] == 0
+    assert result["applied_edges"] == 0
+    assert result["structural_preserved"] is True
+    reasons = {entry["id"]: entry["reason"] for entry in result["omitted_nodes"]}
+    assert reasons == {
+        "ghost_reserve": "remapped_onto:order_reserve",
+        "ghost_charge": "remapped_onto:order_charge",
+    }
+    assert len(result["omitted_edges"]) == 1
+    assert result["omitted_edges"][0]["reason"] == "structural_edge_collision"
+
+
+def test_native_compose_reverse_direction_collision_omitted_with_reason(
+    overlay_corpus, tmp_path: Path
+) -> None:
+    request = _prepare_overlay_request(overlay_corpus, tmp_path)
+    graph_path = Path(request["graph_path"])
+    before_bytes = graph_path.read_bytes()
+    baseline = _read_graph(graph_path)
+    baseline_edge = next(link for link in baseline["links"] if link["relation"] == "calls")
+
+    fragment = {
+        "nodes": [],
+        "edges": [
+            {
+                "source": "order_charge",
+                "target": "order_reserve",
+                "relation": "calls",
+                "confidence": "EXTRACTED",
+                "source_file": "order.py",
+            }
+        ],
+    }
+    result = graph_worker.execute(
+        {**request, "action": "semantic_apply", "arguments": {"fragment": fragment}}
+    )
+
+    after = _read_graph(graph_path)
+    calls_edges = [link for link in after["links"] if link["relation"] == "calls"]
+    assert len(calls_edges) == 1
+    assert _structural_attrs(calls_edges[0]) == _structural_attrs(baseline_edge)
+    # Nothing was accepted, so no publication transaction rewrites the graph.
+    assert graph_path.read_bytes() == before_bytes
+
+    assert result["applied_edges"] == 0
+    assert len(result["omitted_edges"]) == 1
+    assert result["omitted_edges"][0]["reason"] == "structural_edge_collision"
+
+
+def test_native_compose_hyperedges_remapped_or_rejected(overlay_corpus, tmp_path: Path) -> None:
+    request = _prepare_overlay_request(overlay_corpus, tmp_path)
+    graph_path = Path(request["graph_path"])
+
+    fragment = {
+        "nodes": [
+            {
+                "id": "ghost_reserve",
+                "label": "reserve()",
+                "source_file": "order.py",
+                "file_type": "code",
+            },
+            {
+                "id": "guide_flow",
+                "label": "Guide flow",
+                "source_file": "README.md",
+                "file_type": "document",
+            },
+        ],
+        "edges": [],
+        "hyperedges": [
+            {
+                "id": "flow_overlay",
+                "nodes": ["ghost_reserve", "order_charge"],
+                "relation": "flow",
+                "confidence": "INFERRED",
+                "source_file": "README.md",
+            },
+            {
+                "id": "flow_structural",
+                "nodes": ["order_reserve", "order_charge"],
+                "relation": "flow",
+                "confidence": "EXTRACTED",
+                "source_file": "order.py",
+            },
+            {
+                "id": "flow_missing",
+                "nodes": ["guide_flow", "not_a_node"],
+                "relation": "flow",
+                "confidence": "INFERRED",
+                "source_file": "README.md",
+            },
+            {
+                "id": "flow_empty",
+                "nodes": [],
+                "relation": "flow",
+                "confidence": "INFERRED",
+                "source_file": "README.md",
+            },
+        ],
+    }
+    result = graph_worker.execute(
+        {**request, "action": "semantic_compose", "arguments": {"fragments": [fragment]}}
+    )
+    assert result["applied_nodes"] == 1
+    assert result["applied_edges"] == 0
+    assert result["applied_hyperedges"] == 1
+    assert result["structural_preserved"] is True
+    omitted = {entry["id"]: entry["reason"] for entry in result["omitted_hyperedges"]}
+    assert omitted == {
+        "flow_structural": "structural_hyperedge_collision",
+        "flow_missing": "unresolved_members",
+        "flow_empty": "no_valid_members",
+    }
+    unresolved = next(
+        entry for entry in result["omitted_hyperedges"] if entry["id"] == "flow_missing"
+    )
+    assert unresolved["members"] == ["not_a_node"]
+
+    after = _read_graph(graph_path)
+    hyperedges = {hyperedge["id"]: hyperedge for hyperedge in after["hyperedges"]}
+    assert set(hyperedges) == {"flow_structural", "flow_overlay"}
+    assert hyperedges["flow_structural"]["nodes"] == ["order_reserve", "order_charge"]
+    assert hyperedges["flow_structural"]["_origin"] == "ast"
+    assert hyperedges["flow_overlay"]["nodes"] == ["order_reserve", "order_charge"]
+    assert hyperedges["flow_overlay"]["origin"] == "llm"
+    assert hyperedges["flow_overlay"]["_origin"] == "llm"
+    assert hyperedges["flow_overlay"]["confidence"] == "INFERRED"
+    assert "not_a_node" not in json.dumps(after["hyperedges"])
+
+
+def test_native_compose_single_load_cluster_export_without_build_merge(
+    overlay_corpus, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import graphify.build as gbuild
+    import graphify.cluster as gcluster
+    import graphify.export as gexport
+
+    request = _prepare_overlay_request(overlay_corpus, tmp_path)
+    graph_path = Path(request["graph_path"])
+
+    counts = {"load": 0, "cluster": 0, "export": 0}
+    real_load = gbuild._load_existing_graph  # type: ignore[attr-defined]
+
+    def counting_load(path):
+        counts["load"] += 1
+        return real_load(path)
+
+    real_cluster = gcluster.cluster
+
+    def counting_cluster(*args, **kwargs):
+        counts["cluster"] += 1
+        return real_cluster(*args, **kwargs)
+
+    real_export = gexport.to_json
+
+    def counting_export(*args, **kwargs):
+        counts["export"] += 1
+        return real_export(*args, **kwargs)
+
+    def forbidden_build_merge(*args, **kwargs):
+        raise AssertionError("build_merge must never run for semantic composition")
+
+    monkeypatch.setattr(gbuild, "_load_existing_graph", counting_load)
+    monkeypatch.setattr(gcluster, "cluster", counting_cluster)
+    monkeypatch.setattr(gexport, "to_json", counting_export)
+    monkeypatch.setattr(gbuild, "build_merge", forbidden_build_merge)
+
+    fragments = [
+        {
+            "nodes": [
+                {
+                    "id": f"note_{index}",
+                    "label": f"Note {index}",
+                    "source_file": "README.md",
+                    "file_type": "document",
+                }
+            ],
+            "edges": [
+                {
+                    "source": f"note_{index}",
+                    "target": "readme_reservations",
+                    "relation": "references",
+                    "confidence": "INFERRED",
+                    "source_file": "README.md",
+                }
+            ],
+        }
+        for index in range(3)
+    ]
+    result = graph_worker.execute(
+        {**request, "action": "semantic_compose", "arguments": {"fragments": fragments}}
+    )
+    assert result["applied_nodes"] == 3
+    assert result["applied_edges"] == 3
+    assert counts == {"load": 1, "cluster": 1, "export": 1}
+
+    after = _read_graph(graph_path)
+    assert {"note_0", "note_1", "note_2"} <= {node["id"] for node in after["nodes"]}
+
+    # The compatibility wrapper forwards the single model fragment through the
+    # same overlay transaction (never build_merge). Its strict validation keeps
+    # the endpoint-binding oracle, so it reads the base once for validation and
+    # once for the compose transaction — exactly the two reads the previous
+    # wrapper performed (validation + merge).
+    wrapper = graph_worker.execute(
+        {
+            **request,
+            "action": "semantic_apply",
+            "arguments": {
+                "model_text": json.dumps(
+                    {
+                        "nodes": [
+                            {
+                                "id": "note_wrapper",
+                                "label": "Wrapper note",
+                                "source_file": "README.md",
+                                "file_type": "document",
+                            }
+                        ],
+                        "edges": [],
+                    }
+                )
+            },
+        }
+    )
+    assert wrapper["applied_nodes"] == 1
+    assert wrapper["structural_preserved"] is True
+    assert counts == {"load": 3, "cluster": 2, "export": 2}
+
+
+def test_native_compose_digest_mismatch_aborts_without_writing(
+    overlay_corpus, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    request = _prepare_overlay_request(overlay_corpus, tmp_path)
+    graph_path = Path(request["graph_path"])
+    before_bytes = graph_path.read_bytes()
+
+    original = graph_worker._compose_candidate_graph
+
+    def lossy_compose(*args, **kwargs):
+        candidate = original(*args, **kwargs)
+        candidate.remove_node("readme_current_documentation_7")
+        return candidate
+
+    monkeypatch.setattr(graph_worker, "_compose_candidate_graph", lossy_compose)
+    arguments = {
+        "fragments": [
+            {
+                "nodes": [
+                    {
+                        "id": "notes_overview",
+                        "label": "Overview notes",
+                        "source_file": "README.md",
+                        "file_type": "document",
+                    }
+                ],
+                "edges": [],
+            }
+        ]
+    }
+    with pytest.raises(ValueError, match="[Ss]tructural projection changed"):
+        graph_worker.execute({**request, "action": "semantic_compose", "arguments": arguments})
+    assert graph_path.read_bytes() == before_bytes
+
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        SimpleNamespace(
+            buffer=io.BytesIO(
+                json.dumps(
+                    {**request, "action": "semantic_compose", "arguments": arguments}
+                ).encode("utf-8")
+            )
+        ),
+    )
+    assert graph_worker.main() == 1
+    response = json.loads(capsys.readouterr().out)
+    assert response["ok"] is False
+    assert "Structural projection changed" in response["message"]
+    assert graph_path.read_bytes() == before_bytes
+
+
+def test_native_compose_preserves_directed_graph_direction(overlay_corpus, tmp_path: Path) -> None:
+    graph_path = tmp_path / "directed-graph.json"
+    graph_path.write_text(
+        json.dumps(_overlay_graph_data(directed=True), indent=2), encoding="utf-8"
+    )
+    request = {**overlay_corpus, "graph_path": str(graph_path)}
+    baseline = _read_graph(graph_path)
+    baseline_links = {
+        (link["source"], link["target"], link["relation"]) for link in baseline["links"]
+    }
+
+    canary = {
+        "nodes": [
+            {
+                "id": "notes_overview",
+                "label": "Overview notes",
+                "source_file": "README.md",
+                "file_type": "document",
+            }
+        ],
+        "edges": [],
+    }
+    result = graph_worker.execute(
+        {**request, "action": "semantic_compose", "arguments": {"fragments": [canary]}}
+    )
+    assert result["applied_nodes"] == 1
+    assert result["structural_preserved"] is True
+
+    after = _read_graph(graph_path)
+    assert after["directed"] is True
+    after_links = {(link["source"], link["target"], link["relation"]) for link in after["links"]}
+    assert baseline_links <= after_links
