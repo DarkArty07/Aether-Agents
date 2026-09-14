@@ -1,0 +1,102 @@
+{
+  "calls": {
+    "attempts_new_during_canary": 1,
+    "attempts_new_during_repeat": 0,
+    "budget": 4,
+    "counted_at": "router request history for the configured primary operation, window-attributed"
+  },
+  "first_run": {
+    "categories": {
+      "apply": 0,
+      "apply_failed": 0,
+      "auxiliary_failed": 0,
+      "cache": 0,
+      "deadline": 0,
+      "deadline_deferred": 0,
+      "empty": 0,
+      "incomplete": 0,
+      "malformed_json": 0,
+      "route": 0,
+      "schema": 0,
+      "source": 0,
+      "validation_failed": 0
+    },
+    "covered_paths": [
+      "README.md",
+      "workflow.py"
+    ],
+    "elapsed_seconds": 14.992,
+    "failed_paths": [],
+    "input_tokens": 949,
+    "integrity": {
+      "base_structural_digest": "06521275f28e93fa9a7f8d083b1172c0962cf66684b1bccadba498419b080179",
+      "base_structural_snapshot_id": "678cee415f4a4f34ad8a5343d6873eef",
+      "cache_version": "aether.semantic-cache.v2",
+      "integrity_version": "aether.project-knowledge.integrity.v1",
+      "pipeline_version": "aether.semantic-pipeline.v2",
+      "structural_digest": "3460bdf7c6c6b04bbb3cad546e905af525b66aff660dd47be63817f34c0c43fc"
+    },
+    "model_calls": 1,
+    "outcome": "updated",
+    "output_tokens": 630,
+    "plan": {
+      "budget_seconds": 300.0,
+      "deadline_exhausted": false,
+      "plan_persisted": true,
+      "plan_reused": false
+    },
+    "semantic_state": "complete",
+    "total_tokens": 1579,
+    "validated_chunks": 1,
+    "within_host_bound": true
+  },
+  "fixture": {
+    "code": "workflow.py defines canary_process and canary_helper",
+    "document": "README.md states the intake requirement to call canary_process",
+    "kind": "disposable two-file project registered in a private temporary state root",
+    "project_id": "33333333-3333-4333-8333-333333333333 (disposable, not a repository)"
+  },
+  "inspected_relation": {
+    "code_side": "workflow_canary_process",
+    "confidence": "INFERRED",
+    "document_side": "readme",
+    "kind": "llm_document_to_code_edge",
+    "relation": "references",
+    "source": "readme",
+    "target": "workflow_canary_process"
+  },
+  "objective_contract": "oc_f2acfb5effb21f6d@v1",
+  "overlay": {
+    "llm_links_persisted": 1,
+    "llm_nodes_persisted": 0,
+    "note": "model nodes reused exact structural identities; the additive overlay is the semantic relation"
+  },
+  "purpose": "Bounded live semantic canary for the corrected semantic-maintenance transaction.",
+  "raw_content_persisted": false,
+  "repeat_run": {
+    "elapsed_seconds": 0.34,
+    "new_model_calls": 0,
+    "note": "the cached receipt retains the original usage; no new call was scheduled",
+    "outcome": "unchanged",
+    "semantic_state": "complete"
+  },
+  "route": {
+    "api_mode_family": "codex_responses",
+    "digest_sha256": "bc740dc5dbcd7f1968e1cf5e3651710f35c5302584447c7b2e69bed2a8940c7c",
+    "identity": "non-secret digest of the configured primary auxiliary route",
+    "resolved": true
+  },
+  "schema_version": 1,
+  "structural_preservation": {
+    "llm_field_contamination": [],
+    "missing_structural_links": [],
+    "missing_structural_nodes": [],
+    "projection_digest_base": "0b9912bbf3b40bd0a2af94d1fff96d31ce103cb3bacfaf121924b3b49ed9e5c9",
+    "projection_digest_composed": "0b9912bbf3b40bd0a2af94d1fff96d31ce103cb3bacfaf121924b3b49ed9e5c9",
+    "projection_equal": true,
+    "structural_links_base": 4,
+    "structural_links_composed": 4,
+    "structural_nodes_base": 5,
+    "structural_nodes_composed": 5
+  }
+}
