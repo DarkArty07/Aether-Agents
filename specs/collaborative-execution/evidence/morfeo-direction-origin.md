@@ -30,3 +30,18 @@ Keep independent review and required checks. Reuse unchanged, revision-bound evi
 ## Attribution and limits
 
 This is Morfeo design stewardship, not a Supervisor verdict or product implementation. It changes the owning plan clarification and records the steering decision; it does not edit completed board state, bypass tests, accept a failed criterion or restart the runtime. The latest candidate's claimed results remain attributed to their producers pending review.
+
+## Follow-through after the interrupted tool call
+
+Morfeo verified that direction commit `162a27e1eec35a98d9c838a1cbc01893f4912df4` and its GitHub issue note persisted. No side effect was repeated merely because the readback command was interrupted. The review log subsequently shows reads of that exact owning plan, but this is not a completed verdict.
+
+Targeted source inspection at actual fork candidate `d1d1f9e9f41b72b9178b52bdf5c7ff4a6f40457f` found the shared data gap:
+
+- `hermes_cli/kanban_db.py:5011-5063`, `opt_in_collaboration`, stores `origin_session_id` plus project/contract data, without an exact platform/chat/thread/profile route.
+- `tools/kanban_tools.py:1796-1977`, `_maybe_auto_subscribe`, has the native commissioning tuple at creation, but a later notification-subscription row is not independently marked as the collaboration origin. Its API remains boolean and current normal gateway metadata does not generally bind the raw SessionDB id.
+- `gateway/kanban_watchers.py:808-860` chooses a unique reachable platform subscription, not a stored commissioning identity.
+- `tests/gateway/test_kanban_collaboration_delivery.py:148-150` constructs `opt_in_collaboration(session_id=chat_id)`, making two separate identity namespaces equal in a fixture.
+
+D5 now fixes the shared answer explicitly: persist a runtime-derived `origin_route` in the existing opt-in event and match it before either consumer claims; do not reconstruct provenance from arbitrary subscribers. This retains CE-01/06 and contract v1, but makes the missing material data shape explicit. Morfeo owns this design clarification; Supervisor owns the corresponding bounded scope reconciliation and independent review. No claim that the candidate already passes this corrected oracle is made.
+
+The current fork commit is the exact `d1d1f9e9f41b72b9178b52bdf5c7ff4a6f40457f` returned by Git. A different full hash in Implementer's prose must not be used as artifact identity or evidence.
