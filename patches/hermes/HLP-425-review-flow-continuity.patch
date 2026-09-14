@@ -1,0 +1,2548 @@
+diff --git a/agent/conversation_compression.py b/agent/conversation_compression.py
+index 8513261a0d..eb9bc9c4c0 100644
+--- a/agent/conversation_compression.py
++++ b/agent/conversation_compression.py
+@@ -101,6 +101,19 @@ COMPACTION_STATUS = (
+     f"🗜️ {COMPACTION_STATUS_MARKER} — summarizing earlier conversation so I can continue..."
+ )
+ 
++
++def _compression_in_place_for_agent(agent) -> bool:
++    """Resolve rotation policy without breaking exact Kanban affinity.
++
++    Affinity binds one durable session id across worker processes. Legacy
++    rotate-on-compress would end that exact row and create a child id the
++    board binding does not own, so affinity workers must compact in place even
++    when an older/private profile explicitly disabled the modern default.
++    """
++    if os.environ.get("HERMES_KANBAN_AFFINITY_TOKEN"):
++        return True
++    return bool(getattr(agent, "compression_in_place", True))
++
+ COMPACTION_DONE_STATUS = "✓ Context compaction complete — continuing turn..."
+ 
+ 
+@@ -2389,7 +2402,7 @@ def compress_context(
+     # Default True matches DEFAULT_CONFIG / #38763. A missing attribute must
+     # NOT fall back to rotation mode — that re-enables the pre-lease drift
+     # path and can wedge busy sessions that never set the flag.
+-    in_place = bool(getattr(agent, "compression_in_place", True))
++    in_place = _compression_in_place_for_agent(agent)
+     # Set True once the in-place DB write actually completes (the DB block can
+     # raise and skip it). Surfaced to the gateway via agent._last_compaction_in_place.
+     compacted_in_place = False
+diff --git a/agent/conversation_loop.py b/agent/conversation_loop.py
+index d059886526..fb38cdc037 100644
+--- a/agent/conversation_loop.py
++++ b/agent/conversation_loop.py
+@@ -46,7 +46,7 @@ from agent.turn_context import (
+     reanchor_current_turn_user_idx,
+ )
+ from agent.turn_retry_state import TurnRetryState
+-from agent.runtime_cwd import resolve_agent_cwd
++from agent.runtime_cwd import resolve_session_identity_cwd
+ from agent.message_sanitization import (
+     close_interrupted_tool_sequence,
+     _repair_tool_call_arguments,
+@@ -930,12 +930,12 @@ def _stored_prompt_matches_runtime(agent, prompt: str) -> bool:
+ 
+     # Detect cwd drift: if the stored prompt was built in a different working
+     # directory, reuse would silently inject a stale path into the prefix cache.
+-    # Compare against resolve_agent_cwd() — the SAME resolver used to build the
+-    # prompt — so gateway/TUI sessions that set TERMINAL_CWD are not falsely
+-    # rejected (they would always differ from the launch dir's os.getcwd()).
++    # Compare against the SAME session-identity resolver used to build the
++    # prompt. Affinity review can deliberately point tools at another task
++    # workspace without changing the resumed conversation's stable identity.
+     stored_cwd = host_info_value("Current working directory")
+     if stored_cwd:
+-        if stored_cwd != str(resolve_agent_cwd()):
++        if stored_cwd != str(resolve_session_identity_cwd()):
+             return False
+ 
+     # Detect runtime-surface drift: the stored prompt records which platform it
+diff --git a/agent/prompt_builder.py b/agent/prompt_builder.py
+index 4d63895173..de07fbe7b0 100644
+--- a/agent/prompt_builder.py
++++ b/agent/prompt_builder.py
+@@ -22,7 +22,7 @@ from hermes_constants import (
+ )
+ from typing import List, Optional
+ 
+-from agent.runtime_cwd import resolve_agent_cwd
++from agent.runtime_cwd import resolve_session_identity_cwd
+ from agent.skill_utils import (
+     EXCLUDED_SKILL_DIRS,
+     ORG_ACTIVE_MARKER,
+@@ -1346,7 +1346,9 @@ def build_environment_hints() -> str:
+ 
+         host_lines.append(f"User home directory: {os.path.expanduser('~')}")
+         try:
+-            host_lines.append(f"Current working directory: {resolve_agent_cwd()}")
++            host_lines.append(
++                f"Current working directory: {resolve_session_identity_cwd()}"
++            )
+         except OSError:
+             pass
+ 
+diff --git a/agent/runtime_cwd.py b/agent/runtime_cwd.py
+index 712e38ed13..b48442e9a5 100644
+--- a/agent/runtime_cwd.py
++++ b/agent/runtime_cwd.py
+@@ -73,6 +73,32 @@ def resolve_agent_cwd() -> Path:
+     return Path(os.getcwd())
+ 
+ 
++def resolve_session_identity_cwd() -> Path:
++    """Return the cwd that belongs to the durable conversation identity.
++
++    Most sessions use the same directory for conversation identity and tools,
++    so this simply delegates to :func:`resolve_agent_cwd`. A Kanban affinity
++    worker may intentionally review another task workspace while resuming one
++    exact long-lived session. In that case the dispatcher supplies the
++    session's canonical workspace separately so prompt identity/cache checks
++    stay stable while file and terminal tools continue to target the task.
++
++    This is deliberately a prompt/session-identity resolver, not a process
++    cwd mutation: direct ``os.getcwd()`` callers retain the launch-process
++    boundary. Tool code that must target the candidate workspace must use
++    :func:`resolve_agent_cwd` (or the ``TERMINAL_CWD`` it resolves), rather
++    than treating this identity path as a tool-execution cwd.
++    """
++    if os.environ.get("HERMES_KANBAN_AFFINITY_TOKEN"):
++        raw = os.environ.get("HERMES_KANBAN_SESSION_WORKSPACE", "").strip()
++        if raw:
++            p = Path(raw).expanduser()
++            if p.is_dir():
++                return p
++            logger.warning("HERMES_KANBAN_SESSION_WORKSPACE does not exist: %s", raw)
++    return resolve_agent_cwd()
++
++
+ def resolve_context_cwd() -> Path | None:
+     # None means "no configured cwd": build_context_files_prompt then falls back
+     # to the launch dir (os.getcwd()), correct for a local CLI launched inside a
+diff --git a/hermes_cli/kanban_db.py b/hermes_cli/kanban_db.py
+index 764f00418d..b45739b152 100644
+--- a/hermes_cli/kanban_db.py
++++ b/hermes_cli/kanban_db.py
+@@ -85,7 +85,7 @@ import threading
+ import logging
+ import time
+ from contextvars import ContextVar, Token
+-from dataclasses import dataclass, field
++from dataclasses import dataclass, field, replace
+ from pathlib import Path
+ from typing import Any, Iterable, Mapping, Optional
+ 
+@@ -1320,6 +1320,195 @@ def get_session_affinity(
+     return result
+ 
+ 
++def _review_flow_session_context(
++    conn: sqlite3.Connection,
++    task: Task,
++    *,
++    board: Optional[str] = None,
++) -> Optional[tuple[dict[str, Any], str]]:
++    """Resolve an existing reviewer flow session for same-card review.
++
++    Same-card review deliberately keeps the implementation task and its
++    candidate workspace.  A reviewer may nevertheless already own one exact
++    flow-bound session through an ancestor (Aether's Supervisor topology).
++    This helper discovers that existing binding without persisting affinity on
++    the implementation card itself.
++
++    Generic Hermes review remains unchanged when no Aether opt-in can be
++    established. Once established, missing/inconsistent identity is an error,
++    not permission to start a fresh reviewer. A persisted opt-in snapshot or
++    corroborated legacy board/event identity establishes that boundary.
++    """
++    if task.session_affinity:
++        return None
++    if task.session_affinity_corrupt:
++        raise AffinityRegistrationError("review task affinity is corrupt")
++    meta = _read_board_meta_for_conn(conn, board)
++    board_contract_id = str(meta.get("aether_contract_id") or "").strip()
++    board_contract_version = str(meta.get("aether_contract_version") or "").strip()
++    board_project_id = str(meta.get("project_id") or "").strip()
++    board_aether_project_id = str(meta.get("aether_project_id") or "").strip()
++    # Inspect persisted opt-ins before using get_collaboration_root: its None
++    # intentionally conflates no opt-in with malformed/ambiguous ancestry for
++    # generic collaboration callers. Review must distinguish those cases.
++    opted_in = conn.execute(
++        """WITH RECURSIVE ancestors(id) AS (
++               SELECT ?
++               UNION
++               SELECT l.parent_id FROM task_links l
++                 JOIN ancestors a ON l.child_id = a.id
++           )
++           SELECT e.task_id, e.payload FROM task_events e
++             JOIN ancestors a ON a.id = e.task_id
++            WHERE e.kind = 'collaboration_opted_in'
++              AND e.id = (SELECT MAX(last.id) FROM task_events last
++                           WHERE last.task_id = e.task_id
++                             AND last.kind = 'collaboration_opted_in')""",
++        (task.id,),
++    ).fetchall()
++    if not opted_in:
++        return None  # Board metadata alone does not opt a task into Aether.
++    payloads: dict[str, dict[str, Any]] = {}
++    for event in opted_in:
++        try:
++            raw = json.loads(event["payload"]) if event["payload"] else {}
++        except (TypeError, json.JSONDecodeError):
++            raw = {}
++        payloads[event["task_id"]] = raw if isinstance(raw, dict) else {}
++
++    complete_board_identity = all((
++        board_contract_id, board_contract_version,
++        board_project_id, board_aether_project_id,
++    ))
++    recognized = complete_board_identity
++    for payload in payloads.values():
++        if payload.get("aether_project_id"):
++            recognized = True  # Snapshot created by native opt-in, not a new registry.
++        # Legacy opt-ins predate the snapshot. Corroborate separate stores;
++        # a single arbitrary Aether-looking board key is never sufficient.
++        if task.project_id and payload.get("project_id") == task.project_id:
++            contract_matches = bool(board_contract_id) and payload.get("contract_id") == board_contract_id
++            version_matches = bool(board_contract_version) and str(payload.get("contract_version")) == board_contract_version
++            if (contract_matches and version_matches) or (
++                board_aether_project_id and board_project_id == task.project_id
++                and (contract_matches or version_matches)
++            ):
++                recognized = True
++    if not recognized:
++        return None
++    if not task.project_id or not task.assignee:
++        raise AffinityRegistrationError("Aether review is missing project/reviewer identity")
++    try:
++        root_id = get_collaboration_root(conn, task.id)
++    except (AttributeError, TypeError, ValueError) as exc:
++        raise AffinityRegistrationError("Aether review opt-in is malformed") from exc
++    if not root_id or len(payloads) != 1 or root_id not in payloads:
++        raise AffinityRegistrationError("Aether review has missing/inconsistent collaboration root")
++    opt_payload = payloads[root_id]
++    root_task = get_task(conn, root_id)
++    event_contract_id = str(opt_payload.get("contract_id") or "").strip()
++    event_contract_version = str(opt_payload.get("contract_version") or "").strip()
++    opt_project = str(opt_payload.get("project_id") or "").strip()
++    if (
++        not complete_board_identity
++        or board_project_id != task.project_id
++        or root_task is None or root_task.project_id != task.project_id
++        or event_contract_id != board_contract_id
++        or event_contract_version != board_contract_version
++        or opt_project != board_project_id
++        or (opt_payload.get("aether_project_id") is not None
++            and opt_payload["aether_project_id"] != board_aether_project_id)
++    ):
++        raise AffinityRegistrationError("Aether review board/opt-in identity is inconsistent")
++    reviewer = _canonical_assignee(task.assignee)
++    rows = conn.execute(
++        """WITH RECURSIVE ancestors(id) AS (
++               SELECT parent_id FROM task_links WHERE child_id = ?
++               UNION
++               SELECT l.parent_id
++                 FROM task_links l
++                 JOIN ancestors a ON l.child_id = a.id
++           )
++           SELECT t.id, t.project_id, t.assignee, t.session_affinity
++             FROM tasks t
++             JOIN ancestors a ON a.id = t.id
++            WHERE t.project_id = ? AND t.session_affinity IS NOT NULL""",
++        (task.id, task.project_id),
++    ).fetchall()
++    flows: set[str] = set()
++    for row in rows:
++        if _canonical_assignee(row["assignee"]) != reviewer:
++            continue
++        try:
++            parsed = normalize_session_affinity(json.loads(row["session_affinity"]))
++        except (TypeError, ValueError, json.JSONDecodeError) as exc:
++            raise AffinityRegistrationError(
++                "review affinity ancestor is corrupt"
++            ) from exc
++        if parsed is not None:
++            flows.add(parsed["flow_id"])
++    if not flows:
++        raise AffinityRegistrationError(
++            "Aether review has no same-profile flow affinity ancestor"
++        )
++    if len(flows) != 1:
++        raise AffinityRegistrationError(
++            "review has ambiguous same-profile flow affinity ancestry"
++        )
++    flow_id = next(iter(flows))
++    board_slug = _normalize_board_slug(board) or get_current_board()
++    row = conn.execute(
++        """SELECT session_id, workspace_path
++             FROM kanban_session_affinity
++            WHERE board = ? AND project_id = ? AND flow_id = ? AND assignee = ?""",
++        (board_slug, task.project_id, flow_id, task.assignee),
++    ).fetchone()
++    if row is None or not row["session_id"] or not row["workspace_path"]:
++        raise AffinityRegistrationError(
++            "review flow affinity has no resumable session/workspace binding"
++        )
++    workspace = str(row["workspace_path"])
++    if not os.path.isabs(workspace) or not os.path.isdir(workspace):
++        raise AffinityRegistrationError(
++            "review flow affinity workspace is unavailable"
++        )
++    return {"flow_id": flow_id, "terminal": False}, workspace
++
++
++def _reserve_review_flow_session(
++    conn: sqlite3.Connection,
++    task: Task,
++    *,
++    board: Optional[str] = None,
++) -> Optional[tuple[AffinityLease, str]]:
++    """Reserve an existing Aether Supervisor binding for same-card review.
++
++    This path never creates a flow binding and never writes affinity onto the
++    implementation card. It borrows only a previously registered exact
++    Supervisor session after the Aether root/contract/ancestry checks above.
++    """
++    context = _review_flow_session_context(conn, task, board=board)
++    if context is None:
++        return None
++    affinity, workspace = context
++    affinity_task = replace(
++        task,
++        session_affinity=affinity,
++        session_affinity_corrupt=False,
++    )
++    lease = reserve_session_affinity(
++        conn,
++        affinity_task,
++        workspace_path=workspace,
++        board=board,
++    )
++    if lease is None or not lease.session_id:
++        raise AffinityRegistrationError(
++            "review flow affinity has no existing registered session"
++        )
++    return lease, workspace
++
++
+ def reserve_session_affinity(
+     conn: sqlite3.Connection,
+     task: Task,
+@@ -1562,10 +1751,14 @@ def register_worker_session_from_env(session_id: str) -> bool:
+             try:
+                 from hermes_cli.profiles import resolve_profile_env
+ 
++                session_workspace = (
++                    os.environ.get("HERMES_KANBAN_SESSION_WORKSPACE")
++                    or os.environ.get("HERMES_KANBAN_WORKSPACE")
++                )
+                 validate_worker_resume_session(
+                     session_id,
+                     db_path=Path(resolve_profile_env(task.assignee or "")) / "state.db",
+-                    workspace_path=os.environ.get("HERMES_KANBAN_WORKSPACE"),
++                    workspace_path=session_workspace,
+                     expected_profile=task.assignee,
+                 )
+             except AffinityRegistrationError:
+@@ -1581,6 +1774,33 @@ def register_worker_session_from_env(session_id: str) -> bool:
+                 generation=int(generation),
+                 token=token,
+             )
++            if os.environ.get("HERMES_KANBAN_REVIEW_AFFINITY") == "1":
++                context = _review_flow_session_context(
++                    conn,
++                    task,
++                    board=os.environ.get("HERMES_KANBAN_BOARD"),
++                )
++                if context is None:
++                    return register_session_affinity(
++                        conn, task, lease, session_id=session_id,
++                    )
++                review_affinity, expected_workspace = context
++                if review_affinity["flow_id"] != lease.flow_id:
++                    raise AffinityRegistrationError(
++                        "derived review flow changed before session registration"
++                    )
++                if not session_workspace or (
++                    os.path.realpath(session_workspace)
++                    != os.path.realpath(expected_workspace)
++                ):
++                    raise AffinityRegistrationError(
++                        "derived review workspace changed before session registration"
++                    )
++                task = replace(
++                    task,
++                    session_affinity=review_affinity,
++                    session_affinity_corrupt=False,
++                )
+             return register_session_affinity(
+                 conn, task, lease, session_id=session_id,
+             )
+@@ -5056,6 +5276,17 @@ def opt_in_collaboration(
+             "contract_version": resolved_contract_version,
+             "created_at": int(time.time()),
+         }
++        # Preserve the corroborated Aether identity in the existing event so a
++        # later damaged/missing board.json cannot silently turn this flow into
++        # generic review. Generic collaboration events keep their old shape.
++        if (
++            meta.get("aether_project_id")
++            and task.project_id
++            and meta.get("project_id") == task.project_id
++            and meta.get("aether_contract_id") == resolved_contract_id
++            and str(meta.get("aether_contract_version")) == resolved_contract_version
++        ):
++            event_payload["aether_project_id"] = str(meta["aether_project_id"]).strip()
+         if origin_route is not None:
+             if not isinstance(origin_route, dict):
+                 raise ValueError(f"origin_route must be a dict, got {type(origin_route).__name__}")
+@@ -5169,7 +5400,7 @@ def get_collaboration_root(
+         payload = json.loads(row["payload"]) if row["payload"] else {}
+     except (TypeError, json.JSONDecodeError):
+         return None
+-    if payload.get("mode") != "advisory":
++    if not isinstance(payload, dict) or payload.get("mode") != "advisory":
+         return None
+ 
+     r_task = get_task(conn, root_id)
+@@ -12515,38 +12746,62 @@ def _dispatch_once_locked(
+             claimed.branch_name = effective_branch_name
+         _maybe_emit_scratch_tip(conn, claimed.id, claimed.workspace_kind)
+         affinity_lease = None
+-        if claimed.session_affinity or claimed.session_affinity_corrupt:
+-            try:
++        derived_flow_review = False
++        session_workspace = str(workspace)
++        try:
++            if claimed.session_affinity or claimed.session_affinity_corrupt:
+                 affinity_lease = reserve_session_affinity(
+                     conn, claimed, workspace_path=str(workspace), board=board,
+                 )
+-            except AffinityBusy as exc:
+-                _release_claim_for_affinity_busy(
+-                    conn, claimed, source_status="review"
++            else:
++                review_reservation = _reserve_review_flow_session(
++                    conn, claimed, board=board
+                 )
+-                result.affinity_deferred.append((claimed.id, str(exc)))
+-                continue
+-            except (AffinityRegistrationError, ValueError) as exc:
+-                auto = _record_spawn_failure(
+-                    conn, claimed.id, f"session affinity: {exc}",
+-                    failure_limit=failure_limit,
++                if review_reservation is not None:
++                    affinity_lease, session_workspace = review_reservation
++                    derived_flow_review = True
++        except AffinityBusy as exc:
++            _release_claim_for_affinity_busy(
++                conn, claimed, source_status="review"
++            )
++            result.affinity_deferred.append((claimed.id, str(exc)))
++            continue
++        except (AffinityRegistrationError, ValueError) as exc:
++            auto = _record_spawn_failure(
++                conn, claimed.id, f"session affinity: {exc}",
++                failure_limit=failure_limit,
++            )
++            if auto:
++                result.auto_blocked.append(claimed.id)
++                _route_affinity_terminal(
++                    conn, claimed.id,
++                    reason=f"session affinity: {exc}",
++                    outcome="failed",
+                 )
+-                if auto:
+-                    result.auto_blocked.append(claimed.id)
+-                    _route_affinity_terminal(
+-                        conn, claimed.id,
+-                        reason=f"session affinity: {exc}",
+-                        outcome="failed",
+-                    )
+-                continue
++            continue
+         # Force-load the sdlc-review skill for review agents — it carries
+         # the review logic (AC verification, merge, etc.). The mandatory
+         # kanban lifecycle is already injected into every worker's system
+         # prompt via KANBAN_GUIDANCE, so this is the only extra skill the
+-        # review agent needs.
+-        claimed.skills = list(
+-            dict.fromkeys([*(claimed.skills or []), "sdlc-review"])
+-        )
++        # review agent needs. A flow-bound reviewer is different: it resumes
++        # the exact existing controller session, whose product procedure is
++        # already owned by that profile. Do not stack the generic bundled
++        # reviewer procedure on top of it.
++        if derived_flow_review:
++            # Card-pinned skills belong to the implementation phase. Same-card
++            # review changes the assignee without changing the durable card,
++            # so carrying those pins into a resumed controller session would
++            # preload Implementer procedure into Supervisor. Keep the durable
++            # list untouched for possible rework; suppress it only for this
++            # review subprocess.
++            claimed.skills = []
++            claimed.model_override = None
++            claimed.provider_override = None
++            claimed.reasoning_effort = None
++        else:
++            claimed.skills = list(
++                dict.fromkeys([*(claimed.skills or []), "sdlc-review"])
++            )
+         _spawn = spawn_fn if spawn_fn is not None else _default_spawn
+         try:
+             import inspect
+@@ -12557,6 +12812,8 @@ def _dispatch_once_locked(
+                     spawn_kwargs["affinity"] = affinity_lease
+                 if "board" in sig.parameters:
+                     spawn_kwargs["board"] = board
++                if "session_workspace" in sig.parameters and derived_flow_review:
++                    spawn_kwargs["session_workspace"] = session_workspace
+                 pid = _spawn(claimed, str(workspace), **spawn_kwargs)
+             except (TypeError, ValueError):
+                 pid = _spawn(claimed, str(workspace))
+@@ -12881,6 +13138,7 @@ def _default_spawn(
+     *,
+     board: Optional[str] = None,
+     affinity: Optional[AffinityLease] = None,
++    session_workspace: Optional[str] = None,
+ ) -> Optional[int]:
+     """Fire-and-forget ``hermes -p <profile> chat -q ...`` subprocess.
+ 
+@@ -12901,6 +13159,7 @@ def _default_spawn(
+     from hermes_cli.profiles import normalize_profile_name
+ 
+     profile_arg = normalize_profile_name(task.assignee)
++    effective_session_workspace = session_workspace or workspace
+ 
+     prompt = f"work kanban task {task.id}"
+     env = dict(os.environ)
+@@ -12915,6 +13174,8 @@ def _default_spawn(
+         "HERMES_KANBAN_AFFINITY_GENERATION",
+         "HERMES_KANBAN_AFFINITY_FLOW_ID",
+         "HERMES_KANBAN_AFFINITY_PROJECT_ID",
++        "HERMES_KANBAN_SESSION_WORKSPACE",
++        "HERMES_KANBAN_REVIEW_AFFINITY",
+     ):
+         env.pop(key, None)
+ 
+@@ -12960,7 +13221,11 @@ def _default_spawn(
+     # Only pin a real, absolute directory — file_tools rejects relative /
+     # sentinel TERMINAL_CWD values, so a non-dir workspace must NOT be set
+     # here (leave the inherited value rather than write a meaningless one).
+-    if workspace and os.path.isabs(workspace) and os.path.isdir(workspace):
++    if (
++        workspace
++        and os.path.isabs(workspace)
++        and os.path.isdir(workspace)
++    ):
+         env["TERMINAL_CWD"] = workspace
+     if task.branch_name:
+         env["HERMES_KANBAN_BRANCH"] = task.branch_name
+@@ -12969,6 +13234,9 @@ def _default_spawn(
+     if task.claim_lock:
+         env["HERMES_KANBAN_CLAIM_LOCK"] = task.claim_lock
+     if affinity is not None:
++        env["HERMES_KANBAN_SESSION_WORKSPACE"] = effective_session_workspace
++        if task.session_affinity is None and session_workspace is not None:
++            env["HERMES_KANBAN_REVIEW_AFFINITY"] = "1"
+         env["HERMES_KANBAN_AFFINITY_TOKEN"] = affinity.token
+         env["HERMES_KANBAN_AFFINITY_GENERATION"] = str(affinity.generation)
+         env["HERMES_KANBAN_AFFINITY_FLOW_ID"] = affinity.flow_id
+@@ -12981,7 +13249,7 @@ def _default_spawn(
+             validate_worker_resume_session(
+                 affinity.session_id,
+                 db_path=Path(env["HERMES_HOME"]) / "state.db",
+-                workspace_path=workspace,
++                workspace_path=effective_session_workspace,
+                 expected_profile=profile_arg,
+             )
+     # Goal-loop mode: the worker reads these and wraps its run in the
+@@ -13071,10 +13339,12 @@ def _default_spawn(
+         "-q", prompt,
+     ])
+     if affinity is not None:
+-        # The task workspace is authoritative. ``--no-restore-cwd`` prevents
+-        # the resumed session's historical cwd from overriding that pin.
++        # Resume from the affinity session's canonical workspace while the
++        # task/tool workspace remains independently pinned in the child env.
++        # ``--no-restore-cwd`` prevents CLI resume from replacing this exact
++        # flow binding with a stale historical cwd.
+         cmd.extend(["--resume", affinity.session_id] if affinity.session_id else [])
+-        cmd.extend(["--in", workspace, "--no-restore-cwd"])
++        cmd.extend(["--in", effective_session_workspace, "--no-restore-cwd"])
+     if task.goal_mode:
+         # Goal-mode workers must take the fully-quiet single-query path:
+         # the kanban goal-loop hook (_run_kanban_goal_loop_q) only runs in
+@@ -13097,7 +13367,11 @@ def _default_spawn(
+     try:
+         proc = subprocess.Popen(  # noqa: S603 -- argv is a fixed list built above
+             cmd,
+-            cwd=workspace if os.path.isdir(workspace) else None,
++            cwd=(
++                effective_session_workspace
++                if os.path.isdir(effective_session_workspace)
++                else None
++            ),
+             stdin=subprocess.DEVNULL,
+             stdout=log_f,
+             stderr=subprocess.STDOUT,
+diff --git a/run_agent.py b/run_agent.py
+index b4ac91cdb7..91401837b6 100644
+--- a/run_agent.py
++++ b/run_agent.py
+@@ -80,7 +80,8 @@ def _launch_cwd_for_session(source: str) -> Optional[str]:
+     """
+     if source == "kanban":
+         workspace = (
+-            os.environ.get("HERMES_KANBAN_WORKSPACE")
++            os.environ.get("HERMES_KANBAN_SESSION_WORKSPACE")
++            or os.environ.get("HERMES_KANBAN_WORKSPACE")
+             or os.environ.get("TERMINAL_CWD")
+             or ""
+         ).strip()
+diff --git a/tests/agent/test_prompt_builder.py b/tests/agent/test_prompt_builder.py
+index d02871db13..c75b850461 100644
+--- a/tests/agent/test_prompt_builder.py
++++ b/tests/agent/test_prompt_builder.py
+@@ -512,8 +512,13 @@ class TestBuildContextFilesPrompt:
+         sub = tmp_path / "sub"
+         sub.mkdir()
+         from agent.prompt_builder import _load_agents_md
++        from unittest.mock import patch
+ 
+-        assert _load_agents_md(sub) == ""
++        # tmp_path can be beneath an unrelated test-created .git marker
++        # (including /tmp/.git). Make the no-git-root premise explicit while
++        # exercising _load_agents_md's actual cwd-only branch.
++        with patch("agent.prompt_builder._find_git_root", return_value=None):
++            assert _load_agents_md(sub) == ""
+ 
+     def test_skips_agents_md_in_install_tree_on_fallback(self, monkeypatch, tmp_path):
+         # A backend that FALLS BACK into the install tree (cwd=None → getcwd,
+@@ -784,6 +789,28 @@ class TestEnvironmentHints:
+         _pb._clear_backend_probe_cache()
+         assert f"Current working directory: {configured}" in _pb.build_environment_hints()
+ 
++    def test_build_environment_hints_affinity_uses_session_workspace(
++        self, monkeypatch, tmp_path
++    ):
++        """A resumed flow keeps prompt identity even while tools target a candidate."""
++        import agent.prompt_builder as _pb
++
++        canonical = tmp_path / "supervisor"
++        candidate = tmp_path / "candidate"
++        canonical.mkdir()
++        candidate.mkdir()
++        monkeypatch.setattr(_pb, "is_wsl", lambda: False)
++        monkeypatch.delenv("TERMINAL_ENV", raising=False)
++        monkeypatch.setenv("HERMES_KANBAN_AFFINITY_TOKEN", "lease")
++        monkeypatch.setenv("HERMES_KANBAN_SESSION_WORKSPACE", str(canonical))
++        monkeypatch.setenv("HERMES_KANBAN_WORKSPACE", str(candidate))
++        monkeypatch.setenv("TERMINAL_CWD", str(candidate))
++        _pb._clear_backend_probe_cache()
++
++        hints = _pb.build_environment_hints()
++        assert f"Current working directory: {canonical}" in hints
++        assert f"Current working directory: {candidate}" not in hints
++
+     def test_build_environment_hints_falls_back_to_launch_dir(self, monkeypatch, tmp_path):
+         """The #19242 local-CLI contract: no TERMINAL_CWD → the launch dir."""
+         import agent.prompt_builder as _pb
+diff --git a/tests/agent/test_runtime_cwd.py b/tests/agent/test_runtime_cwd.py
+index 3c9f98a90f..4f1450631c 100644
+--- a/tests/agent/test_runtime_cwd.py
++++ b/tests/agent/test_runtime_cwd.py
+@@ -10,6 +10,7 @@ from agent.runtime_cwd import (
+     clear_session_cwd,
+     resolve_agent_cwd,
+     resolve_context_cwd,
++    resolve_session_identity_cwd,
+     set_session_cwd,
+ )
+ 
+@@ -38,6 +39,36 @@ class TestResolveAgentCwd:
+             resolve_agent_cwd()
+ 
+ 
++class TestResolveSessionIdentityCwd:
++    def test_affinity_session_workspace_is_independent_from_task_cwd(
++        self, monkeypatch, tmp_path
++    ):
++        canonical = tmp_path / "supervisor"
++        candidate = tmp_path / "candidate"
++        canonical.mkdir()
++        candidate.mkdir()
++        monkeypatch.setenv("HERMES_KANBAN_AFFINITY_TOKEN", "lease")
++        monkeypatch.setenv("HERMES_KANBAN_SESSION_WORKSPACE", str(canonical))
++        monkeypatch.setenv("HERMES_KANBAN_WORKSPACE", str(candidate))
++        monkeypatch.setenv("TERMINAL_CWD", str(candidate))
++        monkeypatch.chdir(candidate)
++
++        assert resolve_session_identity_cwd() == canonical
++        assert resolve_agent_cwd() == candidate
++        assert resolve_context_cwd() == candidate
++        # Session identity intentionally does not mutate the process cwd;
++        # direct os.getcwd() users remain at their launch/tool boundary.
++        assert Path(os.getcwd()) == candidate
++
++    def test_without_affinity_falls_back_to_normal_agent_cwd(
++        self, monkeypatch, tmp_path
++    ):
++        monkeypatch.delenv("HERMES_KANBAN_AFFINITY_TOKEN", raising=False)
++        monkeypatch.setenv("TERMINAL_CWD", str(tmp_path))
++        monkeypatch.setenv("HERMES_KANBAN_SESSION_WORKSPACE", "/ignored")
++        assert resolve_session_identity_cwd() == tmp_path
++
++
+ class TestResolveContextCwd:
+     def test_returns_dir_when_set(self, monkeypatch, tmp_path):
+         monkeypatch.setenv("TERMINAL_CWD", str(tmp_path))
+diff --git a/tests/hermes_cli/test_kanban_session_affinity.py b/tests/hermes_cli/test_kanban_session_affinity.py
+index 360a33002f..b253834b49 100644
+--- a/tests/hermes_cli/test_kanban_session_affinity.py
++++ b/tests/hermes_cli/test_kanban_session_affinity.py
+@@ -18,6 +18,41 @@ def _project(tmp_path):
+         )
+ 
+ 
++def _opt_in_aether_review(conn, root_id, project_id, *, contract_id="oc_review", legacy=False):
++    """Mark the default test board/root as one exact Aether contract flow."""
++    meta_path = kb.board_metadata_path()
++    meta_path.parent.mkdir(parents=True, exist_ok=True)
++    meta_path.write_text(
++        json.dumps(
++            {
++                "aether_contract_id": contract_id,
++                "aether_contract_version": 1,
++                "aether_project_id": "aether-project-test",
++                "project_id": project_id,
++            }
++        ),
++        encoding="utf-8",
++    )
++    assert kb.opt_in_collaboration(
++        conn,
++        root_id,
++        contract_id=contract_id,
++        contract_version="1",
++        session_id="origin-session",
++    )
++    if legacy:
++        # The pre-snapshot event format remains a supported input.
++        event = conn.execute(
++            "SELECT id, payload FROM task_events WHERE task_id=? "
++            "AND kind='collaboration_opted_in' ORDER BY id DESC LIMIT 1",
++            (root_id,),
++        ).fetchone()
++        payload = json.loads(event["payload"])
++        payload.pop("aether_project_id", None)
++        conn.execute("UPDATE task_events SET payload=? WHERE id=?", (json.dumps(payload), event["id"]))
++        conn.commit()
++
++
+ def _task(conn, project_id, *, title="work", flow="flow-7", terminal=False, workspace=None, session_id=None):
+     return kb.create_task(
+         conn,
+@@ -31,113 +66,1436 @@ def _task(conn, project_id, *, title="work", flow="flow-7", terminal=False, work
+     )
+ 
+ 
+-def test_normalize_session_affinity_requires_flow_and_defaults_non_terminal():
+-    assert kb.normalize_session_affinity({"flow_id": " flow-7 "}) == {
+-        "flow_id": "flow-7", "terminal": False,
+-    }
++def test_normalize_session_affinity_requires_flow_and_defaults_non_terminal():
++    assert kb.normalize_session_affinity({"flow_id": " flow-7 "}) == {
++        "flow_id": "flow-7", "terminal": False,
++    }
++
++
++def test_normalize_session_affinity_rejects_missing_flow_id():
++    with pytest.raises(ValueError, match="flow_id"):
++        kb.normalize_session_affinity({"terminal": True})
++
++
++def test_affinity_task_requires_a_canonical_project(tmp_path, monkeypatch):
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    conn = kb.connect()
++    try:
++        with pytest.raises(ValueError, match="project"):
++            _task(conn, "missing-project", workspace=tmp_path)
++    finally:
++        conn.close()
++
++
++def test_affinity_is_persisted_on_a_project_task(tmp_path, monkeypatch):
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "profile"))
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        task_id = _task(conn, project_id, workspace=tmp_path, terminal=True)
++        task = kb.get_task(conn, task_id)
++        assert task is not None
++        assert task.project_id == project_id
++        assert task.session_affinity == {"flow_id": "flow-7", "terminal": True}
++    finally:
++        conn.close()
++
++
++def test_affinity_lease_registers_one_exact_worker_session(tmp_path, monkeypatch):
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "profile"))
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        task_id = _task(conn, project_id, workspace=tmp_path)
++        claimed = kb.claim_task(conn, task_id)
++        assert claimed is not None
++        lease = kb.reserve_session_affinity(conn, claimed, workspace_path=str(tmp_path))
++        assert lease is not None and lease.session_id is None and lease.generation == 1
++        assert kb.register_session_affinity(conn, claimed, lease, session_id="session-1")
++        stored = kb.get_session_affinity(conn, claimed)
++        assert stored is not None
++        assert stored["session_id"] == "session-1"
++        assert stored["generation"] == 1
++    finally:
++        conn.close()
++
++
++@pytest.mark.parametrize("persisted_affinity", [None, "{not valid json"])
++def test_standard_affinity_registration_rejects_removed_or_corrupt_card_affinity(
++    tmp_path, monkeypatch, persisted_affinity
++):
++    """A normal affinity lease cannot be reinterpreted as derived review."""
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        task_id = _task(conn, project_id, workspace=tmp_path)
++        claimed = kb.claim_task(conn, task_id)
++        assert claimed is not None
++        lease = kb.reserve_session_affinity(conn, claimed, workspace_path=str(tmp_path))
++        assert lease is not None
++        conn.execute(
++            "UPDATE tasks SET session_affinity=? WHERE id=?",
++            (persisted_affinity, task_id),
++        )
++        conn.commit()
++        changed = kb.get_task(conn, task_id)
++        assert changed is not None
++        with pytest.raises(kb.AffinityRegistrationError, match="identity does not match"):
++            kb.register_session_affinity(
++                conn,
++                changed,
++                lease,
++                session_id="unexpected-session",
++            )
++    finally:
++        conn.close()
++
++
++def test_affinity_spawn_uses_exact_resume_and_workspace_pin(tmp_path, monkeypatch):
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "profile"))
++    workspace = tmp_path / "workspace"
++    workspace.mkdir()
++    from hermes_state import SessionDB
++
++    sessions = SessionDB(db_path=tmp_path / "profile" / "state.db")
++    sessions.create_session("session-1", "kanban", profile_name="worker", cwd=str(workspace))
++    sessions.close()
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        task_id = _task(conn, project_id, workspace=workspace)
++        claimed = kb.claim_task(conn, task_id)
++        assert claimed is not None
++        lease = kb.reserve_session_affinity(conn, claimed, workspace_path=str(workspace))
++        assert lease is not None
++        kb.register_session_affinity(conn, claimed, lease, session_id="session-1")
++    finally:
++        conn.close()
++
++    captured = {}
++
++    class FakeProc:
++        pid = 123
++
++    monkeypatch.setattr(kb, "_resolve_hermes_argv", lambda: ["hermes"])
++    monkeypatch.setattr(
++        subprocess, "Popen",
++        lambda argv, **kwargs: captured.update(argv=argv, kwargs=kwargs) or FakeProc(),
++    )
++    conn = kb.connect()
++    try:
++        task = kb.get_task(conn, task_id)
++        assert task is not None
++        lease = kb.AffinityLease(
++            board=lease.board, project_id=lease.project_id, flow_id=lease.flow_id,
++            assignee=lease.assignee, generation=lease.generation, token=lease.token,
++            session_id="session-1",
++        )
++        kb._default_spawn(task, str(workspace), affinity=lease)
++    finally:
++        conn.close()
++    argv = captured["argv"]
++    assert argv[argv.index("--resume") + 1] == "session-1"
++    assert "--no-restore-cwd" in argv
++    assert argv[argv.index("--in") + 1] == str(workspace)
++    child_env = captured["kwargs"]["env"]
++    assert child_env["HERMES_KANBAN_FLOW_ID"] == lease.flow_id
++    assert child_env["HERMES_KANBAN_AFFINITY_FLOW_ID"] == lease.flow_id
++
++
++def test_affinity_review_spawn_separates_session_workspace_from_candidate_workspace(
++    tmp_path, monkeypatch
++):
++    """A resumed reviewer keeps its flow cwd while tools target the candidate tree."""
++    canonical = tmp_path / "supervisor-root"
++    candidate = tmp_path / "implementer-candidate"
++    profile_home = tmp_path / "supervisor-profile"
++    canonical.mkdir()
++    candidate.mkdir()
++    profile_home.mkdir()
++
++    task = kb.Task(
++        id="t_review",
++        title="review implementation",
++        body=None,
++        assignee="supervisor",
++        status="running",
++        priority=0,
++        created_by="implementer",
++        created_at=1,
++        started_at=1,
++        completed_at=None,
++        workspace_kind="worktree",
++        workspace_path=str(candidate),
++        claim_lock="claim",
++        claim_expires=None,
++        tenant=None,
++        branch_name="project/t_review",
++        project_id="p_review",
++        current_run_id=7,
++        session_affinity=None,
++    )
++    lease = kb.AffinityLease(
++        board="review-board",
++        project_id="p_review",
++        flow_id="flow-review",
++        assignee="supervisor",
++        generation=2,
++        token="lease-token",
++        session_id="supervisor-session",
++    )
++    captured = {}
++
++    class FakeProc:
++        pid = 456
++
++    monkeypatch.setattr(kb, "_resolve_hermes_argv", lambda: ["hermes"])
++    monkeypatch.setattr(kb, "_resolve_worker_cli_toolsets", lambda _home: None)
++    monkeypatch.setattr(
++        kb,
++        "validate_worker_resume_session",
++        lambda session_id, **kwargs: captured.update(
++            validated_session=session_id, validated_kwargs=kwargs
++        )
++        or {"id": session_id},
++    )
++    from hermes_cli import profiles
++
++    monkeypatch.setattr(profiles, "resolve_profile_env", lambda _profile: str(profile_home))
++    monkeypatch.setattr(
++        subprocess,
++        "Popen",
++        lambda argv, **kwargs: captured.update(argv=argv, kwargs=kwargs) or FakeProc(),
++    )
++
++    kb._default_spawn(
++        task,
++        str(candidate),
++        affinity=lease,
++        session_workspace=str(canonical),
++    )
++
++    assert captured["validated_session"] == "supervisor-session"
++    assert captured["validated_kwargs"]["workspace_path"] == str(canonical)
++    argv = captured["argv"]
++    assert argv[argv.index("--resume") + 1] == "supervisor-session"
++    assert argv[argv.index("--in") + 1] == str(canonical)
++    child_env = captured["kwargs"]["env"]
++    assert child_env["HERMES_KANBAN_SESSION_WORKSPACE"] == str(canonical)
++    assert child_env["HERMES_KANBAN_REVIEW_AFFINITY"] == "1"
++    assert child_env["HERMES_KANBAN_WORKSPACE"] == str(candidate)
++    assert child_env["TERMINAL_CWD"] == str(candidate)
++    assert captured["kwargs"]["cwd"] == str(canonical)
++
++
++def test_review_dispatch_reuses_supervisor_flow_session_without_rewriting_unit_workspace(
++    tmp_path, monkeypatch
++):
++    """Same-card review resumes the flow Supervisor but leaves the unit worktree intact."""
++    kanban_home = tmp_path / "kanban"
++    profile_home = tmp_path / "profile"
++    canonical = tmp_path / "supervisor-root"
++    candidate = tmp_path / "implementer-candidate"
++    canonical.mkdir()
++    candidate.mkdir()
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(kanban_home))
++    monkeypatch.setenv("HERMES_HOME", str(profile_home))
++    project_id = _project(tmp_path)
++
++    conn = kb.connect()
++    try:
++        root = kb.create_task(
++            conn,
++            title="decompose",
++            assignee="supervisor",
++            project_id=project_id,
++            workspace_kind="dir",
++            workspace_path=str(canonical),
++            session_affinity={"flow_id": "flow-review", "terminal": False},
++        )
++        _opt_in_aether_review(conn, root, project_id)
++        claimed_root = kb.claim_task(conn, root)
++        assert claimed_root is not None
++        root_lease = kb.reserve_session_affinity(
++            conn, claimed_root, workspace_path=str(canonical)
++        )
++        assert root_lease is not None
++        assert kb.register_session_affinity(
++            conn, claimed_root, root_lease, session_id="supervisor-session"
++        )
++        assert kb.complete_task(conn, root, result="decomposed")
++
++        unit = kb.create_task(
++            conn,
++            title="implement",
++            assignee="implementer",
++            project_id=project_id,
++            parents=(root,),
++            workspace_kind="dir",
++            workspace_path=str(candidate),
++            skills=("implementation-evidence",),
++            model_override="implementer-model",
++            provider_override="custom:implementer-provider",
++            reasoning_effort="high",
++        )
++        claimed_unit = kb.claim_task(conn, unit)
++        assert claimed_unit is not None
++        assert kb.request_review(
++            conn,
++            unit,
++            summary="candidate ready",
++            reviewer="supervisor",
++            expected_run_id=claimed_unit.current_run_id,
++        )
++    finally:
++        conn.close()
++
++    from hermes_cli import profiles
++
++    monkeypatch.setattr(profiles, "profile_exists", lambda _profile: True)
++    captured = {}
++
++    def fake_spawn(task, workspace, *, board=None, affinity=None, session_workspace=None):
++        captured.update(
++            task=task,
++            workspace=workspace,
++            board=board,
++            affinity=affinity,
++            session_workspace=session_workspace,
++        )
++        return 999
++
++    conn = kb.connect()
++    try:
++        result = kb.dispatch_once(conn, spawn_fn=fake_spawn, max_spawn=1)
++        assert [row[0] for row in result.spawned] == [unit]
++        assert captured["workspace"] == str(candidate)
++        assert captured["session_workspace"] == str(canonical)
++        assert captured["affinity"] is not None
++        assert captured["affinity"].session_id == "supervisor-session"
++        assert captured["affinity"].flow_id == "flow-review"
++        assert captured["task"].skills == []
++        assert captured["task"].model_override is None
++        assert captured["task"].provider_override is None
++        assert captured["task"].reasoning_effort is None
++
++        persisted = kb.get_task(conn, unit)
++        assert persisted is not None
++        assert persisted.workspace_path == str(candidate)
++        assert persisted.session_affinity is None
++        assert persisted.skills == ["implementation-evidence"]
++        assert persisted.model_override == "implementer-model"
++        assert persisted.provider_override == "custom:implementer-provider"
++        assert persisted.reasoning_effort == "high"
++        lease_state = conn.execute(
++            "SELECT session_id, workspace_path, owner_task_id FROM kanban_session_affinity "
++            "WHERE project_id = ? AND flow_id = ? AND assignee = ?",
++            (project_id, "flow-review", "supervisor"),
++        ).fetchone()
++        assert lease_state is not None
++        assert lease_state["session_id"] == "supervisor-session"
++        assert lease_state["workspace_path"] == str(canonical)
++        assert lease_state["owner_task_id"] == unit
++    finally:
++        conn.close()
++
++
++@pytest.mark.parametrize("legacy", [False, True])
++def test_review_rework_rereview_and_terminal_reuse_one_supervisor_session(
++    tmp_path, monkeypatch, legacy
++):
++    """One Aether flow keeps the exact Supervisor session across all phases."""
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    canonical = tmp_path / "supervisor-root"
++    candidate = tmp_path / "candidate"
++    canonical.mkdir()
++    candidate.mkdir()
++    project_id = _project(tmp_path)
++
++    conn = kb.connect()
++    try:
++        root = kb.create_task(
++            conn,
++            title="decompose",
++            assignee="supervisor",
++            project_id=project_id,
++            workspace_kind="dir",
++            workspace_path=str(canonical),
++            session_id="origin-session",
++            session_affinity={"flow_id": "flow-review", "terminal": False},
++        )
++        _opt_in_aether_review(conn, root, project_id, legacy=legacy)
++        root_run = kb.claim_task(conn, root)
++        assert root_run is not None
++        root_lease = kb.reserve_session_affinity(
++            conn, root_run, workspace_path=str(canonical)
++        )
++        assert root_lease is not None
++        assert kb.register_session_affinity(
++            conn, root_run, root_lease, session_id="supervisor-session"
++        )
++        assert kb.complete_task(conn, root, expected_run_id=root_run.current_run_id)
++
++        unit = kb.create_task(
++            conn,
++            title="implement",
++            assignee="implementer",
++            project_id=project_id,
++            parents=(root,),
++            workspace_kind="dir",
++            workspace_path=str(candidate),
++            skills=("implementation-evidence",),
++        )
++        terminal = kb.create_task(
++            conn,
++            title="integrate",
++            assignee="supervisor",
++            project_id=project_id,
++            parents=(root, unit),
++            workspace_kind="dir",
++            workspace_path=str(canonical),
++            session_id="origin-session",
++            session_affinity={"flow_id": "flow-review", "terminal": True},
++        )
++        impl_run = kb.claim_task(conn, unit)
++        assert impl_run is not None
++        assert kb.request_review(
++            conn,
++            unit,
++            summary="candidate one",
++            reviewer="supervisor",
++            expected_run_id=impl_run.current_run_id,
++        )
++    finally:
++        conn.close()
++
++    from hermes_cli import profiles
++
++    monkeypatch.setattr(profiles, "profile_exists", lambda _profile: True)
++    spawns = []
++
++    def fake_spawn(
++        task,
++        workspace,
++        *,
++        board=None,
++        affinity=None,
++        session_workspace=None,
++    ):
++        spawns.append(
++            {
++                "task": task.id,
++                "workspace": workspace,
++                "session_workspace": session_workspace,
++                "session_id": (
++                    affinity.session_id
++                    if affinity is not None
++                    else None
++                ),
++                "generation": (
++                    affinity.generation
++                    if affinity is not None
++                    else None
++                ),
++            }
++        )
++        return 3000 + len(spawns)
++
++    conn = kb.connect()
++    try:
++        first = kb.dispatch_once(conn, spawn_fn=fake_spawn, max_spawn=1)
++        assert [row[0] for row in first.spawned] == [unit]
++        first_review = kb.get_task(conn, unit)
++        assert first_review is not None and first_review.status == "running"
++        assert spawns[-1]["session_id"] == "supervisor-session"
++        assert spawns[-1]["workspace"] == str(candidate)
++        assert spawns[-1]["session_workspace"] == str(canonical)
++        first_generation = spawns[-1]["generation"]
++
++        ok, returned = kb.request_changes(
++            conn,
++            unit,
++            reason="bounded correction",
++            expected_run_id=first_review.current_run_id,
++        )
++        assert ok and returned == "implementer"
++        lease_row = conn.execute(
++            "SELECT lease_token, session_id FROM kanban_session_affinity "
++            "WHERE project_id=? AND flow_id='flow-review' AND assignee='supervisor'",
++            (project_id,),
++        ).fetchone()
++        assert lease_row is not None
++        assert lease_row["lease_token"] is None
++        assert lease_row["session_id"] == "supervisor-session"
++
++        second_impl = kb.claim_task(conn, unit)
++        assert second_impl is not None and second_impl.assignee == "implementer"
++        assert kb.request_review(
++            conn,
++            unit,
++            summary="candidate two",
++            expected_run_id=second_impl.current_run_id,
++        )
++        second = kb.dispatch_once(conn, spawn_fn=fake_spawn, max_spawn=1)
++        assert [row[0] for row in second.spawned] == [unit]
++        second_review = kb.get_task(conn, unit)
++        assert second_review is not None and second_review.status == "running"
++        assert spawns[-1]["session_id"] == "supervisor-session"
++        assert spawns[-1]["generation"] > first_generation
++        assert kb.complete_task(
++            conn,
++            unit,
++            summary="reviewed and approved",
++            expected_run_id=second_review.current_run_id,
++        )
++
++        final_dispatch = kb.dispatch_once(conn, spawn_fn=fake_spawn, max_spawn=1)
++        assert [row[0] for row in final_dispatch.spawned] == [terminal]
++        assert spawns[-1]["session_id"] == "supervisor-session"
++        assert spawns[-1]["workspace"] == str(canonical)
++        persisted_unit = kb.get_task(conn, unit)
++        assert persisted_unit is not None and persisted_unit.session_affinity is None
++    finally:
++        conn.close()
++
++
++def test_derived_review_keeps_two_argument_spawn_workspace_contract(tmp_path, monkeypatch):
++    """Legacy/test spawn callbacks still receive the candidate as arg two."""
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    canonical = tmp_path / "supervisor"
++    candidate = tmp_path / "candidate"
++    canonical.mkdir()
++    candidate.mkdir()
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        root = kb.create_task(
++            conn,
++            title="root",
++            assignee="supervisor",
++            project_id=project_id,
++            workspace_kind="dir",
++            workspace_path=str(canonical),
++            session_affinity={"flow_id": "flow-review"},
++        )
++        _opt_in_aether_review(conn, root, project_id)
++        root_run = kb.claim_task(conn, root)
++        assert root_run is not None
++        lease = kb.reserve_session_affinity(conn, root_run)
++        assert lease is not None
++        assert kb.register_session_affinity(
++            conn, root_run, lease, session_id="supervisor-session"
++        )
++        assert kb.complete_task(conn, root)
++        unit = kb.create_task(
++            conn,
++            title="unit",
++            assignee="implementer",
++            project_id=project_id,
++            parents=(root,),
++            workspace_kind="dir",
++            workspace_path=str(candidate),
++        )
++        impl = kb.claim_task(conn, unit)
++        assert impl is not None
++        assert kb.request_review(
++            conn,
++            unit,
++            reviewer="supervisor",
++            expected_run_id=impl.current_run_id,
++        )
++    finally:
++        conn.close()
++
++    from hermes_cli import profiles
++
++    monkeypatch.setattr(profiles, "profile_exists", lambda _profile: True)
++    captured = {}
++
++    def old_spawn(task, workspace):
++        captured.update(task=task.id, workspace=workspace)
++        return 8123
++
++    conn = kb.connect()
++    try:
++        result = kb.dispatch_once(conn, spawn_fn=old_spawn, max_spawn=1)
++        assert [row[0] for row in result.spawned] == [unit]
++        assert captured == {"task": unit, "workspace": str(candidate)}
++    finally:
++        conn.close()
++
++
++def test_derived_review_affinity_busy_returns_card_to_review_without_failure(
++    tmp_path, monkeypatch
++):
++    """A busy Supervisor session defers review without charging an attempt."""
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    canonical = tmp_path / "supervisor"
++    candidate = tmp_path / "candidate"
++    canonical.mkdir()
++    candidate.mkdir()
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        root = kb.create_task(
++            conn,
++            title="root",
++            assignee="supervisor",
++            project_id=project_id,
++            workspace_kind="dir",
++            workspace_path=str(canonical),
++            session_affinity={"flow_id": "flow-review"},
++        )
++        _opt_in_aether_review(conn, root, project_id)
++        root_run = kb.claim_task(conn, root)
++        assert root_run is not None
++        lease = kb.reserve_session_affinity(conn, root_run)
++        assert lease is not None
++        assert kb.register_session_affinity(
++            conn, root_run, lease, session_id="supervisor-session"
++        )
++        assert kb.complete_task(conn, root)
++
++        active_controller = kb.create_task(
++            conn,
++            title="active supervisor phase",
++            assignee="supervisor",
++            project_id=project_id,
++            parents=(root,),
++            workspace_kind="dir",
++            workspace_path=str(canonical),
++            session_affinity={"flow_id": "flow-review"},
++        )
++        active = kb.claim_task(conn, active_controller)
++        assert active is not None
++        active_lease = kb.reserve_session_affinity(conn, active)
++        assert active_lease is not None
++        assert active_lease.session_id == "supervisor-session"
++
++        unit = kb.create_task(
++            conn,
++            title="unit",
++            assignee="implementer",
++            project_id=project_id,
++            parents=(root,),
++            workspace_kind="dir",
++            workspace_path=str(candidate),
++        )
++        impl = kb.claim_task(conn, unit)
++        assert impl is not None
++        assert kb.request_review(
++            conn,
++            unit,
++            reviewer="supervisor",
++            expected_run_id=impl.current_run_id,
++        )
++    finally:
++        conn.close()
++
++    from hermes_cli import profiles
++
++    monkeypatch.setattr(profiles, "profile_exists", lambda _profile: True)
++    spawned = []
++
++    def should_not_spawn(task, workspace, **kwargs):
++        spawned.append((task.id, workspace, kwargs))
++        return 9999
++
++    conn = kb.connect()
++    try:
++        result = kb.dispatch_once(conn, spawn_fn=should_not_spawn, max_spawn=5)
++        assert spawned == []
++        assert [task_id for task_id, _reason in result.affinity_deferred] == [unit]
++        deferred = kb.get_task(conn, unit)
++        assert deferred is not None
++        assert deferred.status == "review"
++        assert deferred.current_run_id is None
++        assert deferred.consecutive_failures == 0
++        owner = conn.execute(
++            "SELECT owner_task_id, session_id FROM kanban_session_affinity "
++            "WHERE project_id=? AND flow_id='flow-review' AND assignee='supervisor'",
++            (project_id,),
++        ).fetchone()
++        assert owner is not None
++        assert owner["owner_task_id"] == active_controller
++        assert owner["session_id"] == "supervisor-session"
++    finally:
++        conn.close()
++
++
++@pytest.mark.parametrize("failure_mode", ["spawn", "crash"])
++def test_derived_review_failure_releases_only_lease_and_preserves_session(
++    tmp_path, monkeypatch, failure_mode
++):
++    """Review worker failure must free ownership without losing flow identity."""
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    canonical = tmp_path / "supervisor"
++    candidate = tmp_path / "candidate"
++    canonical.mkdir()
++    candidate.mkdir()
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        root = kb.create_task(
++            conn,
++            title="root",
++            assignee="supervisor",
++            project_id=project_id,
++            workspace_kind="dir",
++            workspace_path=str(canonical),
++            session_affinity={"flow_id": "flow-review"},
++        )
++        _opt_in_aether_review(conn, root, project_id)
++        root_run = kb.claim_task(conn, root)
++        assert root_run is not None
++        root_lease = kb.reserve_session_affinity(conn, root_run)
++        assert root_lease is not None
++        assert kb.register_session_affinity(
++            conn, root_run, root_lease, session_id="supervisor-session"
++        )
++        assert kb.complete_task(conn, root)
++
++        unit = kb.create_task(
++            conn,
++            title="unit",
++            assignee="implementer",
++            project_id=project_id,
++            parents=(root,),
++            workspace_kind="dir",
++            workspace_path=str(candidate),
++        )
++        impl = kb.claim_task(conn, unit)
++        assert impl is not None
++        assert kb.request_review(
++            conn,
++            unit,
++            reviewer="supervisor",
++            expected_run_id=impl.current_run_id,
++        )
++    finally:
++        conn.close()
++
++    from hermes_cli import profiles
++
++    monkeypatch.setattr(profiles, "profile_exists", lambda _profile: True)
++
++    def spawn(task, workspace, *, affinity=None, session_workspace=None, board=None):
++        assert affinity is not None
++        assert affinity.session_id == "supervisor-session"
++        assert workspace == str(candidate)
++        assert session_workspace == str(canonical)
++        if failure_mode == "spawn":
++            raise RuntimeError("synthetic review spawn failure")
++        return 77881
++
++    conn = kb.connect()
++    try:
++        result = kb.dispatch_once(
++            conn,
++            spawn_fn=spawn,
++            max_spawn=1,
++            failure_limit=3,
++        )
++        if failure_mode == "spawn":
++            assert result.spawned == []
++        else:
++            assert [row[0] for row in result.spawned] == [unit]
++            monkeypatch.setattr(kb, "_resolve_crash_grace_seconds", lambda: 0)
++            monkeypatch.setattr(kb, "_pid_alive", lambda _pid: False)
++            monkeypatch.setattr(
++                kb, "_classify_worker_exit", lambda _pid: ("nonzero_exit", 1)
++            )
++            assert kb.detect_crashed_workers(conn) == [unit]
++
++        task = kb.get_task(conn, unit)
++        assert task is not None
++        assert task.status == "review"
++        assert task.current_run_id is None
++        assert task.session_affinity is None
++        row = conn.execute(
++            "SELECT session_id, lease_token, owner_task_id, owner_run_id "
++            "FROM kanban_session_affinity WHERE project_id=? AND flow_id=? "
++            "AND assignee='supervisor'",
++            (project_id, "flow-review"),
++        ).fetchone()
++        assert row is not None
++        assert row["session_id"] == "supervisor-session"
++        assert row["lease_token"] is None
++        assert row["owner_task_id"] is None
++        assert row["owner_run_id"] is None
++    finally:
++        conn.close()
++
++
++def test_derived_review_affinity_registers_existing_supervisor_session(
++    tmp_path, monkeypatch
++):
++    """A derived review lease may bind only to the flow's existing session."""
++    kanban_home = tmp_path / "kanban"
++    profile_home = tmp_path / "supervisor-profile"
++    canonical = tmp_path / "supervisor-root"
++    candidate = tmp_path / "implementer-candidate"
++    canonical.mkdir()
++    candidate.mkdir()
++    profile_home.mkdir()
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(kanban_home))
++    monkeypatch.setenv("HERMES_HOME", str(profile_home))
++    project_id = _project(tmp_path)
++
++    from hermes_state import SessionDB
++
++    sessions = SessionDB(db_path=profile_home / "state.db")
++    sessions.create_session(
++        "supervisor-session",
++        "kanban",
++        profile_name="supervisor",
++        cwd=str(canonical),
++    )
++    sessions.close()
++
++    conn = kb.connect()
++    try:
++        root = kb.create_task(
++            conn,
++            title="decompose",
++            assignee="supervisor",
++            project_id=project_id,
++            workspace_kind="dir",
++            workspace_path=str(canonical),
++            session_affinity={"flow_id": "flow-review", "terminal": False},
++        )
++        _opt_in_aether_review(conn, root, project_id)
++        claimed_root = kb.claim_task(conn, root)
++        assert claimed_root is not None
++        root_lease = kb.reserve_session_affinity(
++            conn, claimed_root, workspace_path=str(canonical)
++        )
++        assert root_lease is not None
++        assert kb.register_session_affinity(
++            conn, claimed_root, root_lease, session_id="supervisor-session"
++        )
++        assert kb.complete_task(conn, root)
++
++        unit = kb.create_task(
++            conn,
++            title="implement",
++            assignee="implementer",
++            project_id=project_id,
++            parents=(root,),
++            workspace_kind="dir",
++            workspace_path=str(candidate),
++        )
++        claimed_unit = kb.claim_task(conn, unit)
++        assert claimed_unit is not None
++        assert kb.request_review(
++            conn,
++            unit,
++            summary="candidate ready",
++            reviewer="supervisor",
++            expected_run_id=claimed_unit.current_run_id,
++        )
++        review = kb.claim_review_task(conn, unit)
++        assert review is not None
++        reserved = kb._reserve_review_flow_session(conn, review)
++        assert reserved is not None
++        lease, session_workspace = reserved
++        assert session_workspace == str(canonical)
++        assert lease is not None and lease.session_id == "supervisor-session"
++    finally:
++        conn.close()
++
++    from hermes_cli import profiles
+ 
++    monkeypatch.setattr(profiles, "resolve_profile_env", lambda _profile: str(profile_home))
++    monkeypatch.setenv("HERMES_KANBAN_TASK", unit)
++    monkeypatch.setenv("HERMES_KANBAN_RUN_ID", str(review.current_run_id))
++    monkeypatch.setenv("HERMES_KANBAN_CLAIM_LOCK", str(review.claim_lock))
++    monkeypatch.setenv("HERMES_KANBAN_AFFINITY_TOKEN", lease.token)
++    monkeypatch.setenv("HERMES_KANBAN_AFFINITY_GENERATION", str(lease.generation))
++    monkeypatch.setenv("HERMES_KANBAN_AFFINITY_FLOW_ID", lease.flow_id)
++    monkeypatch.setenv("HERMES_KANBAN_AFFINITY_PROJECT_ID", lease.project_id)
++    monkeypatch.setenv("HERMES_KANBAN_WORKSPACE", str(candidate))
++    monkeypatch.setenv("HERMES_KANBAN_SESSION_WORKSPACE", str(canonical))
++    monkeypatch.setenv("HERMES_KANBAN_REVIEW_AFFINITY", "1")
++
++    assert kb.register_worker_session_from_env("supervisor-session")
++    conn = kb.connect()
++    try:
++        persisted = kb.get_task(conn, unit)
++        assert persisted is not None and persisted.session_affinity is None
++        row = conn.execute(
++            "SELECT session_id, workspace_path, owner_task_id, owner_run_id "
++            "FROM kanban_session_affinity WHERE project_id = ? AND flow_id = ?",
++            (project_id, "flow-review"),
++        ).fetchone()
++        assert row is not None
++        assert row["session_id"] == "supervisor-session"
++        assert row["workspace_path"] == str(canonical)
++        assert row["owner_task_id"] == unit
++        assert row["owner_run_id"] == review.current_run_id
++    finally:
++        conn.close()
+ 
+-def test_normalize_session_affinity_rejects_missing_flow_id():
+-    with pytest.raises(ValueError, match="flow_id"):
+-        kb.normalize_session_affinity({"terminal": True})
+ 
++@pytest.mark.parametrize("drift", ["contract_version", "ancestor_profile"])
++def test_derived_review_registration_revalidates_aether_context(
++    tmp_path, monkeypatch, drift
++):
++    """Reservation-time Aether identity must still hold at worker registration."""
++    kanban_home = tmp_path / "kanban"
++    profile_home = tmp_path / "supervisor-profile"
++    canonical = tmp_path / "supervisor-root"
++    candidate = tmp_path / "implementer-candidate"
++    canonical.mkdir()
++    candidate.mkdir()
++    profile_home.mkdir()
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(kanban_home))
++    monkeypatch.setenv("HERMES_HOME", str(profile_home))
++    project_id = _project(tmp_path)
++
++    from hermes_state import SessionDB
++
++    sessions = SessionDB(db_path=profile_home / "state.db")
++    sessions.create_session(
++        "supervisor-session",
++        "kanban",
++        profile_name="supervisor",
++        cwd=str(canonical),
++    )
++    sessions.close()
+ 
+-def test_affinity_task_requires_a_canonical_project(tmp_path, monkeypatch):
+-    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
+     conn = kb.connect()
+     try:
+-        with pytest.raises(ValueError, match="project"):
+-            _task(conn, "missing-project", workspace=tmp_path)
++        root = kb.create_task(
++            conn,
++            title="decompose",
++            assignee="supervisor",
++            project_id=project_id,
++            workspace_kind="dir",
++            workspace_path=str(canonical),
++            session_affinity={"flow_id": "flow-review"},
++        )
++        _opt_in_aether_review(conn, root, project_id)
++        root_run = kb.claim_task(conn, root)
++        assert root_run is not None
++        root_lease = kb.reserve_session_affinity(conn, root_run)
++        assert root_lease is not None
++        assert kb.register_session_affinity(
++            conn, root_run, root_lease, session_id="supervisor-session"
++        )
++        assert kb.complete_task(conn, root)
++
++        unit = kb.create_task(
++            conn,
++            title="implement",
++            assignee="implementer",
++            project_id=project_id,
++            parents=(root,),
++            workspace_kind="dir",
++            workspace_path=str(candidate),
++        )
++        impl = kb.claim_task(conn, unit)
++        assert impl is not None
++        assert kb.request_review(
++            conn,
++            unit,
++            reviewer="supervisor",
++            expected_run_id=impl.current_run_id,
++        )
++        review = kb.claim_review_task(conn, unit)
++        assert review is not None
++        reserved = kb._reserve_review_flow_session(conn, review)
++        assert reserved is not None
++        lease, session_workspace = reserved
++
++        if drift == "contract_version":
++            event = conn.execute(
++                "SELECT id, payload FROM task_events "
++                "WHERE task_id=? AND kind='collaboration_opted_in' "
++                "ORDER BY id DESC LIMIT 1",
++                (root,),
++            ).fetchone()
++            payload = json.loads(event["payload"])
++            payload["contract_version"] = "2"
++            conn.execute(
++                "UPDATE task_events SET payload=? WHERE id=?",
++                (json.dumps(payload), event["id"]),
++            )
++        else:
++            conn.execute("UPDATE tasks SET assignee='morfeo' WHERE id=?", (root,))
++        conn.commit()
+     finally:
+         conn.close()
+ 
++    from hermes_cli import profiles
+ 
+-def test_affinity_is_persisted_on_a_project_task(tmp_path, monkeypatch):
++    monkeypatch.setattr(profiles, "resolve_profile_env", lambda _profile: str(profile_home))
++    monkeypatch.setenv("HERMES_KANBAN_TASK", unit)
++    monkeypatch.setenv("HERMES_KANBAN_RUN_ID", str(review.current_run_id))
++    monkeypatch.setenv("HERMES_KANBAN_CLAIM_LOCK", str(review.claim_lock))
++    monkeypatch.setenv("HERMES_KANBAN_AFFINITY_TOKEN", lease.token)
++    monkeypatch.setenv("HERMES_KANBAN_AFFINITY_GENERATION", str(lease.generation))
++    monkeypatch.setenv("HERMES_KANBAN_AFFINITY_FLOW_ID", lease.flow_id)
++    monkeypatch.setenv("HERMES_KANBAN_AFFINITY_PROJECT_ID", lease.project_id)
++    monkeypatch.setenv("HERMES_KANBAN_WORKSPACE", str(candidate))
++    monkeypatch.setenv("HERMES_KANBAN_SESSION_WORKSPACE", session_workspace)
++    monkeypatch.setenv("HERMES_KANBAN_REVIEW_AFFINITY", "1")
++
++    assert not kb.register_worker_session_from_env("supervisor-session")
++
++
++def test_derived_review_requires_existing_flow_binding(tmp_path, monkeypatch):
++    """Aether review may reuse an existing Supervisor binding, never create one."""
+     monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
+-    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "profile"))
+     project_id = _project(tmp_path)
++    canonical = tmp_path / "supervisor-root"
++    candidate = tmp_path / "candidate"
++    canonical.mkdir()
++    candidate.mkdir()
+     conn = kb.connect()
+     try:
+-        task_id = _task(conn, project_id, workspace=tmp_path, terminal=True)
+-        task = kb.get_task(conn, task_id)
+-        assert task is not None
+-        assert task.project_id == project_id
+-        assert task.session_affinity == {"flow_id": "flow-7", "terminal": True}
++        root = kb.create_task(
++            conn,
++            title="decompose",
++            assignee="supervisor",
++            project_id=project_id,
++            workspace_kind="dir",
++            workspace_path=str(canonical),
++            session_affinity={"flow_id": "flow-review", "terminal": False},
++        )
++        _opt_in_aether_review(conn, root, project_id)
++        unit = kb.create_task(
++            conn,
++            title="implement",
++            assignee="implementer",
++            project_id=project_id,
++            parents=(root,),
++            workspace_kind="dir",
++            workspace_path=str(candidate),
++        )
++        conn.execute("UPDATE tasks SET status='done' WHERE id=?", (root,))
++        conn.execute("UPDATE tasks SET status='review', assignee='supervisor' WHERE id=?", (unit,))
++        conn.commit()
++        review = kb.claim_review_task(conn, unit)
++        assert review is not None
++        with pytest.raises(
++            kb.AffinityRegistrationError,
++            match="resumable session|existing registered session",
++        ):
++            kb._reserve_review_flow_session(conn, review)
++        assert conn.execute("SELECT 1 FROM kanban_session_affinity").fetchone() is None
+     finally:
+         conn.close()
+ 
+ 
+-def test_affinity_lease_registers_one_exact_worker_session(tmp_path, monkeypatch):
++@pytest.mark.parametrize("collaboration", [False, True])
++@pytest.mark.parametrize("stray_key", [None, "aether_project_id", "aether_contract_id", "aether_contract_version"])
++def test_generic_review_without_flow_affinity_keeps_bundled_review_skill(
++    tmp_path, monkeypatch, collaboration, stray_key
++):
++    """The generic Hermes review lane remains unchanged outside an affinity flow."""
+     monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
+-    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "profile"))
+     project_id = _project(tmp_path)
++    canonical = tmp_path / "supervisor-root"
++    workspace = tmp_path / "candidate"
++    canonical.mkdir()
++    workspace.mkdir()
+     conn = kb.connect()
+     try:
+-        task_id = _task(conn, project_id, workspace=tmp_path)
++        root = kb.create_task(
++            conn,
++            title="generic parent",
++            assignee="supervisor",
++            project_id=project_id,
++            workspace_kind="dir",
++            workspace_path=str(canonical),
++            session_affinity={"flow_id": "flow-generic", "terminal": False},
++        )
++        root_claim = kb.claim_task(conn, root)
++        assert root_claim is not None
++        lease = kb.reserve_session_affinity(conn, root_claim, workspace_path=str(canonical))
++        assert lease is not None
++        assert kb.register_session_affinity(
++            conn, root_claim, lease, session_id="generic-supervisor-session"
++        )
++        assert kb.complete_task(conn, root)
++        if stray_key:
++            values = {
++                "aether_project_id": "unrelated-label",
++                "aether_contract_id": "oc_generic",
++                "aether_contract_version": "1",
++            }
++            meta_path = kb.board_metadata_path()
++            meta_path.parent.mkdir(parents=True, exist_ok=True)
++            meta_path.write_text(json.dumps({"project_id": project_id, stray_key: values[stray_key]}))
++        if collaboration:
++            assert kb.opt_in_collaboration(
++                conn, root, contract_id="oc_generic", contract_version="1",
++                session_id="origin-session",
++            )
++            event = conn.execute(
++                "SELECT payload FROM task_events WHERE task_id=? "
++                "AND kind='collaboration_opted_in' ORDER BY id DESC LIMIT 1", (root,),
++            ).fetchone()
++            assert "aether_project_id" not in json.loads(event["payload"])
++        task_id = kb.create_task(
++            conn,
++            title="plain implementation",
++            assignee="implementer",
++            project_id=project_id,
++            parents=(root,),
++            workspace_kind="dir",
++            workspace_path=str(workspace),
++        )
+         claimed = kb.claim_task(conn, task_id)
+         assert claimed is not None
+-        lease = kb.reserve_session_affinity(conn, claimed, workspace_path=str(tmp_path))
+-        assert lease is not None and lease.session_id is None and lease.generation == 1
+-        assert kb.register_session_affinity(conn, claimed, lease, session_id="session-1")
+-        stored = kb.get_session_affinity(conn, claimed)
+-        assert stored is not None
+-        assert stored["session_id"] == "session-1"
+-        assert stored["generation"] == 1
++        assert kb.request_review(
++            conn,
++            task_id,
++            summary="ready",
++            reviewer="supervisor",
++            expected_run_id=claimed.current_run_id,
++        )
+     finally:
+         conn.close()
+ 
+ 
+-def test_affinity_spawn_uses_exact_resume_and_workspace_pin(tmp_path, monkeypatch):
+-    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
+-    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "profile"))
+-    workspace = tmp_path / "workspace"
+-    workspace.mkdir()
+-    from hermes_state import SessionDB
++    from hermes_cli import profiles
+ 
+-    sessions = SessionDB(db_path=tmp_path / "profile" / "state.db")
+-    sessions.create_session("session-1", "kanban", profile_name="worker", cwd=str(workspace))
+-    sessions.close()
++    monkeypatch.setattr(profiles, "profile_exists", lambda _profile: True)
++    captured = {}
++
++    def fake_spawn(task, workspace, **kwargs):
++        captured.update(task=task, workspace=workspace, kwargs=kwargs)
++        return 1001
++
++    conn = kb.connect()
++    try:
++        result = kb.dispatch_once(conn, spawn_fn=fake_spawn, max_spawn=1)
++        assert [row[0] for row in result.spawned] == [task_id]
++        assert captured["workspace"] == str(workspace)
++        assert "sdlc-review" in (captured["task"].skills or [])
++        assert captured["kwargs"].get("affinity") is None
++        assert captured["kwargs"].get("session_workspace") is None
++    finally:
++        conn.close()
++
++
++def test_aether_review_without_supervisor_affinity_blocks_at_failure_limit(
++    tmp_path, monkeypatch
++):
++    """An opted-in Aether review must not silently fall back to a fresh reviewer."""
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
+     project_id = _project(tmp_path)
++    canonical = tmp_path / "supervisor-root"
++    candidate = tmp_path / "candidate"
++    canonical.mkdir()
++    candidate.mkdir()
++
+     conn = kb.connect()
+     try:
+-        task_id = _task(conn, project_id, workspace=workspace)
+-        claimed = kb.claim_task(conn, task_id)
++        root = kb.create_task(
++            conn,
++            title="decompose",
++            assignee="supervisor",
++            project_id=project_id,
++            workspace_kind="dir",
++            workspace_path=str(canonical),
++            session_id="origin-session",
++        )
++        _opt_in_aether_review(conn, root, project_id)
++        assert kb.claim_task(conn, root) is not None
++        assert kb.complete_task(conn, root)
++
++        unit = kb.create_task(
++            conn,
++            title="implement",
++            assignee="implementer",
++            project_id=project_id,
++            parents=(root,),
++            workspace_kind="dir",
++            workspace_path=str(candidate),
++        )
++        claimed = kb.claim_task(conn, unit)
+         assert claimed is not None
+-        lease = kb.reserve_session_affinity(conn, claimed, workspace_path=str(workspace))
++        assert kb.request_review(
++            conn,
++            unit,
++            summary="candidate ready",
++            reviewer="supervisor",
++            expected_run_id=claimed.current_run_id,
++        )
++    finally:
++        conn.close()
++
++    from hermes_cli import profiles
++
++    monkeypatch.setattr(profiles, "profile_exists", lambda _profile: True)
++    spawned = []
++
++    def fake_spawn(*args, **kwargs):
++        spawned.append((args, kwargs))
++        return 999
++
++    conn = kb.connect()
++    try:
++        result = kb.dispatch_once(
++            conn,
++            spawn_fn=fake_spawn,
++            max_spawn=1,
++            failure_limit=1,
++        )
++        assert spawned == []
++        assert unit in result.auto_blocked
++        task = kb.get_task(conn, unit)
++        assert task is not None and task.status == "blocked"
++        assert "no same-profile flow affinity ancestor" in (
++            task.last_failure_error or ""
++        )
++    finally:
++        conn.close()
++
++
++@pytest.mark.parametrize(
++    "mutation",
++    [
++        "missing_contract_id",
++        "mismatched_contract_id",
++        "mismatched_contract_version",
++        "missing_event_project",
++        "mismatched_event_project",
++        "mismatched_board_project",
++        "missing_aether_project",
++        "mismatched_aether_project",
++        "missing_board_metadata",
++        "malformed_opt_in",
++        "non_object_opt_in",
++        "invalid_opt_in_mode",
++        "archived_root",
++        "ambiguous_roots",
++    ],
++)
++def test_recognized_aether_identity_damage_never_spawns_fresh_review(
++    tmp_path, monkeypatch, mutation
++):
++    """A damaged opted-in flow fails closed, preserving the candidate and pins."""
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    project_id = _project(tmp_path)
++    canonical = tmp_path / "supervisor-root"
++    candidate = tmp_path / "candidate"
++    canonical.mkdir()
++    candidate.mkdir()
++    conn = kb.connect()
++    try:
++        root = kb.create_task(
++            conn,
++            title="root",
++            assignee="supervisor",
++            project_id=project_id,
++            workspace_kind="dir",
++            workspace_path=str(canonical),
++            session_affinity={"flow_id": "flow-review"},
++        )
++        _opt_in_aether_review(conn, root, project_id)
++        root_run = kb.claim_task(conn, root)
++        assert root_run is not None
++        lease = kb.reserve_session_affinity(conn, root_run)
+         assert lease is not None
+-        kb.register_session_affinity(conn, claimed, lease, session_id="session-1")
++        assert kb.register_session_affinity(
++            conn, root_run, lease, session_id="supervisor-session"
++        )
++        assert kb.complete_task(conn, root)
++
++        meta_path = kb.board_metadata_path()
++        meta = json.loads(meta_path.read_text(encoding="utf-8"))
++        event = conn.execute(
++            "SELECT id, payload FROM task_events "
++            "WHERE task_id=? AND kind='collaboration_opted_in' "
++            "ORDER BY id DESC LIMIT 1",
++            (root,),
++        ).fetchone()
++        assert event is not None
++        payload = json.loads(event["payload"])
++        if mutation == "missing_contract_id":
++            meta.pop("aether_contract_id", None)
++        elif mutation == "mismatched_contract_id":
++            payload["contract_id"] = "oc_other"
++        elif mutation == "mismatched_contract_version":
++            payload["contract_version"] = "2"
++        elif mutation == "missing_event_project":
++            payload["project_id"] = None
++        elif mutation == "mismatched_event_project":
++            payload["project_id"] = "p_other"
++        elif mutation == "mismatched_board_project":
++            meta["project_id"] = "p_other"
++        elif mutation == "missing_aether_project":
++            meta.pop("aether_project_id", None)
++        elif mutation == "mismatched_aether_project":
++            meta["aether_project_id"] = "other-aether-project"
++        elif mutation == "missing_board_metadata":
++            meta = {}
++        elif mutation == "malformed_opt_in":
++            payload = "malformed-json"
++        elif mutation == "non_object_opt_in":
++            payload = []
++        elif mutation == "invalid_opt_in_mode":
++            payload["mode"] = "invalid"
++        elif mutation in ("archived_root", "ambiguous_roots"):
++            pass  # Damage the topology after creating/requesting review below.
++        else:  # pragma: no cover - parametrization is closed above
++            raise AssertionError(mutation)
++        unit = kb.create_task(
++            conn,
++            title="unit",
++            assignee="implementer",
++            project_id=project_id,
++            parents=(root,),
++            workspace_kind="dir",
++            workspace_path=str(candidate),
++            skills=("implementation-evidence",),
++            model_override="implementer-model",
++            provider_override="custom:implementer-provider",
++            reasoning_effort="high",
++        )
++        impl = kb.claim_task(conn, unit)
++        assert impl is not None
++        assert kb.request_review(
++            conn,
++            unit,
++            reviewer="supervisor",
++            expected_run_id=impl.current_run_id,
++        )
++        # Corrupt a fully-created review, not the setup/lifecycle that creates it.
++        meta_path.write_text(json.dumps(meta), encoding="utf-8")
++        conn.execute(
++            "UPDATE task_events SET payload=? WHERE id=?",
++            ("{invalid" if mutation == "malformed_opt_in" else json.dumps(payload), event["id"]),
++        )
++        if mutation == "archived_root":
++            conn.execute("UPDATE tasks SET status='archived' WHERE id=?", (root,))
++        elif mutation == "ambiguous_roots":
++            other = kb.create_task(
++                conn, title="independent root", project_id=project_id,
++                workspace_kind="dir", workspace_path=str(canonical),
++            )
++            conn.execute("UPDATE tasks SET status='done' WHERE id=?", (other,))
++            kb.link_tasks(conn, other, unit)
++        conn.commit()
+     finally:
+         conn.close()
+ 
++    from hermes_cli import profiles
++
++    monkeypatch.setattr(profiles, "profile_exists", lambda _profile: True)
+     captured = {}
+ 
+-    class FakeProc:
+-        pid = 123
++    def fake_spawn(task, workspace, *, affinity=None, session_workspace=None):
++        captured.update(
++            task=task, workspace=workspace,
++            kwargs={"affinity": affinity, "session_workspace": session_workspace},
++        )
++        return 9010
+ 
+-    monkeypatch.setattr(kb, "_resolve_hermes_argv", lambda: ["hermes"])
+-    monkeypatch.setattr(
+-        subprocess, "Popen",
+-        lambda argv, **kwargs: captured.update(argv=argv, kwargs=kwargs) or FakeProc(),
+-    )
+     conn = kb.connect()
+     try:
+-        task = kb.get_task(conn, task_id)
+-        assert task is not None
+-        lease = kb.AffinityLease(
+-            board=lease.board, project_id=lease.project_id, flow_id=lease.flow_id,
+-            assignee=lease.assignee, generation=lease.generation, token=lease.token,
+-            session_id="session-1",
++        result = kb.dispatch_once(conn, spawn_fn=fake_spawn, max_spawn=1, failure_limit=3)
++        assert result.spawned == []
++        assert captured == {}
++        reviewed = kb.get_task(conn, unit)
++        assert reviewed.status == "review"
++        assert reviewed.current_run_id is None
++        assert reviewed.consecutive_failures == 1
++        assert "Aether review" in reviewed.last_failure_error
++        assert reviewed.workspace_path == str(candidate)
++        assert reviewed.session_affinity is None
++        assert reviewed.skills == ["implementation-evidence"]
++        assert reviewed.model_override == "implementer-model"
++        assert reviewed.provider_override == "custom:implementer-provider"
++        assert reviewed.reasoning_effort == "high"
++
++        # One damaged review must not prevent independent work from dispatching.
++        independent = kb.create_task(
++            conn, title="independent work", assignee="other-worker",
++            project_id=project_id, workspace_kind="dir", workspace_path=str(candidate),
+         )
+-        kb._default_spawn(task, str(workspace), affinity=lease)
++        other_dispatch = kb.dispatch_once(conn, spawn_fn=fake_spawn, max_spawn=1, failure_limit=3)
++        assert [row[0] for row in other_dispatch.spawned] == [independent]
++        assert kb.complete_task(conn, independent)
++
++        # Repair through the existing metadata/opt-in lifecycle and retry the
++        # review. Do not erase the corrupt event or allocate another session.
++        bad_payload = conn.execute("SELECT payload FROM task_events WHERE id=?", (event["id"],)).fetchone()[0]
++        if mutation == "archived_root":
++            conn.execute("UPDATE tasks SET status='done' WHERE id=?", (root,))
++            conn.commit()
++        elif mutation == "ambiguous_roots":
++            assert kb.unlink_tasks(conn, other, unit)
++        _opt_in_aether_review(conn, root, project_id)
++        assert conn.execute("SELECT payload FROM task_events WHERE id=?", (event["id"],)).fetchone()[0] == bad_payload
++        resumed = kb.dispatch_once(conn, spawn_fn=fake_spawn, max_spawn=1, failure_limit=3)
++        assert [row[0] for row in resumed.spawned] == [unit]
++        assert captured["workspace"] == str(candidate)
++        assert captured["kwargs"]["session_workspace"] == str(canonical)
++        assert captured["kwargs"]["affinity"].session_id == "supervisor-session"
++        assert kb.get_task(conn, unit).session_affinity is None
++    finally:
++        conn.close()
++
++
++@pytest.mark.parametrize(
++    "handoff",
++    [
++        "delta=documentation only; valid=E-unit (executable patch unchanged); "
++        "invalid=none; open=R-format; retired=R-lines (wrong source artifact)",
++        "delta=functional routing; valid=E-schema; "
++        "invalid=E-routing (changed branch requires targeted recheck); "
++        "open=R-routing; retired=R-format",
++        "delta=no executable change; valid=E-origin; invalid=none; open=none; "
++        "retired=R-broadcast (contradicts OC-1); optional=broadcast is not acceptance",
++    ],
++    ids=["documentation", "functional", "contradictory-return"],
++)
++def test_native_rereview_context_preserves_incremental_handoff_and_contract(
++    tmp_path, monkeypatch, handoff
++):
++    """Exercise native transfer, not the semantic truth of reviewer assertions."""
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    project_id = _project(tmp_path)
++    contract = "OC-1: deliver to the exact commissioning origin, not all subscribers."
++    conn = kb.connect()
++    try:
++        unit = kb.create_task(
++            conn, title="origin delivery", body=contract, assignee="implementer",
++            project_id=project_id, workspace_kind="dir", workspace_path=str(tmp_path),
++        )
++        first = kb.claim_task(conn, unit)
++        assert kb.request_review(
++            conn, unit, reviewer="supervisor", summary="candidate-one; E-unit; E-origin",
++            expected_run_id=first.current_run_id,
++        )
++        review = kb.claim_review_task(conn, unit)
++        assert review is not None
++        ok, owner = kb.request_changes(
++            conn, unit, reason="Review return to resolve against OC-1",
++            expected_run_id=review.current_run_id,
++        )
++        assert ok and owner == "implementer"
++        rework = kb.claim_task(conn, unit)
++        transfer = "prior=candidate-one; next=candidate-two; " + handoff
++        assert kb.request_review(
++            conn, unit, summary=transfer, expected_run_id=rework.current_run_id,
++        )
++        context = kb.build_worker_context(conn, unit)
++        assert transfer in context
++        assert contract in context
++        assert "Review return to resolve against OC-1" in context
++        assert kb.get_task(conn, unit).body == contract
+     finally:
+         conn.close()
+-    argv = captured["argv"]
+-    assert argv[argv.index("--resume") + 1] == "session-1"
+-    assert "--no-restore-cwd" in argv
+-    assert argv[argv.index("--in") + 1] == str(workspace)
+-    child_env = captured["kwargs"]["env"]
+-    assert child_env["HERMES_KANBAN_FLOW_ID"] == lease.flow_id
+-    assert child_env["HERMES_KANBAN_AFFINITY_FLOW_ID"] == lease.flow_id
+ 
+ 
+ def test_kanban_worker_session_records_current_workspace(tmp_path, monkeypatch):
+@@ -149,6 +1507,21 @@ def test_kanban_worker_session_records_current_workspace(tmp_path, monkeypatch):
+     assert _launch_cwd_for_session("kanban") == str(workspace)
+ 
+ 
++def test_affinity_review_session_row_keeps_canonical_workspace(tmp_path, monkeypatch):
++    canonical = tmp_path / "supervisor"
++    candidate = tmp_path / "candidate"
++    canonical.mkdir()
++    candidate.mkdir()
++    monkeypatch.setenv("HERMES_KANBAN_AFFINITY_TOKEN", "lease")
++    monkeypatch.setenv("HERMES_KANBAN_SESSION_WORKSPACE", str(canonical))
++    monkeypatch.setenv("HERMES_KANBAN_WORKSPACE", str(candidate))
++    monkeypatch.setenv("TERMINAL_CWD", str(candidate))
++
++    from run_agent import _launch_cwd_for_session
++
++    assert _launch_cwd_for_session("kanban") == str(canonical)
++
++
+ def test_worker_resume_rejects_closed_session(tmp_path):
+     from hermes_state import SessionDB
+ 
+@@ -246,6 +1619,74 @@ def test_worker_resume_accepts_canonical_default_profile(tmp_path):
+     )["id"] == "session-1"
+ 
+ 
++def test_aether_review_without_supervisor_affinity_fails_closed(tmp_path, monkeypatch):
++    """Verified Aether review must not silently fall back to a fresh reviewer."""
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    workspace = tmp_path / "candidate"
++    workspace.mkdir()
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        root = kb.create_task(
++            conn,
++            title="Aether root without Supervisor affinity",
++            assignee="supervisor",
++            project_id=project_id,
++            workspace_kind="dir",
++            workspace_path=str(tmp_path),
++        )
++        _opt_in_aether_review(conn, root, project_id)
++        conn.execute("UPDATE tasks SET status='done' WHERE id=?", (root,))
++        unit = kb.create_task(
++            conn,
++            title="unit",
++            assignee="implementer",
++            project_id=project_id,
++            parents=(root,),
++            workspace_kind="dir",
++            workspace_path=str(workspace),
++        )
++        impl = kb.claim_task(conn, unit)
++        assert impl is not None
++        assert kb.request_review(
++            conn,
++            unit,
++            reviewer="supervisor",
++            expected_run_id=impl.current_run_id,
++        )
++    finally:
++        conn.close()
++
++    from hermes_cli import profiles
++
++    monkeypatch.setattr(profiles, "profile_exists", lambda _profile: True)
++    spawned = []
++
++    def should_not_spawn(task, workspace, **kwargs):
++        spawned.append((task.id, workspace, kwargs))
++        return 1234
++
++    conn = kb.connect()
++    try:
++        kb.dispatch_once(
++            conn,
++            spawn_fn=should_not_spawn,
++            max_spawn=1,
++            failure_limit=3,
++        )
++        assert spawned == []
++        reviewed = kb.get_task(conn, unit)
++        assert reviewed is not None
++        assert reviewed.status == "review"
++        assert reviewed.current_run_id is None
++        assert reviewed.consecutive_failures == 1
++        assert "no same-profile flow affinity ancestor" in (
++            reviewed.last_failure_error or ""
++        )
++    finally:
++        conn.close()
++
++
+ def test_corrupt_task_affinity_is_rejected_before_dispatch(tmp_path):
+     project_id = _project(tmp_path)
+     conn = kb.connect()
+diff --git a/tests/run_agent/test_compression_persistence.py b/tests/run_agent/test_compression_persistence.py
+index 70568b02ab..452f3d0b48 100644
+--- a/tests/run_agent/test_compression_persistence.py
++++ b/tests/run_agent/test_compression_persistence.py
+@@ -16,8 +16,10 @@ Bug scenario (pre-fix):
+   8. Fallback wrote only user/assistant pair — summary lost
+ """
+ 
++import json
+ import os
+ import tempfile
++from hashlib import sha256
+ from pathlib import Path
+ from unittest.mock import patch
+ 
+@@ -326,6 +328,141 @@ class TestFlushAfterCompression:
+             )
+             db.close()
+ 
++    def test_affinity_compression_preserves_exact_session_when_rotation_configured(
++        self, monkeypatch
++    ):
++        """Affinity overrides legacy rotate-on-compress without changing session id."""
++        from agent.conversation_compression import compress_context
++        from hermes_state import SessionDB
++
++        with tempfile.TemporaryDirectory() as tmpdir:
++            db = SessionDB(db_path=Path(tmpdir) / "test.db")
++            agent = self._make_agent(db)
++            agent.compression_in_place = False
++            agent._ensure_db_session()
++            exact_session = agent.session_id
++
++            messages = [
++                {
++                    "role": "user" if i % 2 == 0 else "assistant",
++                    "content": f"message {i} " + "x" * 200,
++                }
++                for i in range(40)
++            ]
++            agent._flush_messages_to_session_db(messages, [])
++            monkeypatch.setenv("HERMES_KANBAN_AFFINITY_TOKEN", "lease-token")
++
++            with patch(
++                "agent.context_compressor.call_llm",
++                side_effect=RuntimeError("no provider"),
++            ):
++                compressed, _ = compress_context(
++                    agent,
++                    messages,
++                    approx_tokens=100_000,
++                    system_message="sys",
++                )
++
++            assert compressed
++            assert agent.session_id == exact_session
++            assert getattr(agent, "_last_compaction_in_place", False) is True
++            row = db.get_session(exact_session)
++            assert row is not None
++            assert row.get("ended_at") is None
++            db.close()
++
++    def test_affinity_restore_keeps_stored_prompt_when_tools_target_candidate(
++        self, monkeypatch
++    ):
++        """A resumed review restores its canonical prompt without a provider call.
++
++        This covers the startup restore helper, not a full CLI process: the
++        session identity remains the supervisor workspace while file/terminal
++        resolution intentionally stays on the review candidate.
++        """
++        with tempfile.TemporaryDirectory() as tmpdir:
++            root = Path(tmpdir)
++            canonical = root / "supervisor"
++            candidate = root / "candidate"
++            canonical.mkdir()
++            candidate.mkdir()
++            (candidate / "review.txt").write_text("candidate evidence\n")
++            monkeypatch.setenv("HERMES_HOME", str(root / "profile"))
++            monkeypatch.setenv("HERMES_KANBAN_AFFINITY_TOKEN", "lease")
++            monkeypatch.setenv("HERMES_KANBAN_SESSION_WORKSPACE", str(canonical))
++            monkeypatch.setenv("HERMES_KANBAN_WORKSPACE", str(candidate))
++            monkeypatch.setenv("TERMINAL_CWD", str(candidate))
++            monkeypatch.setenv("TERMINAL_ENV", "local")
++
++            # Keep all state/profile isolation in place before importing the
++            # real restoration path or SessionDB.
++            from agent.conversation_loop import _restore_or_build_system_prompt
++            from agent.runtime_cwd import (
++                resolve_agent_cwd,
++                resolve_session_identity_cwd,
++            )
++            from hermes_state import SessionDB
++            from tools.file_tools import read_file_tool
++            from tools.terminal_tool import terminal_tool
++
++            session_id = "supervisor-review-session"
++            stored = (
++                "User home directory: /isolated-home\n"
++                f"Current working directory: {canonical}\n"
++                "Model: test/model\n"
++                "Provider: openrouter\n"
++                "Platform: kanban"
++            )
++            expected_hash = sha256(stored.encode("utf-8")).hexdigest()
++            db = SessionDB(db_path=root / "state.db")
++            db.create_session(
++                session_id,
++                "kanban",
++                model="test/model",
++                system_prompt=stored,
++                cwd=str(canonical),
++            )
++            agent = self._make_agent(db)
++            agent.session_id = session_id
++            agent.platform = "kanban"
++            agent.provider = "openrouter"
++            agent._build_system_prompt = lambda _message: (_ for _ in ()).throw(
++                AssertionError("stored prompt must be restored, not rebuilt")
++            )
++
++            assert resolve_session_identity_cwd() == canonical
++            assert resolve_agent_cwd() == candidate
++            with patch.object(db, "update_system_prompt", wraps=db.update_system_prompt) as update:
++                _restore_or_build_system_prompt(
++                    agent, None, [{"role": "user", "content": "review"}]
++                )
++
++            # Exercise the supported tools rather than only asserting their
++            # resolver: relative file reads and local terminal commands must
++            # both remain in the candidate workspace.
++            assert "candidate evidence" in read_file_tool(
++                "review.txt", task_id=session_id
++            )
++            pwd = json.loads(terminal_tool(command="pwd", task_id=session_id))
++            assert pwd["exit_code"] == 0
++            assert Path(pwd["output"].strip()).resolve() == candidate.resolve()
++
++            restored = db.get_session(session_id)
++            assert agent.session_id == session_id
++            assert agent._cached_system_prompt.encode("utf-8") == stored.encode("utf-8")
++            assert (
++                sha256(agent._cached_system_prompt.encode("utf-8")).hexdigest()
++                == expected_hash
++            )
++            assert restored is not None
++            assert restored["system_prompt"].encode("utf-8") == stored.encode("utf-8")
++            assert (
++                sha256(restored["system_prompt"].encode("utf-8")).hexdigest()
++                == expected_hash
++            )
++            update.assert_not_called()
++            db.close()
++
+ 
+ 
+ # ---------------------------------------------------------------------------
+@@ -437,6 +574,28 @@ class TestStoredPromptCwdDrift:
+                 "Expected True when stored cwd matches current cwd"
+             )
+ 
++    def test_affinity_review_keeps_stored_prompt_when_task_cwd_differs(
++        self, monkeypatch, tmp_path
++    ):
++        """Reviewing another worktree must not invalidate the Supervisor prefix."""
++        from agent.conversation_loop import _stored_prompt_matches_runtime
++
++        canonical = tmp_path / "supervisor"
++        candidate = tmp_path / "candidate"
++        canonical.mkdir()
++        candidate.mkdir()
++        agent = self._make_agent()
++        stored_prompt = (
++            self._host_block(str(canonical))
++            + "Model: test/model\n"
++            "Provider: openrouter\n"
++        )
++        monkeypatch.setenv("HERMES_KANBAN_AFFINITY_TOKEN", "lease")
++        monkeypatch.setenv("HERMES_KANBAN_SESSION_WORKSPACE", str(canonical))
++        monkeypatch.setenv("HERMES_KANBAN_WORKSPACE", str(candidate))
++        monkeypatch.setenv("TERMINAL_CWD", str(candidate))
++
++        assert _stored_prompt_matches_runtime(agent, stored_prompt) is True
+     def test_project_context_cannot_force_a_rebuild(self):
+         """🔴 CACHE INVARIANT: user project text must never invalidate the prompt.
+ 
+@@ -528,3 +687,17 @@ class TestStoredPromptCwdDrift:
+             assert "Platform: cli" in parts["volatile"], (
+                 "Built prompt missing 'Platform: cli' — drift detection cannot read it"
+             )
++
++
++def test_affinity_worker_forces_in_place_compression(monkeypatch):
++    """Exact flow affinity cannot rotate to a child session id."""
++    from agent.conversation_compression import _compression_in_place_for_agent
++
++    class Agent:
++        compression_in_place = False
++
++    monkeypatch.delenv("HERMES_KANBAN_AFFINITY_TOKEN", raising=False)
++    assert _compression_in_place_for_agent(Agent()) is False
++
++    monkeypatch.setenv("HERMES_KANBAN_AFFINITY_TOKEN", "lease-token")
++    assert _compression_in_place_for_agent(Agent()) is True
