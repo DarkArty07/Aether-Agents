@@ -395,7 +395,7 @@ def test_wheel_and_sdist_include_valid_portable_canonical_skill_resources(
             # Packaged canonical resources carry an explicit, intentional version per
             # skill: a bump must be recorded here so accidental drift stays caught.
             expected_version = {
-                "supervisor-decomposition": "0.1.2",
+                "supervisor-decomposition": "0.1.3",
                 "implementation-evidence": "0.1.1",
             }.get(skill_name, "0.1.0")
 

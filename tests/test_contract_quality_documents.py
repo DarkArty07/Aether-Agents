@@ -25,7 +25,7 @@ SKILLS = {
 SKILL_VERSIONS = {
     "objective-contract-design": "0.1.0",
     "contract-result-review": "0.1.0",
-    "supervisor-decomposition": "0.1.2",
+    "supervisor-decomposition": "0.1.3",
     "implementation-evidence": "0.1.1",
 }
 
@@ -119,6 +119,12 @@ def test_supervisor_convergence_guidance_preserves_authority() -> None:
     assert "review-round number alone is not a reason" in normalized_skill
     assert "generic `sdlc-review` skill" in normalized_skill
     assert "treat it as supplementary" in normalized_skill
+    assert "compact incremental record in the existing review handoff/comment" in normalized_skill
+    assert "documentation-only delta normally reuses" in normalized_skill
+    assert "functional delta reruns the affected required controls" in normalized_skill
+    assert "must not turn an optional improvement into a blocking requirement" in normalized_skill
+    assert "At the first source-backed indication that a premise may be false" in normalized_skill
+    assert "does not establish efficacy or runtime adoption" in normalized_skill
     assert "Isolated implementation defect" in skill
     assert "unsuitable shared-state isolation design" in skill
     assert "Unrelated optional refactor" in skill
@@ -126,23 +132,28 @@ def test_supervisor_convergence_guidance_preserves_authority() -> None:
 
 
 def test_review_return_cannot_silently_redefine_acceptance() -> None:
-    implementer = (
-        RESOURCES / "skills/implementation-evidence/SKILL.md"
-    ).read_text(encoding="utf-8")
-    spec = (ROOT / "specs/r7-supervision-and-convergence/spec.md").read_text(
+    implementer = (RESOURCES / "skills/implementation-evidence/SKILL.md").read_text(
         encoding="utf-8"
     )
+    spec = (ROOT / "specs/r7-supervision-and-convergence/spec.md").read_text(encoding="utf-8")
     assert "A review return is execution guidance, not a" in implementer
     assert "before changing code or tests" in implementer
     assert "FR-735a" in spec
     assert "FR-737c" in spec
     assert "Implementer-pinned skills/model overrides" in spec
+    assert "A board key alone never opts a task into Aether" in spec
+    assert "Legacy exact-flow cycles without the snapshot remain supported" in spec
+    assert "creates no magical fail-closed classification" in spec
 
 
 def test_native_loader_reads_exact_documents_in_disposable_home(tmp_path: Path) -> None:
     if importlib.util.find_spec("hermes_cli") is None:
         pytest.skip("native loader requires the already provisioned Hermes interpreter")
-    home = tmp_path / "home"
+    # Hermes must select the explicitly materialized canonical profile, not an
+    # OS-home/private copy with the same names. Everything is established in
+    # the child environment before its first Hermes import.
+    home = tmp_path / "canonical-profile"
+    private_home = tmp_path / "private-os-home"
     expected = {}
     for name in SKILLS:
         data = (RESOURCES / "skills" / name / "SKILL.md").read_bytes()
@@ -150,6 +161,9 @@ def test_native_loader_reads_exact_documents_in_disposable_home(tmp_path: Path) 
         target.parent.mkdir(parents=True)
         target.write_bytes(data)
         expected[name] = hashlib.sha256(data).hexdigest()
+        private_target = private_home / ".hermes" / "skills" / name / "SKILL.md"
+        private_target.parent.mkdir(parents=True, exist_ok=True)
+        private_target.write_text("private learned copy; must not be selected\n", encoding="utf-8")
     env = os.environ.copy()
     for key in list(env):
         if key.startswith("HERMES_KANBAN_") or key in {
@@ -162,6 +176,9 @@ def test_native_loader_reads_exact_documents_in_disposable_home(tmp_path: Path) 
     env.update(
         {
             "HERMES_HOME": str(home),
+            "HOME": str(private_home),
+            "HERMES_KANBAN_HOME": str(tmp_path / "kanban-home"),
+            "HERMES_KANBAN_DB": str(tmp_path / "kanban-home" / "kanban.db"),
             "XDG_CONFIG_HOME": str(tmp_path / "config"),
             "XDG_DATA_HOME": str(tmp_path / "data"),
             "XDG_STATE_HOME": str(tmp_path / "state"),
@@ -180,6 +197,7 @@ for name in json.loads(os.environ['CHECK_SKILL_NAMES']):
     data = response['content'].encode('utf-8')
     source = Path(response['_source_path']).resolve()
     source.relative_to(Path(os.environ['HERMES_HOME']).resolve())
+    assert source != (Path(os.environ['HOME']) / '.hermes' / 'skills' / name / 'SKILL.md')
     result[name] = hashlib.sha256(data).hexdigest()
 print(json.dumps(result, sort_keys=True))
 """

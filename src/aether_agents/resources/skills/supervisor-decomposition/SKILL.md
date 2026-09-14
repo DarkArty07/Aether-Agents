@@ -1,7 +1,7 @@
 ---
 name: supervisor-decomposition
 description: Use when Supervisor decomposes or reviews units.
-version: 0.1.2
+version: 0.1.3
 author: Morfeo (Aether role), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -162,6 +162,22 @@ source provenance, convergence and proportional re-review.
    A genuinely new defect or introduced regression still requires its own reproduction
    and may prevent acceptance. Never approve merely because a round budget was reached,
    hide a failure, or remove a preservation obligation to finish sooner.
+7. **Leave a compact incremental record in the existing review handoff/comment.** State
+   the prior candidate, new candidate and actual delta; mark each prior evidence item as
+   still current or invalidated with its concrete reason; and list defects still open or
+   retired with their supporting check. A documentation-only delta normally reuses
+   unaffected functional evidence after inspecting its scope. A functional delta reruns
+   the affected required controls. A contradictory return rechecks the exact obligation:
+   it may surface a material design question, but it must not turn an optional improvement
+   into a blocking requirement. This is a compact use of the existing handoff, not a
+   second registry, semantic judge or review engine.
+
+At the first source-backed indication that a premise may be false or a material design
+question exists, use the existing collaboration comment path to consult the originating
+design steward. Preserve the current candidate and continue unaffected work; do not wait
+for terminal review, silently substitute a new premise, or call the consultation final
+acceptance. This reuses the established collaboration procedure and does not establish
+efficacy or runtime adoption.
 
 ### Review contrasts (illustrative, not behavioral evidence)
 
