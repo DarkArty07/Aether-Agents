@@ -1,7 +1,7 @@
 ---
 name: supervisor-decomposition
 description: Use when Supervisor decomposes or reviews units.
-version: 0.1.1
+version: 0.1.2
 author: Morfeo (Aether role), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -115,11 +115,19 @@ current limits and authority as constraints, not settings to tune during decompo
 Supervisor owns convergence, not only a sequence of individually valid defect reports.
 Use the existing review comments, evidence and breakdown; do not add a form, registry,
 classifier, judge, automatic approval threshold or new lifecycle.
+For Aether same-card review this canonical procedure owns the product review method.
+Do not independently add Hermes's generic `sdlc-review` skill unless the trusted task
+explicitly pins it; if it is already present in a resumed conversation, treat it as
+supplementary. On conflict, Aether's canonical authority/procedure determines acceptance,
+source provenance, convergence and proportional re-review.
 
 1. **Tie findings to current obligations.** For each material defect, identify the
    requirement or preservation boundary, its reproduction and the affected mechanism.
    Separate required corrections from optional improvements. Optional work does not
-   block acceptance; record it without adding it to the unit's scope.
+   block acceptance; record it without adding it to the unit's scope. Bind factual
+   citations to the artifact actually inspected: source coordinates come from the exact
+   Git/raw artifact whose coordinates are reported. A rendered, normalized or transformed
+   copy may help discovery, but its line numbers are not line numbers of the original.
 2. **Review the mechanism together.** Cover its relevant normal path, failures,
    preservation and recovery as one bounded review, not one predictable operation per
    return. For a receipt writer, for example, consider creation, write, refusal and
@@ -144,12 +152,16 @@ classifier, judge, automatic approval threshold or new lifecycle.
 5. **Consolidate the handoff.** Give the known findings together, the common mechanism
    when supported, and observable verification. Avoid both an open-ended instruction
    to keep hardening and a second oversized specification inside the card.
-6. **Re-review proportionately.** Check the changed risk surface, prior mandatory
-   controls and affected regressions. Do not reopen settled unrelated areas without
-   evidence or invent universal guarantees outside the agreed boundary. A genuinely
-   new defect or introduced regression still requires its own reproduction and may
-   prevent acceptance. Never approve merely because a round budget was reached, hide
-   a failure, or remove a preservation obligation to finish sooner.
+6. **Re-review the delta proportionately.** Identify the previously reviewed candidate,
+   the new candidate and their actual delta first. Reuse prior evidence whose artifact,
+   environment, obligation and risk surface remain unchanged; re-run affected mandatory
+   controls and regressions when the delta can invalidate them. If a broad verification
+   is repeated, state what changed or what specific risk invalidated the earlier result;
+   the review-round number alone is not a reason. Do not reopen settled unrelated areas
+   without evidence or invent universal guarantees outside the agreed boundary.
+   A genuinely new defect or introduced regression still requires its own reproduction
+   and may prevent acceptance. Never approve merely because a round budget was reached,
+   hide a failure, or remove a preservation obligation to finish sooner.
 
 ### Review contrasts (illustrative, not behavioral evidence)
 

@@ -22,6 +22,12 @@ SKILLS = {
     "supervisor-decomposition": "Supervisor",
     "implementation-evidence": "Implementer",
 }
+SKILL_VERSIONS = {
+    "objective-contract-design": "0.1.0",
+    "contract-result-review": "0.1.0",
+    "supervisor-decomposition": "0.1.2",
+    "implementation-evidence": "0.1.1",
+}
 
 
 @pytest.mark.parametrize("name,role", SKILLS.items())
@@ -34,8 +40,7 @@ def test_skill_metadata_and_single_file_scope(name: str, role: str) -> None:
     assert metadata["name"] == name
     assert role in metadata["description"]
     assert len(metadata["description"]) <= 60
-    expected_version = "0.1.1" if name == "supervisor-decomposition" else "0.1.0"
-    assert metadata["version"] == expected_version
+    assert metadata["version"] == SKILL_VERSIONS[name]
     expected_author = (
         "Christopher, Hermes Agent"
         if name == "contract-result-review"
@@ -81,6 +86,7 @@ def test_supervisor_convergence_guidance_preserves_authority() -> None:
     """Check documented obligations, not whether a running model obeys them."""
     soul = (RESOURCES / "profiles/supervisor/SOUL.md").read_text()
     skill = (RESOURCES / "skills/supervisor-decomposition/SKILL.md").read_text()
+    normalized_skill = " ".join(skill.split())
     spec = (ROOT / "specs/r7-supervision-and-convergence/spec.md").read_text()
     for phrase in (
         "Own review convergence",
@@ -105,11 +111,32 @@ def test_supervisor_convergence_guidance_preserves_authority() -> None:
     ):
         assert phrase in skill
     assert "FR-736b" in spec
+    assert "FR-736c" in spec
+    assert "FR-736d" in spec
     assert "no new engine, form or judge is required" in spec
+    assert "exact Git/raw artifact" in normalized_skill
+    assert "Re-review the delta proportionately" in normalized_skill
+    assert "review-round number alone is not a reason" in normalized_skill
+    assert "generic `sdlc-review` skill" in normalized_skill
+    assert "treat it as supplementary" in normalized_skill
     assert "Isolated implementation defect" in skill
     assert "unsuitable shared-state isolation design" in skill
     assert "Unrelated optional refactor" in skill
     assert "new real preservation regression" in skill
+
+
+def test_review_return_cannot_silently_redefine_acceptance() -> None:
+    implementer = (
+        RESOURCES / "skills/implementation-evidence/SKILL.md"
+    ).read_text(encoding="utf-8")
+    spec = (ROOT / "specs/r7-supervision-and-convergence/spec.md").read_text(
+        encoding="utf-8"
+    )
+    assert "A review return is execution guidance, not a" in implementer
+    assert "before changing code or tests" in implementer
+    assert "FR-735a" in spec
+    assert "FR-737c" in spec
+    assert "Implementer-pinned skills/model overrides" in spec
 
 
 def test_native_loader_reads_exact_documents_in_disposable_home(tmp_path: Path) -> None:
