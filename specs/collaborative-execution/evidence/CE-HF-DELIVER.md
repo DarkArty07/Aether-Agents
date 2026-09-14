@@ -1,6 +1,6 @@
 # Implementation Evidence — Unit CE-HF-DELIVER
 
-**Status:** Round-2 corrections implemented and locally verified; ready for same-card
+**Status:** Round-3 corrections implemented and locally verified; ready for same-card
 Supervisor re-review. This is unit evidence, not integrated project acceptance, release
 evidence, or live messaging qualification.
 
@@ -13,7 +13,9 @@ evidence, or live messaging qualification.
 - **Unit compatibility impact:** `minor` (optional collaboration delivery is additive;
   the legacy terminal-notification cursor and ordinary delivery path remain intact)
 - **Round-1 review:** `changes_requested` on `3b569a345b` (two CE-06/D3/D5 defects);
-  both are corrected in `4942a7cfa3` and pinned by focused tests.
+  both corrected in `4942a7cfa3`.
+- **Round-2 review:** `changes_requested` on `4942a7cfa3` (exclusive CORE claim + skip-after-claim
+  starved concurrent still-live consumers watching the same opted-in root); corrected in `d1d1f9e9f4`.
 
 ## 1. Repository identity, prerequisites and scope
 
@@ -22,10 +24,11 @@ evidence, or live messaging qualification.
 | Aether contract/base | `183bd7a4944a5db7d22091c402a74383a80100fa` | Task/decomposition input; no Aether production files changed |
 | Maintained fork base | `DarkArty07/aether-hermes` `3b81e9d91cc3a0662b910726a44c94ed328b1e90` | Re-verified; baseline worktree created from this exact commit |
 | Reviewed CORE parent | `20db06c0b8441190830aa72e3c0de6fdce6b8db4` | Parent handoff; actual reviewed helpers inspected before editing |
-| Round-1 candidate (superseded) | `3b569a345b2c4ba94d20b9216234d8f897e6b281` | Review target that received `changes_requested` |
-| **DELIVER candidate** | `4942a7cfa304cc5e240adea07779a0be18299bd1` | Local commit on isolated fork branch `feat/334-deliver-tui-gateway` |
-| `gateway/kanban_watchers.py` @ candidate | `c56b1d0ec0623f6f3cff6a23e87a7e3b68cfd5bc769191ef96a540736e29902d` | `git show 4942a7cfa3:gateway/kanban_watchers.py \| sha256sum`; equals the clean worktree file |
-| `tui_gateway/server.py` @ candidate | `501ec4c7c7efc28e97413f5bef8976269f930e91969b1084b90fb5e8f309b57f` | `git show 4942a7cfa3:tui_gateway/server.py \| sha256sum`; equals the clean worktree file |
+| Round-1 candidate (superseded) | `3b569a345b2c4ba94d20b9216234d8f897e6b281` | Review target that received round-1 `changes_requested` |
+| Round-2 candidate (superseded) | `4942a7cfa304cc5e240adea07779a0be18299bd1` | Review target that received round-2 `changes_requested` |
+| **DELIVER candidate** | `d1d1f9e9f4eb8fc5998a44274c5d5e16541f6e24` | Local commit on isolated fork branch `feat/334-deliver-tui-gateway` |
+| `gateway/kanban_watchers.py` @ candidate | `3350441f69cd881ad5c5ac4ae333d366ba7a1189c227679812c6faafcc4fbf31` | `git show d1d1f9e9f4:gateway/kanban_watchers.py \| sha256sum`; equals the clean worktree file |
+| `tui_gateway/server.py` @ candidate | `140824eadf8a676fc6ecbdc405cff7a432904330945fa636e0d869a1def8bfa0` | `git show d1d1f9e9f4:tui_gateway/server.py \| sha256sum`; equals the clean worktree file |
 | Baseline target hashes | `gateway/kanban_watchers.py` `755091a353cc3e6a9928e2eee016aa3a2b74b95e690282aa59df442850a10f5d`; `tui_gateway/server.py` `39d2e7a3c04e5810a803c8023719fb72b02c842122ba242553d37276b9a6e096` | Both matched before mutation and matched the CORE tip before this unit began; unchanged by this unit |
 | CORE consume API | `list_pending_collaboration`, `claim_collaboration_messages`, `get_collaboration_message`, `advance_collaboration_message`, `get_collaboration_root` | Inspected in the reviewed CORE candidate; no second table/cursor was added |
 
@@ -127,6 +130,25 @@ used instead. No knowledge graph claim is used as acceptance evidence.
    No stamped D4-D5 semantic was varied, and the CORE claim/list/advance API is still the
    only collaboration state interface used.
 
+### Round-3 corrections (defect from the round-2 review)
+
+9. **No starvation between concurrent live consumers (filter-before-claim and rewind-on-remembered,
+   `gateway/kanban_watchers.py:325-351, 788-809, 876-886`; `tui_gateway/server.py:9850-9875, 9975-10020`).**
+   Round 2 recorded queued wakes per process to prevent re-wake loops on lease reclaim.
+   However, because CORE's `claim_collaboration_messages` grants an exclusive lease upon claim,
+   a live consumer that claimed an expired row and then skipped it would refresh the lease,
+   holding exclusive ownership and starving other concurrent consumers (e.g. gateway tick
+   holding the lease and starving TUI from collecting, and vice versa in TUI-first).
+   Both consumers now implement two composing safeguards:
+   (a) **Filter before claim:** before calling `claim_collaboration_messages`, each consumer
+   inspects pending root records (via `list_pending_collaboration`). If all pending records for
+   that root have already been processed by this live consumer, claiming is skipped entirely,
+   leaving the expired or pending record free for other consumers.
+   (b) **Immediate rewind:** if `claim_collaboration_messages` ever returns a record already
+   remembered, `_kanban_rewind_collaboration` immediately restores `delivery_state="pending"`
+   using the matching lease token, releasing exclusive ownership without waiting for lease expiry.
+   Process-loss redelivery to a fresh consumer remains intact (empty in-process record).
+
 ## 3. Requirement-to-evidence coverage
 
 | Obligation | Check and observed result | Evidence |
@@ -135,6 +157,7 @@ used instead. No knowledge graph claim is used as acceptance evidence.
 | CE-06 / D3: a queued wake is not endlessly re-enqueued to a still-live origin (round-2 fix) | Gateway: one tick queues exactly one internal wake (`wake.internal is True`, `adapter.sends == []`), then after `UPDATE kanban_collaboration SET lease_expires = now-10` a second tick on the same live runner keeps `len(adapter.wakes) == 1`, `adapter.sends == []`, and the row at `delivery_state="queued"`. TUI: after the same lease expiry, `_collect_kanban_collaboration` returns `[]`, the row stays `queued` with `acknowledged_at is None`, and the notify cursor is unchanged; the running poller submits exactly one agent turn across two further passes. | `test_gateway_live_origin_not_rewoken_after_lease_reclaim`; `TestTuiCollaborationLeaseAndRouteScope::test_live_session_is_not_rewoken_after_lease_reclaim`, `::test_poller_loop_does_not_resubmit_after_lease_reclaim` — PASS (RED before the fix: 5 failed / 3 passed) |
 | CE-06 / D3: process loss still redelivers an unconsumed record (round-2 boundary) | Gateway: a fresh consumer instance on the same board (same adapter) re-wakes the aged record (`wakes 1 -> 2`, `internal is True`, no `adapter.send`) and the row stays `queued` with `acknowledged_at is None`. TUI: with the process-lifetime record reset, the collector returns the same record id again, still `queued`. | `test_gateway_process_loss_redelivers_unconsumed_record`; `TestTuiCollaborationLeaseAndRouteScope::test_process_loss_redelivers_unconsumed_record` — PASS |
 | CE-06 / D5: uniqueness is among routes this consumer would use (round-2 fix) | Gateway with telegram + tui subscriptions on one root: exactly one internal wake on the telegram route, `source.chat_id == "chat-100"`, row `queued`. Two distinct telegram chats on one root: no wake, no `adapter.send`, row left `pending`. TUI on the same shape: one collected item for the matching `session_key`, `recipient_kind="origin"`, still `queued`. | `test_gateway_tui_sub_does_not_make_telegram_origin_ambiguous`; `test_gateway_two_telegram_chats_on_one_root_stay_unavailable`; `TestTuiCollaborationLeaseAndRouteScope::test_telegram_sub_on_same_root_does_not_block_tui_origin` — PASS |
+| CE-06 / D5: dual-consumer composition on one root without starvation (round-3 fix) | Both orders tested against the same root with telegram + tui notify subs and origin request. Order 1 (Gateway first): gateway queues 1 wake, immediate TUI collect returns 0 while lease live, lease expires, second gateway tick stays at 1 wake and does not refresh lease, TUI collects 1 item; subsequent passes do not re-enqueue. Order 2 (TUI first): TUI collects 1 item, gateway ticks 0 wakes while lease live, lease expires, second TUI collect returns 0 and does not refresh lease, gateway ticks 1 wake; subsequent passes do not re-enqueue. In both orders: adapter.send == [], no TUI status.update, delivery_state remains queued, acknowledged_at is None, notify cursors untouched. | `test_dual_consumers_compose_without_starvation_gateway_first`; `test_dual_consumers_compose_without_starvation_tui_first` — PASS (RED on 4942a7cfa3: 2 failed) |
 | CE-06: independent cursor and no passive human ping | Both focused suites assert the legacy subscription `last_event_id` is unchanged. Gateway asserts `adapter.send()` is empty and only `deliver_wake` is called; TUI asserts zero `status.update` events for collaboration. | Gateway first test and TUI `test_poller_loop_dispatches_collaboration_without_passive_status_update` — PASS |
 | CE-06: exact gateway chat/thread/API session | Gateway controlled sink verifies `SessionSource.chat_id` and `thread_id`; API-server fixture verifies `deliver_wake(session_id=raw subscription id, source=None)`. | `test_gateway_collaboration_delivery_wakes_origin_without_passive_ping`; `test_gateway_api_server_collaboration_uses_exact_session_without_ping` — PASS |
 | CE-06: exact TUI origin and no reroute | Mismatched/finalized TUI sessions return no item and preserve the pending row; missing root route in the gateway leaves the row pending despite an inherited child route. | `TestTuiCollaborationPoller::test_finalized_or_mismatched_origin_never_reroutes`; `test_gateway_missing_root_route_is_not_rerouted_to_child` — PASS |
@@ -217,7 +240,19 @@ one the consumer actually produced. The round-1 sources were restored with
 `git checkout HEAD -- …` and their hashes re-verified against section 1 before the
 candidate suites below were run.
 
-### Candidate `4942a7cfa3` (committed revision, working tree clean)
+### Round-3 fail-first on the round-2 candidate `4942a7cfa3`
+
+The two new dual-consumer composition pins were run against the round-2 candidate's committed production sources (`git checkout 4942a7cfa3 -- gateway/kanban_watchers.py tui_gateway/server.py`):
+
+```text
+2 failed in 0.92s
+FAILED tests/gateway/test_kanban_collaboration_delivery.py::test_dual_consumers_compose_without_starvation_gateway_first (assert 0 == 1 where 0 = len([]), TUI starved by gateway tick)
+FAILED tests/gateway/test_kanban_collaboration_delivery.py::test_dual_consumers_compose_without_starvation_tui_first (assert 0 == 1 where 0 = len([]), Gateway starved by TUI collect)
+```
+
+The round-2 sources were restored and their hashes re-verified against section 1 before the candidate suites below were run.
+
+### Candidate `d1d1f9e9f4` (committed revision, working tree clean)
 
 Interpreter: this fork worktree's `.venv/bin/python` (Python 3.11.15, created with
 `uv sync --extra dev --frozen`).
@@ -229,10 +264,10 @@ HERMES_TEST_FILE_RETRIES=0 python -m pytest -q \
   tests/tui_gateway/test_kanban_notify_poller.py \
   tests/gateway/test_kanban_collaboration_delivery.py \
   tests/tui_gateway/test_kanban_collaboration_poller.py
-613 passed in 70.74s         # required set; 605 in round 1 plus the 8 new pins
+615 passed in 39.19s (repeat 38.21s)         # required set; 613 in round 2 plus the 2 dual-consumer pins
 
-# Owned focused modules only, four consecutive runs (timing-sensitive TUI poller pin):
-21 passed in 5.93s / 21 passed in 6.07s / 21 passed in 6.13s / 21 passed in 6.15s
+# Owned focused modules only:
+23 passed in 6.20s
 
 # Reviewed CORE regression from the candidate import context:
 HERMES_TEST_FILE_RETRIES=0 python -m pytest -q \
@@ -240,7 +275,7 @@ HERMES_TEST_FILE_RETRIES=0 python -m pytest -q \
   tests/tools/test_kanban_collaboration.py \
   tests/tools/test_kanban_tools.py \
   tests/hermes_cli/test_kanban_session_affinity.py
-102 passed in 10.40s
+102 passed in 9.32s
 
 ruff check gateway/kanban_watchers.py tui_gateway/server.py \
   tests/gateway/test_kanban_collaboration_delivery.py \
@@ -255,15 +290,15 @@ exit code 0
 
 The pre-existing fork files contain unrelated formatting drift, so the production files
 were checked with Ruff rather than reformatted wholesale. The only formatting action in
-this unit was `ruff format` on the owned TUI test module (round-2 pins).
+this unit was `ruff format` on the owned test modules.
 
 ### Reused (not re-run this round)
 
 - Round-1 receipt of the pre-consumer baseline (592 passed) — superseded by the fresh
   round-2 re-run above.
 - Supervisor's independent overlay of the CORE-parent `gateway/kanban_watchers.py` and
-  `tui_gateway/server.py` under the candidate tests (`11 failed / 2 passed`) — independent
-  evidence recorded in the round-1 review comment; not re-run by the implementer.
+  `tui_gateway/server.py` under the candidate tests (`18 failed / 3 passed`) — independent
+  evidence recorded in the round-2 review comment; not re-run by the implementer.
 
 ## 5. Isolation incident and live-board preservation
 
@@ -349,11 +384,11 @@ route-residue rows) unchanged and `open`.
 
 ```markdown
 ### HLP-334: TUI and gateway collaboration consumers
-- **Status:** Candidate implemented in maintained fork at commit `4942a7cfa304cc5e240adea07779a0be18299bd1`.
+- **Status:** Candidate implemented in maintained fork at commit `d1d1f9e9f4eb8fc5998a44274c5d5e16541f6e24`.
 - **Issue:** [Aether #334](https://github.com/DarkArty07/Aether-Agents/issues/334).
 - **Objective Contract:** `oc_a28ff9b7fa20d29d@v1` (SHA-256 `7a51dc2b3d2d62788b1228f823f9def58652e48d48fcecaecb5293f34dde7de5`).
 - **Files touched:** `gateway/kanban_watchers.py`, `tui_gateway/server.py`, `tests/gateway/test_kanban_collaboration_delivery.py`, `tests/tui_gateway/test_kanban_collaboration_poller.py`.
-- **Scope & Behavior:** Adds maintained-fork gateway and TUI consumers for CORE's `kanban_collaboration` adjunct. Each consumer claims collaboration records through the distinct bounded lease API rather than `advance_notify_cursor`, routes only to the exact root subscription/session/chat/thread on its board within the platforms that consumer can reach, fences busy sessions, queues each wake once per live process (bounded process-lifetime record; a lease reclaim after expiry never re-wakes a still-live origin/session, while process loss still redelivers), keeps queued work durable until explicit consumption, labels peer evidence as non-owner advice, emits no passive human ping for internal collaboration, preserves ordinary terminal notifications, and leaves missing/ambiguous/closed origins unavailable instead of rerouting.
+- **Scope & Behavior:** Adds maintained-fork gateway and TUI consumers for CORE's `kanban_collaboration` adjunct. Each consumer claims collaboration records through the distinct bounded lease API rather than `advance_notify_cursor`, routes only to the exact root subscription/session/chat/thread on its board within the platforms that consumer can reach, fences busy sessions, queues each wake once per live process (bounded process-lifetime record; a lease reclaim after expiry never re-wakes a still-live origin/session, while process loss still redelivers), prevents concurrent consumer starvation by filtering remembered IDs before claim and immediately rewinding skipped claims, keeps queued work durable until explicit consumption, labels peer evidence as non-owner advice, emits no passive human ping for internal collaboration, preserves ordinary terminal notifications, and leaves missing/ambiguous/closed origins unavailable instead of rerouting.
 - **Upstream Relationship:** Downstream enhancement to Hermes Agent kanban coordination; consumes the reviewed CORE native collaboration store/tool surface without adding a second bus or changing legacy notification semantics.
 - **Rollback:** Restore `gateway/kanban_watchers.py` and `tui_gateway/server.py` from the reviewed CORE parent commit `20db06c0b8441190830aa72e3c0de6fdce6b8db4`; the additive CORE schema/history remains intact and no down-migration is required for this consumer-only unit.
 - **Maintenance / Retirement:** Retain while Aether contracts use active multi-role collaboration; retire the consumer delta when the native collaboration contract is retired or an equivalent upstream Hermes capability passes its behavior gate.
