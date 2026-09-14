@@ -3,15 +3,44 @@
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import json
 import os
 import signal
 import subprocess
 import tempfile
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
 from .common import KnowledgeError, clean_environment
+
+_CANCEL_EVENT: contextvars.ContextVar[threading.Event | None] = contextvars.ContextVar(
+    "aether_graphify_cancel_event", default=None
+)
+
+
+@contextlib.contextmanager
+def graphify_cancel_scope(event: threading.Event | None):
+    """Make one operation's cancellation visible to copied worker contexts."""
+    token = _CANCEL_EVENT.set(event)
+    try:
+        yield
+    finally:
+        _CANCEL_EVENT.reset(token)
+
+
+def _host_interrupt_requested() -> bool:
+    """Read the optional Hermes host interrupt without making it a dependency."""
+    try:
+        from tools.interrupt import is_interrupted  # type: ignore[import-not-found,import-untyped]
+    except Exception:
+        return False
+    try:
+        return bool(is_interrupted())
+    except Exception:
+        return False
 
 
 class GraphifyBackend:
@@ -31,6 +60,7 @@ class GraphifyBackend:
         graph_path: Path | None = None,
         arguments: dict[str, Any] | None = None,
         timeout: float | None = None,
+        cancel_event: threading.Event | None = None,
     ) -> dict[str, Any]:
         if not self.python.is_file():
             raise KnowledgeError(
@@ -51,6 +81,16 @@ class GraphifyBackend:
         effective_timeout = (
             min(self.timeout, float(timeout)) if timeout is not None else self.timeout
         )
+        operation_cancel = cancel_event or _CANCEL_EVENT.get()
+
+        def terminate(process: subprocess.Popen[bytes]) -> None:
+            """Kill the whole worker group, not only the Python parent."""
+            with contextlib.suppress(ProcessLookupError):
+                if os.name == "posix":
+                    os.killpg(process.pid, signal.SIGKILL)
+                else:
+                    process.kill()
+
         with tempfile.TemporaryDirectory(prefix="aether-graphify-") as scratch:
             home = Path(scratch)
             try:
@@ -68,19 +108,48 @@ class GraphifyBackend:
                     "COMPONENT_UNAVAILABLE", "The Graphify process could not start."
                 ) from exc
             try:
-                stdout, _stderr = process.communicate(encoded, timeout=effective_timeout)
-            except BaseException as exc:
-                # Cancellation and timeout must not leave a detached indexer alive.
-                with contextlib.suppress(ProcessLookupError):
-                    if os.name == "posix":
-                        os.killpg(process.pid, signal.SIGKILL)
-                    else:
-                        process.kill()
-                process.communicate()
-                if isinstance(exc, subprocess.TimeoutExpired):
-                    raise KnowledgeError(
-                        "TIMEOUT", "Graphify exceeded its execution limit."
-                    ) from exc
+                result_holder: dict[str, Any] = {}
+
+                def communicate() -> None:
+                    try:
+                        result_holder["value"] = process.communicate(encoded)
+                    except BaseException as exc:  # pragma: no cover - defensive transport path
+                        result_holder["error"] = exc
+
+                exchange = threading.Thread(target=communicate, daemon=True)
+                exchange.start()
+                deadline = time.monotonic() + effective_timeout
+                while exchange.is_alive():
+                    if (
+                        operation_cancel is not None and operation_cancel.is_set()
+                    ) or _host_interrupt_requested():
+                        terminate(process)
+                        exchange.join()
+                        raise KnowledgeError(
+                            "OPERATION_CANCELLED", "Graphify operation was cancelled."
+                        )
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        terminate(process)
+                        exchange.join()
+                        raise KnowledgeError("TIMEOUT", "Graphify exceeded its execution limit.")
+                    exchange.join(min(0.025, remaining))
+                if "error" in result_holder:
+                    error = result_holder["error"]
+                    if isinstance(error, subprocess.TimeoutExpired):
+                        raise KnowledgeError(
+                            "TIMEOUT", "Graphify exceeded its execution limit."
+                        ) from error
+                    raise error
+                stdout, _stderr = result_holder["value"]
+            except KnowledgeError:
+                raise
+            except BaseException:
+                # Cancellation, timeout and host interrupts must not leave a detached indexer alive.
+                if process.poll() is None:
+                    terminate(process)
+                with contextlib.suppress(Exception):
+                    process.communicate()
                 raise
         if len(stdout) > 2_000_000:
             raise KnowledgeError("RESULT_TOO_LARGE", "Graphify returned an oversized result.")
