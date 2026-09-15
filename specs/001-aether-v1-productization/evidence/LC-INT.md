@@ -112,18 +112,73 @@ above) on a quiet machine, unless stated otherwise:
 | `scripts/check_documentation.py` | passed |
 | `scripts/check_public_artifacts.py` | passed |
 | `policy` job steps 1–5, run locally from the workflow's own `run:` blocks | exit 0 each (with the guard correction in place; see §4.1 for the current red state) |
-| CI coverage lane (CI form: exact-Hermes checkout + disposable hash-locked Graphify component) | 1810 passed, 9 skipped, **1 failed**; `coverage report --format=total` = **78** against the committed floor `fail_under = 78` (`pyproject.toml:89`) |
-| Graphify native lane in the isolated component | 36 passed |
+| CI coverage lane, **in CI** (PR #442, run `34959238413`, head `be9f4ac`) | **RED in all three jobs** at step `Enforce integrated coverage floor` — see §5.2. 3.11/3.13: 12 failed, 1785 passed, 23 skipped, 587 subtests; 3.12: 13 failed, 1784 passed, 23 skipped. Pytest exits non-zero under `set -euo pipefail`, so the step aborts **before** the Graphify append and `coverage report`; the floor total was not produced in CI |
+| CI coverage lane, same commands re-run locally | 1810 passed, 9 skipped, **1 failed**; `coverage report --format=total` = **78** against the committed floor `fail_under = 78` (`pyproject.toml:89`, `precision = 0`) — **diagnostic only, not representative of CI**: the operator machine resolves the offline build requirement from a warm `uv` cache, so the eleven editable-tooling nodes that fail in CI pass here |
+| Graphify native lane in the isolated component (local) | 36 passed |
+| Contract's named `pytest --cov=aether_agents --cov-report=term-missing` | **not usable as written in this environment** — see §5.1 |
 
-The single coverage-lane failure is
-`tests/test_telegram_monitor_delivery.py::test_exact_hermes_single_attempt_seam_never_replays_or_falls_back`.
-Attribution, measured: the test predates this objective (introduced by `9aead4c`, an ancestor
-of `origin/main`) and it fails only when the process resolves the exact Hermes source and the
-test's own checkout resolver disagree — here because the lane exports `PYTHONPATH` to the
-freshly created checkout while `AETHER_EXACT_HERMES_CHECKOUT` is unset, so the resolver
-returned the operator's cached checkout instead. The same node passes in the plain canonical
-suite. `observation-qualification` is not a required check and is red on `origin/main` as
-well; this lane records the measurement rather than absorbing or hiding it.
+### 5.1 The two coverage commands, and why only one is authoritative here
+
+The coverage floor is satisfied: the CI-form lane measured a total of **78** with the
+committed floor at `fail_under = 78`. The contract's other named coverage command,
+`uv run --frozen pytest -q --cov=aether_agents --cov-report=term-missing`, cannot be run
+bare in this environment, for two measured reasons:
+
+1. Without the repository runner's exact-Hermes `PYTHONPATH`, collection fails outright:
+   `ModuleNotFoundError: No module named 'hermes_cli'` (1 error, 1 skipped, 6.4 s). This is
+   exactly what `CONTRIBUTING.md` warns about when it says to use the repository runner for
+   exact-Hermes integration coverage.
+2. With that `PYTHONPATH` supplied, the run completes 1747 passed / 11 failed and then raises
+   a coverage `INTERNALERROR`: `DataError: Can't combine statement coverage data with branch
+   data`. Mechanism, measured: the development environment ships an auto-start hook
+   (`.venv/.../a1_coverage.pth`) that starts coverage in subprocesses when
+   `COVERAGE_PROCESS_START`/`COVERAGE_PROCESS_CONFIG` is set, which pytest-cov's `--cov` does
+   set; a child whose working directory is outside the repository (test `tmp_path` roots,
+   which the suite uses heavily) does not find `pyproject.toml`, so it resolves
+   `branch = False` and writes statement-only parallel data
+   (`branch` is `True` from the repository root, `False` from `/tmp` — verified directly).
+   pytest-cov's `finish()` then combines statement-only with branch-enabled data and fails.
+
+This is a pre-existing repository/tooling interaction, not an objective-caused defect: it
+requires neither this branch's changes nor the RC identity, and CI deliberately uses the
+`coverage run` form instead. It is recorded here rather than absorbed. Its consequence for this
+lane's evidence is that the contract's `--cov` command produced no usable floor measurement, and
+the CI-form command produced a floor measurement only on the operator machine — so neither is
+offered as the coverage gate's result, and the gate's real state is §5.2.
+
+### 5.2 Integrated CI state on PR #442 (authoritative for the gate position)
+
+Run `34959238413` (head `be9f4ac`, the current PR tip) is **red in all six non-`pull-request-target`
+jobs**: the three `policy` jobs because the withdrawn `VERSION` guard candidate is not in the
+tree (§4.1), and the three `observation-qualification` jobs because of the coverage lane below.
+
+Failure classes inside the coverage step, verified from the run's own log:
+
+| Class | Nodes | Evidence |
+| --- | --- | --- |
+| Offline editable tooling cannot resolve its build requirement | 11 nodes in `tests/test_hermes_editable.py` (`test_red_green_editable_reconciliation`, `test_offline_mode_reconciliation`, `test_reconcile_raise_on_failure_false`, …) | `AssertionError: Initial editable install failed: … venv1` and `uv build --wheel failed: Building wheel...` |
+| Exact-checkout resolver points at an absent cache directory | `tests/test_same_card_phase_predicates.py::test_initial_review_requires_an_independent_reviewer` | `FileNotFoundError: '/home/runner/.cache/aether-agents'` |
+| Checkpoint authority unverified — **3.12 only** | `tests/test_observation_journal_storage.py::test_checkpoint_sink_derives_review_authority_from_durable_native_assignment` | `CheckpointResult(accepted=False, reason_code='CHECKPOINT_AUTHORITY_UNVERIFIED')` |
+
+**Attribution, measured rather than assumed.** The first two classes are **pre-existing and not
+objective-caused**: `origin/main` run `34825309185` fails the same coverage step with the same
+eleven editable nodes and the same predicate node, and neither file (`tests/test_hermes_editable.py`,
+`tests/test_same_card_phase_predicates.py`) appears in this objective's diff. They are tracked by
+issue [#428](https://github.com/DarkArty07/Aether-Agents/issues/428). The third is **new relative to
+`main`** (main's 3.12 job has exactly the twelve), its file is likewise untouched by this objective,
+and the node **passes locally** in this tree — so it is an environment/order-sensitive symptom that
+needs its own classification and is not assumed to be this objective's defect.
+
+**Gate position, stated without softening.** The required checks are `policy (3.11/3.12/3.13)` and
+`pull-request-target`; the observed-but-red `observation-qualification` matrix is *not* a required
+check and is red on `origin/main` as well. It is nevertheless inside this contract's gates —
+AC-10 names the coverage floor and stop condition 60 treats unresolved test failures as a stop —
+so this lane does **not** merge, tag or describe the integrated gates as green while it is red.
+Local measurements (§5) are recorded as diagnostics, not as substitutes: the `coverage = 78` total
+was produced on the operator machine, in an environment whose warm `uv` cache masks the eleven CI
+failures, and CI never reaches `coverage report` at all. Neither number is offered as the gate's
+result. The directed next step is canonical rework of #428 (and separate classification of the
+3.12-only symptom) with an independent review lane, which is why publication is deferred.
 
 ## 6. Publication (completed after the tag exists)
 
