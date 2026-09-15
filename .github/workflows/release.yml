@@ -14,14 +14,25 @@ on:
 permissions:
   contents: write
 
+env:
+  # Maintained-fork runtime source identity for this release line (Shared decision 4).
+  # The release integration sets FORK_COMMIT to the accepted `aether-main` revision before
+  # the RC tag is pushed; `scripts/release_bundle.py` independently resolves that exact
+  # commit from this repository and refuses a foreign repository, a wrong revision or a
+  # dirty source. It never derives the identity from a branch tip, the working directory or
+  # recency, so an unset/incorrect pin fails closed instead of publishing wrong bytes.
+  FORK_REPOSITORY: https://github.com/DarkArty07/aether-hermes
+  FORK_COMMIT: "0000000000000000000000000000000000000000"
+
 jobs:
   release:
     runs-on: ubuntu-latest
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ github.token }}
+      RELEASE_BUNDLE_DIR: ${{ runner.temp }}/release-bundle
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
       - name: Validate release tag
@@ -48,6 +59,36 @@ jobs:
             printf 'version=%s\n' "$release_version"
             printf 'prerelease=%s\n' "$release_prerelease"
           } >> "$GITHUB_OUTPUT"
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: 0.12.3
+      - name: Install locked release toolchain
+        run: uv sync --frozen
+      - name: Build and qualify the release bundle
+        env:
+          RELEASE_VERSION: ${{ steps.validate.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_commit="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+          git checkout --quiet --detach "$release_commit"
+          test "$(git rev-parse HEAD)" = "$release_commit"
+          uv run --frozen python scripts/release_bundle.py build \
+            --aether-checkout . \
+            --aether-commit "$release_commit" \
+            --fork-repository "$FORK_REPOSITORY" \
+            --fork-commit "$FORK_COMMIT" \
+            --tag "$RELEASE_TAG" \
+            --expect-package-version "$RELEASE_VERSION" \
+            --work "${RUNNER_TEMP}/release-bundle-work" \
+            --out "$RELEASE_BUNDLE_DIR" \
+            --json
+      - name: Retain the qualified bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aether-release-bundle-${{ steps.validate.outputs.version }}
+          path: ${{ runner.temp }}/release-bundle
+          if-no-files-found: error
       - name: Create or reconcile GitHub Release
         env:
           RELEASE_VERSION: ${{ steps.validate.outputs.version }}
@@ -62,8 +103,17 @@ jobs:
             echo "Invalid prerelease state: $RELEASE_PRERELEASE" >&2
             exit 1
           fi
+          bundle_files=()
+          bundle_dir="${RELEASE_BUNDLE_DIR:-}"
+          if [[ -n "$bundle_dir" ]]; then
+            (cd "$bundle_dir" && sha256sum --check --strict SHA256SUMS)
+            while IFS= read -r -d '' file; do
+              bundle_files+=("$file")
+            done < <(find "$bundle_dir" -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z)
+            [[ "${#bundle_files[@]}" -gt 0 ]]
+          fi
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release edit "$RELEASE_TAG" "$prerelease_arg"
+            gh release edit "$RELEASE_TAG" "$prerelease_arg" "${bundle_files[@]}"
           else
-            gh release create "$RELEASE_TAG" --verify-tag --generate-notes "$prerelease_arg"
+            gh release create "$RELEASE_TAG" --verify-tag --generate-notes "$prerelease_arg" "${bundle_files[@]}"
           fi

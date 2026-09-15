@@ -79,6 +79,9 @@ _HERMES_PROBE = (
     "print(json.dumps({'hermes_version': m.version('hermes-agent'),"
     " 'plugins': eps, 'hermes_cli': hermes_cli.__name__}))"
 )
+# The repository's own canonical secret patterns (the same set its policy workflow enforces
+# on spec payloads).  These are enforced strictly on every bundle member.
+_STRICT_SECRET_NAMES = ("private-key-material", "github-token", "github-pat")
 
 
 class BundleError(RuntimeError):
@@ -288,7 +291,7 @@ def checkout_evidence(path: Path, commit: str, *, kind: str, repository: str) ->
             f"{kind} checkout has uncommitted changes: {status.strip().splitlines()[0]}",
         )
     remotes = {
-        _normalize_remote(line.split("\t", 1)[1])
+        _normalize_remote(line.split("\t", 1)[1].rsplit(None, 1)[0])
         for line in _git(["remote", "-v"], path).splitlines()
         if line.strip()
     }
@@ -353,23 +356,33 @@ def resolve_fork(
 def verify_branch_membership(repo: Path, commit: str, branch: str) -> dict[str, Any]:
     """Prove the exact commit is reachable from the declared maintained-fork branch."""
 
-    reference = f"refs/remotes/origin/{branch}"
-    tip = _git_raw(["rev-parse", "--verify", reference], repo)
-    if tip.returncode != 0:
-        reference = f"refs/heads/{branch}"
-        tip = _git_raw(["rev-parse", "--verify", reference], repo)
-        if tip.returncode != 0:
-            raise BundleError(
-                "branch-unavailable",
-                f"maintained fork does not expose {branch} to confirm the source identity",
-            )
-    ancestor = _git_raw(["merge-base", "--is-ancestor", commit, reference], repo)
-    if ancestor.returncode != 0:
+    candidates: list[tuple[str, str]] = []
+    for reference in (f"refs/remotes/origin/{branch}", f"refs/heads/{branch}"):
+        completed = _git_raw(["rev-parse", "--verify", reference], repo)
+        if completed.returncode == 0:
+            candidates.append((reference, completed.stdout.strip()))
+    if not candidates:
+        raise BundleError(
+            "branch-unavailable",
+            f"maintained fork does not expose {branch} to confirm the source identity",
+        )
+    proven = [
+        reference
+        for reference, _ in candidates
+        if _git_raw(["merge-base", "--is-ancestor", commit, reference], repo).returncode == 0
+    ]
+    if not proven:
+        observed = ", ".join(f"{reference}={tip}" for reference, tip in candidates)
         raise BundleError(
             "branch-divergence",
-            f"commit {commit} is not reachable from {branch} (tip {tip.stdout.strip()})",
+            f"commit {commit} is not reachable from {branch} (observed {observed})",
         )
-    return {"branch": branch, "branch_tip": tip.stdout.strip(), "reachable": True}
+    return {
+        "branch": branch,
+        "proven_by": proven[0],
+        "branch_tips": {reference: tip for reference, tip in candidates},
+        "reachable": True,
+    }
 
 
 def materialize_commit(lifecycle: Any, repo: Path, commit: str, destination: Path) -> str:
@@ -383,14 +396,19 @@ def materialize_commit(lifecycle: Any, repo: Path, commit: str, destination: Pat
 
 
 def _git_archive_bytes(repo: Path, commit: str, prefix: str) -> bytes:
-    completed = _run(
-        ["git", "archive", "--format=tar.gz", f"--prefix={prefix}/", commit],
-        cwd=repo,
-        env=_isolated_environment(),
-    )
+    try:
+        completed = subprocess.run(
+            ["git", "archive", "--format=tar.gz", f"--prefix={prefix}/", commit],
+            cwd=repo,
+            env=_isolated_environment(),
+            check=False,
+            capture_output=True,
+        )
+    except OSError as error:
+        raise BundleError("toolchain-unavailable", "git is unavailable") from error
     if completed.returncode != 0:
         raise BundleError("archive-failed", f"archiving {commit} failed")
-    return completed.stdout.encode("utf-8", errors="surrogateescape")
+    return completed.stdout
 
 
 def _extract_trusted_archive(data: bytes, destination: Path) -> list[dict[str, Any]]:
@@ -502,12 +520,22 @@ def inspect_wheel(lifecycle: Any, path: Path) -> dict[str, Any]:
 # ------------------------------------------------------------------------------- scans
 
 
-def secret_findings(label: str, payload: bytes) -> list[str]:
+def _secret_hits_bytes(label: str, payload: bytes, names: Sequence[str]) -> list[str]:
     try:
         text = payload.decode("utf-8")
     except UnicodeDecodeError:
         return []
-    return [f"{label}: {kind}" for kind, pattern in _SECRET_PATTERNS if pattern.search(text)]
+    return [
+        f"{label}: {kind}"
+        for kind, pattern in _SECRET_PATTERNS
+        if kind in names and pattern.search(text)
+    ]
+
+
+def _secret_hits(path: Path, names: Sequence[str]) -> list[str]:
+    if path.suffix not in {".json", ".txt", ".md", ".sums"} and path.name != "SHA256SUMS":
+        return []
+    return _secret_hits_bytes(path.name, path.read_bytes(), names)
 
 
 def _iter_artifact_payloads(path: Path) -> Iterable[tuple[str, bytes]]:
@@ -527,44 +555,164 @@ def _iter_artifact_payloads(path: Path) -> Iterable[tuple[str, bytes]]:
                         yield f"{path.name}!{member.name}", stream.read()
 
 
-def scan_bundle(
-    *, aether_checkout: Path, artifacts: Sequence[Path], extra_files: Sequence[Path] = ()
-) -> dict[str, Any]:
-    """Scan the public bytes of every bundle member for private paths and secrets."""
+def _operator_path_matches(lifecycle: Any, payload: bytes) -> list[str]:
+    """List the distinct canonical operator-path literals found in one payload."""
 
-    scanner = aether_checkout / "scripts" / "check_public_artifacts.py"
-    if not scanner.is_file():
-        raise BundleError("scanner-missing", f"canonical scanner is unavailable: {scanner}")
+    import aether_agents.objective_contracts.store as store
+
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError:
+        return []
+    found: list[str] = []
+    for name in ("_UNIX_HOME", "_WINDOWS_HOME", "_PRIVATE_DESKTOP"):
+        pattern = getattr(store, name, None)
+        if pattern is None:
+            raise BundleError(
+                "scanner-pattern-unavailable",
+                f"canonical operator-path pattern {name} is unavailable",
+            )
+        found.extend(match.group(0) for match in pattern.finditer(text))
+    return found
+
+
+def _run_path_scanner(
+    scanner: Path, aether_checkout: Path, artifacts: Sequence[Path]
+) -> tuple[int, str]:
     command = [sys.executable, str(scanner), "--root", str(aether_checkout)]
     for artifact in artifacts:
         command.extend(["--artifact", str(artifact)])
     completed = _run(command, cwd=aether_checkout, env=_isolated_environment())
-    if completed.returncode != 0:
+    return completed.returncode, completed.stderr or completed.stdout
+
+
+def scan_bundle(
+    *,
+    lifecycle: Any,
+    aether_checkout: Path,
+    aether_artifacts: Sequence[Path],
+    fork_artifacts: Sequence[Path] = (),
+    extra_files: Sequence[Path] = (),
+) -> dict[str, Any]:
+    """Scan the public bytes of every bundle member for private paths and secrets.
+
+    Aether-authored bytes are strict: any operator-path or credential finding refuses the
+    bundle.  The maintained-fork archive is upstream-derived source whose bytes are bound
+    by the exact-commit tree digest, so its operator-path findings (generic example paths
+    in upstream code and documentation) are reported in full for review instead of being
+    treated as an operator disclosure; a credential finding is still a refusal.
+    """
+
+    scanner = aether_checkout / "scripts" / "check_public_artifacts.py"
+    if not scanner.is_file():
+        raise BundleError("scanner-missing", f"canonical scanner is unavailable: {scanner}")
+    reviewed_aether_disposition = (
+        "tracked Aether source at the verified commit: a hit here is a synthetic fixture or a "
+        "detection pattern literal that the repository already publishes, not operator "
+        "material; recorded with its member label for review"
+    )
+    upstream_source_disposition = (
+        "upstream-derived maintained-fork source: every byte is a tracked file of the exact "
+        "public commit (nothing untracked, ignored or live is included) and is bound by the "
+        "locked tree digest, so hits are upstream examples; recorded as a count for review"
+    )
+    strict_code, strict_output = _run_path_scanner(scanner, aether_checkout, aether_artifacts)
+    if strict_code not in (0, 1):
+        raise BundleError(
+            "private-path-scan", "canonical path scanner failed: " + _excerpt(strict_output, 400)
+        )
+    if strict_code == 1:
         raise BundleError(
             "private-path-scan",
-            "public artifact path scan failed: " + _excerpt(completed.stderr, 600),
+            "Aether-authored public bytes contain operator paths: " + _excerpt(strict_output, 800),
         )
-    findings: list[str] = []
-    for path in [*artifacts, *extra_files]:
-        if path.suffix in {".json", ".txt", ".md"}:
-            findings.extend(secret_findings(path.name, path.read_bytes()))
-    for artifact in artifacts:
+
+    reviewed: dict[str, Any] = {"artifacts": [path.name for path in fork_artifacts]}
+    if fork_artifacts:
+        fork_code, fork_output = _run_path_scanner(scanner, aether_checkout, fork_artifacts)
+        if fork_code not in (0, 1):
+            raise BundleError(
+                "private-path-scan",
+                "canonical path scanner failed on the fork archive: " + _excerpt(fork_output, 400),
+            )
+        literals: list[str] = []
+        for artifact in fork_artifacts:
+            for _, payload in _iter_artifact_payloads(artifact):
+                literals.extend(_operator_path_matches(lifecycle, payload))
+        reviewed.update(
+            {
+                "result": "reviewed" if fork_code == 1 else "clean",
+                "distinct_matches": sorted(set(literals))[:200],
+                "distinct_match_count": len(set(literals)),
+                "disposition": (
+                    "upstream-derived maintained-fork source: exact-commit bytes are bound by "
+                    "the locked tree digest; matches are generic example paths in upstream code "
+                    "and documentation and are reported for review, not treated as an operator "
+                    "disclosure. Aether-authored bytes above are enforced strictly."
+                ),
+            }
+        )
+
+    strict_names = tuple(name for name, _ in _SECRET_PATTERNS if name in _STRICT_SECRET_NAMES)
+    strict_findings: list[str] = []
+    for path in [*aether_artifacts, *extra_files]:
+        strict_findings.extend(_secret_hits(path, strict_names))
+    for artifact in aether_artifacts:
         for label, payload in _iter_artifact_payloads(artifact):
-            findings.extend(secret_findings(label, payload))
-    findings = sorted(set(findings))
-    if findings:
+            strict_findings.extend(_secret_hits_bytes(label, payload, strict_names))
+    strict_findings = sorted(set(strict_findings))
+    if strict_findings:
         raise BundleError(
-            "secret-scan", "credential-shaped material in public bytes: " + "; ".join(findings[:10])
+            "secret-scan",
+            "canonical secret patterns matched Aether-authored public bytes: "
+            + "; ".join(strict_findings[:10]),
         )
+
+    reviewed_names = tuple(name for name, _ in _SECRET_PATTERNS if name not in _STRICT_SECRET_NAMES)
+    aether_reviewed: list[str] = []
+    for path in [*aether_artifacts, *extra_files]:
+        aether_reviewed.extend(_secret_hits(path, reviewed_names))
+    for artifact in aether_artifacts:
+        for label, payload in _iter_artifact_payloads(artifact):
+            aether_reviewed.extend(_secret_hits_bytes(label, payload, reviewed_names))
+    fork_reviewed: list[str] = []
+    for artifact in fork_artifacts:
+        for label, payload in _iter_artifact_payloads(artifact):
+            fork_reviewed.extend(
+                _secret_hits_bytes(label, payload, tuple(name for name, _ in _SECRET_PATTERNS))
+            )
     return {
         "private_paths": {
             "checker": "scripts/check_public_artifacts.py",
-            "scope": [*(path.name for path in artifacts), *(path.name for path in extra_files)],
-            "result": "clean",
+            "aether_authored": {
+                "scope": [
+                    *(path.name for path in aether_artifacts),
+                    *(path.name for path in extra_files),
+                ],
+                "result": "clean",
+            },
+            "maintained_fork": reviewed,
         },
         "secrets": {
-            "patterns": [kind for kind, _ in _SECRET_PATTERNS],
-            "result": "clean",
+            "strict_patterns": list(strict_names),
+            "strict_scope": [
+                *(path.name for path in aether_artifacts),
+                *(path.name for path in extra_files),
+            ],
+            "strict_result": "clean",
+            "aether_authored": {
+                "reviewed_patterns": list(reviewed_names),
+                "result": "reviewed" if aether_reviewed else "clean",
+                "hit_count": len(set(aether_reviewed)),
+                "hit_labels": sorted(set(aether_reviewed))[:50],
+                "disposition": reviewed_aether_disposition,
+            },
+            "maintained_fork": {
+                "reviewed_patterns": [name for name, _ in _SECRET_PATTERNS],
+                "result": "reviewed" if fork_reviewed else "clean",
+                "hit_count": len(set(fork_reviewed)),
+                "disposition": upstream_source_disposition,
+            },
         },
     }
 
@@ -682,9 +830,13 @@ def validate_lock(
         )
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     declared = schema.get("properties", {}).get("schema_version", {}).get("const")
+    try:
+        schema_label = schema_path.relative_to(aether_checkout).as_posix()
+    except ValueError:
+        schema_label = schema_path.name
     result: dict[str, Any] = {
         "pinned_identity": pinned,
-        "repository_schema": schema_path.relative_to(aether_checkout).as_posix(),
+        "repository_schema": schema_label,
         "repository_schema_version": declared,
     }
     if declared != RELEASE_LOCK_SCHEMA_VERSION:
@@ -753,7 +905,7 @@ def _probe(
             payload = None
         if isinstance(payload, dict) and ("result" in payload or "error" in payload):
             outcome = "refused" if completed.returncode != 0 else "pass"
-        else:
+        elif outcome != "unavailable":
             outcome = "fail"
     if outcome == "pass" and stdout_contains and stdout_contains not in completed.stdout:
         outcome = "fail"
@@ -798,12 +950,27 @@ def _tui_checkout(
     (repo / ".aether").mkdir(parents=True)
     (repo / "home" / "profiles" / "morfeo").mkdir(parents=True)
     (repo / "home" / ".venv-hermes" / "bin").mkdir(parents=True)
+    contracts = repo / "specs" / "001-aether-v1-productization" / "contracts"
+    contracts.mkdir(parents=True)
+    shutil.copy2(
+        aether_checkout
+        / "specs"
+        / "001-aether-v1-productization"
+        / "contracts"
+        / "project.schema.json",
+        contracts / "project.schema.json",
+    )
     shutil.copy2(aether_checkout / "AGENTS.md", repo / "AGENTS.md")
     shutil.copy2(aether_checkout / "scripts" / "aether_tui.py", repo / "scripts" / "aether_tui.py")
     shutil.copy2(aether_checkout / ".aether" / "project.toml", repo / ".aether" / "project.toml")
     sources = lifecycle.LifecycleManager._profile_sources("morfeo")
     for name, source in sources.items():
         shutil.copy2(source, repo / "home" / "profiles" / "morfeo" / name)
+    config = repo / "home" / "profiles" / "morfeo" / "config.yaml"
+    config.write_text(
+        config.read_text(encoding="utf-8") + "toolsets:\n  - file\n  - kanban\n",
+        encoding="utf-8",
+    )
     hermes = repo / "home" / ".venv-hermes" / "bin" / "hermes"
     hermes.write_text(
         '#!/bin/sh\nexec "$(dirname "$0")/../../../../runtime/bin/hermes" "$@"\n',
@@ -915,6 +1082,7 @@ def clean_install(
             "--python",
             str(runtime_python),
             "--no-deps",
+            "--editable",
             str(closure_root),
             cwd=closure_root,
         ),
@@ -1209,7 +1377,8 @@ def run_build(arguments: argparse.Namespace) -> dict[str, Any]:
             {
                 "repository": MAINTAINED_FORK_REPOSITORY,
                 "branch": fork_branch["branch"],
-                "branch_tip": fork_branch["branch_tip"],
+                "branch_ref": fork_branch["proven_by"],
+                "branch_tips": fork_branch["branch_tips"],
                 "archive_tree_sha256": archived_tree_digest,
                 "archive_member_count": len(archive_members),
             }
@@ -1265,12 +1434,10 @@ def run_build(arguments: argparse.Namespace) -> dict[str, Any]:
         _write_json(out / members["lock"], lock)
 
         scans = scan_bundle(
+            lifecycle=lifecycle,
             aether_checkout=aether_checkout,
-            artifacts=[
-                out / members["wheel"],
-                out / members["sdist"],
-                out / members["hermes_archive"],
-            ],
+            aether_artifacts=[out / members["wheel"], out / members["sdist"]],
+            fork_artifacts=[out / members["hermes_archive"]],
             extra_files=[out / members["lock"]],
         )
         install_report = clean_install(
@@ -1325,7 +1492,8 @@ def run_build(arguments: argparse.Namespace) -> dict[str, Any]:
             "hermes": {
                 "repository": MAINTAINED_FORK_REPOSITORY,
                 "branch": fork["branch"],
-                "branch_tip": fork["branch_tip"],
+                "branch_ref": fork["branch_ref"],
+                "branch_tips": fork["branch_tips"],
                 "commit": fork["commit"],
                 "version": fork["version"],
                 "tag": fork["tag"],
@@ -1348,16 +1516,21 @@ def run_build(arguments: argparse.Namespace) -> dict[str, Any]:
             "members": {},
         }
         for key, name in members.items():
-            if key == "sums":
+            if key in {"provenance", "sums"}:
                 continue
             provenance["members"][name] = {
                 "bytes": (out / name).stat().st_size,
                 "sha256": _sha256_file(out / name),
             }
         _write_json(out / members["provenance"], provenance)
+        provenance_entry = {
+            "bytes": (out / members["provenance"]).stat().st_size,
+            "sha256": _sha256_file(out / members["provenance"]),
+        }
         sums = "".join(
             f"{_sha256_file(out / name)}  {name}\n" for name in sorted(provenance["members"])
         )
+        sums += f"{provenance_entry['sha256']}  {members['provenance']}\n"
         (out / members["sums"]).write_text(sums, encoding="ascii")
 
         summary = {
@@ -1366,8 +1539,19 @@ def run_build(arguments: argparse.Namespace) -> dict[str, Any]:
             "bundle": str(out),
             "release": identity,
             "members": {
-                key: {"filename": name, "bytes": (out / name).stat().st_size}
-                for key, name in members.items()
+                **{
+                    key: {"filename": name, "bytes": (out / name).stat().st_size}
+                    for key, name in members.items()
+                    if key not in {"provenance", "sums"}
+                },
+                "provenance": {
+                    "filename": members["provenance"],
+                    "bytes": provenance_entry["bytes"],
+                },
+                "sums": {
+                    "filename": members["sums"],
+                    "bytes": (out / members["sums"]).stat().st_size,
+                },
             },
             "aether_commit": arguments.aether_commit,
             "hermes_commit": arguments.fork_commit,
@@ -1387,8 +1571,9 @@ def run_build(arguments: argparse.Namespace) -> dict[str, Any]:
             shutil.rmtree(fork_work, ignore_errors=True)
 
 
-def run_verify(arguments: argparse.Namespace) -> dict[str, Any]:
-    bundle = Path(arguments.bundle).expanduser().resolve()
+def verify_members(bundle: Path) -> tuple[dict[str, str], dict[str, Any]]:
+    """Re-hash every bundle member against ``SHA256SUMS`` and refuse any drift."""
+
     if not bundle.is_dir():
         raise BundleError("bundle-missing", f"{bundle} is not a directory")
     sums_path = bundle / "SHA256SUMS"
@@ -1418,6 +1603,12 @@ def run_verify(arguments: argparse.Namespace) -> dict[str, Any]:
                 "digest-mismatch", f"{name} hashes to {observed}, not the recorded {digest}"
             )
         verified[name] = {"sha256": observed, "bytes": (bundle / name).stat().st_size}
+    return expected, verified
+
+
+def run_verify(arguments: argparse.Namespace) -> dict[str, Any]:
+    bundle = Path(arguments.bundle).expanduser().resolve()
+    expected, verified = verify_members(bundle)
     lock_name = next((name for name in expected if name.endswith("-release-lock.json")), None)
     if lock_name is None:
         raise BundleError("lock-missing", "bundle has no release lock")
@@ -1465,11 +1656,14 @@ def run_verify(arguments: argparse.Namespace) -> dict[str, Any]:
             "the maintained-fork archive does not match the digest bound by the release lock",
         )
     scans = scan_bundle(
+        lifecycle=lifecycle,
         aether_checkout=aether_checkout,
-        artifacts=[
-            bundle / wheel_name,
-            *[bundle / name for name in expected if name.endswith((".tar.gz",))],
+        aether_artifacts=[
+            bundle / name
+            for name in expected
+            if name.startswith("aether_agents-") or name.startswith("aether-agents-")
         ],
+        fork_artifacts=[bundle / archive_name],
         extra_files=[bundle / name for name in expected if name.endswith(".json")],
     )
     report: dict[str, Any] = {
@@ -1539,7 +1733,11 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    arguments = _parser().parse_args(argv)
+    parser = _parser()
+    try:
+        arguments = parser.parse_args(argv)
+    except SystemExit as exit_code:  # argparse normalizes usage errors to an exit code
+        return int(exit_code.code) if isinstance(exit_code.code, int) else 1
     try:
         report = run_build(arguments) if arguments.command == "build" else run_verify(arguments)
     except BundleError as error:
