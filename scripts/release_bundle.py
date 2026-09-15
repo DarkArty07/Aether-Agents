@@ -183,10 +183,10 @@ def _report_masks(
     """Mask every host-local path a report could otherwise disclose."""
 
     return (
-        (work, "<work>"),
         (roots, "<disposable-root>"),
         (bundle, "<bundle>"),
         (aether_checkout, "<aether-checkout>"),
+        (work, "<work>"),
         (Path(sys.executable), "<probe-interpreter>"),
     )
 
