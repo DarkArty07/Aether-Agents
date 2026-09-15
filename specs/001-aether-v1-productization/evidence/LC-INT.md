@@ -157,7 +157,7 @@ Failure classes inside the coverage step, verified from the run's own log:
 | Class | Nodes | Evidence |
 | --- | --- | --- |
 | Offline editable tooling cannot resolve its build requirement | 11 nodes in `tests/test_hermes_editable.py` (`test_red_green_editable_reconciliation`, `test_offline_mode_reconciliation`, `test_reconcile_raise_on_failure_false`, …) | `AssertionError: Initial editable install failed: … venv1` and `uv build --wheel failed: Building wheel...` |
-| Exact-checkout resolver points at an absent cache directory | `tests/test_same_card_phase_predicates.py::test_initial_review_requires_an_independent_reviewer` | `FileNotFoundError: '/home/runner/.cache/aether-agents'` |
+| Exact-checkout resolver points at an absent cache directory | `tests/test_same_card_phase_predicates.py::test_initial_review_requires_an_independent_reviewer` | `FileNotFoundError` for the runner's absent cache directory (`…/.cache/aether-agents`) |
 | Checkpoint authority unverified — **3.12 only** | `tests/test_observation_journal_storage.py::test_checkpoint_sink_derives_review_authority_from_durable_native_assignment` | `CheckpointResult(accepted=False, reason_code='CHECKPOINT_AUTHORITY_UNVERIFIED')` |
 
 **Attribution, measured rather than assumed.** The first two classes are **pre-existing and not
