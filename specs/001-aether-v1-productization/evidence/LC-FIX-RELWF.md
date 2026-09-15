@@ -258,6 +258,14 @@ independently verified, and the contract's AC-12 requires that the tag not be re
 this interaction would mean changing the workflow's identity assertion — a redesign, explicitly
 outside this unit's mandate ("This is a context-placement repair, not a workflow redesign").
 
+> **Current-state correction (added during the Supervisor review run; see §10.4).** The two
+> paragraphs above record the state as measured at implementation time, when both sides were
+> `748aa24`. That is no longer current, and the divergence was **not** created by this correction:
+> `origin/main` had already advanced to `f8e88467c0441280e3ab49b247c6cfd7039db12a` when PR #447 (the
+> LC-INT evidence completion) merged at 14:04:11Z — *before* this unit's PR #448 was opened at
+> 14:22:06Z. `workflow_dispatch` reconciliation of `v1.0.0-rc.1` is therefore **already unavailable
+> today**, and merging this correction changes nothing about that either way.
+
 ## 9. Not claimed by this record
 
 - No push, no workflow run, no CI result, no tag, no release, no publication (see §7).
@@ -270,9 +278,10 @@ outside this unit's mandate ("This is a context-placement repair, not a workflow
 
 ## 10. Review addendum — the empirical proof in §7, completed by the publication lane
 
-*Added by the Supervisor review run (run 101) that reviewed this unit. §1–§9 above are the
-implementing lane's record and are unaltered; this section reports the verification that lane
-could not perform under its publication boundary.*
+*Added by the Supervisor review run (run 101) that reviewed this unit. §1–§9 above remain the
+implementing lane's record; the only edit made to them is the clearly-marked current-state
+correction appended to §8. This section reports the verification that lane could not perform under
+its publication boundary.*
 
 ### 10.1 The push, and its observation
 
@@ -330,14 +339,29 @@ a controlled origin. With `origin/main` equal to the tag commit: `rc=0`,
 `GITHUB_OUTPUT: version=1.0.0rc1` / `prerelease=true`. Negative controls: `RELEASE_TAG=v1.0.0` →
 `rc=1` (version mismatch); `RELEASE_TAG=nonsense` → `rc=1` (`Unsupported release tag: nonsense`).
 
-### 10.4 The interaction in §8, demonstrated
+### 10.4 The interaction in §8: current state, and the causal order
 
-Re-running the same body with `origin/main` advanced to the post-merge commit
-`f8e88467c0441280e3ab49b247c6cfd7039db12a` fails (`rc=1`) on the
-`refs/tags/X^{commit} == refs/remotes/origin/main` assertion. The §8 consequence is therefore
-measured, not predicted: once this correction lands, `workflow_dispatch` can no longer reconcile
-`v1.0.0-rc.1`, and the already-published release must not be deleted, moved or rewritten to restore
-that path.
+Re-running the same body with `origin/main` at `f8e88467c0441280e3ab49b247c6cfd7039db12a` fails
+(`rc=1`) on the `refs/tags/X^{commit} == refs/remotes/origin/main` assertion.
+
+**That is the current state, not a consequence of this correction.** Read back at 14:32:44Z:
+`origin/main = f8e88467c0441280e3ab49b247c6cfd7039db12a` while the annotated tag `v1.0.0-rc.1` still
+dereferences to `748aa24ce5684185f65aa88b0e85919627ff6538`, so the two sides already differ. Causal
+order, from the PR metadata rather than from inference:
+
+| When (UTC) | Event |
+| --- | --- |
+| 14:04:11Z | PR #447 (LC-INT evidence completion) merged, advancing `main` to `f8e88467` |
+| 14:04:14Z | the push carrying `f8e88467` started **zero-job** `release.yml` run `34979146475` — the invalid file was still live on `main`, confirming the defect state |
+| 14:22:06Z | PR #448 (this correction) opened |
+
+The divergence therefore predates this PR by roughly eighteen minutes, and **PR #448 does not create
+it**; PR #447 advanced `main` first. §8's "once this correction is merged" framing was accurate when
+written at implementation time — both sides were `748aa24` then — and is superseded here rather than
+silently rewritten. The consequence is unchanged in substance but different in tense:
+`workflow_dispatch` cannot reconcile `v1.0.0-rc.1` *already*; the published release must not be
+deleted, moved or rewritten to restore that path, and changing the assertion would be a redesign
+outside this unit's mandate.
 
 ### 10.5 What this addendum does not claim
 
