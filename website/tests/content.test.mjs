@@ -164,6 +164,14 @@ test('documentation is rendered, linked to revision and searchable', async () =>
   const index=JSON.parse(await readFile(path.join(output,'docs/search.json'),'utf8'));
   assert.equal(index.length,canonicalDocSlugs.length,`Search index must hold every canonical document (corpus has ${canonicalDocSlugs.length})`);
   assert.deepEqual(index.map(d=>d.slug).sort(),canonicalDocSlugs,'Search index must cover the canonical docs corpus exactly');
+  // src/lib/docs.ts is at once the description map and the docs reading order, so a document
+  // missing from it renders with its title as description and sorts ahead of every described
+  // document. Assert map and corpus agree exactly, in both directions.
+  const mapSource=await readFile('src/lib/docs.ts','utf8');
+  const mapBody=mapSource.slice(mapSource.indexOf('const descriptions: Record<string, string> = {'));
+  const descriptionMap=Object.fromEntries([...mapBody.slice(0,mapBody.indexOf('};')).matchAll(/^\s*'([^']+)':\s*'([^']+)',$/gm)].map(m=>[m[1],m[2]]));
+  assert.deepEqual(Object.keys(descriptionMap).sort(),canonicalDocSlugs,'src/lib/docs.ts must describe every canonical document and nothing else');
+  for (const entry of index) assert.equal(entry.description,descriptionMap[entry.slug],`Search index must carry the description map text for ${entry.slug} instead of the title fallback`);
   assert.ok(index.find(d=>d.slug==='guides/project-knowledge').text.includes('Graphify'));
   const manual=await doc('docs/guides/execution/index.html');
   assert.ok(manual.querySelector('.prose h1'));

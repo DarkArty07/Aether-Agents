@@ -25,6 +25,7 @@ const descriptions: Record<string, string> = {
   'guides/lifecycle': 'Recorrido completo del trabajo y su cierre.',
   'guides/project-knowledge': 'Graphify, mapa técnico compartido y experiencias por rol.',
   'guides/observation': 'Evidencia y lectura de la actividad del sistema.',
+  'guides/telegram-monitor': 'Reportes horarios de progreso y límites del monitor de Telegram.',
   'guides/policy-and-recovery': 'Política, límites y recuperación reversible.',
   'reference/cli': 'Comandos, opciones y salidas de la interfaz de terminal.',
   'reference/plugins-and-tools': 'Plugins y herramientas registradas por el producto.',
