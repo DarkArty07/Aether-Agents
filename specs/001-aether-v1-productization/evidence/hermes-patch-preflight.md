@@ -1,10 +1,10 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-09-15T08:29:21Z`
+Observation timestamp: `2026-09-15T20:08:13Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `7d734946d05954e7810f0c2a8464409736b73535fa50ecbbc51c9bea9cce7f5d`
+Source ledger SHA-256: `a11641a09f33b3077ee7e04ef4b9c82ed06b68dcadf735423b968f43a4f3b0f5`
 
 ## Remaining local guarantees
 
@@ -37,6 +37,7 @@ Source ledger SHA-256: `7d734946d05954e7810f0c2a8464409736b73535fa50ecbbc51c9bea
 - `HLP-393`: Retain HLP-393. Cron jobs commissioned from TUI or gateway capture durable origin, restored at fire time as request-local context so spawned Kanban root tasks auto-subscribe and wake the exact origin upon completion.
 - `HLP-420`: Retain HLP-420. The auxiliary Responses adapter now preserves phase, top-level and item status, incomplete reason, output-text fallback and tool calls, never turns incomplete/cancelled output into finish_reason=stop, keeps commentary/analysis narration out of assistant content, and carries tool_choice through call_llm/_build_call_kwargs without sending the unsupported Router fields.
 - `HLP-425`: Retain HLP-425. The maintained fork and active Aether runtime now preserve one flow-bound Supervisor conversation across same-card review while keeping the candidate workspace and generic Hermes semantics separate.
+- `HLP-426`: Retain HLP-426. The maintained fork now terminates a worker whose run has ended and is no longer current before the dispatcher can spawn a successor on the same workspace, with elapsed time never a criterion; no upstream equivalent was found at the inspected revision, so this remains a downstream-only correction for the maintained fork.
 
 ## Qualified upstream equivalents
 
@@ -142,6 +143,11 @@ Source ledger SHA-256: `7d734946d05954e7810f0c2a8464409736b73535fa50ecbbc51c9bea
 - `HLP-425` (retirement_gate): Retirement gate status is not_executed.
 - `HLP-425` (uncertainty): Long-term reduction in review time and repeated-review frequency has not yet been measured on representative organic work.
 - `HLP-425` (uncertainty): Existing already-running conversations retain their cached prompt until restarted; adoption does not rewrite stored conversation history.
+- `HLP-426` (artifact): The patch reconstructs exactly in the maintained fork and is active in that lineage, but no public upstream equivalence exists at the inspected revision, and the live runtime still runs the pre-RC release. The structured record therefore cannot claim a verified public artifact.
+- `HLP-426` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-426` (uncertainty): The fix guarantees the successor boundary, not instantaneous exit: a superseded process can still run until the next dispatch tick reaps it (bounded by one dispatch interval).
+- `HLP-426` (uncertainty): Runs spawned by an older runtime carry no (pid, start_time) fingerprint in their `spawned` event and are therefore never signalled — a deliberate fail-safe, not an unverified guess.
+- `HLP-426` (uncertainty): The withheld-spawn path is proven by the focused unit test (signal made a no-op) rather than by the canary, because a SIGKILL-surviving process cannot be fabricated.
 
 ## Artifact integrity
 
@@ -174,14 +180,15 @@ Source ledger SHA-256: `7d734946d05954e7810f0c2a8464409736b73535fa50ecbbc51c9bea
 - `HLP-393`: unavailable
 - `HLP-420`: unavailable
 - `HLP-425`: unavailable
+- `HLP-426`: unavailable
 
 ## Selected maintained-fork source
 
-Selected source: `https://github.com/DarkArty07/aether-hermes@9031bae0e8b0ab40c4fd7ba50c644972ff512611` (presence resolved from a checkout: `true`)
+Selected source: `https://github.com/DarkArty07/aether-hermes@7a4fdcd083409c31c09cfa3bfa345354e8576a7e` (presence resolved from a checkout: `true`)
 
 | Verdict | Entries |
 | --- | --- |
-| present | 27 |
+| present | 28 |
 | partial | 0 |
 | absent | 0 |
 | unverified | 2 |

@@ -3,8 +3,8 @@
 - **Unit:** `LC-FIX-WORKLIFE`, routed by the LC-CLOSE flow-controller lane under the design steward's recovery directive.
 - **Tracked defect:** [Aether Agents #450](https://github.com/DarkArty07/Aether-Agents/issues/450) — "bug(kanban): terminal blocked worker remains alive beside successor run". Owner obligation: canonical source fix, not runtime cleanup.
 - **Authority:** root `AGENTS.md` (upstream-first method; maintained-fork corrections under PD-65), `DESIGN.md` PD-65, and the tracked defect. This unit does not create rc.2 authority.
-- **Deliverable status:** source fix produced and proven in a maintained-fork worktree; **nothing pushed, no PR, no merge, no dispatch, no activation, no runtime/service/tag/release change**.
-- **Maintained-fork candidate:** `622678efe9296a7485a817a7625eabfa00a65620` on branch `fix/450-terminal-worker-reap`, branched from `origin/aether-main` tip `9031bae0e8b0ab40c4fd7ba50c644972ff512611` (fetched before branching).
+- **Deliverable status:** source fix produced and proven in a maintained-fork worktree; **nothing pushed, no PR, no merge, no dispatch, no activation, no runtime/service/tag/release change** by the unit itself. Publication of the sanitized successor lineage was performed afterwards by the review lane — §10.
+- **Maintained-fork lineage:** published commit `21628fc3790d825b8dc8082134f5cd382ec551f2` on branch `fix/450-terminal-worker-reap-clean`, based on `origin/aether-main` tip `9031bae0e8b0ab40c4fd7ba50c644972ff512611`, merged to `aether-main` as `7a4fdcd083409c31c09cfa3bfa345354e8576a7e`. The pre-publication candidate `622678ef…` was preserved locally, unpushed, as exact evidence per review direction; §10 records the single delta and its proof.
 - **Aether-side artifacts:** `patches/hermes/HLP-426-terminal-worker-reap.patch`, `HERMES_LOCAL_PATCHES.md` (index-table row + `### HLP-426` section), `specs/001-aether-v1-productization/fixtures/qualify_superseded_worker_reap_450.py` (qualification canary), this note.
 - **Exact local evidence** (task/run ids, epochs, worker pids, the installed release directory identity, the stale worker's own transcript behaviour) is kept in the unit card handoff notes, not in this public artifact, per root `AGENTS.md`'s boundary between local runtime evidence and public source. The reads that produced it are described in §1 and §7.
 
@@ -56,7 +56,7 @@ What that released source contains and does not:
 
 ## 4. The fix (one focused, reviewable change)
 
-Commit `622678ef…` (`hermes_cli/kanban_db.py`, `hermes_cli/kanban.py`, one new test module). Every changed line and why it is necessary:
+Commit `21628fc…` (the sanitized successor of the reviewed candidate; §10) — `hermes_cli/kanban_db.py`, `hermes_cli/kanban.py`, one new test module. Every changed line and why it is necessary:
 
 | Change | Why it is necessary |
 |---|---|
@@ -91,7 +91,7 @@ The new module's 11 cases cover: the exact incident shape end to end (out-of-ban
 ### 5.2 Complete maintained-fork suite, with base attribution
 
 ```
-$ scripts/run_tests.sh                      # candidate 622678ef
+$ scripts/run_tests.sh                      # reviewed candidate (pre-publication)
 === Summary: 3009 files, 33408 tests passed, 90 failed, 296 skipped (100% complete) in 692.6s (24 workers) ===
 EXIT=1
 === 21 files with test failures (90 tests failed) ===
@@ -108,7 +108,7 @@ The failure set is **identical at node level**, not merely at file level: 90 fai
 
 `specs/001-aether-v1-productization/fixtures/qualify_superseded_worker_reap_450.py` drives the real board surface — `claim_task`, `_set_worker_pid`, `block_task`, `unblock_task`, `_dispatch_once_locked` with a stub `spawn_fn` — on a scratch `HERMES_HOME`/board. Only the *worker binary* is a stand-in (a process that appends to a marker file inside the task workspace and dies on SIGTERM); the claim bookkeeping, the spawn-time identity record, the out-of-band terminalization, the tick, the reap and both lanes are the real code paths. The script refuses to run if its resolved DB is not inside the scratch root, and prints the live board path it leaves untouched.
 
-Runs are parameterized by tree only (`<BASE>` = base worktree at `9031bae0e8`, `<FIX>` = candidate worktree). Stand-in pids below are shown as the run's own placeholders rather than literal process ids; the card handoff carries the unmodified values.
+Runs are parameterized by tree only (`<BASE>` = base worktree at `9031bae0e8`, `<FIX>` = the reviewed candidate worktree; the published lineage differs only in the test module's docstring, §10). Stand-in pids below are shown as the run's own placeholders rather than literal process ids; the card handoff carries the unmodified values.
 
 ```
 $ A=<unit>; BASE=<BASE>; FIX=<FIX>; PY=$FIX/.venv/bin/python; S=$A/specs/001-aether-v1-productization/fixtures/qualify_superseded_worker_reap_450.py
@@ -184,15 +184,15 @@ $ git checkout -- . && git status --short
 (base worktree restored clean)
 ```
 
-The patch's SHA-256 is `a7cd466cacd71dca2f091c34dc2fbb8d024991d727a7942f0cfc37eddf3a7679`; the three files it reconstructs are byte-identical to the candidate tree.
+The patch's SHA-256 is `97dc0294b9909e9648bce9d6dbdde4ce7dd379d6cf2114b8c1713b8ee07b2e81` (regenerated for the published lineage); applying it to the base revision reconstructs the three changed paths into tree `0253df7de573ea695206a5f3bf2407cb3e48e320`, exactly the tree of published fork commit `21628fc3790d825b8dc8082134f5cd382ec551f2` and of the `aether-main` merge `7a4fdcd…`.
 
 ## 6. HLP record, rollback and retirement
 
 The downstream record is `patches/hermes/HLP-426-terminal-worker-reap.patch` with its evidence section in `HERMES_LOCAL_PATCHES.md` (`### HLP-426` plus the index-table row), following the existing `patches/hermes/` convention and PD-65:
 
-- **Rollback:** reverse only this portable patch after a hash check (`git apply --check -R` on a tree at the exact base revision), or revert fork commit `622678ef…`. Nothing else is touched by reverting: `_end_run`, `block_task`, every reclaim path, both lanes' claim sequence and the existing dispatch phases are unchanged, there is no schema or state migration, and boards/runs/events/sessions/workspaces created before the revert stay readable. The only residue is inert history (the new events and the two extra `spawned` payload keys).
+- **Rollback:** reverse only this portable patch after a hash check (`git apply --check -R` on a tree at the exact base revision), or revert fork commit `21628fc…`. Nothing else is touched by reverting: `_end_run`, `block_task`, every reclaim path, both lanes' claim sequence and the existing dispatch phases are unchanged, there is no schema or state migration, and boards/runs/events/sessions/workspaces created before the revert stay readable. The only residue is inert history (the new events and the two extra `spawned` payload keys).
 - **Retirement:** an adopted exact Hermes release must terminate (or refuse to spawn a successor for) a worker whose run has already ended and is no longer current, must not use elapsed time as the criterion, and must pass the new focused module plus the canary without this patch. Adopting upstream's `archive_task` termination (its `#76196` fix) is explicitly **not** sufficient: different trigger, no successor-boundary guarantee.
-- **Structured reconciliation entry is deliberately deferred:** `entries/HLP-426.json` and the regenerated aggregate must be produced **after** the merge into `aether-main`. This patch adds a test file that does not exist at the currently selected revision, so an entry declared today would be recorded as `selected_source: absent` and refuse preparation — a false signal rather than a description of reality. The ledger section records that obligation.
+- **Structured reconciliation entry (produced in the integration lane):** `entries/HLP-426.json` and the regenerated aggregate were produced **after** the merge into `aether-main`, as designed — this patch adds a test file that did not exist at the previously selected revision, so an entry declared earlier would have been recorded as `selected_source: absent` and refused preparation. Two structural requirements had to be corrected for the entry to be accepted at all, and both were found by reading the validator rather than guessing: the ledger's HLP-426 heading was promoted from `###` to `##` (detailed sections are recognised only at that level, so the section was invisible and the entry would have been rejected as an unknown ledger ID), and the entry carries the corpus's shared `upstream.inspected_revision`, which the validator enforces identically across every entry. The regenerated aggregate records the merged fork revision `7a4fdcd…`.
 
 ## 7. Board integrity
 
@@ -228,9 +228,9 @@ The downstream record is `patches/hermes/HLP-426-terminal-worker-reap.patch` wit
 ## 9. Reproduction recipe
 
 ```bash
-# 1. candidate worktree (from the maintained fork, after fetching aether-main)
+# 1. worktree (from the maintained fork, after fetching aether-main)
 git -C <fork> fetch origin aether-main
-git -C <fork> worktree add .worktrees/<name> -b fix/450-terminal-worker-reap origin/aether-main
+git -C <fork> worktree add .worktrees/<name> -b <branch> origin/aether-main
 cd <fork>/.worktrees/<name> && uv sync --locked --python 3.11 --extra all --extra dev
 
 # 2. focused tests + affected surface
@@ -246,3 +246,116 @@ CANARY_LIVE_BOARD_DB="$HERMES_KANBAN_DB" PYTHONPATH=<tree> <tree>/.venv/bin/pyth
     <unit>/specs/001-aether-v1-productization/fixtures/qualify_superseded_worker_reap_450.py \
     --case current --scratch <scratch>
 ```
+
+## 10. Publication, review outcome and integration corrections (review lane)
+
+The unit delivered proven, unpushed source plus its evidence. The review lane then
+consumed the design-steward review direction and published a **sanitized lineage**,
+and completed the three integration obligations the unit had correctly routed. This
+section is the review record; §§1–9 above stay as the delivering unit wrote them,
+with the identity references updated in place.
+
+### 10.1 What was published, and how equivalence was proved
+
+- The pre-publication candidate **`622678ef…` was not pushed.** It is preserved
+  locally, unpushed and unrewritten, as exact evidence, per the direction.
+- Published commit **`21628fc3790d825b8dc8082134f5cd382ec551f2`**, whose parent is
+  the pinned base `9031bae0e8b0ab40c4fd7ba50c644972ff512611`, merged to `aether-main`
+  by fork PR #14 as **`7a4fdcd083409c31c09cfa3bfa345354e8576a7e`**. The merge tree and
+  the sanitized commit's tree are the same object (`0253df7de5…`), so the published
+  content is exactly what the merge records.
+- **Delta against the reviewed candidate: exactly one file, 6 insertions / 6
+  deletions** — the new test module's docstring. Nothing else differs.
+- **Executable content is proved identical, not assumed:** with the module docstring
+  removed, the parsed syntax tree of the test module is byte-identical to the
+  candidate's, and `hermes_cli/kanban_db.py` and `hermes_cli/kanban.py` are unchanged
+  against the candidate.
+- **Behavior re-verified at the sanitized commit:** `scripts/run_tests.sh
+  tests/hermes_cli/test_kanban_superseded_worker_reap_450.py -q` → **11 passed, 0
+  failed** (8.2 s, same runner and interpreter as the unit's runs).
+
+### 10.2 A bounded extension of the same correction, and why it was necessary
+
+The review direction stated that "its commit message contains the private Objective
+Contract/card/run identities" and asked for the reviewed tree to be reproduced. A
+full audit found the same identity class **inside the tree as well**: the new test
+module's docstring named the task and both run numbers. Root `AGENTS.md` excludes
+boards and runtime state from public artifacts, and a commit message is not the only
+public surface — the tree is too, and the Aether-side patch and fixture carried the
+same references.
+
+So the same bounded sanitization was applied to the tree and the fixture, and the
+direction's equivalence step was satisfied in the only form the two requirements
+admit together: **the sole delta from the reviewed candidate is the sanitized
+docstring**, with executable content proved identical and the focused suite green at
+the published commit. The alternative — publishing the tree byte-identically — would
+have written board identities into a public repository, which the canon forbids.
+Deviating from a direction's *method* while satisfying its *purpose* is recorded here
+rather than left implicit; if the intended reading was literal byte-equality
+including those references, the preserved candidate allows the decision to be revisited
+without any history rewrite.
+
+### 10.3 Aether-side corrections completed in this lane
+
+- **`.gitattributes`** gains `patches/hermes/HLP-426-terminal-worker-reap.patch
+  whitespace=-trailing-space`, following the existing convention for unified patches
+  whose blank context lines require the prefix space. `git diff --check` over the full
+  range (`d2559cd..HEAD`) is now clean (rc 0), where it previously exited 2 on ten
+  required context lines.
+- **Policy base-manifest allow-list** gains the new patch path. Emulating the
+  workflow's own check (heredoc list vs `git ls-files | grep -v '^specs/'`, both
+  sorted) now reports `407 == 407`, **no** unlisted tracked path and **no** phantom
+  manifest entry.
+- **Portable patch regenerated** for the published lineage: SHA-256
+  `97dc0294b9909e9648bce9d6dbdde4ce7dd379d6cf2114b8c1713b8ee07b2e81`. Applying it to a
+  freshly materialized tree at `9031bae0e8b0ab40c4fd7ba50c644972ff512611` reconstructs
+  the three changed paths into tree `0253df7de573ea695206a5f3bf2407cb3e48e320` — equal
+  to the published fork commit and to the `aether-main` merge. The regeneration method
+  itself was validated first by reproducing the pre-publication patch **byte for byte**
+  from the candidate.
+- **Structured reconciliation entry** `entries/HLP-426.json` created, and the aggregate
+  regenerated at the merged revision: `status: current`, `records: 30`,
+  `present: 28`, `partial: 0`, `absent: 0`, `unverified: [HLP-246, HLP-247]`,
+  `refusing: []`.
+- **Two structural requirements were found by reading the validator, not by guessing,
+  and both were corrected:** detailed ledger sections are recognised only at `##`
+  level, so the section heading was promoted from `###` (otherwise the entry is
+  rejected as an unknown ledger id and the section is invisible), and the entry must
+  carry the corpus's shared `upstream.inspected_revision`, which the validator enforces
+  identically across every entry.
+- **The corpus expectations in `tests/test_hermes_patch_reconciliation.py` grew with
+  the corpus:** the new id joins `EXPECTED_ACTIVE_IDS` and its patch digest joins
+  `PATCH_DIGESTS`. No assertion was weakened and none was removed — the count is
+  unchanged at **23 passed**, matching the pre-change baseline at the same revision.
+- **Fixture references sanitized:** the two incident-shape mentions that named a board
+  run number now read as the incident recorded in #450, keeping the causal description
+  without the board identifiers.
+
+### 10.4 Observations recorded, not corrected
+
+- **The new canary fixture adds one lint finding and one format difference, and both sit
+  outside the CI gate.** `specs/…/qualify_superseded_worker_reap_450.py` has an unused
+  `board_db` assignment (`F841`) and one string-literal style difference. The repository's
+  ruff gate lints `src`, `tests` and named `scripts/` files — not `specs/**` — and the
+  `specs/` corpus already carries two findings and six unformatted files at the current
+  `main`, so this matches the corpus rather than regressing a gate. It was left byte-identical
+  to the bytes the canary runs used: editing the fixture would invalidate the RED/GREEN runs
+  recorded in §5.3 without re-running them, which a review lane should not do silently.
+- **Pre-existing board identifiers elsewhere in the ledger were reported, not touched.**
+  Three lines of `HERMES_LOCAL_PATCHES.md` (from earlier HLPs) carry five distinct task ids;
+  every one is already present at the current `main`, and this unit introduced none. Correcting
+  that corpus is a separate bounded change, not part of this integration.
+- **Both were measured against the pre-change tree at the same revision** (baseline: two lint
+  findings and six unformatted files under `specs/`; the new fixture accounts for exactly the
+  +1/+1 delta), and the CI-scope gate itself is clean here (`ruff check src tests` →
+  "All checks passed!", `ruff format --check src tests` → 150 files already formatted).
+
+### 10.5 Non-claims
+
+No `v1.0.0-rc.2` authority is created or implied here; rc.2 needs its own superseding
+finalized contract. Nothing was activated: the live runtime, its selector, launcher,
+service, profile and the published `v1.0.0-rc.1` tag, release and assets are untouched
+by this lane. Fork Actions are inherited and remain disabled, so no fork CI result is
+claimed — the evidence above is from the repository's own test runner. The forward
+obligation stands recorded rather than fulfilled: the accepted fork revision
+`7a4fdcd…` must be pinned by rc.2 before any rc.2 activation.

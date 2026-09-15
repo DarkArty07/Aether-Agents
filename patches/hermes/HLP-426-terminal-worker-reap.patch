@@ -292,18 +292,18 @@ index b45739b152..aadf74586f 100644
              continue
 diff --git a/tests/hermes_cli/test_kanban_superseded_worker_reap_450.py b/tests/hermes_cli/test_kanban_superseded_worker_reap_450.py
 new file mode 100644
-index 0000000000..23172abdd1
+index 0000000000..d2d48c8c24
 --- /dev/null
 +++ b/tests/hermes_cli/test_kanban_superseded_worker_reap_450.py
 @@ -0,0 +1,435 @@
 +"""Regression: a terminal non-current worker must not outlive its run (#450).
 +
-+Defect (Aether Agents #450): during recovery of an RC contract, task
-+``t_a18b5fc7`` run 264 was durably recorded terminal (``status=blocked``,
-+``outcome=blocked``) while its already-spawned Hermes worker process stayed
-+alive — parented by the gateway, sleeping with no children, cwd equal to the
-+task worktree. The task was later resumed as run 269 with a different pid, so
-+two workers coexisted against one worktree.
++Defect (Aether Agents #450): during recovery of an RC lane, a task whose run
++had been durably recorded terminal (``status=blocked``, ``outcome=blocked``)
++still had its already-spawned Hermes worker process alive — parented by the
++gateway, sleeping with no children, cwd equal to the task worktree. The task
++was later resumed as a successor run with a different pid, so two workers
++coexisted against one worktree.
 +
 +Mechanism: the run was terminalized from *outside* the worker (an
 +out-of-band ``kanban_block`` that the block-loop breaker routed to

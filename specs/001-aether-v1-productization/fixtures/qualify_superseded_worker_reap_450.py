@@ -22,7 +22,7 @@ Cases
     the task is blocked from outside the worker, unblocked, and a second run
     is claimed and blocked from outside again — which trips the unblock-loop
     breaker, so the second run ends as ``block_loop_detected`` while its
-    worker process is alive (this is exactly run 264 in #450). The task is
+    worker process is alive (this is exactly the incident recorded in #450). The task is
     then unblocked and a successor dispatch tick is run. Reports whether the
     stale process was still alive at the moment the successor was spawned,
     whether the fix reaped it first, and whether the stale process kept
@@ -192,7 +192,7 @@ def run_coexist(kb, scratch: Path) -> dict:
         # ---- task A: the incident's own shape -----------------------------
         # Two out-of-band blocks for the same cause trip the unblock-loop
         # breaker: the run is ended by the board (not by the worker) and the
-        # card routes to triage. This is run 264 in #450.
+        # card routes to triage. This is the incident recorded in #450.
         tid_a, ws_a = _new_task(kb, conn, scratch, "incident shape")
         claimed = kb.claim_task(conn, tid_a)
         assert claimed is not None
