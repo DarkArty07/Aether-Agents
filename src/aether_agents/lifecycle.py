@@ -90,6 +90,7 @@ __all__ = [
     "UninstallResult",
     "verify_clean_checkout",
     "verify_source_checkout",
+    "display_version",
     "load_aether_prebuild_identity",
     "load_release_lock",
 ]
@@ -549,6 +550,13 @@ def _display_version(package_version: str) -> str:
     if match is None or match["pre"] is None:
         return package_version
     return f"{match['base']}-{match['pre']}.{match['number']}"
+
+
+# Public name for the same converter, for callers that need the contract's display
+# identity outside the release lock (``aether init``'s portable marker and the
+# laboratory's project seeding).  One implementation, deliberately exposed: a second
+# normalization would be a second source of truth for the product version.
+display_version = _display_version
 
 
 def load_aether_prebuild_identity(path: Path | str) -> AetherPrebuildIdentity:
