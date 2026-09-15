@@ -108,6 +108,10 @@ resumed run continues the ladder instead of relitigating the classification.
 1. Re-verify the published identity handed off by LC-INT (release/tag/commit, artifact names
    and hashes) and that the RC bytes are the ones downloaded from the release.
 2. Record the full pre-state, then run the non-mutating preview and the cheap refusal checks.
+   The pre-state MUST include the exact bytes and mtime of the real user unit
+   (`hermes-gateway-morfeo.service`) plus its `ExecStart`, `WorkingDirectory`, `VIRTUAL_ENV`
+   and `HERMES_HOME` values, because §4.1 shows how that file can be silently rewritten.
+   Capture them with a plain read; never run a lifecycle or activation test to obtain them.
 3. Write the post-restart verification checklist durably **before** the interrupting step,
    activate, and let the session interruption happen as authorized.
 4. After instances reopen: active record vs `runtime/current` vs launcher vs Desktop entry vs
@@ -115,12 +119,48 @@ resumed run continues the ladder instead of relitigating the classification.
    TUI `--check` plus a real launch, gateway/dispatcher readiness with a post-activation PID,
    plugin/tool exposure, exact Project binding, Graphify probe/status/query, no legacy
    project-local runtime path, one real three-role pipeline E2E, and the HLP-310 canary of
-   §3.1 re-run on the activated runtime.
+   §3.1 re-run on the activated runtime. **Plus the §4.1 unit-file assertions below.**
 5. Rollback rehearsal, then forward activation of the same RC and re-verification; preservation
    of every mutable-state identity and of post-cutoff data.
 6. Issue truth: #437/#438 only with exact evidence; #261 updated with the RC outcome and the
-   outstanding stable/PyPI/WSL2 gates, left open; #404 per §3.3.
+   outstanding stable/PyPI/WSL2 gates, left open; #404 per §3.3; #439 per §4.1.
 7. Residue: objective-owned merged branches/worktrees and bounded test processes only, with the
    preserved items reported.
 8. Final report with `release_impact`/`release_action`/`release_channel` stated separately from
    the evidence supporting them.
+
+### 4.1 Live-safety constraint from issue #439 (recorded before activation, not after)
+
+While this card was blocked, an earlier run of the LC-RUNTIME candidate executed
+`tests/test_observation_lifecycle.py::test_activation_materializes_three_explicit_profile_homes_under_store`,
+which called the real `activate_existing()` without an injected disabled service controller.
+The generated gateway unit was written to the **real** user systemd destination with that
+test's `tmp_path` in `ExecStart`, `WorkingDirectory`, `PATH`, `VIRTUAL_ENV` and `HERMES_HOME`;
+when pytest removed the directory the unit entered a five-second `203/EXEC` restart loop
+(~474 failures), the dispatcher/ticker stopped, and four workers died. Issue #439 is the
+record. This is the same file this card's activation lane legitimately rewrites, so the
+incident is a direct hazard statement for step 3, not a curiosity.
+
+Independently verified at claim time (read-only) that the restoration holds: the unit's
+`ExecStart` and `VIRTUAL_ENV` resolve to the real release
+`…/runtime/releases/20260914T135740-0600-a3d8475c-h0b28897/venv`, `WorkingDirectory` and
+`HERMES_HOME` are the real `…/state/aether/hermes/profiles/morfeo`, and the service reports
+`ActiveState=active`, `NRestarts=0`, a start time after the incident. The unrelated
+`hermes-gateway-hestia.service` is active and was not touched.
+
+Obligations this adds to the activation step:
+
+- **Never run a lifecycle/activation test that can reach `SystemdUserController` or the real
+  unit destination from this card.** Pre-state and verification are plain reads.
+- Immediately after activation, assert the unit's `ExecStart`, `WorkingDirectory`,
+  `VIRTUAL_ENV` and `HERMES_HOME` name the **new immutable release**, contain no `tmp`/
+  `pytest-` path, and match `runtime/current`; then assert `NRestarts` is stable (not
+  climbing) and that no `203/EXEC` failure appears. A partial or clamped transition is
+  reported as a failed canary, never as success.
+- Treat the owner-visible consequence of a bad write here as severe: the same failure mode
+  stops the board's dispatcher and every concurrent flow.
+- `#439` is *not* in the contract's issue list (`#437`, `#438`, `#261`). It is therefore
+  **left open** by this card unless LC-RUNTIME's isolation fix is present in the accepted RC
+  *and* verified, in which case the verification is commented on it with evidence; it is never
+  closed on this card's own authority. The incident and its verified restoration are reported
+  in the final evidence either way.

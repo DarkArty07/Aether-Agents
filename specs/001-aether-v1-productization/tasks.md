@@ -236,6 +236,36 @@ Real serialization is the integration/closeout chain:
     canary passes on the activated runtime — otherwise it stays open with the failure
     recorded. This is a directly evidenced behavioral claim about HLP-310, so it is never
     accepted from historical focused tests alone.
+19. Canonical `hermes.source_tree_sha256` encoding (resolved for `LC-RUNTIME` request 10).
+    The lock field is **not** a free choice of hash recipe: it is re-derived by the shipping
+    validator, so the canonical encoding is the one that code implements —
+    `src/aether_agents/lifecycle.py::_tree_sha256` over the *materialized* (git-archive
+    extracted) source, i.e. `sha256(json.dumps(rows, separators=(",",":"), ensure_ascii=True))`
+    where `rows` are `(posix-relative-path, sha256(file bytes))` in `os.walk` DFS order with
+    per-level sorted names (`__pycache__` excluded; symlinks and non-regular files refused).
+    `_tree_sha256` is the function used at `lifecycle.py:2567`, `:3251-3252` and `:3683`, so
+    any other recipe cannot be canonical without changing the validator.
+    Measured vectors, computed by calling the real function on `git archive` materializations
+    of the reviewed fork revisions (trees and 9,375 regular files per revision confirmed
+    independently, zero symlinks):
+    - `54eeb56dab…` (tree `8d50484d…`) → `4f0c6fabb658bcb49e14ebfd97ec60b5bdca249471d7706cb1532fcf56095295`
+    - `387705ea1d…` (tree `ead7e6c3…`) → `fb3e5336a0106ad96ccac88345f23880a9f2597235f023aab246add4a2498337`
+    Two divergence traps, both measured, so no unit re-derives this:
+    - **Blob bytes vs materialized bytes.** The fork repository's `.gitattributes` gives the
+      nine `*.ps1` files `text: set` / `eol: crlf`, so `git check-attr` (authoritative) shows
+      their blob bytes are LF while the checked-out/archived bytes are CRLF. A digest over
+      raw git blobs therefore *never* equals a digest over the materialized tree. LC-FORK's
+      recorded `fb9284a9…` (54eeb56) and `1350dacf…` (387705ea) reproduce exactly **as
+      blob-based projections** — they are legitimate fork-evidence figures, and they are not
+      the lock value.
+    - **Row order.** `_tree_sha256` appends in DFS order, which differs from a global path
+      sort for these trees (`4f0c6fab` vs `8eddd139` at 54eeb56; `fb3e5336` vs `c6088578` at
+      387705ea). Only the DFS value is canonical.
+    Also recorded: `hermes_editable.compute_source_tree_sha256` is a *different* function with
+    a different exclusion set, usable for the editable path but never as the lock's recipe.
+    `LC-INT` regenerates the field with the lifecycle function at the merged fork tip and
+    writes the encoding and the resulting value into the lock/evidence; mismatch stays
+    fail-closed.
 
 ## LC-DOCS — canonical design, docs and capability reconciliation
 
