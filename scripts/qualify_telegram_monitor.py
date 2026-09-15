@@ -1620,6 +1620,14 @@ SYNTHETIC_CASE_TEXTS: Mapping[str, str] = {
     "review": "Synthetic review flow is active.",
 }
 
+#: The reviewer the synthetic pending-review case requests its review from.
+#:
+#: The adopted review contract requires an initial review request to name an explicit,
+#: distinct reviewer (the shipped writer refuses to invent one and rejects self-review), so
+#: the synthetic scope must mirror that rule instead of bypassing it.  The value is a role
+#: name, exactly like the ``implementer``/``morfeo`` identities the fixture already uses.
+SYNTHETIC_REVIEW_REVIEWER = "supervisor"
+
 
 def _bound_task_id(entry: Mapping[str, Any], task: Mapping[str, Any]) -> str:
     """The identity the shipped kanban writer assigned to one synthetic task.
@@ -1683,19 +1691,23 @@ def _scope_manifest(scope_root: Path, stamp: str) -> list[dict[str, Any]]:
                 status = "running" if letter == "A" else "ready"
             else:
                 status = "running"
-            tasks.append(
-                {
-                    "key": f"{letter}{index + 1}",
-                    "title": (
-                        f"[synthetic] qualification root {letter}"
-                        if index == 0
-                        else f"[synthetic] qualification case {letter}{index + 1}"
-                    ),
-                    "status": status,
-                    "result": SYNTHETIC_CASE_TEXTS[key],
-                    "case": key if key in claimed else None,
-                }
-            )
+            record: dict[str, Any] = {
+                "key": f"{letter}{index + 1}",
+                "title": (
+                    f"[synthetic] qualification root {letter}"
+                    if index == 0
+                    else f"[synthetic] qualification case {letter}{index + 1}"
+                ),
+                "status": status,
+                "result": SYNTHETIC_CASE_TEXTS[key],
+                "case": key if key in claimed else None,
+            }
+            if status == "review":
+                # The pending-review case requests its review from an explicit, distinct
+                # reviewer; the shipped writer owns the reviewer rule and the fixture never
+                # bypasses it.
+                record["reviewer"] = SYNTHETIC_REVIEW_REVIEWER
+            tasks.append(record)
             if index > 0:
                 links.append((0, index))
         sessions = [
@@ -3843,10 +3855,18 @@ for entry in MANIFEST:
                 ):
                     fail("fixture-complete-refused")
             elif status == "review":
+                # The review request names the manifest's explicit reviewer: the shipped
+                # writer refuses an initial review without one and rejects self-review, so
+                # the fixture proves the real rule instead of having it relaxed.
+                reviewer = task.get("reviewer")
+                if not isinstance(reviewer, str) or not reviewer.strip():
+                    fail("fixture-review-reviewer-missing")
+                    continue
                 if not kanban_db.request_review(
                     board_connection,
                     task_id,
                     summary=task["result"],
+                    reviewer=reviewer,
                     with_reason=True,
                 )[0]:
                     fail("fixture-review-refused")
