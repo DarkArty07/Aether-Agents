@@ -51,6 +51,7 @@ blockers [#437](https://github.com/DarkArty07/Aether-Agents/issues/437),
 | In-scope 1, 7, 11; D1; AC-15 | **LC-DOCS** (Implementer, root-gated) | Canonical design/spec/guide/capability/changelog reconciliation for maintained fork, XDG layout, interrupting update/rollback and RC scope, with the derived capability registry matching the real CLI surface and no competing authority |
 | In-scope 2; D7; AC-10 (focused) | **LC-BLOCK** (Implementer, root-gated) | #437 and #438 closed by reproduced fixes: literal manifest entry for `patches/hermes/HLP-425-review-flow-continuity.patch`, a D15R fixture that names a distinct reviewer, and order-independent exact-Hermes Monitor tests that never read ambient live state |
 | In-scope 8; D6; AC-01 (fork half), AC-02 (fork half) | **LC-FORK** (Implementer, root-gated) | One clean reviewed `aether-hermes:aether-main` candidate carrying every accepted active HLP behavior, with fork docs/tests and packaging identity reconciled, ready for a normal PR without history rewrite |
+| In-scope 7, 8; D6; AC-02 (fork half) | **LC-PORT420** (Implementer, root-gated; added at execution) | HLP-420's Responses terminal/phase fidelity and `tool_choice` carriage landed on the maintained fork as ordinary source, byte-identical to the reviewed `patches/hermes/HLP-420-responses-terminal-fidelity.patch` candidate, with its focused regression module present and RED/GREEN proven |
 | In-scope 3, 4, 5, 6, 9, 10 (disposable); D2, D3, D4, D5; AC-01–AC-08 | **LC-RUNTIME** (Implementer, root-gated) | Maintained-fork release lock and deterministic validation, one `aether update` local-candidate route with non-mutating preview and clean-source refusal, XDG active record with versioned staging/`runtime/current`/launcher/Desktop/service projections, transition recovery, state-preserving rollback, doctor mismatch diagnostics, reconciled HLP ledger/evidence generation, and disposable-home tests including interruption/fault injection |
 | In-scope 7, 11; D8; AC-05, AC-11, AC-12 (tooling) | **LC-RELTOOL** (Implementer, root-gated) | `VERSION`/changelog/release-workflow/closeout tooling that builds, inspects and hash-binds one exact release bundle (wheel, sdist, fork runtime closure, release lock, provenance, `SHA256SUMS`) and produces package-member and clean-install reports |
 | In-scope 12; D7, D8, D10; AC-10 (integrated), AC-11, AC-12 | **LC-INT** (Supervisor, same flow, terminal=false) | Integrated gates on the merged candidate, fork PR and Aether PR through required checks and green merge without bypass, annotated tag `v1.0.0-rc.1`, GitHub prerelease carrying the exact qualified artifacts, and downloaded-artifact identity verification |
@@ -63,10 +64,11 @@ t_a3b2d549 (Supervisor decomposition root)
     ├── LC-DOCS     (Implementer; base 410c172)
     ├── LC-BLOCK    (Implementer; base 410c172)
     ├── LC-FORK     (Implementer; base 410c172; nested fork worktree)
+    ├── LC-PORT420  (Implementer; base 410c172; nested fork worktree; added at execution)
     ├── LC-RUNTIME  (Implementer; base 410c172)
     └── LC-RELTOOL  (Implementer; base 410c172)
 
-LC-DOCS, LC-BLOCK, LC-FORK, LC-RUNTIME, LC-RELTOOL
+LC-DOCS, LC-BLOCK, LC-FORK, LC-PORT420, LC-RUNTIME, LC-RELTOOL
     → same-card Supervisor review on each unit
     → LC-INT    (Supervisor, same flow, consumes every reviewed unit)
     → LC-CLOSE  (Supervisor, same flow, terminal=true)
@@ -354,6 +356,45 @@ Real serialization is the integration/closeout chain:
   the tree is clean and the branch is a normal fast-forwardable candidate without history
   rewrite; report the exact candidate revision, tree digest inputs and any residual risk.
 - Dependencies: decomposition root only.
+
+## LC-PORT420 — HLP-420 Responses terminal fidelity as fork source
+
+- Source: contract in-scope 7 and 8; D6; AC-02 (fork half). Added at execution
+  (2026-09-14) after `LC-FORK` measured HLP-420 as the only active reconciliation entry
+  whose source is absent from the fork candidate; it is a parent of `LC-INT`.
+- Outcome: the maintained fork carries HLP-420's behavior as ordinary reviewed source on
+  branch `fix/420-responses-terminal-fidelity` at `70569d1025b64cb98114e78840cef83baf1fc9d2`
+  (parent `54eeb56dab`), together with `tests/agent/test_auxiliary_client_responses_terminal_420.py`.
+  Delivered bytes are byte-identical to the reviewed candidate in
+  `patches/hermes/HLP-420-responses-terminal-fidelity.patch` (content SHA-256 `2c5dfee0…`
+  and `1c8a21d0…`; blobs `e71d241ed7…` and `b347d8577d…`), and the file's unrelated
+  #301/#303/#296 extra-headers and Chat-directive behavior is provably preserved.
+- Inputs: fork checkout at `54eeb56dab`; the patch above (SHA-256 `e0caa198…`); the
+  `HERMES_LOCAL_PATCHES.md` HLP-420 local-semantics list; the HLP-420 reconciliation entry.
+- **Corrected premise (recorded so no later unit inherits it):** an earlier Supervisor card
+  premise asserted the patch "does not apply as a replay" because the candidate blob
+  `93b185c9…` was compared against `93275ed4…`. That comparison conflated a git blob id
+  with a content SHA-256: `93275ed4…` is the raw-content hash of the very same bytes, the
+  patch's `index` line is `93b185c9eb..e71d241ed7`, and the file did not change between the
+  patch's recorded base and the candidate tip. The patch therefore **does** replay
+  byte-exactly at this base — as the ledger already stated — and review confirmed it by
+  applying the patch to a pristine tree and reproducing the delivered bytes. The unit
+  followed the card's source-port direction; the two methods are provably equivalent, so
+  neither the deliverable nor the ledger needs a correction.
+- Boundaries: fork worktree `agent/auxiliary_client.py` (HLP-420 regions only) and the new
+  regression module; Aether side only `specs/001-aether-v1-productization/evidence/LC-PORT420.md`.
+  No push/PR/merge/tag/publish/activation, no live-runtime or installed-editable change.
+- Judgement: how the ported regions are expressed as source, and how the focused matrix
+  proves each recorded local-semantics item.
+- Verification: RED on the unported base (`20 failed, 5 passed`; acceptance case fails
+  exactly `assert 'stop' == 'length'`), GREEN focused module (`25 passed`), existing
+  `tests/agent/test_auxiliary_client.py` (`181 passed`), whole `tests/agent/` delta equal to
+  the +25 new tests with an identical environment-driven failure set, `ruff check` and
+  `git diff --check` clean, pre-existing `ruff format` drift unchanged (287 hunks; 656 → 655
+  formatter-removed lines), module origin resolving to the candidate, and delivered blobs
+  equal to the patch postimages. Review additionally replayed the patch onto a pristine
+  `54eeb56dab` tree and reproduced both delivered files byte-for-byte.
+- Dependencies: decomposition root only; parent of `LC-INT`.
 
 ## LC-RUNTIME — maintained-fork lock, local candidate route and state-preserving lifecycle
 
