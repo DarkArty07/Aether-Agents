@@ -8,3 +8,4 @@ patches/hermes/HLP-388-cron-session-launch-workdir.patch whitespace=-trailing-sp
 patches/hermes/HLP-393-cron-commissioning-origin-subscription.patch whitespace=-trailing-space
 patches/hermes/HLP-334-native-collaboration.patch whitespace=-trailing-space
 patches/hermes/HLP-425-review-flow-continuity.patch whitespace=-trailing-space
+patches/hermes/HLP-426-terminal-worker-reap.patch whitespace=-trailing-space

@@ -144,6 +144,7 @@ jobs:
           patches/hermes/HLP-393-cron-commissioning-origin-subscription.patch
           patches/hermes/HLP-420-responses-terminal-fidelity.patch
           patches/hermes/HLP-425-review-flow-continuity.patch
+          patches/hermes/HLP-426-terminal-worker-reap.patch
           patches/hermes/HLP-369-goal-mode-review-recovery.patch
           patches/hermes/HLP-275-aux-image-prep-cap.patch
           patches/hermes/HLP-382-bounded-transcript-publication.patch

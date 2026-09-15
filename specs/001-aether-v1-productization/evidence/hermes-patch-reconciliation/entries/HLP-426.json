@@ -1,0 +1,93 @@
+{
+  "id": "HLP-426",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-426--a-terminal-non-current-worker-must-not-outlive-its-run-maintained-fork-2026-09-15",
+  "components": [
+    "HLP-426",
+    "hermes_cli/kanban_db.py",
+    "hermes_cli/kanban.py",
+    "tests/hermes_cli/test_kanban_superseded_worker_reap_450.py"
+  ],
+  "required_behavior": "A worker process whose run has already ended and is no longer the task's current run is terminated before the dispatch tick can spawn a successor on the same workspace, and the spawn is withheld if it survives termination, while a long-running current worker is never a candidate because elapsed time is not a criterion and the identity is verified by the spawn-time (pid, start_time) fingerprint plus the claiming host.",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/450"
+      }
+    ],
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+        "result": "The inspected revision clears the durable worker identity on terminal transitions (14 `worker_pid = NULL` assignments, including the block/triage path) and contains no `reap_superseded_workers` equivalent anywhere in the repository; worker termination exists only on the reclaim paths via `_terminate_reclaimed_worker`."
+      },
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py_dispatch.py",
+        "result": "The inspected dispatch lane contains no superseded-worker check before spawning a successor, so nothing guarantees the predecessor's process has exited."
+      },
+      {
+        "kind": "source",
+        "reference": "additional inspections recorded in the ledger: selected public release `v2026.8.18` (commit e624e9fde561e1add9388384012b295fde669ade) and the latest released artifact `v2026.9.14` (commit 345cd2b057a452236de401d3534b8502a7465e8d)",
+        "result": "Both keep clearing `worker_pid` without signalling the process and terminate a worker on a terminal transition only in the archive path; no successor-boundary guarantee was found, so this remains a downstream-only correction under PD-65."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Retire only when an adopted exact Hermes release terminates (or refuses to spawn a successor for) a worker whose run has already ended and is no longer the task's current run, does not use elapsed time as the criterion, and passes the focused module plus the disposable-board canary without this patch. Adopting upstream's archive-path termination is not sufficient: different trigger, no successor-boundary guarantee.",
+    "status": "not_executed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "published fork lineage 21628fc3790d825b8dc8082134f5cd382ec551f2 (focused module)",
+        "result": "`scripts/run_tests.sh tests/hermes_cli/test_kanban_superseded_worker_reap_450.py -q` → 11 passed, 0 failed."
+      },
+      {
+        "kind": "test",
+        "reference": "reviewed candidate 622678ef (affected surface and complete suite, with base attribution)",
+        "result": "Affected surface 74 files / 650 passed / 0 failed / 1 Windows-only skip; complete suite 3009 files / 33408 passed / 90 failed / 296 skipped with the failing-node set identical to the unmodified base (`9031bae0e8`)."
+      },
+      {
+        "kind": "test",
+        "reference": "specs/001-aether-v1-productization/fixtures/qualify_superseded_worker_reap_450.py",
+        "result": "On the unfixed base the incident shape reproduces (all three superseded processes still alive when a successor was spawned, each still writing afterwards); with the fix the tick reaps all three first and the successor observes every predecessor gone. Counter-case: a live current worker survives four ticks untouched."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "unavailable",
+    "artifacts": [
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-426-terminal-worker-reap.patch",
+        "result": "passed",
+        "ledger_sha256": "97dc0294b9909e9648bce9d6dbdde4ce7dd379d6cf2114b8c1713b8ee07b2e81",
+        "computed_sha256": "97dc0294b9909e9648bce9d6dbdde4ce7dd379d6cf2114b8c1713b8ee07b2e81",
+        "checksum_status": "passed",
+        "parse_status": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "maintained fork base 9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "git apply --check and apply on a freshly materialized 9031bae0e8b0ab40c4fd7ba50c644972ff512611 tree; the three changed paths reconstruct into tree 0253df7de573ea695206a5f3bf2407cb3e48e320, equal to published fork commit 21628fc3790d825b8dc8082134f5cd382ec551f2 and to the aether-main merge 7a4fdcd083409c31c09cfa3bfa345354e8576a7e",
+        "result": "passed"
+      }
+    ],
+    "blocker": "The patch reconstructs exactly in the maintained fork and is active in that lineage, but no public upstream equivalence exists at the inspected revision, and the live runtime still runs the pre-RC release. The structured record therefore cannot claim a verified public artifact."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "The fix guarantees the successor boundary, not instantaneous exit: a superseded process can still run until the next dispatch tick reaps it (bounded by one dispatch interval).",
+    "Runs spawned by an older runtime carry no (pid, start_time) fingerprint in their `spawned` event and are therefore never signalled — a deliberate fail-safe, not an unverified guess.",
+    "The withheld-spawn path is proven by the focused unit test (signal made a no-op) rather than by the canary, because a SIGKILL-surviving process cannot be fabricated."
+  ],
+  "summary": "Retain HLP-426. The maintained fork now terminates a worker whose run has ended and is no longer current before the dispatcher can spawn a successor on the same workspace, with elapsed time never a criterion; no upstream equivalent was found at the inspected revision, so this remains a downstream-only correction for the maintained fork."
+}
