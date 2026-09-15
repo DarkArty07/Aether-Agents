@@ -1,0 +1,93 @@
+{
+  "id": "HLP-425",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-425--supervisor-same-card-review-flow-continuity-and-provenance-fencing",
+  "components": [
+    "HLP-425",
+    "hermes_cli/kanban_db.py",
+    "agent/runtime_cwd.py",
+    "agent/prompt_builder.py",
+    "agent/conversation_loop.py",
+    "agent/conversation_compression.py",
+    "run_agent.py",
+    "tests/hermes_cli/test_kanban_session_affinity.py",
+    "tests/agent/test_runtime_cwd.py",
+    "tests/agent/test_prompt_builder.py",
+    "tests/run_agent/test_compression_persistence.py"
+  ],
+  "required_behavior": "Corroborated Aether same-card review reuses one existing Supervisor flow session and canonical session workspace while preserving the implementation card, candidate tool workspace and Implementer pins; recognized damaged provenance fails closed instead of silently creating a generic reviewer, while genuine generic and legacy review remain compatible.",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/425"
+      },
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/426"
+      }
+    ],
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+        "result": "The inspected revision has no derived same-card review-flow resolver or review-affinity registration path that borrows one existing Supervisor session while retaining the implementation card."
+      },
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/agent/runtime_cwd.py",
+        "result": "The inspected revision has no session-identity cwd resolver or separate canonical-session workspace contract for review tools."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Retire only when an adopted exact Hermes release provides equivalent generic/Aether provenance separation, exact reviewer-session reuse, session/tool workspace separation, prompt continuity and fail-closed damaged-flow behavior and passes the focused matrix without this patch.",
+    "status": "not_executed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "maintained-fork candidate 54eeb56dabefc98821d696656ed58c55dd777346",
+        "result": "Integrated review/session/collaboration selection: 354 passed, 0 failed, 1 Windows-only skip."
+      },
+      {
+        "kind": "test",
+        "reference": "bounded installed-source compatibility selection after adoption",
+        "result": "219 passed, 0 failed, 1 Windows-only skip; affected production files compiled successfully."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "unavailable",
+    "artifacts": [
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-425-review-flow-continuity.patch",
+        "result": "passed",
+        "ledger_sha256": "2b302ca52209e41d5354b8c9ce06deade0742d105534fdf2113eadce1ba322fa",
+        "computed_sha256": "2b302ca52209e41d5354b8c9ce06deade0742d105534fdf2113eadce1ba322fa",
+        "checksum_status": "passed",
+        "parse_status": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "maintained fork base bb5e9a422f3135371557e75bcd1db01c5f8fc3ba",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "git apply --check and apply on a freshly materialized bb5e9a422f3135371557e75bcd1db01c5f8fc3ba tree; all ten changed paths SHA-256-equal to 54eeb56dabefc98821d696656ed58c55dd777346",
+        "result": "passed"
+      }
+    ],
+    "blocker": "The exact local patch reconstructs and is active in the Aether runtime, but public upstream equivalence remains unavailable at the inspected revision."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "Long-term reduction in review time and repeated-review frequency has not yet been measured on representative organic work.",
+    "Existing already-running conversations retain their cached prompt until restarted; adoption does not rewrite stored conversation history."
+  ],
+  "summary": "Retain HLP-425. The maintained fork and active Aether runtime now preserve one flow-bound Supervisor conversation across same-card review while keeping the candidate workspace and generic Hermes semantics separate."
+}

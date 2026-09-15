@@ -71,13 +71,16 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tempdir.cleanup()
 
-    def run_check(self, cwd: Path) -> subprocess.CompletedProcess[str]:
+    def run_check(
+        self, cwd: Path, *, env: dict[str, str] | None = None
+    ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, str(self.launcher), "--check"],
             cwd=cwd,
             text=True,
             capture_output=True,
             check=False,
+            env=env,
         )
 
     def load_module(self):
@@ -156,6 +159,65 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
         result = self.run_check(self.root)
         self.assertEqual(result.returncode, 2)
         self.assertIn("Hermes executable is not executable", result.stderr)
+
+    def test_check_supports_separated_runtime_and_state_roots(self) -> None:
+        project = Path(self.tempdir.name) / "project"
+        profile = Path(self.tempdir.name) / "state" / "hermes" / "profiles" / "morfeo"
+        runtime = Path(self.tempdir.name) / "runtime" / "current"
+        hermes = runtime / "venv" / "bin" / "hermes"
+
+        project.mkdir(parents=True)
+        (project / "AGENTS.md").write_text("fixture\n", encoding="utf-8")
+        (project / ".aether").mkdir()
+        shutil.copy2(self.root / ".aether" / "project.toml", project / ".aether/project.toml")
+        schema = (
+            project / "specs" / "001-aether-v1-productization" / "contracts" / "project.schema.json"
+        )
+        schema.parent.mkdir(parents=True)
+        shutil.copy2(
+            self.root
+            / "specs"
+            / "001-aether-v1-productization"
+            / "contracts"
+            / "project.schema.json",
+            schema,
+        )
+
+        profile.mkdir(parents=True)
+        shutil.copy2(self.root / "home/profiles/morfeo/config.yaml", profile / "config.yaml")
+        shutil.copy2(self.root / "home/profiles/morfeo/SOUL.md", profile / "SOUL.md")
+        hermes.parent.mkdir(parents=True)
+        hermes.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        hermes.chmod(0o755)
+
+        environment = dict(os.environ)
+        environment.update(
+            {
+                "AETHER_PROJECT_ROOT": str(project),
+                "AETHER_HERMES_ROOT": str(Path(self.tempdir.name) / "state" / "hermes"),
+                "AETHER_RUNTIME_ROOT": str(runtime),
+            }
+        )
+        result = self.run_check(Path("/tmp"), env=environment)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual(report["repo_root"], str(project.resolve()))
+        self.assertEqual(report["hermes_home"], str(profile.resolve()))
+        self.assertEqual(report["hermes_executable"], str(hermes.resolve()))
+        self.assertEqual(
+            report["command"],
+            [str(hermes.resolve()), "--tui", "--in", str(project.resolve())],
+        )
+
+    def test_separated_runtime_paths_must_be_absolute(self) -> None:
+        environment = dict(os.environ)
+        environment["AETHER_PROJECT_ROOT"] = "relative/project"
+
+        result = self.run_check(self.root, env=environment)
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("AETHER_PROJECT_ROOT must be an absolute path", result.stderr)
 
     def test_launch_executes_canonical_command_with_clean_python_env(self) -> None:
         module = self.load_module()

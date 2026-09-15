@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from aether_agents import product_version
+from aether_agents.lifecycle import display_version
 from aether_agents.observation.capture.journal import JournalWriter
 from aether_agents.observation.capture.projectors import EventBuilder
 from aether_agents.observation.context import ProjectRegistry
@@ -68,7 +69,7 @@ def _seed_trace(root: Path) -> tuple[Path, ObservationPaths, str, str]:
                 "schema_version = 1",
                 f'project_id = "{project_id}"',
                 'name = "Aether observation laboratory"',
-                f'initialized_by = "{product_version()}"',
+                f'initialized_by = "{display_version(product_version())}"',
                 'forge = "local"',
                 'contract_root = "specs"',
                 'default_branch = "main"',

@@ -40,7 +40,7 @@ class ReleaseLockSourceModeTests(unittest.TestCase):
         self.commit = commit
         self.digest = digest
         self.base = {
-            "schema_version": 3,
+            "schema_version": 4,
             "aether": {
                 "version": "1.0.0-rc.1",
                 "package_version": "1.0.0rc1",
@@ -85,21 +85,25 @@ class ReleaseLockSourceModeTests(unittest.TestCase):
             "provenance_url": "https://example.invalid/provenance",
         }
 
-    def upstream_lock(self) -> dict[str, Any]:
+    def maintained_fork_lock(self) -> dict[str, Any]:
         lock = copy.deepcopy(self.base)
         lock["hermes"] = {
-            "source_mode": "upstream",
-            "repository": "https://github.com/NousResearch/hermes-agent",
-            "version": "0.20.5",
-            "tag": "v2026.8.19",
+            "source_mode": "maintained_fork",
+            "repository": "https://github.com/DarkArty07/aether-hermes",
+            "branch": "aether-main",
+            "version": "0.20.1",
             "commit": self.commit,
             "python_requires": ">=3.11,<3.14",
             "source_tree_sha256": self.digest,
-            "artifacts": [self.artifact("source", "hermes-agent.tar.gz")],
+            "artifacts": [
+                self.artifact("source", "aether-hermes-source.tar.gz"),
+            ],
         }
         return lock
 
     def transitional_fork_lock(self) -> dict[str, Any]:
+        """The retired mode's exact historical shape, kept to prove it is refused."""
+
         lock = copy.deepcopy(self.base)
         lock["hermes"] = {
             "source_mode": "transitional_fork",
@@ -128,38 +132,72 @@ class ReleaseLockSourceModeTests(unittest.TestCase):
     def assert_invalid(self, instance: dict[str, Any]) -> None:
         self.assertNotEqual(list(self.validator.iter_errors(instance)), [])
 
-    def test_upstream_mode_is_valid(self) -> None:
-        self.assert_valid(self.upstream_lock())
+    def test_maintained_fork_mode_is_valid(self) -> None:
+        self.assert_valid(self.maintained_fork_lock())
 
-    def test_transitional_fork_mode_is_valid(self) -> None:
-        self.assert_valid(self.transitional_fork_lock())
+    def test_declared_fork_tag_is_valid_and_optional(self) -> None:
+        lock = self.maintained_fork_lock()
+        lock["hermes"]["tag"] = "aether-rc-candidate"
+        self.assert_valid(lock)
 
-    def test_fork_without_residual_patch_is_invalid(self) -> None:
-        lock = self.transitional_fork_lock()
-        lock["hermes"]["residual_patches"] = []
+        del lock["hermes"]["tag"]
+        self.assert_valid(lock)
+
+    def test_transitional_fork_and_upstream_shapes_are_refused(self) -> None:
+        self.assert_invalid(self.transitional_fork_lock())
+
+        upstream = self.maintained_fork_lock()
+        upstream["hermes"]["source_mode"] = "upstream"
+        upstream["hermes"]["repository"] = "https://github.com/NousResearch/hermes-agent"
+        self.assert_invalid(upstream)
+
+    def test_maintained_fork_identity_is_exactly_constrained(self) -> None:
+        foreign_repository = self.maintained_fork_lock()
+        foreign_repository["hermes"]["repository"] = "https://github.com/DarkArty07/hermes-agent"
+        self.assert_invalid(foreign_repository)
+
+        foreign_branch = self.maintained_fork_lock()
+        foreign_branch["hermes"]["branch"] = "main"
+        self.assert_invalid(foreign_branch)
+
+        missing_branch = self.maintained_fork_lock()
+        del missing_branch["hermes"]["branch"]
+        self.assert_invalid(missing_branch)
+
+    def test_transitional_only_keys_are_not_accepted(self) -> None:
+        lock = self.maintained_fork_lock()
+        lock["hermes"]["residual_patches"] = ["HLP-191"]
         self.assert_invalid(lock)
 
-    def test_upstream_mode_cannot_point_to_fork(self) -> None:
-        lock = self.upstream_lock()
-        lock["hermes"]["repository"] = "https://github.com/DarkArty07/hermes-agent"
+        lock = self.maintained_fork_lock()
+        lock["hermes"]["upstream_base"] = {
+            "repository": "https://github.com/NousResearch/hermes-agent",
+            "tag": "v2026.8.18",
+            "commit": self.commit,
+        }
         self.assert_invalid(lock)
 
     def test_legacy_fork_only_shape_is_invalid(self) -> None:
-        lock = self.upstream_lock()
+        lock = self.maintained_fork_lock()
         del lock["hermes"]["source_mode"]
         self.assert_invalid(lock)
 
     def test_source_tree_digest_is_required_and_artifact_paths_are_closed(self) -> None:
-        missing_digest = self.upstream_lock()
+        missing_digest = self.maintained_fork_lock()
         del missing_digest["hermes"]["source_tree_sha256"]
         self.assert_invalid(missing_digest)
 
-        escaping_artifact = self.upstream_lock()
+        escaping_artifact = self.maintained_fork_lock()
         escaping_artifact["hermes"]["artifacts"][0]["filename"] = "../secret.tar.gz"
         self.assert_invalid(escaping_artifact)
 
+    def test_source_artifact_is_required_in_the_closure(self) -> None:
+        lock = self.maintained_fork_lock()
+        lock["hermes"]["artifacts"] = [self.artifact("wheel", "hermes_agent.whl")]
+        self.assert_invalid(lock)
+
     def test_observer_dependency_lock_digest_is_required(self) -> None:
-        lock = self.upstream_lock()
+        lock = self.maintained_fork_lock()
         del lock["aether"]["observer_requirements_sha256"]
 
         self.assert_invalid(lock)
@@ -180,7 +218,7 @@ class ReleaseLockSourceModeTests(unittest.TestCase):
         )
         for write_field, read_field, newer in fields:
             with self.subTest(write_field=write_field):
-                lock = self.upstream_lock()
+                lock = self.maintained_fork_lock()
                 compatibility = lock["aether"]["observation_compatibility"]
                 compatibility[write_field] = newer
                 self.assertNotIn(newer, compatibility[read_field])
@@ -193,12 +231,12 @@ class CanonicalContractConsistencyTests(unittest.TestCase):
 
         self.assertEqual(roadmap_id, "**Roadmap ID**: R4")
 
-    def test_release_lock_schema_and_plan_agree_on_version_three(self) -> None:
+    def test_release_lock_schema_and_plan_agree_on_version_four(self) -> None:
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         plan = A1_PLAN_PATH.read_text(encoding="utf-8")
 
-        self.assertEqual(schema["properties"]["schema_version"]["const"], 3)
-        self.assertIn("release-lock schema is integer `3`", plan)
+        self.assertEqual(schema["properties"]["schema_version"]["const"], 4)
+        self.assertIn("release-lock schema is integer `4`", plan)
         self.assertNotIn("requires downstream fork coordinates unconditionally", plan)
 
     def test_tui_subscription_is_not_claimed_as_delivery(self) -> None:

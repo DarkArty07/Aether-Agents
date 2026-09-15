@@ -38,6 +38,41 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def _absolute_env_path(name: str) -> Path | None:
+    """Return one explicit deployment path without guessing relative locations."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return None
+    path = Path(raw).expanduser()
+    if not path.is_absolute():
+        raise ActivationError(f"{name} must be an absolute path")
+    return path
+
+
+def _activation_paths() -> tuple[Path, Path, Path]:
+    """Resolve project, Morfeo profile and Hermes executable for this installation.
+
+    Source checkouts keep the original repository-local layout. A separated runtime
+    injects explicit XDG deployment roots through the small ``~/.local/bin/aether``
+    shim, so the versioned launcher never embeds a machine-specific home directory.
+    """
+    repo = _absolute_env_path("AETHER_PROJECT_ROOT") or _repo_root()
+    hermes_root = _absolute_env_path("AETHER_HERMES_ROOT")
+    runtime_root = _absolute_env_path("AETHER_RUNTIME_ROOT")
+
+    profile = (
+        hermes_root / "profiles" / "morfeo"
+        if hermes_root is not None
+        else repo / "home" / "profiles" / "morfeo"
+    )
+    hermes = (
+        runtime_root / "venv" / "bin" / "hermes"
+        if runtime_root is not None
+        else repo / "home" / ".venv-hermes" / "bin" / "hermes"
+    )
+    return repo, profile, hermes
+
+
 class _UnsupportedProjectSchema(ValueError):
     """The direct-launch adapter cannot safely evaluate a changed canonical schema."""
 
@@ -248,11 +283,9 @@ def _validate_extra_args(args: Sequence[str]) -> None:
 def inspect_activation(extra_args: Sequence[str] = ()) -> dict[str, object]:
     """Validate local state and return the deterministic activation contract."""
     _validate_extra_args(extra_args)
-    repo = _repo_root()
-    profile = repo / "home" / "profiles" / "morfeo"
+    repo, profile, hermes = _activation_paths()
     config = profile / "config.yaml"
     soul = profile / "SOUL.md"
-    hermes = repo / "home" / ".venv-hermes" / "bin" / "hermes"
 
     if not (repo / "AGENTS.md").is_file():
         raise ActivationError(f"Aether repository marker does not exist: {repo / 'AGENTS.md'}")

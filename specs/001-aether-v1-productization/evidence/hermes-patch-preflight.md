@@ -1,10 +1,10 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-09-14T05:41:09Z`
+Observation timestamp: `2026-09-15T08:29:21Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `37afa83980312080e5e7a990c250305ce26e54bdc7513f0dff996760738b9ea1`
+Source ledger SHA-256: `7d734946d05954e7810f0c2a8464409736b73535fa50ecbbc51c9bea9cce7f5d`
 
 ## Remaining local guarantees
 
@@ -35,6 +35,8 @@ Source ledger SHA-256: `37afa83980312080e5e7a990c250305ce26e54bdc7513f0dff996760
 - `HLP-388`: Retain HLP-388. The framework persists the verified cron launch workdir in the session row before tools run, preventing ungrounded contract authoring while keeping null cwd when unset.
 - `HLP-389`: Retain HLP-389. Referenced-script discovery now uses a syntax-aware view for inert interpreter heredoc bodies while direct detection keeps the original text, so the harmless log-read path is accepted and every recorded executable control remains blocked.
 - `HLP-393`: Retain HLP-393. Cron jobs commissioned from TUI or gateway capture durable origin, restored at fire time as request-local context so spawned Kanban root tasks auto-subscribe and wake the exact origin upon completion.
+- `HLP-420`: Retain HLP-420. The auxiliary Responses adapter now preserves phase, top-level and item status, incomplete reason, output-text fallback and tool calls, never turns incomplete/cancelled output into finish_reason=stop, keeps commentary/analysis narration out of assistant content, and carries tool_choice through call_llm/_build_call_kwargs without sending the unsupported Router fields.
+- `HLP-425`: Retain HLP-425. The maintained fork and active Aether runtime now preserve one flow-bound Supervisor conversation across same-card review while keeping the candidate workspace and generic Hermes semantics separate.
 
 ## Qualified upstream equivalents
 
@@ -71,9 +73,11 @@ Source ledger SHA-256: `37afa83980312080e5e7a990c250305ce26e54bdc7513f0dff996760
 - `HLP-226` (uncertainty): The documented private backup reconstruction input is unavailable after its approval-denied existence check; no replacement or inferred reconstruction is recorded.
 - `HLP-226` (uncertainty): HLP-226c remains a downstream component: the objective's pre-dispatch inspection at applied upstream revision 67764dc0863349a384c16425e73ee8571f3a94b7 recorded in specs/hlp-226-cross-board-project-inheritance/evidence/HLP-226C.md found no equivalent shared-dir/board-bound recovery, and no recurrence-level upstream inspection exists at this record's inspected revision 4f22543509d1b91dc45bcb369447126c5eb14fb7.
 - `HLP-246` (retirement_gate): Retirement gate status is failed.
+- `HLP-246` (selected_source_evidence): no repository-relative component path or declared portable patch path is recorded for this entry
 - `HLP-246` (uncertainty): No linked upstream issue or PR was located for equivalent attachment identity behavior.
 - `HLP-246` (uncertainty): A future upstream change must still pass the full pre-transport, readback, legacy-row, and byte-for-byte tarball gate; source similarity or a merged label is insufficient.
 - `HLP-247` (retirement_gate): Retirement gate status is failed.
+- `HLP-247` (selected_source_evidence): no repository-relative component path or declared portable patch path is recorded for this entry
 - `HLP-247` (uncertainty): No linked upstream issue or PR was located for the archived-parent dependency distinction.
 - `HLP-247` (uncertainty): The active detailed ledger section is reconciled independently even though it is absent from the active summary table.
 - `HLP-262` (artifact): The documented reconstruction input is unavailable, and the exact upstream lacks the origin-signal prerequisite needed to apply the full patch; checksum and parser controls do not establish a reconstruction pass.
@@ -129,6 +133,15 @@ Source ledger SHA-256: `37afa83980312080e5e7a990c250305ce26e54bdc7513f0dff996760
 - `HLP-393` (artifact): The exact maintained-fork reconstruction, focused candidate checks, and PR #10 candidate passed, but public upstream equivalence remains unavailable because upstream lacks cron commissioning origin and kanban auto-subscription.
 - `HLP-393` (retirement_gate): Retirement gate status is not_executed.
 - `HLP-393` (uncertainty): Upstream does not capture or restore durable commissioning origin for cron-spawned tasks at the inspected revision.
+- `HLP-420` (artifact): Portable reconstruction passed and the focused candidate checks are green, but public upstream equivalence is unavailable: both inspected upstream revisions still synthesize finish_reason=stop for incomplete/cancelled terminals and still concatenate every message item. No live runtime was activated by this unit.
+- `HLP-420` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-420` (uncertainty): tool_choice passthrough covers call_llm, _call_llm_impl, _build_call_kwargs, the Responses adapter and the synchronous same-provider retry; the asynchronous auxiliary entry point and the emergency fallback candidate builders still omit tool_choice, so a fallback attempt keeps the route default instead of forcing the structured call.
+- `HLP-420` (uncertainty): The forced submit_graph_fragment structured-call contingency is not implemented here; this unit only makes the transport capable of carrying it deterministically, and the async path would need its own change before a forced call could be proven there.
+- `HLP-420` (uncertainty): A completed response with empty output and no top-level output_text still returns no content with finish_reason=stop; classifying that hollow response as retryable remains the caller's decision.
+- `HLP-425` (artifact): The exact local patch reconstructs and is active in the Aether runtime, but public upstream equivalence remains unavailable at the inspected revision.
+- `HLP-425` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-425` (uncertainty): Long-term reduction in review time and repeated-review frequency has not yet been measured on representative organic work.
+- `HLP-425` (uncertainty): Existing already-running conversations retain their cached prompt until restarted; adoption does not rewrite stored conversation history.
 
 ## Artifact integrity
 
@@ -159,6 +172,22 @@ Source ledger SHA-256: `37afa83980312080e5e7a990c250305ce26e54bdc7513f0dff996760
 - `HLP-388`: unavailable
 - `HLP-389`: passed
 - `HLP-393`: unavailable
+- `HLP-420`: unavailable
+- `HLP-425`: unavailable
+
+## Selected maintained-fork source
+
+Selected source: `https://github.com/DarkArty07/aether-hermes@9031bae0e8b0ab40c4fd7ba50c644972ff512611` (presence resolved from a checkout: `true`)
+
+| Verdict | Entries |
+| --- | --- |
+| present | 27 |
+| partial | 0 |
+| absent | 0 |
+| unverified | 2 |
+
+- `HLP-246`: unverified — no repository-relative component path or declared portable patch path is recorded for this entry
+- `HLP-247`: unverified — no repository-relative component path or declared portable patch path is recorded for this entry
 
 ## Safe next decisions
 

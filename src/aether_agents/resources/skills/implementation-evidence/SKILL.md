@@ -1,7 +1,7 @@
 ---
 name: implementation-evidence
 description: Use when Implementer executes a contract-derived unit.
-version: 0.1.0
+version: 0.1.1
 author: Morfeo (Aether role), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -56,7 +56,11 @@ Supervisor-owned delivery defines scope; reading more context does not enlarge i
    possible in the actual interface. Ask a bounded, source-backed question when the
    agreed design contradicts that interface; continue unrelated authorized work.
    Record consumption and disposition of peer help without transferring writable
-   ownership or inventing new acceptance.
+   ownership or inventing new acceptance. A review return is execution guidance, not a
+   new source of product acceptance: when a required correction materially contradicts
+   the canonical obligation, interface or verified source, surface that contradiction
+   through the existing collaboration/review path before changing code or tests to make
+   the derived interpretation pass.
 3. **Make a short local execution approach.** Identify the smallest behavior changes
    and tests needed for this unit, using the existing code and conventions. This is
    working reasoning, not another authoritative `plan.md` or `tasks.md`. Do not require
@@ -137,6 +141,8 @@ acceptance criteria, or bypasses unit review.
 - Publishing, integrating, or claiming an aggregate release decision from a unit role.
 - Encoding test oracles against impossible interface transitions without verifying the real interface.
 - Treating peer advice as authority to widen unit scope or invent new acceptance criteria.
+- Changing implementation or tests to satisfy a review interpretation that conflicts with
+  the canonical obligation instead of first resolving the contradiction with evidence.
 
 ## Verification
 

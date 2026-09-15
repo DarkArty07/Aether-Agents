@@ -29,6 +29,12 @@ Prerelease is not a compatibility impact, and a merge does not imply a release.
 Release action and channel follow the standing project policy; the fields do not
 create a second lifecycle state machine.
 
+A pre-stable milestone is a legitimate objective outcome: an authorized objective may
+publish a release candidate to its prerelease channel while the stable gates stay open.
+`release_channel = prerelease` never implies stable `1.0.0`, a package-index publication,
+a WSL2 qualification or a completed `#261`. The Implementer reports only its own
+compatibility evidence; the aggregate conclusions belong to the terminal closeout.
+
 ## Bounded direct route
 
 Morfeo may complete an understood, bounded, inspectable, practically reversible

@@ -2,7 +2,7 @@
 
 Aether Agents is a multi-agent software-engineering product and method. It adapts [Hermes Agent](https://hermes-agent.nousresearch.com/docs) as the runtime substrate and [GitHub Spec Kit](https://github.com/github/spec-kit) as the specification method, while defining Aether's role, handoff, policy, and qualification boundaries.
 
-**Status:** the repository contains a beta stabilization build, not a release candidate or a public release. Feature expansion and nonessential Hermes changes remain frozen while the rolling reliability gate is qualified.
+**Status:** the checked-in tree is still a beta stabilization build, not a release candidate — no release candidate has been published from this repository. The owner-authorized `1.0.0rc1` objective targets package version `1.0.0rc1` and annotated GitHub prerelease `v1.0.0-rc.1` (`release_impact = major`, `release_action = publish`, `release_channel = prerelease`) as a bounded pre-stable milestone: explicitly **not** stable `1.0.0`, **not** a PyPI or other package-index publication, and **not** a WSL2 qualification result. Issue #261 therefore stays open with the stable, PyPI/OIDC and WSL2 gates outstanding. Feature expansion and nonessential Hermes changes remain frozen while the rolling reliability gate is qualified.
 
 ## Documentation
 
@@ -17,7 +17,9 @@ Start with the [documentation index](docs/index.md). The current documentation o
 
 ## Current beta boundary
 
-Aether uses Hermes-native Projects, boards, worktrees, review, lifecycle, profiles, and tools; it does not replace Hermes with another queue, scheduler, worker manager, or generic manual. A documented transitional downstream is retained only for indispensable qualified runtime fixes and must retire when the exact released upstream behavior passes its gate.
+Aether uses Hermes-native Projects, boards, worktrees, review, lifecycle, profiles, and tools; it does not replace Hermes with another queue, scheduler, worker manager, or generic manual. A documented transitional downstream is no longer the runtime policy: under PD-49/61/64/65 the executable Hermes source is the maintained fork `DarkArty07/aether-hermes` branch `aether-main`, bound by the release lock's `schema_version` 4 `maintained_fork` source mode through repository, exact commit, source-tree digest, artifact closure and provenance. The fixed public `v2026.8.18` tree remains the reference for upstream-compatible behavior and historical evidence, and `.patch` files stay audit/reconstruction evidence that is never replayed onto an active runtime.
+
+Immutable release code and Graphify components live under the Aether XDG data root, while every mutable Hermes home, session, board, credential, memory, observation, monitor and knowledge artifact stays under the Aether XDG state root. `aether update` is the only supported promotion and activation boundary: its local-candidate route previews explicit clean Aether and fork commits without mutating anything, activation is explicit and may interrupt Aether-owned instances, a partial transition is recoverable, and rollback restores product code without rolling user state backward.
 
 The `aether init` command initializes **an existing Git repository root only**. It writes the portable project marker and binds it to exactly one non-archived native Hermes Project whose primary path matches exactly; `--hermes-project ID` resolves an otherwise ambiguous exact-path match. It neither initializes Git nor creates or changes a native Hermes Project.
 

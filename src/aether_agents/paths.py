@@ -96,6 +96,53 @@ def data_root(explicit: Path | str | None = None) -> Path:
     return base / "aether"
 
 
+def user_bin_dir(explicit: Path | str | None = None) -> Path:
+    """Resolve the user executable directory the launcher projection targets."""
+
+    if explicit is not None:
+        root = Path(explicit).expanduser()
+        if not root.is_absolute():
+            raise ValueError("explicit user bin directory must be absolute")
+        return root
+    xdg = os.environ.get("XDG_BIN_HOME", "").strip()
+    if xdg:
+        configured = Path(xdg)
+        if not configured.is_absolute():
+            raise ValueError("XDG_BIN_HOME must be absolute")
+        return configured
+    return Path.home() / ".local" / "bin"
+
+
+def applications_dir(explicit: Path | str | None = None) -> Path:
+    """Resolve the user Desktop-entry directory the projection targets."""
+
+    if explicit is not None:
+        root = Path(explicit).expanduser()
+        if not root.is_absolute():
+            raise ValueError("explicit applications directory must be absolute")
+        return root
+    xdg = os.environ.get("XDG_DATA_HOME", "").strip()
+    base = Path(xdg) if xdg else Path.home() / ".local" / "share"
+    if not base.is_absolute():
+        raise ValueError("XDG_DATA_HOME must be absolute")
+    return base / "applications"
+
+
+def systemd_user_dir(explicit: Path | str | None = None) -> Path:
+    """Resolve the systemd user-unit directory the service projection targets."""
+
+    if explicit is not None:
+        root = Path(explicit).expanduser()
+        if not root.is_absolute():
+            raise ValueError("explicit systemd user directory must be absolute")
+        return root
+    xdg = os.environ.get("XDG_CONFIG_HOME", "").strip()
+    base = Path(xdg) if xdg else Path.home() / ".config"
+    if not base.is_absolute():
+        raise ValueError("XDG_CONFIG_HOME must be absolute")
+    return base / "systemd" / "user"
+
+
 def ensure_private_dir(path: Path) -> Path:
     """Create a private directory without following any existing POSIX symlink.
 

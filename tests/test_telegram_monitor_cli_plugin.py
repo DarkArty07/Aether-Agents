@@ -739,13 +739,28 @@ def test_exact_packaged_precheck_child_hands_the_lease_to_the_reporter(
     assert gate["report_id"] == "report-alpha"
     assert gate["cutoff_utc"] == cutoff_text
 
-    # The native scheduler executes the same packaged script and never reads an idle
-    # gate out of it, whatever the child runtime can resolve.
+    # The native scheduler executes the same packaged script with its own sanitized child
+    # environment.  Whether that child resolves the packaged runtime depends on the
+    # interpreter layout of the runner, so both real outcomes are pinned exactly instead of
+    # letting this regression pass on the accident of one of them.
     from cron import scheduler
 
     ok, output = scheduler._run_job_script(monitor_runtime.PRECHECK_SCRIPT_NAME)
     assert ok is True
-    assert scheduler._parse_wake_gate(output) is True
+    gate_lines = [line for line in output.splitlines() if line.strip()]
+    assert gate_lines, output
+    gate = json.loads(gate_lines[-1])
+    if gate["reason"] == "narration-in-progress":
+        # A child that resolves the runtime is fenced by the live handoff this test just
+        # wrote: this tick repeats a cut whose narration is already owned across the
+        # process boundary, so the same pending report never wakes a second narration.
+        assert gate["report_id"] == "report-alpha"
+        assert scheduler._parse_wake_gate(output) is False
+    else:
+        # A child that cannot resolve the runtime refuses loudly instead of ever reading
+        # the pending cut as an idle no-op.
+        assert gate == {"reason": "runtime-mismatch", "wakeAgent": True}
+        assert scheduler._parse_wake_gate(output) is True
 
     # The child is gone; the handoff carries the report to the exact reporter session.
     parent = MonitorStore()
