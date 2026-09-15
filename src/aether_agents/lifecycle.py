@@ -206,22 +206,43 @@ class AetherPrebuildIdentity:
 
 
 # Aether 1.0 RC source identity: the executable Hermes source is reviewed fork source,
-# bound by repository, branch, exact commit, tree digest and artifact closure.  The
-# retired modes replayed residual ``patches/hermes/*.patch`` files onto a fixed public
-# baseline and are refused for new preparation.
+# bound by repository, branch, exact commit, tree digest and artifact closure.  Neither
+# historical mode stays selectable for new preparation: ``transitional_fork`` replayed
+# residual ``patches/hermes/*.patch`` files onto a fixed public baseline, while
+# ``upstream`` consumed the released public artifact as-is.  Each is refused with the
+# reason that mode actually had, never a borrowed one.
 MAINTAINED_FORK_SOURCE_MODE = "maintained_fork"
 MAINTAINED_FORK_REPOSITORY = "https://github.com/DarkArty07/aether-hermes"
 MAINTAINED_FORK_BRANCH = "aether-main"
 RETIRED_HERMES_SOURCE_MODES = ("upstream", "transitional_fork")
 
+_RETIRED_MODE_REASONS = {
+    "transitional_fork": (
+        "the fixed public baseline plus residual patches/hermes/*.patch replay is no longer "
+        "a supported source identity"
+    ),
+    "upstream": (
+        "the Aether 1.0 RC's source identity is the maintained fork "
+        f"'{MAINTAINED_FORK_REPOSITORY}' on branch '{MAINTAINED_FORK_BRANCH}', not the "
+        "released public artifact; selecting upstream deliberately would need its own "
+        "reviewed decision and schema representation"
+    ),
+}
+
 _RETIRED_MODE_MESSAGE = (
-    "Hermes source mode '{mode}' is retired for Aether 1.0: the fixed public baseline "
-    "and its residual patch replay are no longer a supported source identity. "
+    "Hermes source mode '{mode}' is retired for Aether 1.0: {reason}. "
     "Regenerate the release lock with hermes.source_mode 'maintained_fork', "
     f"hermes.repository '{MAINTAINED_FORK_REPOSITORY}' and hermes.branch "
     f"'{MAINTAINED_FORK_BRANCH}' at the exact reviewed fork commit; portable "
     "patches/hermes/*.patch files stay audit evidence and are never replayed."
 )
+
+
+def _retired_mode_message(mode: str) -> str:
+    """Return the retirement message stating the reason that mode actually had."""
+
+    reason = _RETIRED_MODE_REASONS.get(mode, "it is not the Aether 1.0 RC source identity")
+    return _RETIRED_MODE_MESSAGE.format(mode=mode, reason=reason)
 
 
 @dataclass(frozen=True, slots=True)
@@ -245,7 +266,7 @@ class HermesSource:
         mode = value.get("source_mode")
         if mode != MAINTAINED_FORK_SOURCE_MODE:
             if isinstance(mode, str) and mode in RETIRED_HERMES_SOURCE_MODES:
-                raise IntegrityError(_RETIRED_MODE_MESSAGE.format(mode=mode))
+                raise IntegrityError(_retired_mode_message(mode))
             raise IntegrityError("release lock Hermes source mode is not maintained_fork")
         expected = {
             "source_mode",
@@ -447,7 +468,7 @@ def _refuse_retired_source_mode(payload: Any) -> None:
         return
     mode = hermes.get("source_mode")
     if isinstance(mode, str) and mode in RETIRED_HERMES_SOURCE_MODES:
-        raise IntegrityError(_RETIRED_MODE_MESSAGE.format(mode=mode))
+        raise IntegrityError(_retired_mode_message(mode))
 
 
 def load_release_lock(path: Path | str) -> ValidatedReleaseLock:

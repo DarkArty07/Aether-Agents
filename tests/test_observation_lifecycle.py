@@ -712,33 +712,47 @@ def test_release_lock_uses_the_maintained_fork_identity_not_the_public_baseline(
     )
     assert lock.commit == "f" * 40
 
-    with pytest.raises(IntegrityError, match="retired"):
-        lifecycle.HermesSource.from_record(
+    # Each retired mode is refused with the reason that mode actually had: only
+    # `transitional_fork` replayed residual patches onto a fixed public baseline, while
+    # `upstream` consumed the released public artifact as-is and never replayed anything.
+    transitional_history = {
+        "source_mode": "transitional_fork",
+        "repository": "https://github.com/DarkArty07/hermes-agent",
+        "version": "0.20.5",
+        "tag": "aether-v0.20.5-1",
+        "commit": HERMES_BASELINE.commit,
+        "python_requires": HERMES_BASELINE.python_requires,
+        "source_tree_sha256": "e" * 64,
+        "upstream_base": {
+            "repository": "https://github.com/NousResearch/hermes-agent",
+            "tag": HERMES_BASELINE.tag,
+            "commit": HERMES_BASELINE.commit,
+        },
+        "residual_patches": ["HLP-191"],
+        "artifacts": [
             {
-                "source_mode": "transitional_fork",
-                "repository": "https://github.com/DarkArty07/hermes-agent",
-                "version": "0.20.5",
-                "tag": "aether-v0.20.5-1",
-                "commit": HERMES_BASELINE.commit,
-                "python_requires": HERMES_BASELINE.python_requires,
-                "source_tree_sha256": "e" * 64,
-                "upstream_base": {
-                    "repository": "https://github.com/NousResearch/hermes-agent",
-                    "tag": HERMES_BASELINE.tag,
-                    "commit": HERMES_BASELINE.commit,
-                },
-                "residual_patches": ["HLP-191"],
-                "artifacts": [
-                    {
-                        "kind": "source",
-                        "filename": "hermes-agent.tar.gz",
-                        "url": "https://example.invalid/hermes-agent.tar.gz",
-                        "sha256": "b" * 64,
-                        "provenance_url": "https://example.invalid/provenance",
-                    }
-                ],
+                "kind": "source",
+                "filename": "hermes-agent.tar.gz",
+                "url": "https://example.invalid/hermes-agent.tar.gz",
+                "sha256": "b" * 64,
+                "provenance_url": "https://example.invalid/provenance",
             }
-        )
+        ],
+    }
+
+    with pytest.raises(IntegrityError, match="retired") as transitional_refusal:
+        lifecycle.HermesSource.from_record(transitional_history)
+    transitional_text = str(transitional_refusal.value)
+    assert "residual patches/hermes/*.patch replay" in transitional_text
+    assert MAINTAINED_FORK_SOURCE_MODE in transitional_text
+
+    with pytest.raises(IntegrityError, match="retired") as upstream_refusal:
+        lifecycle.HermesSource.from_record({"source_mode": "upstream"})
+    upstream_text = str(upstream_refusal.value)
+    assert MAINTAINED_FORK_REPOSITORY in upstream_text
+    assert "released public artifact" in upstream_text
+    assert "residual" not in upstream_text
+    assert "replayed" not in upstream_text.replace("are never replayed", "")
 
 
 def test_release_record_schema_three_binds_exact_observation_compatibility(

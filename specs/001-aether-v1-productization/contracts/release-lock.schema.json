@@ -46,7 +46,7 @@
       "properties": {
         "source_mode": {
           "const": "maintained_fork",
-          "description": "The Aether 1.0 RC consumes the maintained fork as reviewed source. The retired `upstream` and `transitional_fork` modes, which replayed residual `.patch` files onto a fixed public baseline, are refused for new preparation."
+          "description": "The Aether 1.0 RC consumes the maintained fork as reviewed source. Both historical modes are refused for new preparation, each with its own true reason: retired `transitional_fork` (a fixed public baseline plus residual `.patch` replay) and retired `upstream` (the released public artifact consumed as-is, which is not the RC's source identity; selecting it deliberately would need its own reviewed decision and schema representation)."
         },
         "repository": {"const": "https://github.com/DarkArty07/aether-hermes"},
         "branch": {"const": "aether-main"},

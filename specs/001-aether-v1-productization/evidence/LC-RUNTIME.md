@@ -31,15 +31,19 @@ recovery, doctor mismatch codes, the maintained-fork reconciliation generator an
 
 ## 2. Owner launcher separation (contract in-scope 3, card outcome 6)
 
-The owner's two uncommitted launcher changes were integrated **byte-identically** into this unit's
-worktree and the owner's primary checkout was only read:
+The owner's two uncommitted launcher changes were integrated into this unit's worktree and the
+owner's primary checkout was only read:
 
-- `diff` of the primary checkout's `scripts/aether_tui.py` against this worktree's file reports no
-  difference (`LAUNCHER BYTE-IDENTICAL`); the primary checkout was never written by this unit.
-- `tests/test_aether_tui_launcher.py` gained the separated-runtime lane
-  (`test_check_supports_separated_runtime_and_state_roots`,
+- `scripts/aether_tui.py` is **byte-identical** to the primary checkout: `diff` against that file
+  reports no difference (`LAUNCHER BYTE-IDENTICAL`), and the primary checkout was never written by
+  this unit.
+- `tests/test_aether_tui_launcher.py` is **equivalent, not byte-identical**: the integrated file
+  gained the separated-runtime lane (`test_check_supports_separated_runtime_and_state_roots`,
   `test_separated_runtime_paths_must_be_absolute`) that exercises
-  `AETHER_PROJECT_ROOT`/`AETHER_HERMES_ROOT`/`AETHER_RUNTIME_ROOT`.
+  `AETHER_PROJECT_ROOT`/`AETHER_HERMES_ROOT`/`AETHER_RUNTIME_ROOT`, and it differs from the owner's
+  dirty file by exactly one wrapped expression at line 174 (the
+  `project / "specs" / … / "project.schema.json"` tuple, five lines there, one line here) —
+  semantically identical, and `ruff format --check` is clean at `line-length = 100` in both forms.
 
 ## 3. Blocking defect found at run start and repaired: #439 isolation
 
@@ -80,17 +84,17 @@ this run — including the complete 1704-test suite — and every comparison rep
 
 | File | Change |
 | --- | --- |
-| `src/aether_agents/lifecycle.py` | maintained-fork `HermesSource`/lock validation with retired-mode refusal, `LocalCandidate` verification, `update_local`, projection seams (`ProjectionRoots`, confined derivation, disabled controller for non-installed stores), doctor/`service_plan` detail, duplicate `verify_clean_checkout` definition removed |
+| `src/aether_agents/lifecycle.py` | maintained-fork `HermesSource`/lock validation with per-mode retired-mode refusal (`_retired_mode_message`, each mode's own reason), `LocalCandidate` verification, `update_local`, projection seams (`ProjectionRoots`, confined derivation, disabled controller for non-installed stores), doctor/`service_plan` detail, duplicate `verify_clean_checkout` definition removed |
 | `src/aether_agents/cli.py` | pinned `--local --aether-checkout --aether-commit --fork-checkout --fork-commit` surface, mutual exclusions, `_run_local_transition` preview/activation envelopes and refusals |
 | `src/aether_agents/paths.py` | explicit `user_bin_dir`/`applications_dir`/`systemd_user_dir` resolvers |
 | `src/aether_agents/resources/schemas/**` | packaged copy is Hatch-force-included from the contract copy, so the two stay byte-identical by construction (`pyproject.toml:55`) |
-| `specs/001-aether-v1-productization/contracts/release-lock.schema.json` | `schema_version` const 4; `hermes.source_mode` const `maintained_fork`, `repository`/`branch` consts, `commit`, `source_tree_sha256`, optional `tag`, `python_requires`, closed `artifacts` closure; retired modes and transitional-only keys rejected |
+| `specs/001-aether-v1-productization/contracts/release-lock.schema.json` | `schema_version` const 4; `hermes.source_mode` const `maintained_fork`, `repository`/`branch` consts, `commit`, `source_tree_sha256`, optional `tag`, `python_requires`, closed `artifacts` closure; retired modes and transitional-only keys rejected, with the `source_mode` description naming each retired mode's own reason (review round, below) |
 | `specs/001-aether-v1-productization/contracts/hermes-patch-reconciliation.schema.json` | maintained-fork selected-source reconciliation shape |
 | `scripts/validate_hermes_patch_reconciliation.py` | maintained-fork generation/check mode (`--check` never writes), fail-closed partial/absent entries, one trailing newline in the generated preflight (fixed `git diff --check` whitespace error) |
 | `HERMES_LOCAL_PATCHES.md` + `specs/.../evidence/hermes-patch-*` | ledger/aggregate/preflight reconciled to the maintained fork at `54eeb56` |
 | `scripts/aether_tui.py` | owner launcher separation, byte-identical to the primary checkout |
 | `tests/test_lifecycle_projections.py` (new) | preview/refusals, projection coherence, doctor mismatch, recovery reprojection, interruption at the service projection, update/rollback/forward-activation with hash-level state preservation, #439 isolation controls |
-| `tests/test_observation_lifecycle.py` | maintained-fork lock fixtures and refusals, profile homes under the state root, RC-source `hermes_exact` lane, two assertion repairs (below), and the release-lock fixture version derived from the built wheel instead of a stale `0.24.0` literal (cross-unit repair requested by `LC-RELTOOL`/Supervisor) |
+| `tests/test_observation_lifecycle.py` | maintained-fork lock fixtures and refusals, profile homes under the state root, RC-source `hermes_exact` lane, two assertion repairs (below), and the release-lock fixture version derived from the built wheel instead of a stale `0.24.0` literal (cross-unit repair requested by `LC-RELTOOL`/Supervisor); the retired-mode refusal block now asserts each mode's own reason instead of any borrowed one (§10) |
 | `tests/test_a1_contracts.py` | schema v4 agreement with the owning r13 plan line, retired-mode/const-key refusals |
 | `tests/test_hermes_patch_reconciliation.py`, `tests/test_aether_tui_launcher.py` | maintained-fork reconciliation and launcher-separation coverage |
 
@@ -104,7 +108,7 @@ before the intended observer-digest assertion; the test now restores both fields
 
 | Obligation | Evidence command | Observed result |
 | --- | --- | --- |
-| AC-01 source authority (fork identity, retired constant refused) | `uv run --frozen python scripts/run_tests.py -- -q -p no:cacheprovider tests/test_a1_contracts.py tests/test_observation_lifecycle.py -k "lock or fork or identity or materializes"`; `tests/test_hermes_baseline.py` | schema v4 accepts only `maintained_fork` + exact repository/branch/commit/tree/artifacts; `upstream` and `transitional_fork` refuse with the actionable `_RETIRED_MODE_MESSAGE`; `tests/test_release_lock_uses_the_maintained_fork_identity_not_the_public_baseline` passes. `hermes.tag` is **not required** for `maintained_fork` (no tag exists at the fork candidate; the supervisor's measured decision) and a declared tag is still verified to dereference to the locked commit. PR/merge evidence for the fork and Aether repositories is `LC-FORK`/`LC-INT` work, not claimed here. |
+| AC-01 source authority (fork identity, retired constant refused) | `uv run --frozen python scripts/run_tests.py -- -q -p no:cacheprovider tests/test_a1_contracts.py tests/test_observation_lifecycle.py -k "lock or fork or identity or materializes"`; `tests/test_hermes_baseline.py` | schema v4 accepts only `maintained_fork` + exact repository/branch/commit/tree/artifacts; `upstream` and `transitional_fork` each refuse with the reason that mode actually had (`transitional_fork`: fixed public baseline plus residual `patches/hermes/*.patch` replay; `upstream`: the RC's source identity is the maintained fork, and a deliberate upstream selection would need its own reviewed decision and schema representation) followed by the actionable regenerate guidance (`_retired_mode_message`); `tests/test_release_lock_uses_the_maintained_fork_identity_not_the_public_baseline` passes. `hermes.tag` is **not required** for `maintained_fork` (no tag exists at the fork candidate; the supervisor's measured decision) and a declared tag is still verified to dereference to the locked commit. PR/merge evidence for the fork and Aether repositories is `LC-FORK`/`LC-INT` work, not claimed here. |
 | AC-02 patch completeness | `uv run --frozen python scripts/validate_hermes_patch_reconciliation.py --check --fork-checkout <clean fork checkout> --json` | `status: current`, `records: 29`, `present: 26`, `partial: 1`, `absent: 0`, `unverified: 2`; the single refusing entry is HLP-420 (`tests/agent/test_auxiliary_client_responses_terminal_420.py` absent at `54eeb56`) — owned by `LC-PORT420`, re-pinned by `LC-INT`. The local route refuses preparation on stale/refusing coverage (focused refusal tests). No `.patch` replay path exists in `src/` or `scripts/` (grep: only the retirement message and tests that assert refusal). |
 | AC-03 layout/preservation | `tests/test_lifecycle_projections.py::test_local_update_preserves_mutable_state_bytes_and_rolls_back_exactly`; `tests/test_observation_lifecycle.py::test_update_rollback_reupdate_preserves_unknown_observation_bytes` | release code stays under the data root, operational homes and mutable state under the state root; observation bytes, a profile-home `sessions.sqlite3`, an owner memory file and monitor state keep identical SHA-256 across install → update → rollback → forward activation; the generic `~/.local/bin/hermes` was never touched. |
 | AC-04 local preview | `tests/test_lifecycle_projections.py` (preview + every refusal); `test_cli_local_route_requires_the_complete_pinned_surface` | preview is read-only (`before == after` file list, no staging/releases/active pointer), reports exact Aether/fork revisions, target version/tag, HLP coverage, artifacts/hash, service interruption, preserved state and blockers; refuses dirty trees, commit mismatch, foreign origin, `VERSION`≠tag, wrong branch, incompatible Python, stale/refusing coverage, missing or conflicting pinned inputs and incomplete option surfaces without staging or activation. |
@@ -171,6 +175,18 @@ All commands run from the unit worktree; Hermes-facing lanes use the repository 
   `_STATEFUL_COMMANDS` gate (`src/aether_agents/cli.py`, unchanged by this unit), so the real local
   preview/activation lane runs through the installed manager after `LC-INT` installs the RC —
   `LC-CLOSE`'s lane. Live witness: unchanged; the live installation was only read.
+- Review round (Supervisor run 30, changes requested on accuracy only, branch tip `fb22bd6`):
+  `uv run --frozen python scripts/run_tests.py -- -q -p no:cacheprovider "tests/test_observation_lifecycle.py::test_release_lock_uses_the_maintained_fork_identity_not_the_public_baseline"`
+  → **1 passed in 0.13s** with the extended per-mode refusal assertions;
+  `… scripts/run_tests.py -- -q -p no:cacheprovider tests/test_a1_contracts.py` →
+  **1 failed, 29 passed, 11 subtests passed in 1.34s**, the single failure being the
+  integration-bound r13 plan line (§7.2); focused sweep
+  `… tests/test_lifecycle_projections.py tests/test_a1_contracts.py tests/test_hermes_patch_reconciliation.py tests/test_hermes_baseline.py tests/test_hermes_editable.py tests/test_observation_packaging.py tests/test_aether_tui_launcher.py tests/test_public_artifacts.py`
+  → **2 failed, 125 passed, 20 subtests passed in 40.78s**, the two failures exactly the
+  integration-bound r13 plan line and the policy manifest, no new failure;
+  `ruff check src/aether_agents/lifecycle.py tests/test_observation_lifecycle.py` →
+  **All checks passed**; `ruff format --check` on the same two files → **2 files already formatted**.
+  Both retirement texts were rendered and read directly (§10) instead of being assumed.
 
 ### 6.1 Coverage result
 
@@ -241,11 +257,16 @@ Measured facts and disposition:
    that node passes (11.40s) with the operator-destination witnesses unchanged. No other stale
    product-version literal exists in the touched surfaces (the remaining `0.24.0` occurrences are
    inert fixture data and a now version-agnostic comment).
-8. **`LC-INT` — coverage gate not evaluated on this branch** (see §6.1): the canonical coverage
-   invocation cannot produce a report here because `pytest-cov`'s `combine()` refuses mixed
-   statement/branch data; the floor of 78 % is therefore unverified in this lane and no green coverage
-   claim is made. The trigger is in the coverage configuration/tooling, not in a module this unit
-   owns, and the same failure predates this unit's changes.
+8. **`LC-INT` — coverage gate not evaluated on this branch** (see §6.1): neither lane measured the
+   78 % floor here. The `scripts/run_tests.py --cov` attempt (pytest-cov) cannot produce a report
+   because its `combine()` refuses mixed statement/branch data, and CI's actual enforcement is a
+   different invocation — `uv run --frozen coverage run -m pytest … --ignore=tests/test_observation_performance.py`
+   followed by `uv run --frozen coverage report --format=total` (`.github/workflows/policy.yml:639-643`),
+   where both invocations share the `branch = true` configuration. No green coverage claim is made in
+   this unit in either lane; per Shared decision 16 the floor is `LC-INT`'s obligation on the merged
+   tree, and a real failure there returns as an integration finding rather than being absorbed here.
+   The Supervisor corrected this row's earlier attribution in review run 30 (the pytest-cov failure is
+   not evidence about the CI lane).
 9. **`LC-FORK` / `LC-INT` — canonical encoding of `hermes.source_tree_sha256`** (raised to the
    controller as request #10 and **resolved**; recorded as Shared decision 19 in
    `specs/001-aether-v1-productization/tasks.md` at `4cb3235`): the shipping validator is canonical —
@@ -289,3 +310,26 @@ schema copy is force-included from the single contract file, so no packaged/cont
 possible. All other manager commands keep their pinned envelopes. This is not an aggregate release
 conclusion: `LC-INT` owns the merged-tree gates, the fork re-pin and publication, and `LC-CLOSE`
 owns the real activation lane and the terminal report.
+
+## 10. Review round and its disposition
+
+Supervisor review run 30 (claimed from the review lane at branch tip `fb22bd6`) returned **changes
+requested** for one bounded accuracy item: the refusal texts attributed residual `.patch` replay to
+`upstream`, which never replayed patches — only `transitional_fork` did (fixed public baseline plus
+residual patch replay). The review confirmed the refusal *behaviour* as contract-backed (AC-01/D2)
+and required only the claims to be corrected, so behaviour was not touched.
+
+Applied in this round, entirely inside the declared writable surface:
+
+| Text | Before | After |
+| --- | --- | --- |
+| `contracts/release-lock.schema.json` `source_mode` description | one shared claim that the retired `upstream` and `transitional_fork` modes "replayed residual `.patch` files onto a fixed public baseline" | each mode's own reason: `transitional_fork` = a fixed public baseline plus residual `.patch` replay; `upstream` = the released public artifact consumed as-is, not the RC's source identity, needing its own reviewed decision and schema representation |
+| `src/aether_agents/lifecycle.py` comment above the constants | "The retired modes replayed … onto a fixed public baseline" | per-mode statement, closing with "each is refused with the reason that mode actually had, never a borrowed one" |
+| `_RETIRED_MODE_MESSAGE` | one reason for both modes ("the fixed public baseline and its residual patch replay …") | `_RETIRED_MODE_REASONS` + `_retired_mode_message(mode)`: each mode carries the reason it actually had, followed by the unchanged actionable regenerate guidance. Both call sites (`HermesSource.from_record`, `_refuse_retired_source_mode`) use the helper |
+| `tests/test_observation_lifecycle.py` refusal block | a single `match="retired"` on `transitional_fork` | both modes asserted: `transitional_fork` must state "residual patches/hermes/*.patch replay" and name `maintained_fork`; `upstream` must name the maintained-fork repository, contain "released public artifact", and contain neither "residual" nor a replay claim. RED/GREEN measured, not assumed: with the pre-fix module restored (`git checkout -- src/aether_agents/lifecycle.py`) the node fails (**1 failed in 0.18s**, at the `transitional_fork` phrase), and the pre-fix `upstream` text also fails its assertions ("released public artifact" absent, "residual" present) while the replay-claim assertion alone does not distinguish the two texts; after restoring the fixed module byte-exactly (SHA-256 `1bf090e48c5e6c29dff8a2a6b0026765f6901d0eb41d90dffd7874ff08423081`) the node passes (**1 passed in 0.11s**) |
+| this record, §2 | both launcher changes described as "integrated byte-identically" | `scripts/aether_tui.py` is byte-identical; `tests/test_aether_tui_launcher.py` is equivalent-but-not-byte-identical (one wrapped expression at line 174) |
+| this record, §5 AC-01 row and §7.8 | quoted `_RETIRED_MODE_MESSAGE` as one generic reason; attributed the unmeasured coverage floor to the pytest-cov lane | per-mode reasons recorded; coverage attribution corrected to the CI invocation (`policy.yml:639-643`) as an `LC-INT` obligation, the Supervisor's correction from the same review |
+
+Refusal behaviour is unchanged: both retired modes still refuse before any staging or activation,
+each naming the maintained fork, branch and exact-commit regeneration path. Nothing in this round
+changed acceptance, the pinned identifiers, a shared interface or another unit's file.
