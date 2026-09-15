@@ -7,12 +7,14 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
 
 from aether_agents import lab
-from aether_agents.lab import affinity, matrix, persistent, runner
+from aether_agents.lab import affinity, matrix, observation, persistent, runner
+from aether_agents.project_marker import validate_project_marker
 
 FORBIDDEN_EVIDENCE_KEYS = {
     "environment",
@@ -97,6 +99,27 @@ def test_observation_prepare_only_calls_registered_tool_for_each_action(tmp_path
     registry = run_root / "state" / "aether" / "projects" / "registry.json"
     assert registry.is_file()
     assert list((run_root / "state").rglob("registry.json")) == [registry]
+
+
+def test_observation_seeding_writes_the_same_conforming_marker_as_aether_init(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The laboratory seeds a portable marker; it obeys the canonical schema too.
+
+    The RC installs as ``1.0.0rc1``, which the marker's SemVer-constrained
+    ``initialized_by`` rejects, so the seeding records the display identity.
+    """
+    monkeypatch.setattr(observation, "product_version", lambda: "1.0.0rc1")
+    run_root = tmp_path / "observation"
+
+    result = lab.prepare_observation_only(run_root)
+
+    assert result["status"] == "PREPARED"
+    marker = tomllib.loads(
+        (run_root / "project" / ".aether" / "project.toml").read_text(encoding="utf-8")
+    )
+    validate_project_marker(marker)
+    assert marker["initialized_by"] == "1.0.0-rc.1"
 
 
 def test_live_observation_invokes_supplied_runtime_once_after_spend_acknowledgement(

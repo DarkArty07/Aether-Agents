@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -15,6 +16,25 @@ SCANNER = ROOT / "scripts" / "check_public_artifacts.py"
 ROOT_REPORTS = ("INTEGRATIONS.md", "INCOMPLETE_IMPLEMENTATIONS.md")
 # Updated by the owner-authorized Graphify integration; retain byte-integrity coverage.
 INTEGRATIONS_SHA256 = "b34ac51af0a9ae65d3b35fb1e724165042585b61bfe92ed3196369e853c86536"
+# The canonical base manifest step asserts `VERSION` against an ERE quoted in the workflow.
+_VERSION_GUARD_RE = re.compile(r"^\s*grep -Eq '(?P<pattern>[^']+)' VERSION$", re.MULTILINE)
+# The accepted package identities mirror `.github/workflows/release.yml` (`Validate release
+# tag`): a stable `X.Y.Z` or the RC form `X.Y.ZrcN` mapped from tag `vX.Y.Z-rc.N`, plus the
+# pre-existing development form `X.Y.Z.devN`.  The tag/display identity `1.0.0-rc.1` is not a
+# package identity, and the release workflow's own grammar (no leading zeros, RC number >= 1)
+# bounds the numeric components here too.
+ACCEPTED_PACKAGE_IDENTITIES = ("1.0.0", "1.0.0rc1", "1.0.0rc2", "2.30.4", "1.0.0.dev3")
+REFUSED_PACKAGE_IDENTITIES = (
+    "1.0.0-rc.1",
+    "1.0.0rc",
+    "1.0",
+    "v1.0.0",
+    "abc",
+    "",
+    "1.0.0.post1",
+    "1.0.0rc0",
+    "01.0.0",
+)
 
 
 def _run(*arguments: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
@@ -115,7 +135,16 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     assert "`docs/capabilities.toml`](docs/capabilities.toml)" in readme
     assert "sole current implementation-status and traceability registry" in readme
     assert "documented transitional downstream" in readme
-    assert "beta stabilization build, not a release candidate" in readme
+    assert "releases/tag/v1.0.0-rc.1" in readme
+    assert "**has been published**" in readme
+    assert "beta stabilization build, not a release candidate" not in readme
+    assert "no release candidate has been published" not in readme
+    assert "**not** stable `1.0.0`" in readme
+    assert "**not** a PyPI or other package-index publication" in readme
+    assert "**not** a WSL2 qualification result" in readme
+    assert (
+        "#261 therefore stays open with the stable, PyPI/OIDC and WSL2 gates outstanding" in readme
+    )
     assert "remain explicit unsupported placeholders" in readme
     assert "Historical snapshot" in incomplete
     assert "does not state the current implementation" in incomplete
@@ -175,3 +204,24 @@ def test_canonical_base_manifest_matches_tracked_non_specs_files() -> None:
     )
     actual = sorted(path for path in git_ls.stdout.splitlines() if not path.startswith("specs/"))
     assert expected == actual
+
+
+def _canonical_base_manifest_version_pattern() -> str:
+    """Return the single ERE the base manifest step applies to the `VERSION` file."""
+
+    workflow = ROOT / ".github" / "workflows" / "policy.yml"
+    patterns = _VERSION_GUARD_RE.findall(workflow.read_text(encoding="utf-8"))
+    assert len(patterns) == 1, f"expected exactly one VERSION guard, found {patterns}"
+    return patterns[0]
+
+
+def test_canonical_base_manifest_guard_accepts_only_supported_package_identities() -> None:
+    pattern = _canonical_base_manifest_version_pattern()
+
+    for identity in ACCEPTED_PACKAGE_IDENTITIES:
+        assert re.search(pattern, identity), f"guard refuses supported identity {identity!r}"
+    for identity in REFUSED_PACKAGE_IDENTITIES:
+        assert not re.search(pattern, identity), f"guard accepts unsupported identity {identity!r}"
+
+    declared = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    assert re.search(pattern, declared), f"guard refuses the repository's own VERSION {declared!r}"

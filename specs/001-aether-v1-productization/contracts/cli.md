@@ -24,14 +24,24 @@ aether setup [--config PATH] [--release-lock PATH] [--dry-run] [--json]
 
 Guided mode is used when `--config` is absent. Declarative mode parses the TOML file into the data model defined by `setup-config.schema.json`. Both modes call one planner/validator/effect engine.
 
-Effects may include creating XDG directories, staging the lock-selected upstream or transitional-fork Hermes runtime, writing product-owned profile policy/configuration, and preparing the user service. Login autostart is opt-in. Provider authentication is delegated to the managed Hermes native mechanism.
+Effects may include creating XDG directories, staging the lock-selected maintained-fork Hermes runtime, writing product-owned profile policy/configuration, and preparing the user service. Login autostart is opt-in. Provider authentication is delegated to the managed Hermes native mechanism.
 
-The local wheel/check-out implementation path requires an explicit schema-3
+The local wheel/check-out implementation path requires an explicit schema-4
 `--release-lock`. The manager validates its six-field Aether pre-build identity
 against wheel metadata, its hash-bound observer dependency digest against the packaged
 lock, and its Hermes source-tree digest against a tracked-commit archive. It retains
 the exact validated lock in the staged release and never invents Git provenance from
 a filename, remote artifact digest, or wheel digest.
+
+A schema-4 lock declares `hermes.source_mode` `maintained_fork` with
+`hermes.repository` `https://github.com/DarkArty07/aether-hermes` and binds the exact
+fork commit, source-tree digest, Hermes package version/tag, Python compatibility and
+artifact closure. The retired `transitional_fork` mode — a fixed public baseline plus
+replayed residual `.patch` files — is refused for new preparation with an actionable
+message; `patches/hermes/*.patch` records remain audit/reconstruction evidence and are
+never applied to an active release. It also keeps the upstream `upstream` mode for a
+deliberately selected public source. Hermes keeps its own distribution identity
+(`hermes-agent`), which the lock records rather than renames.
 
 ### `aether init`
 
@@ -74,13 +84,18 @@ These commands address only the Aether-managed user service and never another He
 aether doctor [--project PATH] [--json]
 ```
 
-Validates platform, XDG paths and permissions, manager/product compatibility, release-lock schema `3`, external provenance and local transition digests, the runtime artifact/executable, manager/runtime `aether-agents` distribution/package/Git/source/installed-file identity parity, the exact `aether-contract-observer` entry-point target and per-profile enablement, declared observation write versions contained in their read sets and matched to packaged schemas/upcasters/projection code, runtime-local CLI non-shadowing, profile-policy parity, service state, required tools, project identity, board/session/launch context mappings, observation health counters, journal/archive integrity, projection compatibility, fingerprint-key permissions/epochs, and WSL2 filesystem constraints. It reports unresolved/conflicting context and preserved unknown-newer observation bytes without exposing their identifiers or key material. It is read-only and remains usable when Hermes cannot import.
+Validates platform, XDG paths and permissions, manager/product compatibility, release-lock schema `4`, external provenance and local transition digests, the runtime artifact/executable, manager/runtime `aether-agents` distribution/package/Git/source/installed-file identity parity, the exact `aether-contract-observer` entry-point target and per-profile enablement, declared observation write versions contained in their read sets and matched to packaged schemas/upcasters/projection code, runtime-local CLI non-shadowing, profile-policy parity, service state, required tools, project identity, board/session/launch context mappings, observation health counters, journal/archive integrity, projection compatibility, fingerprint-key permissions/epochs, and WSL2 filesystem constraints. It reports unresolved/conflicting context and preserved unknown-newer observation bytes without exposing their identifiers or key material. It is read-only and remains usable when Hermes cannot import. A mismatch between the authoritative active-release record, `runtime/current`, the launcher, the Desktop entry and the Aether-owned service projection is reported as an actionable fail-closed diagnostic instead of a silent degradation.
 
 ### `aether update`
 
 ```text
-aether update [VERSION] [--prerelease] [--release-lock PATH] [--dry-run] [--yes] [--json]
+aether update [VERSION] [--prerelease] [--wheel PATH] [--hermes-checkout PATH] [--release-lock PATH] [--dry-run] [--yes] [--json]
+aether update --local --aether-checkout PATH --aether-commit SHA --fork-checkout PATH --fork-commit SHA [--dry-run] [--yes] [--json]
 ```
+
+`aether update` is the only supported coherent product promotion and activation
+boundary. Nothing else stages, switches or activates a release, and no update runs on
+startup or a timer.
 
 - Defaults to the newest stable compatible release.
 - Prereleases require either an explicit prerelease version or `--prerelease`.
@@ -89,13 +104,36 @@ aether update [VERSION] [--prerelease] [--release-lock PATH] [--dry-run] [--yes]
 - Does not adopt mutable Hermes upstream.
 - Does not run on startup or a timer.
 
+Local-candidate mode:
+
+- `--local` is mutually exclusive with `[VERSION]`, `--prerelease`, `--wheel`,
+  `--hermes-checkout` and `--release-lock`.
+- Inputs are explicit identities: an Aether checkout path with its exact commit and a
+  maintained-fork checkout path with its exact commit. Identity is never taken from the
+  current directory, checkout recency or a mutable branch tip.
+- Without `--yes`, the command is a non-mutating preview that reports the exact
+  Aether and fork revisions, target version and release ID, active HLP coverage,
+  artifacts and hashes, expected service interruption, preserved state and any
+  blockers. `--dry-run` requests the same preview explicitly.
+- Preview performs no staging and no activation. It refuses dirty trees, ambiguous or
+  missing checkouts, a wrong repository or branch, unknown or mismatched commits, bad
+  hashes, changed inputs and incompatible Python.
+- With `--yes`, activation is explicit and may interrupt Aether-owned TUI, gateway and
+  worker processes immediately; there is no drain or wait-for-idle semantics. Unrelated
+  services and processes are never stopped, and durable state must remain recoverable
+  when the owner reopens instances.
+- A partial transition is detected and recoverable rather than silently degraded, and
+  `runtime/current`, the launcher, the Desktop entry and the Aether-owned service
+  projection agree with the single authoritative active-release record after one
+  transition.
+
 ### `aether rollback`
 
 ```text
 aether rollback [VERSION] [--dry-run] [--yes] [--json]
 ```
 
-Defaults to the most recent prior coherent product version. Switches product-owned runtime/policy pointers and never overwrites newer user data with an old backup. Observation journals and key epochs continue forward unchanged; the selected reducer uses its versioned projection and preserves/indexes unknown newer bytes until a compatible forward update.
+Defaults to the most recent prior coherent product version. Switches product-owned runtime/policy pointers and never overwrites newer user data with an old backup; user state under the Aether state root is never rolled backward. Observation journals and key epochs continue forward unchanged; the selected reducer uses its versioned projection and preserves/indexes unknown newer bytes until a compatible forward update.
 
 ### `aether reconcile`
 

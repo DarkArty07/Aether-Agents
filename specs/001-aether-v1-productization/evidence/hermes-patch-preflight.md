@@ -1,6 +1,6 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-09-14T17:27:25Z`
+Observation timestamp: `2026-09-15T08:29:21Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
@@ -73,9 +73,11 @@ Source ledger SHA-256: `7d734946d05954e7810f0c2a8464409736b73535fa50ecbbc51c9bea
 - `HLP-226` (uncertainty): The documented private backup reconstruction input is unavailable after its approval-denied existence check; no replacement or inferred reconstruction is recorded.
 - `HLP-226` (uncertainty): HLP-226c remains a downstream component: the objective's pre-dispatch inspection at applied upstream revision 67764dc0863349a384c16425e73ee8571f3a94b7 recorded in specs/hlp-226-cross-board-project-inheritance/evidence/HLP-226C.md found no equivalent shared-dir/board-bound recovery, and no recurrence-level upstream inspection exists at this record's inspected revision 4f22543509d1b91dc45bcb369447126c5eb14fb7.
 - `HLP-246` (retirement_gate): Retirement gate status is failed.
+- `HLP-246` (selected_source_evidence): no repository-relative component path or declared portable patch path is recorded for this entry
 - `HLP-246` (uncertainty): No linked upstream issue or PR was located for equivalent attachment identity behavior.
 - `HLP-246` (uncertainty): A future upstream change must still pass the full pre-transport, readback, legacy-row, and byte-for-byte tarball gate; source similarity or a merged label is insufficient.
 - `HLP-247` (retirement_gate): Retirement gate status is failed.
+- `HLP-247` (selected_source_evidence): no repository-relative component path or declared portable patch path is recorded for this entry
 - `HLP-247` (uncertainty): No linked upstream issue or PR was located for the archived-parent dependency distinction.
 - `HLP-247` (uncertainty): The active detailed ledger section is reconciled independently even though it is absent from the active summary table.
 - `HLP-262` (artifact): The documented reconstruction input is unavailable, and the exact upstream lacks the origin-signal prerequisite needed to apply the full patch; checksum and parser controls do not establish a reconstruction pass.
@@ -172,6 +174,20 @@ Source ledger SHA-256: `7d734946d05954e7810f0c2a8464409736b73535fa50ecbbc51c9bea
 - `HLP-393`: unavailable
 - `HLP-420`: unavailable
 - `HLP-425`: unavailable
+
+## Selected maintained-fork source
+
+Selected source: `https://github.com/DarkArty07/aether-hermes@9031bae0e8b0ab40c4fd7ba50c644972ff512611` (presence resolved from a checkout: `true`)
+
+| Verdict | Entries |
+| --- | --- |
+| present | 27 |
+| partial | 0 |
+| absent | 0 |
+| unverified | 2 |
+
+- `HLP-246`: unverified — no repository-relative component path or declared portable patch path is recorded for this entry
+- `HLP-247`: unverified — no repository-relative component path or declared portable patch path is recorded for this entry
 
 ## Safe next decisions
 

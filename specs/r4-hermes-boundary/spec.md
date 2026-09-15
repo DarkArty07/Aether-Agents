@@ -39,8 +39,8 @@ R4 does not choose which primitive Aether uses (R5), decide A2A's scope (R6), de
 - **FR-401**: Aether MUST classify a Hermes capability before adopting it, and MUST NOT adopt one merely because it exists.
 - **FR-402**: Aether MUST NOT build a coordination mechanism that duplicates one of these three.
 - **FR-403**: Aether targets a qualified stable upstream Hermes release and MUST prefer configuration, profiles, skills, plugins, prompts, and upstream contribution over downstream core changes.
-- **FR-403a**: A public `transitional_fork` is permitted only for an existing indispensable patch whose Aether guarantee, upstream disposition, qualification evidence, and retirement condition are explicit. Aether MUST NOT add a new product capability that requires a downstream-only core change.
-- **FR-403b**: Every release lock MUST declare `upstream` or `transitional_fork` and pin the public repository, release tag, annotated-tag/commit identity where applicable, source or artifact digest, Python range, and Aether compatibility. The original `hermes-agent` distribution remains isolated from any personal installation.
+- **FR-403a**: Aether carries its runtime changes as maintained-fork source: the executable release source is the maintained fork `DarkArty07/aether-hermes`, branch `aether-main`, selected by the release lock's `maintained_fork` source mode (`schema_version` 4). The retired `transitional_fork` mode — a fixed public baseline plus replayed residual patches — is refused for new preparation, and `.patch` records are never replayed onto an active release. Each carried downstream change MUST keep its Aether guarantee, upstream disposition, qualification evidence, and retirement condition explicit, and Aether MUST NOT add a new product capability that requires a downstream-only core change.
+- **FR-403b**: Every release lock MUST declare `upstream` or `maintained_fork` and pin the public repository, branch and exact commit, annotated-tag/commit identity where applicable, source-tree or artifact digest, Python range, and Aether compatibility. The original `hermes-agent` distribution remains isolated from any personal installation.
 - **FR-403c**: Generally useful fixes MUST be proposed upstream. Aether-specific policy remains outside Hermes core. A merged PR is not grounds to retire a patch until the exact target release passes that patch's behavior gate.
 - **FR-404**: Every capability claim MUST record the Hermes version, because these claims are version-specific and one minor release already invalidated three of them.
 
@@ -147,13 +147,21 @@ Only one of the three gaps recorded earlier survives, and **R5 removed it from A
 
 ## 9. Selected Baseline and Transitional Disposition
 
+> **Maintained-fork reconciliation (2026-09-15, Objective Contract `oc_3397f9f05d780f8e@v1`).** The
+> executable release source is now the maintained fork `DarkArty07/aether-hermes`, branch `aether-main`,
+> bound by release-lock `schema_version` 4 source mode `maintained_fork` through repository, branch, exact
+> commit, source-tree digest, artifact closure and provenance. The `v2026.8.18` selection recorded below
+> remains the reference baseline for upstream-compatible behavior and historical evidence, not the
+> deployment input; the retired `transitional_fork` mode is refused for new preparation, and FR-425 is
+> reconciled accordingly. The historical wording in this section is preserved rather than rewritten.
+
 The selected stable upstream base is the annotated release `v2026.8.18`: tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74` dereferences to commit `e624e9fde561e1add9388384012b295fde669ade`; `pyproject.toml:3-15` identifies `hermes-agent` `0.20.4` and Python `>=3.11,<3.14`. The GitHub-generated source archive observed during reconciliation had SHA-256 `1e3d39d3638ec15fa9d31af262568a953e9272090deb1c50c44cd401175f5b80`; release production must lock this exact byte stream or a separately built immutable artifact and digest.
 
 The task handoff named `9f13bb131670169467d9b2453ae2e8848814ff6e` as the release commit. GitHub does not resolve that object. Because the release tag was the controlling owner selection, reconciliation records its actual annotated-tag object and dereferenced commit above. This is a factual correction, not a product-scope change.
 
 Direct inspection of the selected commit and the active local patch ledger found six still-indispensable workflow guarantees absent or incomplete in the tag: sticky initial blocking, agent-facing `max_retries`, human-gated escalation recovery, one durable terminal handoff, first-spawn branch propagation, and asymmetric per-profile concurrency. Their upstream PRs `#91180`, `#89590`, `#91211`, `#91220`, `#89688`, and `#91266` were all open on 2026-08-21. The directory-versus-script lifecycle-guard fix from `9ac1e65…` is contained in the selected tag and is a retirement candidate pending its exact qualification gate.
 
-- **FR-425**: A1's initial candidate uses `transitional_fork` mode unless qualification proves every indispensable guarantee without downstream core changes. The exact public fork tag, commit, artifacts, digests, and provenance are Phase 2 outputs; no moving branch or unbuilt candidate may appear in a release lock.
+- **FR-425**: A1's accepted candidate uses `maintained_fork` mode, binding the maintained fork's exact commit and source-tree digest together with its artifacts and provenance. A deliberately selected public upstream baseline remains the alternative when the exact released artifact passes every indispensable guarantee without a downstream core change. No unbound moving branch or unbuilt candidate may appear in a release lock.
 - **FR-426**: The downstream patch stack MUST be minimal, public, tested, and recorded in a ledger with Aether guarantee, upstream disposition, qualification evidence, owner, retirement condition, and target release.
 - **FR-427**: The downstream repository MUST preserve upstream package identity, license, attribution, and source history. It MUST NOT publish a renamed or conflicting distribution to PyPI.
 - **FR-428**: The Aether manager MUST consume only immutable, hash-verified public release artifacts. It MUST NOT install from a developer checkout, mutable branch, or private runtime.
@@ -193,7 +201,7 @@ Selected-source findings:
 - **SC-404**: Each of the three primitives is classified, with upstream's own selection criteria recorded.
 - **SC-405**: No capability is recorded as unselected on unverified evidence.
 - **SC-406**: A future upgrade can be assessed against this classification without re-deriving it.
-- **SC-407**: The selected release mode is explicit; any transitional downstream is public, minimal, immutable in release locks, and separately gated for publication.
+- **SC-407**: The selected source mode and the accepted change set are explicit; the maintained-fork source is public, minimal, immutable once bound by a release lock, and separately gated for publication.
 - **SC-408**: No new Aether product capability requires a downstream-only Hermes core change.
 
 ## 12. Done When

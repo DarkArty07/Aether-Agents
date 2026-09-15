@@ -1,5 +1,5 @@
 {
-  "observed_at_utc": "2026-09-14T17:27:25Z",
+  "observed_at_utc": "2026-09-15T08:29:21Z",
   "overall_blockers": [
     {
       "detail": "Retirement gate status is failed.",
@@ -147,6 +147,11 @@
       "kind": "retirement_gate"
     },
     {
+      "detail": "no repository-relative component path or declared portable patch path is recorded for this entry",
+      "id": "HLP-246",
+      "kind": "selected_source_evidence"
+    },
+    {
       "detail": "No linked upstream issue or PR was located for equivalent attachment identity behavior.",
       "id": "HLP-246",
       "kind": "uncertainty"
@@ -160,6 +165,11 @@
       "detail": "Retirement gate status is failed.",
       "id": "HLP-247",
       "kind": "retirement_gate"
+    },
+    {
+      "detail": "no repository-relative component path or declared portable patch path is recorded for this entry",
+      "id": "HLP-247",
+      "kind": "selected_source_evidence"
     },
     {
       "detail": "No linked upstream issue or PR was located for the archived-parent dependency distinction.",
@@ -512,6 +522,22 @@
         "summary": "Create an initially blocked task after its dependency is resolved, reopen the isolated database, recompute readiness, and require an explicit unblock as the only transition to ready."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "hermes_cli/kanban_db.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_kanban_blocked_sticky.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Exact upstream source has the initial blocked status but not the durable sticky event. The isolated behavioral probe showed auto-promotion without unblock, so the local guarantee remains required.",
       "upstream": {
         "disposition": "upstream_partial",
@@ -573,6 +599,22 @@
         "summary": "Verify the agent-facing schema minimum, handler validation and forwarding, then observe max_retries persisted by a separate process after task creation."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "tests/tools/test_kanban_tools.py",
+            "present": true
+          },
+          {
+            "path": "tools/kanban_tools.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Upstream already supports max_retries in the database layer but does not expose or forward it through kanban_create. With no executed full gate, the local interface guarantee remains required.",
       "upstream": {
         "disposition": "upstream_partial",
@@ -644,6 +686,42 @@
         "summary": "Exercise loop escalation through reconnect, reassignment, and auto-decompose; reject recovery while still in triage; then require explicit routing and a durable recovery event before any resume without autonomous redispatch."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "gateway/kanban_watchers.py",
+            "present": true
+          },
+          {
+            "path": "hermes_cli/kanban.py",
+            "present": true
+          },
+          {
+            "path": "hermes_cli/kanban_db.py",
+            "present": true
+          },
+          {
+            "path": "hermes_cli/kanban_decompose.py",
+            "present": true
+          },
+          {
+            "path": "tests/gateway/test_kanban_auto_decompose_recovery.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_kanban_cli.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_kanban_decompose.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Upstream can escalate repeated blocks to triage but still treats all triage tasks as auto-decomposition candidates and lacks the durable recovery boundary. The local human gate must remain.",
       "upstream": {
         "disposition": "upstream_partial",
@@ -717,6 +795,46 @@
         "summary": "Run the complete terminal-handoff matrix for no handoff, valid receipt, rejected or forged receipt, duplicate or conflicting receipt, exception, signal, timeout, and quiet CLI exit-code mapping."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "agent/conversation_loop.py",
+            "present": true
+          },
+          {
+            "path": "agent/kanban_stop.py",
+            "present": true
+          },
+          {
+            "path": "agent/turn_finalizer.py",
+            "present": true
+          },
+          {
+            "path": "hermes_cli/kanban_db.py",
+            "present": true
+          },
+          {
+            "path": "hermes_cli/kanban_exit_codes.py",
+            "present": true
+          },
+          {
+            "path": "tests/agent/test_kanban_stop.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_kanban_protocol_exit.py",
+            "present": true
+          },
+          {
+            "path": "tests/run_agent/test_kanban_terminal_guard_integration.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Upstream has a name-based stop nudge and a clean-exit backstop, but it lacks durable exactly-one receipt validation and EX_PROTOCOL=76. The local terminal-handoff guarantee remains required.",
       "upstream": {
         "disposition": "upstream_partial",
@@ -785,6 +903,22 @@
         "summary": "Repeat the first-spawn regression in ready and review lanes with directory and scratch controls at the target revision."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "hermes_cli/kanban_db.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_kanban_db.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-198. Exact-target source and a disposable behavioral gate reproduce the stale claimed-task branch mismatch in ready and review dispatch.",
       "upstream": {
         "disposition": "upstream_open",
@@ -855,6 +989,46 @@
         "summary": "Configure the asymmetric Supervisor=1 and Implementer=3 topology, exercise ready/review with running and dry-run cases, CLI/gateway passthrough, invalid normalization, effective configuration, and post-restart qualification."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "gateway/kanban_watchers.py",
+            "present": true
+          },
+          {
+            "path": "hermes_cli/config_defaults.py",
+            "present": true
+          },
+          {
+            "path": "hermes_cli/kanban.py",
+            "present": true
+          },
+          {
+            "path": "hermes_cli/kanban_db.py",
+            "present": true
+          },
+          {
+            "path": "tests/gateway/test_kanban_watchers_mixin.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_kanban_cli_dispatch_passthrough.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_kanban_per_profile_cap.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_kanban_per_profile_overrides.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-204. The target retains only the uniform cap, while the required asymmetric override interface remains solely in an open upstream PR.",
       "upstream": {
         "disposition": "upstream_open",
@@ -919,6 +1093,22 @@
         "summary": "At a revision without the local hunk, run the exact regression, the full gateway-restart-loop test file, and the post-restart runtime probe before retiring the backport."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "cron/lifecycle_guard.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_gateway_restart_loop.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "The exact upstream target contains and behaviorally passes the HLP-209 directory exemption, but the recorded runtime retirement gate remains incomplete.",
       "upstream": {
         "disposition": "upstream_verified",
@@ -1011,6 +1201,30 @@
         "summary": "The full gate requires E2E-16 plus the terminal-controller blocker canary on an unpatched upstream revision. A disposable source-level prerequisite gate was executed first and failed because the required affinity and blocker-routing interfaces are absent."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "hermes_cli/kanban_db.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_kanban_session_affinity.py",
+            "present": true
+          },
+          {
+            "path": "tests/tools/test_kanban_tools.py",
+            "present": true
+          },
+          {
+            "path": "tools/kanban_tools.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain both HLP-211 and HLP-211b. The exact public snapshot lacks prerequisite runtime interfaces, and the linked open PR is a narrower same-task resumption change. The tracked HLP-211b patch checksum, parser check, and read-only effective-checkout byte reconstruction passed; only the ignored backup input remains unavailable.",
       "upstream": {
         "disposition": "upstream_partial",
@@ -1150,6 +1364,30 @@
         "summary": "With an empty worker Projects registry, verify both a direct worktree source and an affinity-terminal dir source preserve the canonical Project, materialize a real distinct worktree and branch, reject a conflicting Project, and reject a noncanonical dir source; then verify that a current-board Project/affinity root sharing a prior-board worktree leaf still recovers the board-bound Project/repository identity in the new terminal and its cross-profile worktree child, while every board/path/Project/affinity mismatch fails before invalid persistence."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "hermes_cli/kanban_db.py",
+            "present": true
+          },
+          {
+            "path": "tests/tools/test_kanban_cross_board_project.py",
+            "present": true
+          },
+          {
+            "path": "tests/tools/test_kanban_tools.py",
+            "present": true
+          },
+          {
+            "path": "tools/kanban_tools.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-226, HLP-226b and HLP-226c. Exact upstream lacks the affinity-terminal Project-source variant as well as the explicit-worktree and conflicting-Project behavior. The portable HLP-226b patch checksum and parser controls pass, but the documented reconstruction input and overall artifact verification remain unavailable. The new portable HLP-226c patch is bound by digest and reconstructs the reviewed fork candidate 7980bbf1f9f75efdcbee2196ae910bb77138541d byte for byte from maintained fork base 415056fee527c5a2302370bd6dba56f84b9a4202 with git apply --check and all three changed files matching on file SHA-256 and Git blob identity.",
       "upstream": {
         "disposition": "upstream_partial",
@@ -1226,6 +1464,13 @@
         "summary": "The required attachment-identity gate fails on the inspected upstream revision before a full multi-process tarball run: inline truncated valid base64 is accepted without transport claims or durable SHA-256 identity."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [],
+        "presence": "unverified",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": "no repository-relative component path or declared portable patch path is recorded for this entry"
+      },
       "summary": "Retain HLP-246. The exact public snapshot accepts a synthetic truncated payload with valid base64 and has no sender identity claims, SHA-256 persistence, or readback verification.",
       "upstream": {
         "disposition": "upstream_missing",
@@ -1280,6 +1525,13 @@
         "summary": "The three-control archived-parent gate was executed in a disposable upstream database and failed because an eventless blocked child was promoted to ready when its parent was archived."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [],
+        "presence": "unverified",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": "no repository-relative component path or declared portable patch path is recorded for this entry"
+      },
       "summary": "Retain HLP-247. The exact public snapshot still promotes an eventless blocked child on parent archive, while the required todo and non-sticky compatibility controls remain promotable.",
       "upstream": {
         "disposition": "upstream_missing",
@@ -1356,6 +1608,22 @@
         "summary": "At the exact upstream revision, first require the origin_signal block API and sticky predicate; then run the input, revision, and recovery reopen/recompute regression with explicit unblock or native-controller resolution as the only resume path."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "hermes_cli/kanban_db.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_kanban_blocked_sticky.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-262. Exact upstream has neither the origin_signal block API prerequisite nor sticky predicate support for origin_signal, and the portable patch checksum and parser controls pass without establishing full-patch reconstruction from unavailable inputs.",
       "upstream": {
         "disposition": "upstream_missing",
@@ -1432,6 +1700,22 @@
         "summary": "Retire only when an adopted exact Hermes release applies a proactive auxiliary-image cap whose thresholds preserve this objective's within-cap byte fidelity and pass the unchanged pre/post oracle including the image-only content read."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "tests/tools/test_vision_aux_image_prep.py",
+            "present": true
+          },
+          {
+            "path": "tools/vision_tools.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-275. The auxiliary vision path now applies the repository's existing embed policy before the first request, so oversized small-byte images are normalized by the existing resizer with scale disclosure and within-policy images stay byte-identical. Upstream already carries a stricter-threshold variant of the same mechanism, so this entry is a retirement candidate only after oracle requalification.",
       "upstream": {
         "disposition": "upstream_partial",
@@ -1503,6 +1787,18 @@
         "summary": "Retire only when an exact upstream supports the affinity origin path and passes the recovery/compatibility and native-origin canary without HLP-280. Preserve the existing HLP-211b and HLP-262 guarantees."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "hermes_cli/kanban_db.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain the bounded HLP-280 recovery. Local 15 recovery probes, 129 affected tests with one Windows skip, 44 notifier tests and a native-origin canary passed. This records a downstream repair, not the rejected v4/v5 architecture or a Hermes release upgrade.",
       "upstream": {
         "disposition": "upstream_missing",
@@ -1584,6 +1880,26 @@
         "summary": "Retire only when an exact upstream revision without HLP-305 completes a transient-lock-then-success turn, fails closed before TTL expiry under persistent contention, and preserves holder-miss, non-lock-error, late-refresh cleanup and real TUI continuation controls."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "scripts/qualify_legacy_fts_contention.py",
+            "present": true
+          },
+          {
+            "path": "tests/run_agent/test_cross_process_turn_lease.py",
+            "present": true
+          },
+          {
+            "path": "tests/test_fts_tool_write_bounds.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-305 in maintained fork c185ee3bb. Source hash readback and normal SessionDB activation passed after consistent backup/quick_check/SHA-256. Live owner TUI tool result retains complete11576-character message with8203-character index(prefix+metadata), proving writer-side activation without restarting TUI. Existing Python processes still require graceful reload for their cached code paths. Expanded testing retains baseline failure #349.",
       "upstream": {
         "disposition": "upstream_missing",
@@ -1667,6 +1983,26 @@
         "summary": "Retire only when an adopted Hermes release excludes HERMES_DELEGATED_CHILD_CONTEXT and HERMES_KANBAN_* from terminal session snapshots with equivalent tests."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "tests/tools/test_delegate_kanban_isolation.py",
+            "present": true
+          },
+          {
+            "path": "tests/tools/test_snapshot_session_id_leak.py",
+            "present": true
+          },
+          {
+            "path": "tools/environments/base.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-310. Inspected upstream does not exclude delegated child identity or Kanban environment variables from terminal snapshots. Maintained fork commit 25cabeb25327199a03aa3cf1613ed2f815f646cb provides the causal repair in PR #4.",
       "upstream": {
         "disposition": "upstream_missing",
@@ -1748,6 +2084,46 @@
         "summary": "Retire only when an adopted exact Hermes release provides equivalent optional collaboration semantics and passes the focused collaboration suites without this patch."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "gateway/kanban_watchers.py",
+            "present": true
+          },
+          {
+            "path": "hermes_cli/kanban_db.py",
+            "present": true
+          },
+          {
+            "path": "tests/gateway/test_kanban_collaboration_delivery.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_kanban_collaboration.py",
+            "present": true
+          },
+          {
+            "path": "tests/tools/test_kanban_collaboration.py",
+            "present": true
+          },
+          {
+            "path": "tests/tui_gateway/test_kanban_collaboration_poller.py",
+            "present": true
+          },
+          {
+            "path": "tools/kanban_tools.py",
+            "present": true
+          },
+          {
+            "path": "tui_gateway/server.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-334. Optional native collaboration adds an adjunct same-board table, optional create/comment arguments, and origin-bound TUI/gateway delivery without replacing the terminal-notification cursor or promoting peer evidence to owner authority.",
       "upstream": {
         "disposition": "upstream_missing",
@@ -1813,6 +2189,18 @@
         "summary": "Retire only when a qualified upstream version independently passes terminal/open/unknown/auth/duplicate-link controls and the legitimate continuation canary without this delta. Do not retire merely because an upstream PR merges."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "hermes_cli/kanban_db.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-335. The local respawn-guard recovery releases only independently verifiable CLOSED/MERGED PR references so Graphify closeout can resume; OPEN/unknown/auth failures stay guarded. This records a downstream repair, not a Hermes upgrade or a Graphify product delivery.",
       "upstream": {
         "disposition": "upstream_open",
@@ -1893,6 +2281,22 @@
         "summary": "Retire only when upstream Hermes adopts board-level worktree base ref configuration with equivalent validation and fail-closed semantics."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "hermes_cli/kanban_db.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_kanban_worktree_base_ref.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-354. Inspected upstream lacks worktree_base_ref materialization and fail-closed validation. Maintained fork commit 7d3173e1f3dba107f9a389d4e35c95f215775ee1 provides the causal repair in PR #4.",
       "upstream": {
         "disposition": "upstream_missing",
@@ -1969,6 +2373,26 @@
         "summary": "Retire only when an adopted exact Hermes release provides equivalent independent review gating (initial review without an independent reviewer fails closed and self-review is rejected) and passes the ABR-362 regression predicates without downstream patches."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "hermes_cli/kanban_db.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_kanban_review_independence.py",
+            "present": true
+          },
+          {
+            "path": "tools/kanban_tools.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-362. Initial same-card review requires an explicit independent reviewer; self-review is rejected and legacy unassigned review claims remain parked. Verified by regression tests on the maintained fork and candidate testing in Aether.",
       "upstream": {
         "disposition": "upstream_missing",
@@ -2045,6 +2469,46 @@
         "summary": "Retire only when an exact released Hermes revision passes the complete-to-review readiness gate, independent reviewer/re-review cycle, whole-objective completion gate, exact recovery-origin canary, and arbitrary-block negative controls without the local patch."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "hermes_cli/goals.py",
+            "present": true
+          },
+          {
+            "path": "hermes_cli/kanban.py",
+            "present": true
+          },
+          {
+            "path": "hermes_cli/kanban_db.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_kanban_cli.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_kanban_review_surfaces.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_kanban_session_affinity.py",
+            "present": true
+          },
+          {
+            "path": "tests/tools/test_kanban_tools.py",
+            "present": true
+          },
+          {
+            "path": "tools/kanban_tools.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-369. Exact upstream retains the circular goal-mode review gate and recovery-kind mismatch; maintained-fork PR #6 merge 415056fee527c5a2302370bd6dba56f84b9a4202 separates review readiness from completion, preserves independent review and completion gates, and accepts only the exact pending controller recovery signal while retaining origin attention.",
       "upstream": {
         "disposition": "upstream_missing",
@@ -2134,6 +2598,38 @@
         "summary": "Retire only when an adopted exact Hermes release resolves script and monitor_script through an effective profile-scoped root at call time, enforces confinement and non-regular rejection, and passes the PR8-CRON #372 test suite without downstream patches."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "cron/jobs.py",
+            "present": true
+          },
+          {
+            "path": "cron/lifecycle_guard.py",
+            "present": true
+          },
+          {
+            "path": "cron/scheduler.py",
+            "present": true
+          },
+          {
+            "path": "cron/script_root.py",
+            "present": true
+          },
+          {
+            "path": "tests/cron/test_cron_script_root_372.py",
+            "present": true
+          },
+          {
+            "path": "tools/cronjob_tools.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-372. Cron scripts and monitor scripts resolve dynamically through one effective profile-scoped root at call time with fail-closed confinement on traversal, symlink escapes, and non-regular files.",
       "upstream": {
         "disposition": "upstream_missing",
@@ -2218,6 +2714,22 @@
         "summary": "Retire only when an adopted exact Hermes release bounds the transcript-publication critical section with equivalent visibility, ownership, ordering, counter, model-patch and rollback semantics and passes the unchanged causal oracle plus the recorded fault-injection matrix."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "agent/conversation_compression.py",
+            "present": true
+          },
+          {
+            "path": "tests/state/test_compaction_publication.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-382. Transcript publication is now bounded and atomic: staged batches in the existing store, exact-once preservation of interleaved concurrent appends, one metadata-only cutover, and bounded target-local cleanup. The unchanged oracle is deterministically RED at the fork base and green on the candidate and integrated tree.",
       "upstream": {
         "disposition": "upstream_missing",
@@ -2302,6 +2814,22 @@
         "summary": "Retire only when an adopted exact Hermes release provides clear prompt guidance that terminal integration or release children do not substitute for unit review, passing the regression tests in test_kanban_review_surfaces.py."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "agent/prompt_builder.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_kanban_review_surfaces.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-385. Guidance in KANBAN_GUIDANCE explicitly states that terminal integration or release children alone do not replace unit review, requiring an explicit review/QA phase child before kanban_complete is called as an implementation handoff.",
       "upstream": {
         "disposition": "upstream_missing",
@@ -2381,6 +2909,18 @@
         "summary": "Retire only when an adopted exact Hermes release persists the verified launch workdir in the cron session row and keeps null when workdir is unset, passing the #388 framework tests."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "tests/cron/test_cron_workdir_session_388.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-388. The framework persists the verified cron launch workdir in the session row before tools run, preventing ungrounded contract authoring while keeping null cwd when unset.",
       "upstream": {
         "disposition": "upstream_missing",
@@ -2465,6 +3005,22 @@
         "summary": "Retire only when an adopted exact Hermes release provides a syntax-aware referenced-script walk that accepts inert interpreter heredoc data while still blocking direct lifecycle commands and referenced real scripts, verified against the recorded control matrix."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "cron/lifecycle_guard.py",
+            "present": true
+          },
+          {
+            "path": "tests/tools/test_lifecycle_guard_heredoc_data.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-389. Referenced-script discovery now uses a syntax-aware view for inert interpreter heredoc bodies while direct detection keeps the original text, so the harmless log-read path is accepted and every recorded executable control remains blocked.",
       "upstream": {
         "disposition": "upstream_missing",
@@ -2549,6 +3105,38 @@
         "summary": "Retire only when an adopted exact Hermes release captures trusted commissioning origin at create time, restores it as request-local context during cron execution, and passes the #393 test suite without downstream patches."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "cron/jobs.py",
+            "present": true
+          },
+          {
+            "path": "cron/scheduler.py",
+            "present": true
+          },
+          {
+            "path": "gateway/session_context.py",
+            "present": true
+          },
+          {
+            "path": "tests/cron/test_cron_commissioning_origin_393.py",
+            "present": true
+          },
+          {
+            "path": "tools/cronjob_tools.py",
+            "present": true
+          },
+          {
+            "path": "tools/kanban_tools.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-393. Cron jobs commissioned from TUI or gateway capture durable origin, restored at fire time as request-local context so spawned Kanban root tasks auto-subscribe and wake the exact origin upon completion.",
       "upstream": {
         "disposition": "upstream_missing",
@@ -2635,6 +3223,22 @@
         "summary": "Retire only when an adopted exact Hermes release maps Responses status/incomplete_details into non-stop chat finish reasons, fails failed/cancelled terminals closed, keeps commentary/analysis items out of assistant content, recovers a top-level output_text for empty output, forwards tool_choice through call_llm/_build_call_kwargs/the Responses adapter, and passes tests/agent/test_auxiliary_client_responses_terminal_420.py without this patch."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "agent/auxiliary_client.py",
+            "present": true
+          },
+          {
+            "path": "tests/agent/test_auxiliary_client_responses_terminal_420.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-420. The auxiliary Responses adapter now preserves phase, top-level and item status, incomplete reason, output-text fallback and tool calls, never turns incomplete/cancelled output into finish_reason=stop, keeps commentary/analysis narration out of assistant content, and carries tool_choice through call_llm/_build_call_kwargs without sending the unsupported Router fields.",
       "upstream": {
         "disposition": "upstream_missing",
@@ -2724,6 +3328,50 @@
         "summary": "Retire only when an adopted exact Hermes release provides equivalent generic/Aether provenance separation, exact reviewer-session reuse, session/tool workspace separation, prompt continuity and fail-closed damaged-flow behavior and passes the focused matrix without this patch."
       },
       "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "agent/conversation_compression.py",
+            "present": true
+          },
+          {
+            "path": "agent/conversation_loop.py",
+            "present": true
+          },
+          {
+            "path": "agent/prompt_builder.py",
+            "present": true
+          },
+          {
+            "path": "agent/runtime_cwd.py",
+            "present": true
+          },
+          {
+            "path": "hermes_cli/kanban_db.py",
+            "present": true
+          },
+          {
+            "path": "tests/agent/test_prompt_builder.py",
+            "present": true
+          },
+          {
+            "path": "tests/agent/test_runtime_cwd.py",
+            "present": true
+          },
+          {
+            "path": "tests/hermes_cli/test_kanban_session_affinity.py",
+            "present": true
+          },
+          {
+            "path": "tests/run_agent/test_compression_persistence.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+        "unverified_reason": null
+      },
       "summary": "Retain HLP-425. The maintained fork and active Aether runtime now preserve one flow-bound Supervisor conversation across same-card review while keeping the candidate workspace and generic Hermes semantics separate.",
       "upstream": {
         "disposition": "upstream_missing",
@@ -2755,6 +3403,15 @@
     }
   ],
   "schema_version": "aether.hermes-patch-reconciliation.v1",
+  "selected_source": {
+    "absent": 0,
+    "partial": 0,
+    "present": 27,
+    "repository": "https://github.com/DarkArty07/aether-hermes",
+    "resolved_from_checkout": true,
+    "revision": "9031bae0e8b0ab40c4fd7ba50c644972ff512611",
+    "unverified": 2
+  },
   "source_ledger_sha256": "7d734946d05954e7810f0c2a8464409736b73535fa50ecbbc51c9bea9cce7f5d",
   "upstream": {
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",

@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from aether_agents import product_version
+from aether_agents.lifecycle import display_version
 from aether_agents.observation.context import ProjectRegistry, canonical_project_id
 from aether_agents.project_marker import ProjectMarkerValidationError, validate_project_marker
 from aether_agents.result import Envelope
@@ -450,7 +451,10 @@ def _plan(root: Path, args: argparse.Namespace, registry: ProjectRegistry) -> di
         "schema_version": 1,
         "project_id": str(uuid.uuid4()),
         "name": name,
-        "initialized_by": product_version(),
+        # The distribution version is PEP 440 (``1.0.0rc1``) while the canonical schema
+        # constrains this portable field to SemVer, so the marker records the release's
+        # display identity (``1.0.0-rc.1``) through the product's single converter.
+        "initialized_by": display_version(product_version()),
         "forge": forge,
         "contract_root": "specs",
     }

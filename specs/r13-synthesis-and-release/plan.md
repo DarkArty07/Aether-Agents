@@ -6,9 +6,11 @@
 **Plan owner**: Morfeo
 **Execution owner**: Supervisor
 **Derived from**: `spec.md`, R4/R8–R12, `../001-aether-v1-productization/`, and `../002-aether-contract-observation/`
-**Selected Hermes baseline**: `NousResearch/hermes-agent` `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, `hermes-agent` `0.20.4`, Python `>=3.11,<3.14`
-**Initial release mode**: `transitional_fork` under PD-65
+**Selected Hermes reference baseline**: `NousResearch/hermes-agent` `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, `hermes-agent` `0.20.4`, Python `>=3.11,<3.14`
+**Executable Hermes source**: maintained fork `DarkArty07/aether-hermes`, branch `aether-main`, bound by release-lock `schema_version` 4 source mode `maintained_fork` (repository, branch, exact commit, source-tree digest, artifact closure and provenance)
+**A1 release mode**: `maintained_fork`; the retired `transitional_fork` mode (fixed public baseline plus replayed residual patches) is refused for new preparation
 **Written**: 2026-08-21
+**Amended**: 2026-09-15 — maintained-fork and `1.0.0rc1` release-candidate reconciliation under Objective Contract `oc_3397f9f05d780f8e@v1`
 
 ## 1. Summary
 
@@ -17,9 +19,9 @@ Build Aether 1.0 as a public Python product that manages one coherent, isolated 
 Two independently versioned components are locked together:
 
 1. `aether-agents` on PyPI, exposing `aether`; and
-2. the original `hermes-agent` distribution from the exact public `upstream` or `transitional_fork` artifact named by the manager's release lock.
+2. the original `hermes-agent` distribution from the exact `upstream` or `maintained_fork` source/artifact named by the manager's release lock.
 
-The selected stable upstream base is exact. A1 begins in transitional mode only because six existing indispensable workflow guarantees are not yet qualifying behavior in that release. The fork is a retirement-bound bridge, not an architecture destination and not a place for new Aether-only capabilities.
+The selected stable upstream base is exact and remains the reference baseline for upstream-compatible behavior. The six existing indispensable workflow guarantees below are carried as maintained-fork source on `aether-main` under release-lock `schema_version` 4 source mode `maintained_fork`, never as replayed `.patch` files, and the retired `transitional_fork` mode is refused for new preparation. The maintained fork stays a retirement-bound boundary rather than an architecture destination or a place for new Aether-only capabilities, and no new product capability may require a downstream-only Hermes change.
 
 ## 2. Fixed implementation decisions
 
@@ -32,13 +34,13 @@ The selected stable upstream base is exact. A1 begins in transitional mode only 
 | Import package | Fixed as `aether_agents` by PD-69; implementation findings cannot rename it without an owner-approved contract revision |
 | Contract observer | Same `aether-agents` wheel and product version; official `hermes_agent.plugins` entry point `aether-contract-observer = "aether_agents.observation.capture.hermes_plugin"`; no second distribution or per-profile source copy |
 | Aether version | One source of truth; SemVer display/tag and PEP 440 package form must normalize to the same release |
-| Public schema versions | Aether manager owns them; setup/project schemas are integer `1`; release-lock schema is integer `3` after PD-65/69/70 and declares the observer entry point plus event/summary/segment-manifest read/write versions and projection schema version |
+| Public schema versions | Aether manager owns them; setup/project schemas are integer `1`; release-lock schema is integer `4` after the maintained-fork reconciliation (it was integer `3` through PD-65/69/70) and declares the source mode, the observer entry point plus event/summary/segment-manifest read/write versions and projection schema version |
 | Observation evolution/privacy | PD-70: immutable versioned event journals, pure upcasters, per-reader versioned projections, preserved unknown-newer bytes, exact context resolution, private project HMAC key epochs, and deterministic closed-segment compaction |
 | Profile-policy bundle version | Aether release-owned and digest-bound; independent field, never inferred from file timestamps |
 | Hermes version | Native `hermes-agent` version plus exact public source/tag/commit/artifact identity in the lock |
 | Downstream build identity | Phase 2 decides a PEP 440-conforming artifact version without renaming the distribution; it must remain traceable to upstream `0.20.4` and the Aether patch ledger |
 
-The A1 `release-lock.schema.json` is reconciled at schema version `3`: `upstream` mode forbids downstream-only coordinates, `transitional_fork` mode requires the upstream base and residual patch ledger, both modes require immutable Hermes coordinates/digests/provenance/Python compatibility, and the Aether section binds the single distribution plus official observer entry point. The wheel's final digest remains in external release provenance and local transition records to avoid self-reference. Phase 1 implements and validates this accepted public contract; it does not redesign it.
+The A1 `release-lock.schema.json` is reconciled at schema version `4`: `upstream` mode forbids downstream-only coordinates, `maintained_fork` mode binds the public fork repository, branch, exact commit, source-tree digest, artifact closure and provenance, the retired `transitional_fork` mode is refused for new preparation, both modes require immutable Hermes coordinates/digests/provenance/Python compatibility, and the Aether section binds the single distribution plus official observer entry point. The wheel's final digest remains in external release provenance and local transition records to avoid self-reference. Phase 1 implements and validates this accepted public contract; it does not redesign it.
 
 ### 2.2 Manager/runtime boundary
 
@@ -59,16 +61,16 @@ Honor all `XDG_*_HOME` values; default logical layout:
 ├── config.toml
 └── systemd/
 
-~/.local/share/aether/
+~/.local/share/aether/                # immutable side
 ├── active.json
-├── releases/<aether-semver>/
-│   ├── release-lock.json
-│   ├── runtime/
-│   └── product-resources/
-├── profiles/{morfeo,supervisor,implementer}/
-└── projects/<project-uuid>/{board,workspaces,mapping.json}
+└── releases/<aether-semver>/
+    ├── release-lock.json
+    ├── runtime/
+    └── product-resources/
 
-~/.local/state/aether/
+~/.local/state/aether/                # mutable side, never moved or rolled backward
+├── profiles/{morfeo,supervisor,implementer}/   # operational Hermes homes (sessions, memories, credentials)
+├── projects/<project-uuid>/{board,workspaces,mapping.json}
 ├── {transitions,backups,logs}/
 └── observations/
     ├── health/
@@ -82,7 +84,7 @@ Honor all `XDG_*_HOME` values; default logical layout:
 ~/.cache/aether/downloads/
 ```
 
-Immutable release artifacts, persistent user/profile/project state, transition evidence, and replaceable cache are separate. `active.json` is atomically replaced only after the candidate is coherent. No runtime/user state enters project Git.
+Immutable release artifacts, persistent user/profile/project state, transition evidence, and replaceable cache are separate. The immutable side lives under the Aether data root and every mutable Hermes home and product state under the Aether state root (2026-09-15 reconciliation). `active.json` is atomically replaced only after the candidate is coherent. No runtime/user state enters project Git.
 
 ### 2.4 Native Hermes adaptation
 
@@ -97,7 +99,7 @@ Selected commit evidence:
 
 ### 2.5 Release mode and patch ledger
 
-R4 research §13 owns the patch-by-patch disposition. Phase 2 carries only:
+R4 research §13 owns the per-change disposition. The six accepted changes below are carried as maintained-fork source on `aether-main`, bound by release-lock `schema_version` 4 source mode `maintained_fork`, and are never replayed as `.patch` files onto an active release. The accepted change set is:
 
 1. sticky initial blocking;
 2. agent-facing retry override;
@@ -106,7 +108,7 @@ R4 research §13 owns the patch-by-patch disposition. Phase 2 carries only:
 5. first-spawn branch propagation; and
 6. asymmetric per-profile concurrency.
 
-The directory-versus-script lifecycle-guard correction is already contained in the selected tag and is omitted unless its exact qualification regression fails. Every carried patch has an upstream issue/PR and a behavior-based retirement gate. No open PR head or private editable checkout is a release dependency.
+The directory-versus-script lifecycle-guard correction is already contained in the selected reference tag and is omitted unless its exact qualification regression fails. Every carried change has an upstream issue/PR and a behavior-based retirement gate, and `.patch`/HLP records remain audit and reconstruction evidence. No open PR head or private editable checkout is a release dependency.
 
 ### 2.6 Portable profile/policy resources
 
@@ -153,7 +155,7 @@ These are dependency phases, not implementation cards. Supervisor derives the re
 
 ### Phase 0 — Canonical reconciliation
 
-Completed by this candidate: R4/R8–R13 and derived ROADMAP/AGENTS describe the public product, selected base, transitional rule, exact evidence, privacy boundary, and qualification gates. Historical rationale remains in research/Git.
+Completed by this candidate: R4/R8–R13 and derived ROADMAP/AGENTS describe the public product, selected source baseline and maintained-fork release mode, exact evidence, privacy boundary, and qualification gates. Historical rationale remains in research/Git.
 
 **Exit**: independent review confirms no stale no-fork/private-binding/private-local execution instruction survives in current canonical entry.
 
@@ -163,17 +165,17 @@ Implement package/version sources, CLI parser/result envelope, schemas including
 
 **Exit**: exact built wheel installs through `uv` in a disposable environment and `help`, `version`, and no-runtime `doctor` run outside the source tree.
 
-### Phase 2 — Transitional downstream artifacts
+### Phase 2 — Maintained-fork source reconciliation and artifacts
 
-Reconcile only the six patch lines onto selected upstream commit `e624e9f…`; build wheel/sdist/source artifacts; inspect package identity/license/history; create patch ledger, checksums, SBOM, provenance, and qualification evidence.
+Carry only the six accepted changes as source on the maintained fork, based on the selected reference commit `e624e9f…`; build wheel/sdist/source artifacts; inspect package identity/license/history; record the accepted-change ledger, checksums, SBOM, provenance, and qualification evidence.
 
 **External gate**: create/publish public downstream repository/tag/release assets.
 
-**Exit**: local candidate artifacts pass all patch gates; exact future public coordinates can populate a release lock. If an upstream artifact passes every gate, switch candidate mode to `upstream` and omit downstream publication.
+**Exit**: local candidate artifacts pass every accepted-change gate; exact future public coordinates can populate a release lock. If a deliberately selected upstream artifact passes every gate, select `upstream` and omit downstream publication.
 
 ### Phase 3 — Runtime lifecycle and recovery
 
-Implement schema-3 lock validation, one-wheel verified download staging, dual isolated installation, external-provenance/transition digest binding, installed-file fingerprint and entry-point parity, active-release record, transition journal, doctor, update, mismatch detection, reconcile, rollback, and safe uninstall.
+Implement schema-4 lock validation, one-wheel verified download staging, dual isolated installation, external-provenance/transition digest binding, installed-file fingerprint and entry-point parity, active-release record, transition journal, doctor, update, mismatch detection, reconcile, rollback, and safe uninstall.
 
 **Exit**: fault injection proves no mixed active release and no damage to unrelated Hermes/user state.
 
@@ -250,7 +252,7 @@ A tool denial is authoritative. No phase may substitute another tool, account, p
 
 | Risk | Control / rollback |
 |---|---|
-| Transitional fork becomes permanent | No new downstream-only feature; per-patch owner/upstream state/retirement gate; requalify every upstream release |
+| A carried fork change loses its upstream reconciliation | No new downstream-only feature; per-change owner/upstream state/retirement gate; requalify every selected upstream release |
 | Release lock accepts a wrong source | Annotated-tag and commit are separate fields; conditional mode schema; digest/provenance before execution |
 | Manager/runtime versions drift | Atomic active record, doctor mismatch refusal, explicit reconcile/rollback |
 | Update damages user state | immutable releases, pre-transition backup, fault injection, user-preserving uninstall, unrelated-Hermes refusal |
@@ -269,7 +271,7 @@ Supervisor MUST:
 
 1. re-run cross-artifact analysis on this plan, `spec.md`, A1, R4, and R8–R12;
 2. settle the conditional release-lock schema, downstream artifact version, public API/CLI shapes, and shared file ownership before fan-out;
-3. build one dependency graph across manager, transitional downstream, lifecycle, profiles/policy, project integration, security, docs/GitHub, deterministic qualification, and live/release gates;
+3. build one dependency graph across manager, maintained-fork source reconciliation, lifecycle, profiles/policy, project integration, security, docs/GitHub, deterministic qualification, and live/release gates;
 4. attach exact acceptance criteria and source decisions to every card;
 5. create independent review/qualification lanes where evidence value is real;
 6. preserve external gates rather than assigning them to workers; and

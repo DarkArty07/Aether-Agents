@@ -41,12 +41,13 @@ All roots honor the corresponding `XDG_*_HOME` variable and fall back to the sta
 
 ```text
 ~/.config/aether/             # non-secret product choices and generated-service source/records
-~/.local/share/aether/        # active.json, immutable releases, isolated runtimes, profiles, projects
-~/.local/state/aether/        # transition journals, backups, observations, local redacted logs
+~/.local/share/aether/        # immutable side: active.json, immutable releases, isolated runtimes
+~/.local/state/aether/        # mutable side: operational Hermes homes, profiles, projects, transition
+                              # journals, backups, observations, local redacted logs
 ~/.cache/aether/downloads/    # replaceable verified-download staging
 ```
 
-Inside data, each immutable `releases/<aether-semver>/` owns its release lock, isolated Hermes runtime, and product-resource bundle. Persistent role profiles and `projects/<project-uuid>/` live outside release directories so update/rollback does not erase user state. A project's product state owns its board/workspace location and local mapping; portable identity remains in the project repository and contains no absolute machine path.
+Inside data, each immutable `releases/<aether-semver>/` owns its release lock, isolated Hermes runtime, and product-resource bundle. **Maintained-fork/RC reconciliation (2026-09-15, Objective Contract `oc_3397f9f05d780f8e@v1`):** persistent role profiles, operational Hermes homes and `projects/<project-uuid>/` live under the state root, outside release directories and never moved or rolled backward, so update/rollback cannot erase user state. A project's product state owns its board/workspace location and local mapping; portable identity remains in the project repository and contains no absolute machine path.
 
 - **FR-904a**: `active.json` MUST be an atomic coherent-release record, never a partially updated set of independent pointers.
 - **FR-904b**: Immutable release-owned artifacts MUST be separated from persistent user/profile/project state and from replaceable cache.

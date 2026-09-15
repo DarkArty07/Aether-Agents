@@ -16,7 +16,7 @@ Aether's three-role method is functioning in Christopher's local environment, bu
 
 The owner accepted PD-48 through PD-64 in conversation before this contract was written, accepted PD-65 through PD-67 during canonical reconciliation, PD-68 on 2026-08-21 for pre-1.0 contract observation, and PD-69 on 2026-08-23 for the single-distribution modular project structure. Those decisions are canonical in `DESIGN.md`; this artifact records why the selected implementation direction is defensible and which alternatives were rejected.
 
-**2026-08-21 amendment:** PD-65 supersedes A1-D02, A1-D03, and A1-D05 wherever they described the fork as Aether's permanent or unconditional runtime path. Their original wording remains below as historical rationale. The current decision is upstream-by-default with a release-locked `transitional_fork` mode only while indispensable patches remain, and no new Aether capability may add a downstream-only Hermes core dependency.
+**2026-08-21 amendment (historical):** PD-65 supersedes A1-D02, A1-D03, and A1-D05 wherever they described the fork as Aether's permanent or unconditional runtime path. Their original wording remains below as historical rationale. The transition-only policy stated here — upstream by default with a release-locked `transitional_fork` mode only while indispensable patches remain — was itself superseded by the 2026-09-07 maintained-fork amendment and by the 2026-09-15 RC reconciliation below; no new Aether capability may add a downstream-only Hermes core dependency.
 
 ### Owner amendment — maintained fork (2026-09-07)
 
@@ -27,6 +27,14 @@ The owner accepted PD-48 through PD-64 in conversation before this contract was 
 - **Owner clarification:** the initial source is the actual local Hermes installation and its local changes, not the older remote fork branch. Remote fork main was dated 2026-08-19; the local base commit was dated 2026-08-28. The observed local delta included 34 tracked modified paths and five untracked paths; this inventory is not blanket acceptance of every change. Reusing the existing GitHub fork is a hosting proposal only. Preserve source/build state privately, classify changes and qualify the candidate before publication; exclude credentials and user state.
 - **Pending design:** reuse or rename the existing fork, maintained branch/version scheme, upstream integration and contribution rules, source-mode/schema migration, package composition, and treatment of permanent features versus retireable fixes. These are recommendations to settle, not implied execution authority.
 - **Bounded impact:** A1 source policy and release design are reopened for the fork transition. The current encoded baseline, active runtime, frontend, historical tests and release artifacts are not changed. PD-51 release qualification and privacy/isolation requirements remain applicable. Repairing the current TUI incident remains a distinct bounded objective.
+
+### RC reconciliation — maintained fork, XDG layout, update boundary and the `1.0.0rc1` milestone (2026-09-15)
+
+- **Need and authority:** Objective Contract `oc_3397f9f05d780f8e@v1` (owner-authorized) directs the `1.0.0rc1` release candidate; its in-scope item 1 directs the reconciliation of the A1 owning artifacts with the contract's accepted decisions.
+- **Decision (recorded in `spec.md`, `plan.md` and `contracts/cli.md`):** release-lock `schema_version` 4 with `hermes.source_mode` `maintained_fork`, bound to `https://github.com/DarkArty07/aether-hermes`, branch `aether-main`, exact commit, source-tree digest, artifact closure and provenance. The retired `transitional_fork` mode is refused for new preparation, and `.patch` files are never replayed onto an active release. Immutable release code and Graphify components live under the Aether XDG data root while every mutable Hermes home and all product state stay under the Aether XDG state root. `aether update` — including its `--local` local-candidate route with a non-mutating preview and explicit interrupting activation — is the sole supported promotion/activation boundary, with transition recovery and a state-preserving rollback that never rolls user state backward. The milestone identity is package `1.0.0rc1` with annotated tag and GitHub prerelease `v1.0.0-rc.1`, `release_impact = major`, `release_action = publish`, `release_channel = prerelease`.
+- **Why the earlier A1 design changed:** the 2026-08-21 transition-only policy assumed upstream retirement was the goal; PD-65 replaced it with a maintained fork. The 2026-09-07 amendment deliberately left the source-mode/schema migration, layout reconciliation and release identity open. This amendment closes those gaps and introduces no new product principle.
+- **Bounds:** the RC is a pre-stable milestone. It is not stable `1.0.0`, not a PyPI or other package-index publication, and not a WSL2-qualified result; issue #261 stays open with the stable-1.0.0, PyPI/OIDC and WSL2 gates outstanding. The A1-D02/D03/D05 wording below stays as historical rationale and is not implementation instruction.
+- **Evidence:** the fork repository, branch, candidate revision and the Hermes distribution identity used by the reconciliation were inspected read-only, as was the installed XDG data/state split. Machine paths and live-state values are deliberately absent from public artifacts.
 
 ## 2. Observed Aether repository state
 
@@ -195,7 +203,7 @@ Pending publishers can create a project on first trusted publication. Configurin
 
 ### A1-D03 — Separate repositories (amended by PD-65)
 
-**Current decision**: `Aether-Agents` owns the product and all Aether-specific capability. `DarkArty07/hermes-agent` owns only the temporary downstream patch line while a release still selects `transitional_fork`; steady-state runtime ownership remains upstream.
+**Historical decision (superseded by the 2026-09-15 RC reconciliation)**: `Aether-Agents` owns the product and all Aether-specific capability. `DarkArty07/hermes-agent` owns only the temporary downstream patch line while a release still selects `transitional_fork`; steady-state runtime ownership remains upstream. The current decision is `Aether-Agents` owning the product with `DarkArty07/aether-hermes` (`aether-main`) as the maintained release-locked runtime source, and deliberate upstream adoption rather than mandatory retirement.
 
 **Assumption**: preserving upstream history and package identity reduces maintenance and makes Aether's actual product layer inspectable.
 
@@ -216,7 +224,7 @@ Pending publishers can create a project on first trusted publication. Configurin
 
 ### A1-D05 — GitHub Release downstream artifacts (conditional under PD-65)
 
-**Current decision**: when a release selects `transitional_fork`, build the original `hermes-agent` wheel/sdist from the downstream and publish them as verified GitHub Release assets. In normal `upstream` mode, lock and verify the stable upstream source archive and build the original distribution in a controlled environment.
+**Historical decision (superseded by the 2026-09-15 RC reconciliation)**: when a release selects `transitional_fork`, build the original `hermes-agent` wheel/sdist from the downstream and publish them as verified GitHub Release assets. In normal `upstream` mode, lock and verify the stable upstream source archive and build the original distribution in a controlled environment. The current decision keeps the original distribution name and identity, builds it from the locked maintained-fork revision (or from a deliberately selected upstream source), and attaches it to the reviewed release bundle rather than publishing a renamed package.
 
 **Why**: PyPI's `hermes-agent` namespace belongs to upstream and renaming would require unrelated metadata divergence. A GitHub asset can retain the original distribution name while remaining pinned and auditable.
 
@@ -299,7 +307,7 @@ Pending publishers can create a project on first trusted publication. Configurin
 
 **Why**: one source, distribution, and version prevent manager/observer drift while an explicit import boundary preserves doctor and rollback when Hermes is broken. The locked Hermes loader natively supports module entry points exposing `register(ctx)`, so no core patch or profile-local source copy is needed.
 
-**Artifact identity**: release-lock schema `3` binds the immutable pre-build tuple (distribution, package version, tag, commit, Python range, observer entry point), the digest of the wheel-packaged hash-bound observer dependency closure, and a deterministic digest of the locally materialized Hermes Git tree. That tree digest is deliberately separate from remote source-artifact digests. External release provenance and the local transition record bind the final wheel filename/SHA-256 because a wheel cannot contain its own final digest without circularity. The validated lock bytes are retained per release; activation compares their digest, installed-file fingerprints, dependency versions, and source-tree identity across both environments.
+**Artifact identity**: release-lock schema `4` binds the immutable maintained-fork source identity (repository, branch, exact commit, source-tree digest, artifact closure and provenance) plus the pre-build tuple (distribution, package version, tag, commit, Python range, observer entry point), the digest of the wheel-packaged hash-bound observer dependency closure, and a deterministic digest of the locally materialized Hermes Git tree. That tree digest is deliberately separate from remote source-artifact digests. External release provenance and the local transition record bind the final wheel filename/SHA-256 because a wheel cannot contain its own final digest without circularity. The validated lock bytes are retained per release; activation compares their digest, installed-file fingerprints, dependency versions, and source-tree identity across both environments.
 
 **Rejected**: a second observer package/repository/version, copied per-profile plugin directories, mutable `PYTHONPATH` installation, a new observer daemon, or importing Hermes into manager modules.
 
@@ -307,8 +315,8 @@ Pending publishers can create a project on first trusted publication. Configurin
 
 These are bounded choices Supervisor may settle during executability analysis if it records the decision and preserves the contract:
 
-- exact current stable upstream Hermes tag selected as the downstream base;
-- exact downstream release tag naming;
+- the exact maintained-fork revision used by a release and its accepted-change ledger coverage at that revision (with the deliberately selectable upstream alternative);
+- exact Hermes release tag naming for the maintained-fork artifacts;
 - exact minimal Python CLI dependency set, with the requirement that doctor/rollback survive a broken runtime;
 - exact atomic pointer mechanism where Linux/WSL2 semantics are verified;
 - exact user-service unit content and activation command;

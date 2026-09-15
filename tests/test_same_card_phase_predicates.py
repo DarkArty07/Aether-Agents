@@ -6,6 +6,7 @@ They isolate inherited dispatcher routing as well as HERMES_HOME.
 
 from __future__ import annotations
 
+import importlib.util
 import inspect
 import json
 import os
@@ -23,11 +24,26 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _resolve_baseline_checkout() -> Path:
+    """Resolve the exact Hermes baseline checkout this suite is running against.
+
+    The explicit override wins and the canonical operator cache entry stays the local
+    default, but neither is present on a clean runner: the lane provisions exactly one
+    verified checkout and exposes it on ``PYTHONPATH``. A cache-only lookup therefore
+    failed with ``FileNotFoundError`` before the node could verify anything (#428).
+    Falling back to the imported runtime keeps the node bound to a real checkout, which
+    ``verify_clean_checkout`` still authenticates against the locked tag and commit.
+    """
     configured = os.environ.get("AETHER_EXACT_HERMES_CHECKOUT")
     if configured:
         return Path(configured).expanduser()
     cache_home = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
-    return cache_home / "aether-agents" / "hermes" / HERMES_BASELINE.tag
+    cached = cache_home / "aether-agents" / "hermes" / HERMES_BASELINE.tag
+    if cached.is_dir():
+        return cached
+    spec = importlib.util.find_spec("hermes_cli")
+    if spec is not None and spec.origin is not None:
+        return Path(spec.origin).resolve().parents[1]
+    return cached
 
 
 @pytest.fixture
