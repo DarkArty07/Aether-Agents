@@ -26,7 +26,7 @@ released, published, restarted, activated or pointed at the live runtime.
 
 | Check | Observed |
 | --- | --- |
-| Fork resolved by remote URL | `origin` = `https://github.com/DarkArty07/aether-hermes` (provisioned checkout `/home/darkarty/Desktop/03_PROYECTOS/01_ACTIVOS/aether-hermes`) |
+| Fork resolved by remote URL | `origin` = `https://github.com/DarkArty07/aether-hermes` |
 | Provisioned revision | `aether-main` = `54eeb56dabefc98821d696656ed58c55dd777346`, working tree clean before and after this unit; `rev-parse aether-main` unchanged at the end |
 | Port isolation | nested worktree `<fork>/.worktrees/lc-port420` on branch `fix/420-responses-terminal-fidelity`, created from that checkout at `54eeb56dab`; the checkout whose branch is `aether-main` was never checked out, staged or committed |
 | Base prerequisite absent | at `54eeb56dab` `agent/auxiliary_client.py` carried **0** occurrences of `AuxiliaryResponsesTerminalError` and **0** of `incomplete_details`, and the regression module did not exist — the port target was genuinely missing, matching the card's measurement |
