@@ -8,8 +8,11 @@ from pathlib import Path
 import pytest
 from observation_helpers import EPOCH, EventFactory, complete_trace, native_pseudonym
 
+from aether_agents import product_version
 from aether_agents.observation.checkpoint import AuthorityContext
 from aether_agents.observation.contracts import (
+    COLLECTOR_VERSION,
+    REDUCER_VERSION,
     canonical_digest,
     canonical_json_bytes,
     validate_event,
@@ -24,12 +27,28 @@ from aether_agents.observation.reduce.reducer import ReductionInput, reduce_even
 
 
 def test_complete_pipeline_matches_the_reviewed_golden_summary_byte_for_byte() -> None:
+    """The reviewed golden is exactly what this build's own pipeline produces.
+
+    OBS-FR-071 shares one product version across collector, reducer and CLI, and the
+    default ``complete_trace()`` takes that version from the live distribution: every
+    event carries ``COLLECTOR_VERSION`` and the summary reports ``REDUCER_VERSION``
+    derived from the same value.  The reviewed golden follows that shared identity, so
+    the derivation is asserted here rather than resting on the fixture's literal bytes.
+    This module's node identity is pinned by the qualification manifest, which is why
+    the premise of the comparison lives in this test instead of a neighbouring one.
+    """
+    assert COLLECTOR_VERSION == product_version()
+    assert REDUCER_VERSION == f"aether.observation.reducer.v1+{COLLECTOR_VERSION}"
     expected = json.loads(
         (Path(__file__).parent / "fixtures" / "observation" / "complete-summary.json").read_text(
             encoding="utf-8"
         )
     )
     actual = complete_trace().summary()
+    assert actual["reducer_version"] == REDUCER_VERSION
+    assert {pair["collector_version"] for pair in actual["provenance"]["compatibility_pairs"]} == {
+        COLLECTOR_VERSION
+    }
     assert actual == expected
     assert canonical_json_bytes(actual) == canonical_json_bytes(expected)
 
