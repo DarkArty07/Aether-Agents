@@ -597,6 +597,79 @@ def test_captured_tool_output_records_no_run_to_run_elapsed_value(
     assert recorded["stderr"] == "Installed 1 package in <elapsed>"
 
 
+def test_captured_interpreter_leaf_is_normalized_like_the_elapsed_value(
+    tool: types.ModuleType,
+) -> None:
+    """`bin/python` and `bin/python3` (and `bin/python3.13`) are the same interpreter, and
+    which alias a run records depends only on whether the venv already existed, so a
+    capture records the leaf canonically instead of certifying the alias as a member byte."""
+
+    for leaf in ("python", "python3", "python3.13", "python3.13t", "python3.exe"):
+        line = f"Using CPython interpreter at: /checkout/.venv/bin/{leaf}"
+        assert tool._normalize_captured(line) == (
+            "Using CPython interpreter at: /checkout/.venv/bin/<interpreter>"
+        )
+    for untouched in (
+        "run python3 -m aether_agents",
+        "Activate with: source manager/bin/activate",
+        "manager/bin/python-config --cflags",
+    ):
+        assert tool._normalize_captured(untouched) == untouched
+
+
+def test_build_interpreter_is_masked_before_the_checkout_it_lives_in(
+    tool: types.ModuleType, tmp_path: Path
+) -> None:
+    """The build interpreter normally lives inside the Aether checkout, so a checkout mask
+    that ran first would leave the one part of the path that differs between a fresh and an
+    already-populated venv in every capture."""
+
+    interpreter = Path(sys.executable)
+    checkout = interpreter.parent.parent if interpreter.parent.name == "bin" else interpreter.parent
+    masks = tool._report_masks(
+        tmp_path / "install-roots", tmp_path / "work", tmp_path / "bundle", checkout
+    )
+    recorded = tool._portable_capture(f"Using CPython interpreter at: {interpreter}", masks)
+    assert recorded == "Using CPython interpreter at: <probe-interpreter>"
+    assert "bin/python" not in recorded
+
+
+def test_recorded_capture_does_not_depend_on_the_build_directory_or_the_venv_alias(
+    tool: types.ModuleType, tmp_path: Path
+) -> None:
+    """Two builds of the same revisions must record the same bytes.  A capture may not
+    embed the length of the build directory (the ``[truncated N characters]`` footer counts
+    the real host path when masking happens after excerpting) nor which alias the venv
+    happens to expose for its interpreter."""
+
+    script = "import sys; sys.stdout.write(sys.argv[1] + 'y' * 1200)"
+    recorded = []
+    for directory, leaf in (("a", "python"), ("a-much-longer-build-directory", "python3")):
+        work = tmp_path / directory
+        root = work / "install-roots"
+        interpreter = root / "runtime" / "bin" / leaf
+        interpreter.parent.mkdir(parents=True)
+        interpreter.symlink_to(sys.executable)
+        recorded.append(
+            tool._probe(
+                "capture",
+                [str(interpreter), "-c", script, str(root)],
+                root=root,
+                environment=dict(os.environ),
+                required=True,
+                expectation="exit-zero",
+                mask=tool._report_masks(root, work, tmp_path / "bundle", tmp_path / "checkout"),
+            )
+        )
+
+    first, second = recorded
+    assert first["exit_code"] == second["exit_code"] == 0
+    assert "<disposable-root>/runtime/bin/<interpreter>" in first["argv"]
+    assert first["argv"] == second["argv"]
+    assert "[truncated" in first["stdout"]
+    assert first["stdout"] == second["stdout"]
+
+
 # ---------------------------------------------------------------------------- verify
 
 

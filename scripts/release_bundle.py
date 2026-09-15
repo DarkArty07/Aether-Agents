@@ -172,17 +172,26 @@ def _excerpt(text: str, limit: int = _MAX_EXCERPT) -> str:
 
 
 # ``uv`` reports how long each resolution, preparation, install and check took.  That
-# elapsed value is the one part of its output that differs between two builds of the exact
+# elapsed value is the one part of its output that differs between two runs of the exact
 # same revisions (the same resolution is 8 ms in one run and 10 ms in the next), and the
 # qualified member set has to be reproducible from those identical inputs, so the value is
 # recorded as ``<elapsed>`` rather than certified as a member byte.
 _ELAPSED_RE = re.compile(r"\bin (?:\d+m )?\d+(?:\.\d+)?(?:ns|µs|us|ms|s)\b")
 
+# A venv exposes the same interpreter as ``bin/python`` and ``bin/python3`` (often also
+# ``bin/python3.13``), and which alias a run records depends only on whether the venv
+# already existed when the build started: a fresh ``uv run`` records ``python``, the next
+# one ``python3``.  The interpreter is a platform detail, not a member byte, so every
+# interpreter leaf is recorded canonically as ``bin/<interpreter>`` the same way the
+# elapsed value is recorded as ``<elapsed>``.
+_INTERPRETER_RE = re.compile(r"\bbin/python(?:3(?:\.\d+)?[a-z]?)?(?:\.exe)?(?![0-9A-Za-z_.\-])")
+
 
 def _normalize_captured(text: str) -> str:
-    """Keep captured tool output, drop the run-to-run elapsed values from it."""
+    """Keep captured tool output, drop the run-to-run and host-local values from it."""
 
-    return _ELAPSED_RE.sub("in <elapsed>", text)
+    value = _ELAPSED_RE.sub("in <elapsed>", text)
+    return _INTERPRETER_RE.sub("bin/<interpreter>", value)
 
 
 def _write_json(path: Path, payload: Any) -> None:
@@ -199,17 +208,44 @@ def _portable(text: str, replacements: Sequence[tuple[Path | str, str]]) -> str:
     return value
 
 
+def _portable_capture(text: str, masks: Sequence[tuple[Path | str, str]]) -> str:
+    """Mask host-local paths, then drop the values two runs must not disagree on."""
+
+    return _normalize_captured(_portable(text, masks))
+
+
+def _capture(text: str, masks: Sequence[tuple[Path | str, str]], limit: int = _MAX_EXCERPT) -> str:
+    """Record captured output portably: mask first, excerpt second.
+
+    Masking before excerpting is what makes the recorded bytes - including the
+    ``[truncated N characters]`` footer - depend only on the portable text.  Excerpting
+    first counts the characters of the real host paths, so the same capture recorded from
+    a longer or shorter build directory differs even though nothing else did.
+    """
+
+    return _excerpt(_portable_capture(text, masks), limit)
+
+
 def _report_masks(
     roots: Path, work: Path, bundle: Path, aether_checkout: Path
 ) -> tuple[tuple[Path | str, str], ...]:
-    """Mask every host-local path a report could otherwise disclose."""
+    """Mask every host-local path a report could otherwise disclose.
 
+    The build interpreter comes first: it normally lives inside the checkout
+    (``<aether-checkout>/.venv/bin/python3``), and masking the checkout path first would
+    leave the interpreter leaf visible - the one part of that path that differs between a
+    fresh and an already-populated venv.  Its resolved target is masked too, so the
+    host-local CPython installation a uv-managed venv points at cannot leak either.
+    """
+
+    interpreter = Path(sys.executable)
     return (
+        (interpreter, "<probe-interpreter>"),
+        (interpreter.resolve(), "<probe-interpreter>"),
         (roots, "<disposable-root>"),
         (bundle, "<bundle>"),
         (aether_checkout, "<aether-checkout>"),
         (work, "<work>"),
-        (Path(sys.executable), "<probe-interpreter>"),
     )
 
 
@@ -990,14 +1026,14 @@ def _probe(
     report_mask = tuple(mask) + ((root, "<probe-root>"),)
     return {
         "name": name,
-        "argv": _portable(" ".join(argv), report_mask),
+        "argv": _portable_capture(" ".join(argv), report_mask),
         "exit_code": completed.returncode,
         "outcome": outcome,
         "required": required,
         "expectation": expectation,
         "ok": outcome in {"pass", "refused"} if not required else outcome == "pass",
-        "stdout": _portable(_excerpt(_normalize_captured(completed.stdout), 900), report_mask),
-        "stderr": _portable(_excerpt(_normalize_captured(completed.stderr), 900), report_mask),
+        "stdout": _capture(completed.stdout, report_mask, 900),
+        "stderr": _capture(completed.stderr, report_mask, 900),
     }
 
 
@@ -1097,17 +1133,13 @@ def clean_install(
             {
                 "step": name,
                 "exit_code": completed.returncode,
-                "stderr": _portable(_excerpt(_normalize_captured(completed.stderr), 500), masks),
+                "stderr": _capture(completed.stderr, masks, 500),
             }
         )
         if completed.returncode != 0:
             raise BundleError(
                 code,
-                f"{name} failed: "
-                + _portable(
-                    _excerpt(_normalize_captured(completed.stderr or completed.stdout), 400),
-                    masks,
-                ),
+                f"{name} failed: " + _capture(completed.stderr or completed.stdout, masks, 400),
             )
 
     record("manager-venv", uv("venv", "--python", sys.executable, str(manager)), "install-failed")
