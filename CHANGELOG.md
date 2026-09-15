@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.0.0rc1 — release candidate (pre-stable, not yet published)
+
+The release identity is package version `1.0.0rc1`, annotated tag and GitHub prerelease
+`v1.0.0-rc.1` (`release_impact=major`, `release_action=publish`,
+`release_channel=prerelease`); `VERSION` remains the single product-version source.
+
+- Added `scripts/release_bundle.py`: it builds one release bundle from exact clean Aether
+  and maintained-fork commits — the `aether-agents` wheel and sdist, the maintained-fork
+  runtime source closure at its exact commit, the schema-4 `maintained_fork` release lock,
+  a provenance manifest, package-member and clean-install reports and a `SHA256SUMS` —
+  and refuses a dirty checkout, a mismatched revision, a foreign repository, a build that
+  is not byte-reproducible from the same commit, a private-path or canonical-secret
+  finding in Aether-authored bytes, an incomplete member set, a tampered digest, and a
+  missing release-identity surface. It also reports the exact member set a publication
+  must attach and refuses a published release whose asset names or `sha256:` digests
+  disagree with that bundle.
+- Qualified the bundle before publication: member inspection of the wheel, sdist and
+  source archive, a private-path and secret scan over the public bytes, a clean install of
+  the exact wheel plus the locked runtime closure into fresh disposable roots with the
+  normal resolver, and the CLI/runtime handshakes (`aether --version`,
+  `aether version --json`, `aether --help`, `aether update --help`, the
+  `doctor`/`status`/`setup`/`update`/`rollback` preview and refusal envelopes, the
+  local-candidate preview and the pinned `aether update --local` option surface, Hermes
+  import/version/plugin discovery, and the canonical TUI `--check`).
+- Reconciled `.github/workflows/release.yml` with the existing tag and release-identity
+  validation: the release job builds and qualifies the bundle from the tagged commit and
+  attaches that exact member set — the verified members plus `SHA256SUMS` — to the GitHub
+  prerelease, so the attached artifact set is the qualified artifact set. A re-run that
+  finds the release already published attaches nothing (`gh release edit` takes no file
+  arguments) and instead re-verifies the published assets by name and `sha256:` digest,
+  failing closed when the release and the qualified bundle disagree. No second release
+  path is introduced.
+- This is a pre-stable release candidate. It is not stable `1.0.0`, no PyPI or other
+  package-index publication occurs, WSL2 (and any macOS/Windows lane) is unverified and
+  recorded as such, and issue #261 remains open with the deferred stable, PyPI/OIDC and
+  WSL2 obligations explicit. The runtime, lifecycle, documentation and fork reconciliation
+  content of this candidate is delivered and evidenced by the same objective's unit
+  branches; this entry records only the release-identity, bundle-tooling and workflow
+  reconciliation performed here.
+
 ## Unreleased
 
 ### Semantic project knowledge — trustworthy, bounded and honest snapshots (#416, #418, #419, #420, #423, #424)
