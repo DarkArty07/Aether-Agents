@@ -197,4 +197,7 @@ Every other manifest entry (the 400 pre-existing lines are unchanged byte for by
 
 ### 8.1 Candidate revision
 
-_(recorded after the commit; the branch tip is the record plus the code it describes)_
+- **Code candidate:** `9c17027` — `fix(monitor): close release blockers #437 and #438` (6 files changed, 419 insertions(+), 16 deletions(-)), on branch `aether-agents-2/t_8a02a727-lc-block-close-release-blockers-437-and` from base `410c172ae69ffa87f6e32960ae4aef3b8d6598f0`.
+- **Branch tip requested for review:** the commit that carries this §8.1 line (documentation-only update of this record; no code, test or manifest content changes after `9c17027`).
+- `git show --stat 9c17027` lists exactly: `.github/workflows/policy.yml`, `scripts/qualify_telegram_monitor.py`, `tests/test_telegram_monitor_runtime.py`, `tests/test_telegram_monitor_cli_plugin.py`, `tests/test_telegram_monitor_ambient_isolation.py`, `specs/001-aether-v1-productization/evidence/LC-BLOCK.md`.
+- Post-commit re-check used for the branch tip: `uv run --frozen python scripts/run_tests.py -- -q --tb=short tests/test_public_artifacts.py::test_canonical_base_manifest_matches_tracked_non_specs_files tests/test_telegram_monitor_cli_plugin.py::test_exact_packaged_precheck_child_hands_the_lease_to_the_reporter tests/test_telegram_monitor_cli_plugin.py::test_d15r_fixture_and_environment_gaps_chain_end_to_end tests/test_telegram_monitor_ambient_isolation.py tests/test_telegram_monitor_runtime.py` → **62 passed**; `git status` clean afterwards.
