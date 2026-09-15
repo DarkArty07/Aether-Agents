@@ -134,6 +134,11 @@ All commands run from the unit worktree; Hermes-facing lanes use the repository 
   → see §6.1. Under instrumentation the suite is slower and timing-sensitive Telegram-Monitor nodes
   can fail that pass uninstrumented and in isolation (measured: `test_d16t_lab_scheduler_stop_detects_cooperative_exit_and_records_status`
   3/3 passes in isolation, 0.16–0.21s each); those are the #438 class owned by `LC-BLOCK`.
+- End-state full suite at the frozen commits (`a9c6137`, `15ee753`, `26771c5`):
+  `uv run --frozen python scripts/run_tests.py -- -q --tb=no -rf -p no:cacheprovider` →
+  **3 failed, 1709 passed, 70 skipped, 587 subtests passed in 386.86s**, the same three
+  integration-bound failures and no others, with the operator-destination witnesses unchanged before
+  and after the run.
 - Earlier run at the same revision (before the fixture-version fix, for the record):
   **1704 passed, 6 failed, 70 skipped, 587 subtests passed in 451.79s**, with the extra failures being
   the RC-source lane before its repair and the version-coupled fixture repaired above.
