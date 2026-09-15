@@ -680,18 +680,20 @@ def scan_bundle(
                 "canonical path scanner failed on the fork archive: " + _excerpt(fork_output, 400),
             )
         literals: list[str] = []
+        shapes: list[str] = []
         labels: set[str] = set()
         for artifact in fork_artifacts:
             for label, payload in _iter_artifact_payloads(artifact):
                 matches = _operator_path_matches(lifecycle, payload)
                 if matches:
                     labels.add(label.rsplit("!", 1)[-1])
-                literals.extend(_path_shape(value) for value in matches)
+                literals.extend(matches)
+                shapes.extend(_path_shape(value) for value in matches)
         reviewed.update(
             {
                 "result": "reviewed" if fork_code == 1 else "clean",
-                "distinct_match_shapes": sorted(set(literals))[:200],
                 "distinct_match_count": len(set(literals)),
+                "distinct_match_shapes": sorted(set(shapes))[:200],
                 "matched_member_count": len(labels),
                 "disposition": (
                     "upstream-derived maintained-fork source: exact-commit bytes are bound by "
