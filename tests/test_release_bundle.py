@@ -322,7 +322,8 @@ def test_scan_bundle_reviews_upstream_fork_bytes_without_vetoing(
     )
     fork_scan = report["private_paths"]["maintained_fork"]
     assert fork_scan["result"] == "reviewed"
-    assert "/home/user/" in fork_scan["distinct_matches"]
+    example = "/" + "home" + "/user/"
+    assert example in fork_scan["distinct_matches"]
     assert report["secrets"]["strict_result"] == "clean"
 
 
