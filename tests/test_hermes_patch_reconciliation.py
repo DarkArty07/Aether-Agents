@@ -34,6 +34,8 @@ ENTRIES_PATH = (
 UPSTREAM_REPOSITORY = "https://github.com/NousResearch/hermes-agent"
 UPSTREAM_REVISION = "a" * 40
 INSPECTED_UPSTREAM_REVISION = "4f22543509d1b91dc45bcb369447126c5eb14fb7"
+#: The maintained-fork revision every generated aggregate must be current at.
+SELECTED_REVISION = "54eeb56dabefc98821d696656ed58c55dd777346"
 OBSERVED_AT = "2026-08-30T20:00:00Z"
 EXPECTED_ACTIVE_IDS = (
     "HLP-188",
@@ -205,6 +207,31 @@ def _copy_repository_evidence(root: Path) -> tuple[Path, Path]:
     return ledger, entries
 
 
+def _fork_checkout(tmp_path: Path) -> tuple[Path, str]:
+    """Build one clean maintained-fork-shaped checkout at a known revision."""
+
+    checkout = tmp_path / "fork"
+    checkout.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", "-b", "aether-main"], cwd=checkout, check=True)
+    subprocess.run(["git", "config", "user.name", "Aether Test"], cwd=checkout, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "aether@example.invalid"], cwd=checkout, check=True
+    )
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://github.com/DarkArty07/aether-hermes"],
+        cwd=checkout,
+        check=True,
+    )
+    (checkout / "agent").mkdir()
+    (checkout / "agent" / "runtime_cwd.py").write_text("SOURCE = 1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "agent"], cwd=checkout, check=True)
+    subprocess.run(["git", "commit", "-qm", "fork fixture"], cwd=checkout, check=True)
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=checkout, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    return checkout, revision
+
+
 def _reconcile(
     tmp_path: Path,
     records: list[dict[str, Any]],
@@ -220,6 +247,7 @@ def _reconcile(
         observed_at_utc=OBSERVED_AT,
         upstream_repository=UPSTREAM_REPOSITORY,
         upstream_revision=UPSTREAM_REVISION,
+        selected_revision=SELECTED_REVISION,
     )
 
 
@@ -239,6 +267,7 @@ def test_repository_fragments_cover_active_ledger_and_bind_patch_digests(
 ) -> None:
     validator = _load_validator()
     ledger, entries = _copy_repository_evidence(tmp_path)
+    fork, fork_revision = _fork_checkout(tmp_path)
 
     aggregate = validator.reconcile(
         repository_root=tmp_path,
@@ -248,6 +277,8 @@ def test_repository_fragments_cover_active_ledger_and_bind_patch_digests(
         observed_at_utc=OBSERVED_AT,
         upstream_repository=UPSTREAM_REPOSITORY,
         upstream_revision=INSPECTED_UPSTREAM_REVISION,
+        selected_revision=fork_revision,
+        fork_root=fork,
     )
 
     assert tuple(record["id"] for record in aggregate["records"]) == EXPECTED_ACTIVE_IDS
@@ -326,6 +357,7 @@ def test_repository_fragments_reject_hlp262_omission(tmp_path: Path) -> None:
             observed_at_utc=OBSERVED_AT,
             upstream_repository=UPSTREAM_REPOSITORY,
             upstream_revision=INSPECTED_UPSTREAM_REVISION,
+            selected_revision=SELECTED_REVISION,
         )
 
 
@@ -346,6 +378,7 @@ def test_repository_fragments_reject_hlp226_without_hlp226b_component(tmp_path: 
             observed_at_utc=OBSERVED_AT,
             upstream_repository=UPSTREAM_REPOSITORY,
             upstream_revision=INSPECTED_UPSTREAM_REVISION,
+            selected_revision=SELECTED_REVISION,
         )
 
 
@@ -366,6 +399,7 @@ def test_repository_fragments_reject_hlp226_without_hlp226c_component(tmp_path: 
             observed_at_utc=OBSERVED_AT,
             upstream_repository=UPSTREAM_REPOSITORY,
             upstream_revision=INSPECTED_UPSTREAM_REVISION,
+            selected_revision=SELECTED_REVISION,
         )
 
 
@@ -392,6 +426,7 @@ def test_repository_fragments_reject_hlp226_without_hlp226c_patch_artifact(
             observed_at_utc=OBSERVED_AT,
             upstream_repository=UPSTREAM_REPOSITORY,
             upstream_revision=INSPECTED_UPSTREAM_REVISION,
+            selected_revision=SELECTED_REVISION,
         )
 
 
@@ -420,6 +455,7 @@ def test_repository_fragments_reject_hlp226_patch_digest_drift(
             observed_at_utc=OBSERVED_AT,
             upstream_repository=UPSTREAM_REPOSITORY,
             upstream_revision=INSPECTED_UPSTREAM_REVISION,
+            selected_revision=SELECTED_REVISION,
         )
 
 
@@ -444,6 +480,7 @@ def test_reconcile_sorts_records_binds_provenance_and_writes_deterministic_outpu
 
     output = tmp_path / "reconciliation.json"
     preflight = tmp_path / "preflight.md"
+    fork, fork_revision = _fork_checkout(tmp_path)
     completed = subprocess.run(
         (
             sys.executable,
@@ -462,6 +499,10 @@ def test_reconcile_sorts_records_binds_provenance_and_writes_deterministic_outpu
             UPSTREAM_REPOSITORY,
             "--upstream-revision",
             UPSTREAM_REVISION,
+            "--selected-revision",
+            fork_revision,
+            "--fork-checkout",
+            str(fork),
             "--output",
             str(output),
             "--preflight",
@@ -489,6 +530,7 @@ def test_reconcile_sorts_records_binds_provenance_and_writes_deterministic_outpu
         "## Qualified upstream equivalents",
         "## Retirement blockers",
         "## Artifact integrity",
+        "## Selected maintained-fork source",
         "## Safe next decisions",
     ):
         assert heading in report
@@ -603,7 +645,7 @@ def test_reconcile_rejects_retirement_candidate_without_full_exact_gate(tmp_path
         ),
         (
             lambda record: record["upstream"].__setitem__("inspected_revision", "b" * 40),
-            "upstream revision",
+            "public-source inspection identity",
         ),
     ),
 )

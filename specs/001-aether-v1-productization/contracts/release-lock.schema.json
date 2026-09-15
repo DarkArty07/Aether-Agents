@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": ["schema_version", "aether", "hermes", "profile_bundle"],
   "properties": {
-    "schema_version": {"const": 3},
+    "schema_version": {"const": 4},
     "aether": {
       "type": "object",
       "additionalProperties": false,
@@ -36,78 +36,43 @@
       "required": [
         "source_mode",
         "repository",
+        "branch",
         "version",
-        "tag",
         "commit",
         "python_requires",
         "source_tree_sha256",
         "artifacts"
       ],
       "properties": {
-        "source_mode": {"enum": ["upstream", "transitional_fork"]},
-        "repository": {"type": "string", "format": "uri", "pattern": "^https://github\\.com/"},
+        "source_mode": {
+          "const": "maintained_fork",
+          "description": "The Aether 1.0 RC consumes the maintained fork as reviewed source. Both historical modes are refused for new preparation, each with its own true reason: retired `transitional_fork` (a fixed public baseline plus residual `.patch` replay) and retired `upstream` (the released public artifact consumed as-is, which is not the RC's source identity; selecting it deliberately would need its own reviewed decision and schema representation)."
+        },
+        "repository": {"const": "https://github.com/DarkArty07/aether-hermes"},
+        "branch": {"const": "aether-main"},
         "version": {"type": "string", "minLength": 1},
-        "tag": {"type": "string", "minLength": 1},
+        "tag": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$",
+          "description": "Optional exact tag on the selected commit. When declared it must dereference to `commit` in the verified checkout; the maintained fork does not tag every candidate revision."
+        },
         "commit": {"$ref": "#/$defs/git_commit"},
         "python_requires": {"type": "string", "minLength": 1},
         "source_tree_sha256": {
           "$ref": "#/$defs/sha256",
-          "description": "SHA-256 of the deterministic path-and-file-byte projection of the exact Git commit materialized locally; this is distinct from every externally published artifact digest."
-        },
-        "upstream_base": {"$ref": "#/$defs/upstream_base"},
-        "residual_patches": {
-          "type": "array",
-          "items": {"type": "string", "minLength": 1},
-          "uniqueItems": true
+          "description": "SHA-256 of the canonical path-and-file-byte projection of the exact Git commit materialized locally (never a Git blob): rows `(posix-relative-path, sha256(file bytes))` collected in `os.walk` DFS order with per-level sorted names, `__pycache__` excluded, symlinks and non-regular files refused, serialized as `json.dumps(rows, separators=(\",\", \":\"), ensure_ascii=True)` and hashed once. The lifecycle validator re-derives this value from the materialized commit and refuses any mismatch; it is distinct from every externally published artifact digest and from the editable-install projection."
         },
         "artifacts": {
           "type": "array",
           "minItems": 1,
-          "items": {"$ref": "#/$defs/artifact"}
-        }
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {"source_mode": {"const": "upstream"}},
-            "required": ["source_mode"]
+          "items": {"$ref": "#/$defs/artifact"},
+          "contains": {
+            "properties": {"kind": {"const": "source"}},
+            "required": ["kind"]
           },
-          "then": {
-            "properties": {
-              "repository": {"const": "https://github.com/NousResearch/hermes-agent"},
-              "residual_patches": {"maxItems": 0},
-              "artifacts": {
-                "contains": {
-                  "properties": {"kind": {"const": "source"}},
-                  "required": ["kind"]
-                },
-                "minContains": 1,
-                "maxContains": 1
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {"source_mode": {"const": "transitional_fork"}},
-            "required": ["source_mode"]
-          },
-          "then": {
-            "required": ["upstream_base", "residual_patches"],
-            "properties": {
-              "repository": {"const": "https://github.com/DarkArty07/hermes-agent"},
-              "residual_patches": {"minItems": 1},
-              "artifacts": {
-                "minItems": 2,
-                "allOf": [
-                  {"contains": {"properties": {"kind": {"const": "wheel"}}, "required": ["kind"]}},
-                  {"contains": {"properties": {"kind": {"const": "sdist"}}, "required": ["kind"]}}
-                ]
-              }
-            }
-          }
+          "minContains": 1
         }
-      ]
+      }
     },
     "profile_bundle": {
       "type": "object",
@@ -142,16 +107,6 @@
     "sha256": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
-    },
-    "upstream_base": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["repository", "tag", "commit"],
-      "properties": {
-        "repository": {"const": "https://github.com/NousResearch/hermes-agent"},
-        "tag": {"type": "string", "minLength": 1},
-        "commit": {"$ref": "#/$defs/git_commit"}
-      }
     },
     "observer_entry_point": {
       "type": "object",

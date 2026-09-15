@@ -21,9 +21,11 @@ import shutil
 import sqlite3
 import stat
 import subprocess
+import sys
 import tarfile
 import tempfile
 import threading
+import tomllib
 import zipfile
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field, replace
@@ -54,26 +56,40 @@ from aether_agents.paths import (
     FILE_MODE,
     UnsafeObservationPath,
     _open_private_directory,
+    applications_dir,
+    data_root,
     ensure_private_dir,
     harden_file,
     read_private_bytes,
+    state_root,
+    systemd_user_dir,
+    user_bin_dir,
 )
 
 __all__ = [
+    "AETHER_REPOSITORY",
     "AetherPrebuildIdentity",
     "HERMES_BASELINE",
+    "MAINTAINED_FORK_BRANCH",
+    "MAINTAINED_FORK_REPOSITORY",
+    "MAINTAINED_FORK_SOURCE_MODE",
     "CheckoutEvidence",
     "DoctorResult",
     "HermesBaseline",
+    "HermesSource",
     "IntegrityError",
     "LifecycleManager",
+    "LocalCandidate",
+    "LocalCandidateBuild",
     "OBSERVATION_COMPATIBILITY",
     "PreparedRelease",
+    "ProjectionRoots",
     "ReleaseRecord",
     "ReleaseStore",
     "ValidatedReleaseLock",
     "UninstallResult",
     "verify_clean_checkout",
+    "verify_source_checkout",
     "load_aether_prebuild_identity",
     "load_release_lock",
 ]
@@ -189,6 +205,174 @@ class AetherPrebuildIdentity:
         return hashlib.sha256(encoded).hexdigest()
 
 
+# Aether 1.0 RC source identity: the executable Hermes source is reviewed fork source,
+# bound by repository, branch, exact commit, tree digest and artifact closure.  Neither
+# historical mode stays selectable for new preparation: ``transitional_fork`` replayed
+# residual ``patches/hermes/*.patch`` files onto a fixed public baseline, while
+# ``upstream`` consumed the released public artifact as-is.  Each is refused with the
+# reason that mode actually had, never a borrowed one.
+MAINTAINED_FORK_SOURCE_MODE = "maintained_fork"
+MAINTAINED_FORK_REPOSITORY = "https://github.com/DarkArty07/aether-hermes"
+MAINTAINED_FORK_BRANCH = "aether-main"
+RETIRED_HERMES_SOURCE_MODES = ("upstream", "transitional_fork")
+
+_RETIRED_MODE_REASONS = {
+    "transitional_fork": (
+        "the fixed public baseline plus residual patches/hermes/*.patch replay is no longer "
+        "a supported source identity"
+    ),
+    "upstream": (
+        "the Aether 1.0 RC's source identity is the maintained fork "
+        f"'{MAINTAINED_FORK_REPOSITORY}' on branch '{MAINTAINED_FORK_BRANCH}', not the "
+        "released public artifact; selecting upstream deliberately would need its own "
+        "reviewed decision and schema representation"
+    ),
+}
+
+_RETIRED_MODE_MESSAGE = (
+    "Hermes source mode '{mode}' is retired for Aether 1.0: {reason}. "
+    "Regenerate the release lock with hermes.source_mode 'maintained_fork', "
+    f"hermes.repository '{MAINTAINED_FORK_REPOSITORY}' and hermes.branch "
+    f"'{MAINTAINED_FORK_BRANCH}' at the exact reviewed fork commit; portable "
+    "patches/hermes/*.patch files stay audit evidence and are never replayed."
+)
+
+
+def _retired_mode_message(mode: str) -> str:
+    """Return the retirement message stating the reason that mode actually had."""
+
+    reason = _RETIRED_MODE_REASONS.get(mode, "it is not the Aether 1.0 RC source identity")
+    return _RETIRED_MODE_MESSAGE.format(mode=mode, reason=reason)
+
+
+@dataclass(frozen=True, slots=True)
+class HermesSource:
+    """Validated maintained-fork Hermes source identity from one release lock."""
+
+    source_mode: str
+    repository: str
+    branch: str
+    version: str
+    tag: str | None
+    commit: str
+    python_requires: str
+    source_tree_sha256: str
+    artifacts: tuple[dict[str, Any], ...]
+
+    @classmethod
+    def from_record(cls, value: Any) -> "HermesSource":
+        if not isinstance(value, dict):
+            raise IntegrityError("release lock Hermes source identity shape is invalid")
+        mode = value.get("source_mode")
+        if mode != MAINTAINED_FORK_SOURCE_MODE:
+            if isinstance(mode, str) and mode in RETIRED_HERMES_SOURCE_MODES:
+                raise IntegrityError(_retired_mode_message(mode))
+            raise IntegrityError("release lock Hermes source mode is not maintained_fork")
+        expected = {
+            "source_mode",
+            "repository",
+            "branch",
+            "version",
+            "commit",
+            "python_requires",
+            "source_tree_sha256",
+            "artifacts",
+        }
+        if set(value) - {"tag"} != expected:
+            raise IntegrityError("release lock Hermes source identity shape is invalid")
+        if value.get("repository") != MAINTAINED_FORK_REPOSITORY:
+            raise IntegrityError("release lock Hermes repository is not the maintained fork")
+        if value.get("branch") != MAINTAINED_FORK_BRANCH:
+            raise IntegrityError("release lock Hermes branch is not the maintained fork branch")
+        version = value.get("version")
+        if not isinstance(version, str) or not version.strip():
+            raise IntegrityError("release lock Hermes version is invalid")
+        tag = value.get("tag")
+        if tag is not None and (
+            not isinstance(tag, str)
+            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}", tag) is None
+        ):
+            raise IntegrityError("release lock Hermes tag is invalid")
+        commit = value.get("commit")
+        if (
+            not isinstance(commit, str)
+            or re.fullmatch(r"[0-9a-f]{40}(?:[0-9a-f]{24})?", commit) is None
+        ):
+            raise IntegrityError("release lock Hermes commit is invalid")
+        python_requires = value.get("python_requires")
+        if not isinstance(python_requires, str) or not python_requires.strip():
+            raise IntegrityError("release lock Hermes python_requires is invalid")
+        tree_digest = value.get("source_tree_sha256")
+        if not isinstance(tree_digest, str) or _SHA256_RE.fullmatch(tree_digest) is None:
+            raise IntegrityError("release lock Hermes source tree digest is invalid")
+        artifacts = value.get("artifacts")
+        if not isinstance(artifacts, list) or not artifacts:
+            raise IntegrityError("release lock Hermes artifact closure is empty")
+        normalized: list[dict[str, Any]] = []
+        for artifact in artifacts:
+            if not isinstance(artifact, dict) or set(artifact) != {
+                "kind",
+                "filename",
+                "url",
+                "sha256",
+                "provenance_url",
+            }:
+                raise IntegrityError("release lock Hermes artifact entry is invalid")
+            if artifact["kind"] not in {"source", "wheel", "sdist"}:
+                raise IntegrityError("release lock Hermes artifact kind is invalid")
+            filename = artifact["filename"]
+            if (
+                not isinstance(filename, str)
+                or not filename
+                or filename != Path(filename).name
+                or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,254}", filename) is None
+            ):
+                raise IntegrityError("release lock Hermes artifact filename is invalid")
+            for key in ("url", "provenance_url"):
+                target = artifact[key]
+                if not isinstance(target, str) or not target.startswith("https://"):
+                    raise IntegrityError("release lock Hermes artifact location is invalid")
+            digest = artifact["sha256"]
+            if not isinstance(digest, str) or _SHA256_RE.fullmatch(digest) is None:
+                raise IntegrityError("release lock Hermes artifact digest is invalid")
+            normalized.append(dict(artifact))
+        if not any(artifact["kind"] == "source" for artifact in normalized):
+            raise IntegrityError("release lock Hermes closure has no source artifact")
+        return cls(
+            source_mode=MAINTAINED_FORK_SOURCE_MODE,
+            repository=MAINTAINED_FORK_REPOSITORY,
+            branch=MAINTAINED_FORK_BRANCH,
+            version=version,
+            tag=tag,
+            commit=commit,
+            python_requires=python_requires,
+            source_tree_sha256=tree_digest,
+            artifacts=tuple(normalized),
+        )
+
+    def to_record(self) -> dict[str, Any]:
+        record: dict[str, Any] = {
+            "source_mode": self.source_mode,
+            "repository": self.repository,
+            "branch": self.branch,
+            "version": self.version,
+            "commit": self.commit,
+            "python_requires": self.python_requires,
+            "source_tree_sha256": self.source_tree_sha256,
+            "artifacts": [dict(artifact) for artifact in self.artifacts],
+        }
+        if self.tag is not None:
+            record["tag"] = self.tag
+        return record
+
+    @property
+    def digest(self) -> str:
+        encoded = json.dumps(self.to_record(), sort_keys=True, separators=(",", ":")).encode(
+            "utf-8"
+        )
+        return hashlib.sha256(encoded).hexdigest()
+
+
 @dataclass(frozen=True, slots=True)
 class ValidatedReleaseLock:
     """Fully validated external lock plus the local materialization boundary."""
@@ -202,6 +386,17 @@ class ValidatedReleaseLock:
     hermes_source_tree_sha256: str
     profile_bundle_sha256: str
     observation_compatibility: dict[str, Any]
+    hermes_source: HermesSource | None = None
+
+    @property
+    def effective_hermes_source(self) -> HermesSource:
+        """Return the validated maintained-fork identity or refuse to guess one."""
+
+        if self.hermes_source is None:
+            raise IntegrityError(
+                "release lock carries no validated maintained-fork Hermes source identity"
+            )
+        return self.hermes_source
 
 
 def _release_lock_schema() -> dict[str, Any]:
@@ -263,14 +458,28 @@ def _read_release_lock_bytes(path: Path | str) -> tuple[Path, bytes]:
         os.close(descriptor)
 
 
+def _refuse_retired_source_mode(payload: Any) -> None:
+    """Refuse the retired source modes before schema validation can blur the reason."""
+
+    if not isinstance(payload, dict):
+        return
+    hermes = payload.get("hermes")
+    if not isinstance(hermes, dict):
+        return
+    mode = hermes.get("source_mode")
+    if isinstance(mode, str) and mode in RETIRED_HERMES_SOURCE_MODES:
+        raise IntegrityError(_retired_mode_message(mode))
+
+
 def load_release_lock(path: Path | str) -> ValidatedReleaseLock:
-    """Validate every schema-3 field and the exact A1/Hermes semantic tuple."""
+    """Validate every schema-4 field and the exact maintained-fork source identity."""
 
     candidate, raw_bytes = _read_release_lock_bytes(path)
     try:
         payload = json.loads(raw_bytes)
     except (UnicodeError, json.JSONDecodeError) as error:
         raise IntegrityError("release lock is unavailable or malformed") from error
+    _refuse_retired_source_mode(payload)
     schema = _release_lock_schema()
     errors = sorted(
         Draft202012Validator(
@@ -299,18 +508,12 @@ def load_release_lock(path: Path | str) -> ValidatedReleaseLock:
     assert isinstance(aether_wheel_sha256, str)
     hermes = payload.get("hermes")
     assert isinstance(hermes, dict)
-    expected_hermes = {
-        "source_mode": "upstream",
-        "repository": HERMES_BASELINE.repository.removesuffix(".git"),
-        "version": HERMES_BASELINE.version,
-        "tag": HERMES_BASELINE.tag,
-        "commit": HERMES_BASELINE.commit,
-        "python_requires": HERMES_BASELINE.python_requires,
-    }
-    if any(hermes.get(key) != value for key, value in expected_hermes.items()):
-        raise IntegrityError("release lock does not select the exact Hermes baseline")
-    hermes_source_tree_sha256 = hermes.get("source_tree_sha256")
-    assert isinstance(hermes_source_tree_sha256, str)
+    hermes_source = HermesSource.from_record(hermes)
+    if (
+        identity.package_version != display_version
+        and _display_version(identity.package_version) != display_version
+    ):
+        raise IntegrityError("release lock Aether version and package version disagree")
     profile_bundle = payload.get("profile_bundle")
     assert isinstance(profile_bundle, dict)
     if profile_bundle.get("version") != "2":
@@ -324,10 +527,28 @@ def load_release_lock(path: Path | str) -> ValidatedReleaseLock:
         aether_identity=identity,
         aether_wheel_sha256=aether_wheel_sha256,
         observer_requirements_sha256=observer_requirements_sha256,
-        hermes_source_tree_sha256=hermes_source_tree_sha256,
+        hermes_source_tree_sha256=hermes_source.source_tree_sha256,
         profile_bundle_sha256=profile_bundle_sha256,
         observation_compatibility=observation_compatibility,
+        hermes_source=hermes_source,
     )
+
+
+def _display_version(package_version: str) -> str:
+    """Map one PEP 440 package version to the contract's display/tag form.
+
+    ``1.0.0rc1`` is the published package version; ``1.0.0-rc.1`` is the same release in
+    the display and tag grammar the release lock and annotated tag use.
+    """
+
+    match = re.fullmatch(
+        r"(?P<base>[0-9]+\.[0-9]+\.[0-9]+)"
+        r"(?:(?P<pre>a|b|rc|dev|post)(?P<number>[0-9]+))?",
+        package_version,
+    )
+    if match is None or match["pre"] is None:
+        return package_version
+    return f"{match['base']}-{match['pre']}.{match['number']}"
 
 
 def load_aether_prebuild_identity(path: Path | str) -> AetherPrebuildIdentity:
@@ -431,25 +652,46 @@ def _git(checkout: Path, *arguments: str, check: bool = True) -> str:
     return completed.stdout.strip()
 
 
+def _normalized_git_remote(url: str) -> str:
+    """Normalize one Git remote URL to a comparable https repository identity."""
+
+    value = url.strip()
+    for prefix in ("git@github.com:", "ssh://git@github.com/"):
+        if value.startswith(prefix):
+            value = "https://github.com/" + value.removeprefix(prefix)
+    return value.removesuffix(".git").rstrip("/")
+
+
 def verify_clean_checkout(
     checkout: Path | str,
     *,
-    expected_tag: str = HERMES_BASELINE.tag,
-    expected_commit: str = HERMES_BASELINE.commit,
+    source: HermesSource | None = None,
+    expected_tag: str | None = None,
+    expected_commit: str | None = None,
     expected_tag_object: str | None = None,
 ) -> CheckoutEvidence:
-    """Prove a checkout is the requested immutable tag/commit and is clean."""
+    """Prove a checkout is the requested revision and is clean.
+
+    When ``source`` is supplied the supplied maintained-fork identity is the only
+    authority; otherwise the historical fixed public baseline applies, which keeps the
+    qualification harness and its recorded revision meaningful.
+    """
+
+    if source is not None:
+        return verify_source_checkout(checkout, source)
+    expected_tag = HERMES_BASELINE.tag if expected_tag is None else expected_tag
+    commit_expected = HERMES_BASELINE.commit if expected_commit is None else expected_commit
 
     path = Path(checkout).resolve(strict=True)
     if not path.is_dir():
         raise IntegrityError("Hermes checkout is not a directory")
     commit = _git(path, "rev-parse", "HEAD")
-    if commit != expected_commit:
+    if commit != commit_expected:
         raise IntegrityError(
-            f"Hermes checkout commit mismatch: expected {expected_commit}, got {commit}"
+            f"Hermes checkout commit mismatch: expected {commit_expected}, got {commit}"
         )
     tag_commit = _git(path, "rev-list", "-n", "1", expected_tag)
-    if tag_commit != expected_commit:
+    if tag_commit != commit_expected:
         raise IntegrityError("Hermes tag does not dereference to the expected commit")
     tag_object_output = _git(path, "rev-parse", f"{expected_tag}^{{tag}}", check=False)
     tag_object = tag_object_output or None
@@ -462,6 +704,58 @@ def verify_clean_checkout(
         path=path,
         tag=expected_tag,
         tag_object=tag_object,
+        commit=commit,
+        clean=True,
+    )
+
+
+def verify_source_checkout(
+    checkout: Path | str,
+    source: HermesSource,
+) -> CheckoutEvidence:
+    """Prove a checkout is the selected maintained-fork revision and is clean.
+
+    Identity comes only from the validated lock plus the explicit checkout path: the
+    repository remote, the branch, the exact commit and the declared tag are verified
+    against the supplied source identity, never inferred from a mutable branch tip or
+    from the current working directory.
+    """
+
+    path = Path(checkout).expanduser()
+    try:
+        resolved = path.resolve(strict=True)
+    except OSError as error:
+        raise IntegrityError("Hermes source checkout is unavailable") from error
+    if not resolved.is_dir():
+        raise IntegrityError("Hermes source checkout is not a directory")
+    if _git(resolved, "rev-parse", "--is-inside-work-tree", check=False) != "true":
+        raise IntegrityError("Hermes source checkout is not a Git worktree")
+    remote = _normalized_git_remote(_git(resolved, "remote", "get-url", "origin", check=False))
+    if remote != _normalized_git_remote(source.repository):
+        raise IntegrityError(
+            f"Hermes source checkout origin is not the selected repository ({remote or 'none'})"
+        )
+    branch = _git(resolved, "rev-parse", "--abbrev-ref", "HEAD", check=False)
+    if branch != source.branch:
+        raise IntegrityError(
+            f"Hermes source checkout branch mismatch: expected {source.branch}, got {branch}"
+        )
+    commit = _git(resolved, "rev-parse", "HEAD")
+    if commit != source.commit:
+        raise IntegrityError(
+            f"Hermes source checkout commit mismatch: expected {source.commit}, got {commit}"
+        )
+    if source.tag is not None:
+        tag_commit = _git(resolved, "rev-list", "-n", "1", source.tag, check=False)
+        if tag_commit != source.commit:
+            raise IntegrityError("Hermes source tag does not dereference to the locked commit")
+    dirty = _git(resolved, "status", "--porcelain=v1", "--untracked-files=all")
+    if dirty:
+        raise IntegrityError("Hermes source checkout is dirty")
+    return CheckoutEvidence(
+        path=resolved,
+        tag=source.tag or source.branch,
+        tag_object=None,
         commit=commit,
         clean=True,
     )
@@ -675,7 +969,21 @@ def _wheel_observation_compatibility(source: bytes) -> dict[str, Any]:
 
 
 def _tree_sha256(root: Path) -> str:
-    """Digest a confined regular-file tree by relative path and file bytes."""
+    """Digest a materialized source tree by relative path and file bytes.
+
+    This is the one canonical recipe for the release lock's ``hermes.source_tree_sha256``
+    and it is re-derived by this validator over the *materialized* commit: rows are
+    ``(posix-relative-path, sha256(file bytes))`` collected in ``os.walk`` DFS order with
+    per-level sorted names, ``__pycache__`` excluded, symlinks and non-regular files
+    refused, then ``sha256(json.dumps(rows, separators=(",", ":"), ensure_ascii=True))``.
+
+    Two traps this encoding rules out: it hashes the bytes a consumer actually receives
+    (a Git *blob* digest differs wherever ``.gitattributes`` rewrites line endings, e.g.
+    the fork's ``*.ps1`` files are LF in the blob and CRLF when materialized), and its DFS
+    order differs from a global path sort for these trees. ``aether_agents.hermes_editable``
+    computes a different projection with a different exclusion set for the editable path;
+    it is never this lock recipe.
+    """
 
     rows: list[tuple[str, str]] = []
     for directory, names, files in os.walk(root, followlinks=False):
@@ -1291,6 +1599,9 @@ class PreparedRelease:
     prebuild_identity: str
     installed_file_fingerprint: str
     observation_compatibility: dict[str, Any] = field(default_factory=_compatibility_copy)
+    hermes_repository: str = MAINTAINED_FORK_REPOSITORY
+    hermes_branch: str = MAINTAINED_FORK_BRANCH
+    hermes_source_tree_sha256: str | None = None
 
     @property
     def release_id(self) -> str:
@@ -1314,6 +1625,9 @@ class ReleaseRecord:
     installed_file_fingerprint: str | None = None
     observation_compatibility: dict[str, Any] = field(default_factory=_compatibility_copy)
     observer: dict[str, str] = field(default_factory=lambda: dict(OBSERVER_ENTRY_POINT))
+    hermes_repository: str | None = None
+    hermes_branch: str | None = None
+    hermes_source_tree_sha256: str | None = None
 
     @classmethod
     def from_json(cls, payload: Any) -> "ReleaseRecord":
@@ -1353,10 +1667,31 @@ class ReleaseRecord:
             or any(ord(character) < 0x20 for character in self.wheel_filename)
         ):
             raise IntegrityError("invalid wheel filename")
-        if self.hermes_tag != HERMES_BASELINE.tag:
-            raise IntegrityError("active release uses a different Hermes tag")
-        if self.hermes_commit != HERMES_BASELINE.commit:
-            raise IntegrityError("active release uses a different Hermes commit")
+        if (
+            not isinstance(self.hermes_commit, str)
+            or re.fullmatch(r"[0-9a-f]{40}(?:[0-9a-f]{24})?", self.hermes_commit) is None
+        ):
+            raise IntegrityError("active release Hermes commit is invalid")
+        if not isinstance(self.hermes_tag, str) or (
+            self.hermes_tag != ""
+            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}", self.hermes_tag) is None
+        ):
+            raise IntegrityError("active release Hermes tag is invalid")
+        if self.hermes_repository is not None and self.hermes_repository not in {
+            _normalized_git_remote(MAINTAINED_FORK_REPOSITORY),
+            _normalized_git_remote(HERMES_BASELINE.repository),
+        }:
+            raise IntegrityError("active release Hermes repository is not supported")
+        if (
+            self.hermes_branch is not None
+            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}", self.hermes_branch) is None
+        ):
+            raise IntegrityError("active release Hermes branch is invalid")
+        if (
+            self.hermes_source_tree_sha256 is not None
+            and _SHA256_RE.fullmatch(self.hermes_source_tree_sha256) is None
+        ):
+            raise IntegrityError("active release Hermes source digest is invalid")
         if self.observer_entry_point != HERMES_BASELINE.observer_entry_point:
             raise IntegrityError("observer entry point mismatch")
         if self.observer != OBSERVER_ENTRY_POINT:
@@ -1435,9 +1770,15 @@ class ReleaseStore:
 
     @property
     def profile_homes(self) -> Path:
-        """Persistent, explicitly product-scoped Hermes homes for all roles."""
+        """Persistent, explicitly product-scoped Hermes homes for all roles.
 
-        return self.root / "profiles"
+        The operational Hermes homes live under the established Aether XDG *state* root
+        (``$XDG_STATE_HOME/aether/hermes/profiles``), so the lifecycle reconciles into the
+        installed layout instead of creating a second data-root home tree; release code
+        and components stay under the data root.
+        """
+
+        return self.state_root / "hermes" / "profiles"
 
     def profile_home(self, role: str) -> Path:
         if role not in _PROFILE_ROLES:
@@ -1655,10 +1996,31 @@ class ReleaseStore:
             raise IntegrityError("invalid prepared release version")
         if not _SHA256_RE.fullmatch(prepared.wheel_sha256):
             raise IntegrityError("invalid prepared wheel digest")
-        if prepared.hermes_tag != HERMES_BASELINE.tag:
-            raise IntegrityError("prepared release uses a different Hermes tag")
-        if prepared.hermes_commit != HERMES_BASELINE.commit:
-            raise IntegrityError("prepared release uses a different Hermes commit")
+        if not isinstance(prepared.hermes_tag, str) or (
+            prepared.hermes_tag != ""
+            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}", prepared.hermes_tag) is None
+        ):
+            raise IntegrityError("prepared release Hermes tag is invalid")
+        if (
+            not isinstance(prepared.hermes_commit, str)
+            or re.fullmatch(r"[0-9a-f]{40}(?:[0-9a-f]{24})?", prepared.hermes_commit) is None
+        ):
+            raise IntegrityError("prepared release Hermes commit is invalid")
+        if prepared.hermes_repository not in {
+            _normalized_git_remote(MAINTAINED_FORK_REPOSITORY),
+            _normalized_git_remote(HERMES_BASELINE.repository),
+        }:
+            raise IntegrityError("prepared release Hermes repository is not supported")
+        if (
+            not isinstance(prepared.hermes_branch, str)
+            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}", prepared.hermes_branch) is None
+        ):
+            raise IntegrityError("prepared release Hermes branch is invalid")
+        if (
+            prepared.hermes_source_tree_sha256 is not None
+            and _SHA256_RE.fullmatch(prepared.hermes_source_tree_sha256) is None
+        ):
+            raise IntegrityError("prepared release Hermes source digest is invalid")
         _validate_observation_compatibility(prepared.observation_compatibility)
         identity = AetherPrebuildIdentity.from_record(prepared.aether_identity)
         if identity.package_version != prepared.version:
@@ -1719,6 +2081,9 @@ class ReleaseStore:
                 prepared.observation_compatibility
             ),
             observer=dict(OBSERVER_ENTRY_POINT),
+            hermes_repository=prepared.hermes_repository,
+            hermes_branch=prepared.hermes_branch,
+            hermes_source_tree_sha256=prepared.hermes_source_tree_sha256,
         )
         record.validate()
         self._ensure_owned_root()
@@ -2134,6 +2499,266 @@ class ReleaseStore:
             )
 
 
+# The Aether product repository identity used to authenticate a local candidate
+# checkout.  The commit is always supplied explicitly; a branch tip is never used.
+AETHER_REPOSITORY = "https://github.com/DarkArty07/Aether-Agents"
+_RELEASE_TAG_RE = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$")
+
+
+@dataclass(frozen=True, slots=True)
+class LocalCandidate:
+    """One verified local Aether/maintained-fork candidate revision pair."""
+
+    aether_checkout: Path
+    aether_commit: str
+    aether_tag: str
+    package_version: str
+    display_version: str
+    aether_python_requires: str
+    fork_checkout: Path
+    fork_commit: str
+    fork_branch: str
+    fork_version: str
+    fork_python_requires: str
+    fork_source_tree_sha256: str
+    hlp_coverage: dict[str, Any]
+
+    def to_record(self) -> dict[str, Any]:
+        return {
+            "mode": "local",
+            "aether": {
+                "checkout": str(self.aether_checkout),
+                "commit": self.aether_commit,
+                "tag": self.aether_tag,
+                "package_version": self.package_version,
+                "display_version": self.display_version,
+                "python_requires": self.aether_python_requires,
+            },
+            "fork": {
+                "checkout": str(self.fork_checkout),
+                "commit": self.fork_commit,
+                "branch": self.fork_branch,
+                "version": self.fork_version,
+                "python_requires": self.fork_python_requires,
+                "source_tree_sha256": self.fork_source_tree_sha256,
+                "repository": MAINTAINED_FORK_REPOSITORY,
+            },
+            "target": {
+                "version": self.display_version,
+                "package_version": self.package_version,
+                "release_id_rule": "<package-version>-<wheel sha256 prefix>",
+                "release_id_resolved_at": "preparation, from the built candidate wheel",
+            },
+            "hlp_coverage": self.hlp_coverage,
+            "artifacts": [
+                {
+                    "kind": "hermes-source",
+                    "filename": self.fork_source_filename,
+                    "sha256": self.fork_source_tree_sha256,
+                    "origin": "git archive of the exact maintained-fork commit",
+                },
+                {
+                    "kind": "aether-wheel",
+                    "filename": f"aether_agents-{self.package_version}-py3-none-any.whl",
+                    "sha256": None,
+                    "origin": "built once from the exact clean Aether commit during preparation",
+                },
+            ],
+        }
+
+    @property
+    def fork_source_filename(self) -> str:
+        return f"aether-hermes-{self.fork_commit[:12]}.tar.gz"
+
+    def artifacts_closure(self) -> list[dict[str, Any]]:
+        """Return the maintained-fork artifact closure recorded in the release lock."""
+
+        return [
+            {
+                "kind": "source",
+                "filename": self.fork_source_filename,
+                "url": f"{MAINTAINED_FORK_REPOSITORY}/archive/{self.fork_commit}.tar.gz",
+                "sha256": self.fork_source_tree_sha256,
+                "provenance_url": f"{MAINTAINED_FORK_REPOSITORY}/commit/{self.fork_commit}",
+            }
+        ]
+
+    def hermes_source(self) -> HermesSource:
+        return HermesSource(
+            source_mode=MAINTAINED_FORK_SOURCE_MODE,
+            repository=MAINTAINED_FORK_REPOSITORY,
+            branch=self.fork_branch,
+            version=self.fork_version,
+            tag=None,
+            commit=self.fork_commit,
+            python_requires=self.fork_python_requires,
+            source_tree_sha256=self.fork_source_tree_sha256,
+            artifacts=tuple(self.artifacts_closure()),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class LocalCandidateBuild:
+    """One built local candidate plus the generated lock that binds it."""
+
+    wheel: Path
+    release_lock: Path
+    staging: Path
+    candidate: LocalCandidate
+
+
+def _requires_python_accepts(requires: str, version: tuple[int, int]) -> bool:
+    """Bounded check that one ``Requires-Python`` range admits ``version``.
+
+    Only the comma-separated comparison operators used by the Aether manifest are
+    interpreted; an unparsed or empty range refuses rather than guessing.
+    """
+
+    specified = False
+    for clause in requires.split(","):
+        clause = clause.strip()
+        if not clause:
+            continue
+        match = re.fullmatch(r"(?P<op><=|>=|==|<|>|~=)\s*(?P<release>[0-9]+(?:\.[0-9]+)*)", clause)
+        if match is None:
+            return False
+        specified = True
+        parts = [int(part) for part in match.group("release").split(".")]
+        while len(parts) < 2:
+            parts.append(0)
+        bound = (parts[0], parts[1])
+        op = match.group("op")
+        if op == ">=" and version < bound:
+            return False
+        if op == ">" and version <= bound:
+            return False
+        if op == "<=" and version > bound:
+            return False
+        if op == "<" and version >= bound:
+            return False
+        if op == "==" and version[0] != bound[0]:
+            return False
+        if op == "~=" and version[0] != bound[0]:
+            return False
+    return specified
+
+
+#: The Aether-owned gateway unit projection.  The unrelated ``hermes-gateway-hestia``
+#: and every other Hermes service stay outside this lifecycle.
+AETHER_GATEWAY_UNIT = "hermes-gateway-morfeo.service"
+
+
+class ServiceController:
+    """The only seam through which activation may interrupt an Aether-owned unit."""
+
+    def available(self) -> bool:  # pragma: no cover - interface definition
+        raise NotImplementedError
+
+    def restart(self, unit_name: str) -> str:  # pragma: no cover - interface definition
+        raise NotImplementedError
+
+
+class SystemdUserController(ServiceController):
+    """Restart one Aether-owned unit through the user systemd manager."""
+
+    def available(self) -> bool:
+        return shutil.which("systemctl") is not None
+
+    def restart(self, unit_name: str) -> str:
+        if not self.available():
+            return "unavailable"
+        environment = _isolated_subprocess_environment()
+        reloaded = subprocess.run(
+            ["systemctl", "--user", "daemon-reload"],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        if reloaded.returncode != 0:
+            return "reload_failed"
+        restarted = subprocess.run(
+            ["systemctl", "--user", "restart", unit_name],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        return "restarted" if restarted.returncode == 0 else "restart_failed"
+
+
+class DisabledServiceController(ServiceController):
+    """A controller that performs no service effect (disposable or headless lanes)."""
+
+    def available(self) -> bool:
+        return False
+
+    def restart(self, unit_name: str) -> str:
+        return "disabled"
+
+
+_LAUNCHER_NAME = "aether"
+_DESKTOP_ENTRY_NAME = "hermes.desktop"
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectionRoots:
+    """The operator-visible directories one manager is allowed to project into.
+
+    The installed installation owns the real user destinations.  A disposable lane
+    (test, redirected XDG roots, second installation) either injects its own confined
+    roots or receives roots derived next to its own store, so no disposable lifecycle
+    path can materialize, overwrite or delete the operator's launcher, Desktop entry or
+    user unit.
+    """
+
+    launcher_dir: Path
+    desktop_dir: Path
+    service_dir: Path
+
+    @classmethod
+    def operator(cls) -> "ProjectionRoots":
+        """The ambient operator destinations of the installed XDG environment."""
+
+        return cls(
+            launcher_dir=Path(user_bin_dir()),
+            desktop_dir=Path(applications_dir()),
+            service_dir=Path(systemd_user_dir()),
+        )
+
+    @classmethod
+    def disposable(cls, root: Path | str) -> "ProjectionRoots":
+        """Confined destinations under one disposable root."""
+
+        base = Path(root)
+        return cls(
+            launcher_dir=base / "bin",
+            desktop_dir=base / "applications",
+            service_dir=base / "systemd" / "user",
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectionSpec:
+    """Deterministic selector projections owned by one installed release."""
+
+    release: Path
+    runtime_current: Path
+    launcher_path: Path
+    desktop_path: Path
+    service_path: Path
+    launcher_bytes: bytes
+    desktop_bytes: bytes
+    service_bytes: bytes
+
+    def digests(self) -> dict[str, str]:
+        return {
+            "launcher": hashlib.sha256(self.launcher_bytes).hexdigest(),
+            "desktop": hashlib.sha256(self.desktop_bytes).hexdigest(),
+            "service": hashlib.sha256(self.service_bytes).hexdigest(),
+        }
+
+
 @dataclass(frozen=True, slots=True)
 class DoctorResult:
     ready: bool
@@ -2151,9 +2776,67 @@ class UninstallResult:
 class LifecycleManager:
     """Hermes-independent doctor/update/rollback/uninstall orchestration."""
 
-    def __init__(self, *, store: ReleaseStore, python_executable: Path) -> None:
+    def __init__(
+        self,
+        *,
+        store: ReleaseStore,
+        python_executable: Path,
+        service_controller: ServiceController | None = None,
+        projections: ProjectionRoots | None = None,
+    ) -> None:
         self.store = store
         self.python_executable = Path(python_executable)
+        # One installation owns the operator's real destinations and is the only
+        # installation allowed to interrupt the Aether-owned unit.  Every other store
+        # (disposable test, redirected XDG roots, a second installation) resolves to
+        # confined projection roots and a controller that performs no service effect,
+        # so a disposable lane can never reach the live launcher, Desktop entry, unit
+        # file or user systemd manager.
+        self.installed_environment = self._is_installed_environment(store)
+        self.projections = projections
+        self.disabled_service_reason: str | None = None
+        if service_controller is not None:
+            self.service_controller: ServiceController = service_controller
+        elif self.installed_environment and projections is None:
+            self.service_controller = SystemdUserController()
+        else:
+            self.disabled_service_reason = "disabled_non_installed_environment"
+            self.service_controller = DisabledServiceController()
+
+    @staticmethod
+    def _is_installed_environment(store: ReleaseStore) -> bool:
+        """True only for the ambient installation at the default XDG locations."""
+
+        ambient_data = Path.home() / ".local" / "share" / "aether"
+        ambient_state = Path.home() / ".local" / "state" / "aether"
+        return (
+            store.root == ambient_data
+            and store.state_root == ambient_state
+            and store.root == data_root()
+            and store.state_root == state_root()
+        )
+
+    def _confined_projection_base(self) -> Path:
+        """Base for derived destinations, always inside the manager's own surroundings.
+
+        A redirected data root hosts its own projections; when only the state root was
+        redirected, the state root's parent hosts them.  Either way the derived base is
+        outside the ambient operator destinations.
+        """
+
+        ambient_data = Path.home() / ".local" / "share" / "aether"
+        if self.store.root != ambient_data:
+            return self.store.root.parent / "aether-projections"
+        return self.store.state_root.parent / "aether-projections"
+
+    def projection_roots(self) -> ProjectionRoots:
+        """Resolve the launcher/Desktop/service destinations for this manager."""
+
+        if self.projections is not None:
+            return self.projections
+        if self.installed_environment:
+            return ProjectionRoots.operator()
+        return ProjectionRoots.disposable(self._confined_projection_base())
 
     @staticmethod
     def _manager_authority_remediation() -> str:
@@ -2466,7 +3149,29 @@ class LifecycleManager:
         with self.store.mutation_lock():
             if self.store.active(required=False) is not None:
                 self._assert_executing_active_manager_locked()
-            return self._recover_locked()
+            result = self._recover_locked()
+            self._reconcile_projections_locked(result)
+            return result
+
+    def _reconcile_projections_locked(self, result: dict[str, int]) -> None:
+        """Re-project the selector for the authoritative record after any recovery.
+
+        A partial transition leaves the active record authoritative while the selector
+        or a projection may still name the interrupted target; this bounded,
+        idempotent step restores them from the record, so the recovered state is
+        coherent again without a second transition.
+        """
+
+        try:
+            active = self.store.active(required=False)
+        except IntegrityError:
+            return
+        if active is None:
+            return
+        if not self.projection_status(active)["mismatches"]:
+            return
+        self.project_release(active, restart_service=False)
+        result["projections_reconciled"] = 1
 
     def recover_for_rollback(self) -> dict[str, int]:
         """Recover transition structure without requiring a healthy active runtime."""
@@ -3211,13 +3916,11 @@ class LifecycleManager:
         """Prepare while the caller retains the lifecycle mutation lock."""
 
         source_wheel = self._resolve_wheel(wheel)
-        evidence = verify_clean_checkout(
-            hermes_checkout,
-            expected_tag=HERMES_BASELINE.tag,
-            expected_commit=HERMES_BASELINE.commit,
-            expected_tag_object=HERMES_BASELINE.tag_object,
-        )
+        # Source identity is resolved from the validated lock first: the checkout is
+        # verified against that identity instead of the retired fixed public baseline.
         validated_lock = load_release_lock(release_lock)
+        hermes_source = validated_lock.effective_hermes_source
+        evidence = verify_clean_checkout(hermes_checkout, source=hermes_source)
         digest = self._validate_aether_wheel_lock(validated_lock, source_wheel)
         metadata = self._inspect_wheel(source_wheel)
         aether_identity = validated_lock.aether_identity
@@ -3246,9 +3949,9 @@ class LifecycleManager:
         # Materialize only the bytes tracked by the authenticated commit.  A clean
         # worktree says nothing about ignored ``.env`` or editable-install debris,
         # so copying the worktree is never an acceptable release boundary.
-        hermes_source = stage / "hermes-source"
-        _materialize_git_archive(evidence.path, evidence.commit, hermes_source)
-        hermes_source_sha256 = _tree_sha256(hermes_source)
+        hermes_source_dir = stage / "hermes-source"
+        _materialize_git_archive(evidence.path, evidence.commit, hermes_source_dir)
+        hermes_source_sha256 = _tree_sha256(hermes_source_dir)
         if hermes_source_sha256 != validated_lock.hermes_source_tree_sha256:
             raise IntegrityError("release lock Hermes source digest mismatch")
 
@@ -3269,7 +3972,7 @@ class LifecycleManager:
             str(staged_wheel),
         )
         hermes_dependency_evidence = self._install_hermes_from_lock(
-            hermes_source,
+            hermes_source_dir,
             runtime_python,
             artifact_dir / "hermes-requirements.txt",
         )
@@ -3317,7 +4020,7 @@ class LifecycleManager:
         hermes_version = self._installed_distribution_version(
             runtime_python, HERMES_BASELINE.distribution
         )
-        if hermes_version != HERMES_BASELINE.version:
+        if hermes_version != hermes_source.version:
             raise IntegrityError("installed Hermes distribution version mismatch")
 
         for environment in (manager, runtime):
@@ -3337,13 +4040,16 @@ class LifecycleManager:
             "observer": metadata["observer"],
             "observation_compatibility": metadata["observation_compatibility"],
             "observation_schema_sha256": metadata["observation_schema_sha256"],
-            "hermes_repository": HERMES_BASELINE.repository,
-            "hermes_tag": evidence.tag,
-            "hermes_tag_object": evidence.tag_object,
-            "hermes_commit": evidence.commit,
+            "hermes_repository": hermes_source.repository,
+            "hermes_branch": hermes_source.branch,
+            "hermes_source_mode": hermes_source.source_mode,
+            "hermes_tag": hermes_source.tag or hermes_source.branch,
+            "hermes_tag_object": None,
+            "hermes_commit": hermes_source.commit,
             "hermes_version": hermes_version,
             "hermes_source_sha256": hermes_source_sha256,
             "locked_hermes_source_tree_sha256": (validated_lock.hermes_source_tree_sha256),
+            "hermes_artifact_closure": [dict(item) for item in hermes_source.artifacts],
             "release_lock_sha256": validated_lock.sha256,
             "hermes_uv_lock_sha256": hermes_dependency_evidence["uv_lock_sha256"],
             "hermes_requirements_sha256": hermes_dependency_evidence["requirements_sha256"],
@@ -3354,6 +4060,11 @@ class LifecycleManager:
             "profile_bundle_sha256": profile_bundle_sha256,
             "authority_context": AuthorityContext.for_active_release(release_id).to_record(),
         }
+        # One stable relative alias so the selector and the project launcher agree on
+        # ``runtime/current/venv`` regardless of the private environment directory name.
+        venv_alias = stage / "venv"
+        if not venv_alias.exists() and not venv_alias.is_symlink():
+            os.symlink("runtime", venv_alias)
         _atomic_json(stage / "release.json", release_manifest)
         self.store._harden_tree(stage)
         _fsync_directory(stage_parent)
@@ -3362,13 +4073,379 @@ class LifecycleManager:
             wheel=staged_wheel,
             wheel_sha256=digest,
             stage=stage,
-            hermes_tag=evidence.tag,
-            hermes_commit=evidence.commit,
+            hermes_tag=hermes_source.tag or hermes_source.branch,
+            hermes_commit=hermes_source.commit,
             aether_identity=aether_identity.to_record(),
             prebuild_identity=aether_identity.digest,
             installed_file_fingerprint=metadata["installed_file_fingerprint"],
             observation_compatibility=metadata["observation_compatibility"],
+            hermes_repository=hermes_source.repository,
+            hermes_branch=hermes_source.branch,
+            hermes_source_tree_sha256=hermes_source_sha256,
         )
+
+    def local_candidate(
+        self,
+        *,
+        aether_checkout: Path | str,
+        aether_commit: str,
+        fork_checkout: Path | str,
+        fork_commit: str,
+    ) -> LocalCandidate:
+        """Verify both explicit local inputs without staging or activating anything.
+
+        Nothing below the bounded read-only verification (Git inspection, one confined
+        ``git archive`` under a system temporary directory for the source digest, and the
+        candidate's own reconciliation check) is performed: no candidate environment is
+        created, the active record is untouched, and no service is signalled.
+        """
+
+        aether = self._verify_aether_candidate_checkout(aether_checkout, aether_commit)
+        fork = self._verify_fork_candidate_checkout(fork_checkout, fork_commit)
+        coverage = self._local_hlp_coverage(aether["checkout"], fork["checkout"], fork["commit"])
+        return LocalCandidate(
+            aether_checkout=aether["checkout"],
+            aether_commit=aether["commit"],
+            aether_tag=aether["tag"],
+            package_version=aether["package_version"],
+            display_version=aether["display_version"],
+            aether_python_requires=aether["python_requires"],
+            fork_checkout=fork["checkout"],
+            fork_commit=fork["commit"],
+            fork_branch=fork["branch"],
+            fork_version=fork["version"],
+            fork_python_requires=fork["python_requires"],
+            fork_source_tree_sha256=fork["source_tree_sha256"],
+            hlp_coverage=coverage,
+        )
+
+    def _verify_aether_candidate_checkout(
+        self, checkout: Path | str, commit: str
+    ) -> dict[str, Any]:
+        candidate = Path(checkout).expanduser()
+        try:
+            resolved = candidate.resolve(strict=True)
+        except OSError as error:
+            raise IntegrityError("Aether candidate checkout is unavailable") from error
+        if not resolved.is_dir():
+            raise IntegrityError("Aether candidate checkout is not a directory")
+        if _git(resolved, "rev-parse", "--is-inside-work-tree", check=False) != "true":
+            raise IntegrityError("Aether candidate checkout is not a Git worktree")
+        remote = _normalized_git_remote(_git(resolved, "remote", "get-url", "origin", check=False))
+        if remote != _normalized_git_remote(AETHER_REPOSITORY):
+            raise IntegrityError("Aether candidate checkout origin is not the Aether repository")
+        if not isinstance(commit, str) or re.fullmatch(r"[0-9a-f]{40}", commit) is None:
+            raise IntegrityError("Aether candidate commit is not an exact lowercase revision")
+        head = _git(resolved, "rev-parse", "HEAD", check=False)
+        if head != commit:
+            raise IntegrityError(
+                f"Aether candidate commit mismatch: expected {commit}, got {head or 'none'}"
+            )
+        dirty = _git(resolved, "status", "--porcelain=v1", "--untracked-files=all")
+        if dirty:
+            raise IntegrityError("Aether candidate checkout is dirty")
+        tag = self._release_tag_at(resolved, commit)
+        version_bytes = _git(resolved, "show", f"{commit}:VERSION", check=False).strip()
+        if not _VERSION_RE.fullmatch(version_bytes):
+            raise IntegrityError("Aether candidate VERSION is missing or invalid")
+        display = _display_version(version_bytes)
+        if tag != f"v{display}":
+            raise IntegrityError(
+                f"Aether candidate release tag {tag} does not match VERSION {version_bytes}"
+            )
+        requires = self._candidate_requires_python(resolved, commit)
+        if not _requires_python_accepts(requires, sys.version_info[:2]):
+            raise IntegrityError(
+                f"Aether candidate Python range '{requires}' is incompatible with the "
+                f"running interpreter {sys.version_info.major}.{sys.version_info.minor}"
+            )
+        return {
+            "checkout": resolved,
+            "commit": commit,
+            "tag": tag,
+            "package_version": version_bytes,
+            "display_version": display,
+            "python_requires": requires,
+        }
+
+    @staticmethod
+    def _release_tag_at(checkout: Path, commit: str) -> str:
+        """Return the one release tag pointing exactly at the candidate commit."""
+
+        listed = _git(checkout, "tag", "--points-at", commit, check=False).split()
+        tags = sorted(tag for tag in listed if _RELEASE_TAG_RE.fullmatch(tag))
+        if len(tags) != 1:
+            raise IntegrityError(
+                "Aether candidate commit must carry exactly one annotated release tag "
+                f"(found {len(tags)}); tag the exact commit before local promotion"
+            )
+        return tags[0]
+
+    @staticmethod
+    def _candidate_requires_python(checkout: Path, commit: str) -> str:
+        raw = _git(checkout, "show", f"{commit}:pyproject.toml", check=False)
+        try:
+            payload = tomllib.loads(raw)
+        except tomllib.TOMLDecodeError as error:
+            raise IntegrityError("Aether candidate pyproject.toml is unreadable") from error
+        requires = payload.get("project", {}).get("requires-python")
+        if not isinstance(requires, str) or not requires.strip():
+            raise IntegrityError("Aether candidate declares no Python compatibility range")
+        return requires
+
+    def _verify_fork_candidate_checkout(self, checkout: Path | str, commit: str) -> dict[str, Any]:
+        if not isinstance(commit, str) or re.fullmatch(r"[0-9a-f]{40}", commit) is None:
+            raise IntegrityError("maintained-fork commit is not an exact lowercase revision")
+        path = Path(checkout).expanduser()
+        try:
+            resolved = path.resolve(strict=True)
+        except OSError as error:
+            raise IntegrityError("maintained-fork candidate checkout is unavailable") from error
+        version_raw = _git(resolved, "show", f"{commit}:pyproject.toml", check=False)
+        try:
+            payload = tomllib.loads(version_raw)
+        except tomllib.TOMLDecodeError as error:
+            raise IntegrityError(
+                "maintained-fork candidate pyproject.toml is unreadable"
+            ) from error
+        project = payload.get("project")
+        if not isinstance(project, dict):
+            raise IntegrityError("maintained-fork candidate project metadata is missing")
+        version = project.get("version")
+        requires = project.get("requires-python")
+        if not isinstance(version, str) or not version.strip():
+            raise IntegrityError("maintained-fork candidate declares no distribution version")
+        if not isinstance(requires, str) or not requires.strip():
+            raise IntegrityError("maintained-fork candidate declares no Python range")
+        if not _requires_python_accepts(requires, sys.version_info[:2]):
+            raise IntegrityError(
+                f"maintained-fork Python range '{requires}' is incompatible with the "
+                f"running interpreter {sys.version_info.major}.{sys.version_info.minor}"
+            )
+        with tempfile.TemporaryDirectory(prefix="aether-fork-source-") as temporary:
+            materialized = Path(temporary) / "source"
+            _materialize_git_archive(resolved, commit, materialized)
+            digest = _tree_sha256(materialized)
+        # The checkout itself is verified against the identity built from the explicit
+        # commit plus the pinned repository/branch, never from a mutable tip.
+        source = HermesSource(
+            source_mode=MAINTAINED_FORK_SOURCE_MODE,
+            repository=MAINTAINED_FORK_REPOSITORY,
+            branch=MAINTAINED_FORK_BRANCH,
+            version=version,
+            tag=None,
+            commit=commit,
+            python_requires=requires,
+            source_tree_sha256=digest,
+            artifacts=(),
+        )
+        verify_source_checkout(resolved, source)
+        return {
+            "checkout": resolved,
+            "commit": commit,
+            "branch": MAINTAINED_FORK_BRANCH,
+            "version": version,
+            "python_requires": requires,
+            "source_tree_sha256": digest,
+        }
+
+    def _local_hlp_coverage(
+        self, aether_checkout: Path, fork_checkout: Path, fork_commit: str
+    ) -> dict[str, Any]:
+        """Run the candidate's own reconciliation check mode and refuse stale coverage."""
+
+        script = aether_checkout / "scripts" / "validate_hermes_patch_reconciliation.py"
+        if script.is_symlink() or not script.is_file():
+            raise IntegrityError("Aether candidate reconciliation tooling is unavailable")
+        arguments = [
+            str(self.python_executable),
+            str(script),
+            "--root",
+            str(aether_checkout),
+            "--check",
+            "--json",
+            "--selected-revision",
+            fork_commit,
+            "--fork-checkout",
+            str(fork_checkout),
+        ]
+        try:
+            completed = subprocess.run(
+                arguments,
+                check=False,
+                capture_output=True,
+                text=True,
+                env=_isolated_subprocess_environment(),
+            )
+        except OSError as error:
+            raise IntegrityError("Aether candidate reconciliation tooling cannot run") from error
+        summary: dict[str, Any] | None = None
+        for line in reversed(completed.stdout.splitlines()):
+            stripped = line.strip()
+            if not stripped.startswith("{"):
+                continue
+            try:
+                parsed = json.loads(stripped)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict) and "selected_source" in parsed:
+                summary = parsed
+                break
+        if summary is None:
+            raise IntegrityError(
+                "Aether candidate reconciliation tooling produced no check summary "
+                f"(exit {completed.returncode})"
+            )
+        if completed.returncode != 0:
+            detail = completed.stderr.strip() or "reconciliation evidence is not current"
+            raise IntegrityError(f"active HLP coverage is not current: {detail}")
+        refusing = summary.get("refusing")
+        if not isinstance(refusing, list):
+            raise IntegrityError("reconciliation check summary is malformed")
+        if refusing:
+            detail = "; ".join(
+                f"{item.get('id')}: {item.get('detail')}"
+                for item in refusing
+                if isinstance(item, dict)
+            )
+            raise IntegrityError(
+                "an active HLP behavior is not present at the maintained-fork candidate: " + detail
+            )
+        return summary
+
+    def _build_local_candidate(
+        self,
+        candidate: LocalCandidate,
+        *,
+        staging: Path,
+    ) -> LocalCandidateBuild:
+        """Materialize the exact Aether commit, build one wheel and bind it in a lock."""
+
+        _create_private_directory(staging)
+        source = staging / "aether-source"
+        _materialize_git_archive(candidate.aether_checkout, candidate.aether_commit, source)
+        distribution = staging / "dist"
+        _create_private_directory(distribution)
+        self._run_uv(
+            "--no-config",
+            "build",
+            "--wheel",
+            "--out-dir",
+            str(distribution),
+            cwd=source,
+        )
+        wheels = sorted(distribution.glob("*.whl"))
+        if len(wheels) != 1:
+            raise IntegrityError("local candidate build did not produce one wheel")
+        wheel = wheels[0]
+        if wheel.is_symlink() or not wheel.is_file():
+            raise IntegrityError("local candidate wheel is not a regular file")
+        digest = _sha256(wheel)
+        metadata = self._inspect_wheel(wheel)
+        if metadata["version"] != candidate.package_version:
+            raise IntegrityError("built candidate wheel version differs from the commit VERSION")
+        if metadata["python_requires"] != candidate.aether_python_requires.replace(" ", ""):
+            raise IntegrityError("built candidate wheel Python range differs from the commit")
+        lock_payload = {
+            "schema_version": 4,
+            "aether": {
+                "version": candidate.display_version,
+                "package_version": candidate.package_version,
+                "distribution": "aether-agents",
+                "git_tag": candidate.aether_tag,
+                "git_commit": candidate.aether_commit,
+                "python_requires": metadata["python_requires"],
+                "observer": metadata["observer"],
+                "wheel_sha256": digest,
+                "observer_requirements_sha256": metadata["observer_requirements_sha256"],
+                "observation_compatibility": metadata["observation_compatibility"],
+            },
+            "hermes": candidate.hermes_source().to_record(),
+            "profile_bundle": {
+                "version": "2",
+                "sha256": self.profile_bundle_sha256(),
+                "roles": list(_PROFILE_ROLES),
+            },
+        }
+        lock_path = staging / "release-lock.json"
+        encoded = json.dumps(lock_payload, indent=2, sort_keys=True) + "\n"
+        self._write_durable(lock_path, encoded.encode("utf-8"))
+        load_release_lock(lock_path)
+        return LocalCandidateBuild(
+            wheel=wheel,
+            release_lock=lock_path,
+            staging=staging,
+            candidate=candidate,
+        )
+
+    def profile_bundle_sha256(self) -> str:
+        """Return the digest of the profile bundle this manager materializes.
+
+        The managed profile bundle is produced by the installed product's packaged
+        resources, so a release lock must declare exactly this digest for the same
+        manager to accept the candidate.
+        """
+
+        rows: dict[str, dict[str, str]] = {}
+        for role in _PROFILE_ROLES:
+            resources: dict[str, str] = {}
+            for name, source in self._profile_sources(role).items():
+                resources[name] = _sha256(source)
+            skills: dict[str, str] = {}
+            for skill_name, source in self._skill_sources().items():
+                skills[f"profiles/{role}/skills/{skill_name}/SKILL.md"] = _sha256(source)
+            rows[role] = {"resources": resources, "skills": skills}
+        encoded = json.dumps(rows, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    def update_local(
+        self,
+        *,
+        aether_checkout: Path | str,
+        aether_commit: str,
+        fork_checkout: Path | str,
+        fork_commit: str,
+        expected_active_release_id: str | None | object = _CAS_UNSET,
+    ) -> ReleaseRecord:
+        """Prepare one local candidate from explicit clean commits and activate it."""
+
+        expected = (
+            self._capture_expected_active()
+            if expected_active_release_id is _CAS_UNSET
+            else expected_active_release_id
+        )
+        candidate = self.local_candidate(
+            aether_checkout=aether_checkout,
+            aether_commit=aether_commit,
+            fork_checkout=fork_checkout,
+            fork_commit=fork_commit,
+        )
+        with self.store.mutation_lock():
+            self._assert_executing_active_manager_locked()
+            self._recover_locked()
+            if expected is _CAS_UNSET:
+                expected = self._assert_expected_active_locked(_CAS_UNSET)
+            else:
+                self._assert_expected_active_locked(expected)
+            staging_root = self.store.root / "staging"
+            ensure_private_dir(staging_root)
+            staging = staging_root / ("local-" + secrets.token_hex(8))
+            try:
+                build = self._build_local_candidate(candidate, staging=staging)
+                record = self.store._register_locked(
+                    self._prepare_release_locked(
+                        wheel=build.wheel,
+                        hermes_checkout=candidate.fork_checkout,
+                        release_lock=build.release_lock,
+                    )
+                )
+                return self._activate_existing_locked(
+                    record.release_id,
+                    transition_kind="update",
+                    expected_active_release_id=expected,
+                )
+            finally:
+                _remove_private_tree(staging, missing_ok=True)
 
     def install(
         self,
@@ -3587,15 +4664,35 @@ class LifecycleManager:
             raise IntegrityError("release installation evidence is unreadable") from error
         if not isinstance(manifest, dict):
             raise IntegrityError("release installation evidence is malformed")
+        # The release's own authenticated lock is the only source of Hermes identity.
+        release_lock_sha256 = manifest.get("release_lock_sha256")
+        release_lock_path = release / "release-lock.json"
+        if (
+            not isinstance(release_lock_sha256, str)
+            or not _SHA256_RE.fullmatch(release_lock_sha256)
+            or release_lock_path.is_symlink()
+            or not release_lock_path.is_file()
+            or _sha256(release_lock_path) != release_lock_sha256
+        ):
+            raise IntegrityError("release lock digest mismatch")
+        validated_lock = load_release_lock(release_lock_path)
+        hermes_source = validated_lock.effective_hermes_source
+        if (
+            validated_lock.sha256 != release_lock_sha256
+            or validated_lock.aether_identity.to_record() != record.aether_identity
+        ):
+            raise IntegrityError("release lock identity mismatch")
         expected_fields = {
             "version": record.version,
             "wheel_filename": record.wheel_filename,
             "wheel_sha256": record.wheel_sha256,
-            "hermes_repository": HERMES_BASELINE.repository,
-            "hermes_tag": HERMES_BASELINE.tag,
-            "hermes_tag_object": HERMES_BASELINE.tag_object,
-            "hermes_commit": HERMES_BASELINE.commit,
-            "hermes_version": HERMES_BASELINE.version,
+            "hermes_repository": hermes_source.repository,
+            "hermes_branch": hermes_source.branch,
+            "hermes_source_mode": hermes_source.source_mode,
+            "hermes_tag": hermes_source.tag or hermes_source.branch,
+            "hermes_tag_object": None,
+            "hermes_commit": hermes_source.commit,
+            "hermes_version": hermes_source.version,
             "observer_entry_point": HERMES_BASELINE.observer_entry_point,
             "observer": dict(record.observer),
             "aether_identity": record.aether_identity,
@@ -3612,6 +4709,7 @@ class LifecycleManager:
             "observation_schema_sha256",
             "hermes_source_sha256",
             "locked_hermes_source_tree_sha256",
+            "hermes_artifact_closure",
             "hermes_uv_lock_sha256",
             "hermes_requirements_sha256",
             "release_lock_sha256",
@@ -3625,22 +4723,10 @@ class LifecycleManager:
             if manifest.get("observation_compatibility") != record.observation_compatibility:
                 raise IntegrityError("observation compatibility declaration mismatch")
             raise IntegrityError("release installation evidence disagrees with its record")
-        release_lock_sha256 = manifest.get("release_lock_sha256")
-        release_lock_path = release / "release-lock.json"
-        if (
-            not isinstance(release_lock_sha256, str)
-            or not _SHA256_RE.fullmatch(release_lock_sha256)
-            or release_lock_path.is_symlink()
-            or not release_lock_path.is_file()
-            or _sha256(release_lock_path) != release_lock_sha256
-        ):
-            raise IntegrityError("release lock digest mismatch")
-        validated_lock = load_release_lock(release_lock_path)
-        if (
-            validated_lock.sha256 != release_lock_sha256
-            or validated_lock.aether_identity.to_record() != record.aether_identity
-        ):
-            raise IntegrityError("release lock identity mismatch")
+        if manifest.get("hermes_artifact_closure") != [
+            dict(artifact) for artifact in hermes_source.artifacts
+        ]:
+            raise IntegrityError("release lock Hermes artifact closure mismatch")
         observer_requirements_sha256 = manifest.get("observer_requirements_sha256")
         observer_requirements = release / "artifacts" / "observer-requirements.txt"
         if (
@@ -3677,10 +4763,10 @@ class LifecycleManager:
             hermes_source_sha256
         ):
             raise IntegrityError("Hermes source identity evidence is malformed")
-        hermes_source = release / "hermes-source"
-        if hermes_source.is_symlink() or not hermes_source.is_dir():
+        hermes_source_dir = release / "hermes-source"
+        if hermes_source_dir.is_symlink() or not hermes_source_dir.is_dir():
             raise IntegrityError("Hermes release source is unavailable")
-        if _tree_sha256(hermes_source) != hermes_source_sha256:
+        if _tree_sha256(hermes_source_dir) != hermes_source_sha256:
             raise IntegrityError("Hermes source digest mismatch")
         locked_source_sha256 = manifest.get("locked_hermes_source_tree_sha256")
         if (
@@ -3692,7 +4778,7 @@ class LifecycleManager:
             raise IntegrityError("release lock Hermes source digest mismatch")
         lock_sha256 = manifest.get("hermes_uv_lock_sha256")
         requirements_sha256 = manifest.get("hermes_requirements_sha256")
-        hermes_lock = hermes_source / "uv.lock"
+        hermes_lock = hermes_source_dir / "uv.lock"
         requirements = release / "artifacts" / "hermes-requirements.txt"
         if (
             not isinstance(lock_sha256, str)
@@ -3762,7 +4848,7 @@ class LifecycleManager:
             self._environment_python(release / "runtime"),
             HERMES_BASELINE.distribution,
         )
-        if hermes_version != HERMES_BASELINE.version:
+        if hermes_version != hermes_source.version:
             raise IntegrityError("installed Hermes distribution version mismatch")
         for environment_name in ("manager", "runtime"):
             environment_python = self._environment_python(release / environment_name)
@@ -3855,6 +4941,10 @@ class LifecycleManager:
             assert selected is not None
             self._select_release_projections_locked(selected, projection_expectations)
             self._validate_profile_homes(selected)
+            # Selector, launcher, Desktop entry and the Aether-owned unit follow the one
+            # authoritative active record.  This is the interrupting step: the gateway
+            # is restarted immediately, unrelated services are never touched.
+            self.project_release(selected, restart_service=True)
         except BaseException as transition_error:
             compensation_error: BaseException | None = None
             try:
@@ -3875,6 +4965,7 @@ class LifecycleManager:
                 self._restore_profile_product_state(profile_snapshot)
                 if previous is not None:
                     self._reconcile_release_projections_locked(previous)
+                    self.project_release(previous, restart_service=False)
                 elif projection_expectations is not None:
                     # Restore the exact pre-select identities under target-local CAS;
                     # neither the target nor an opaque original DB is opened.
@@ -4683,6 +5774,26 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             payload.get("unloaded")
         )
 
+    def _release_hermes_source(self, release: Path, details: dict[str, Any]) -> HermesSource | None:
+        """Return the release's authenticated maintained-fork identity, if any."""
+
+        try:
+            validated = load_release_lock(release / "release-lock.json")
+            source = validated.effective_hermes_source
+        except (IntegrityError, OSError):
+            return None
+        details["source"] = {
+            "source_mode": source.source_mode,
+            "repository": source.repository,
+            "branch": source.branch,
+            "commit": source.commit,
+            "version": source.version,
+            "source_tree_sha256": source.source_tree_sha256,
+            "artifacts": len(source.artifacts),
+            "lock_sha256": validated.sha256,
+        }
+        return source
+
     def _transition_details(self) -> tuple[dict[str, int], bool]:
         details = {"journal_count": 0, "pending_count": 0}
         permissions_ok = True
@@ -4737,6 +5848,249 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             verify_imports=verify_imports,
         )
 
+    def projection_spec(self, record: ReleaseRecord) -> ProjectionSpec:
+        """Return the deterministic selector projections for one release record."""
+
+        release = self.store.release_path(record.release_id)
+        data_parent = self.store.root.parent
+        state_parent = self.store.state_root.parent
+        runtime_current = self.store.root / "runtime" / "current"
+        roots = self.projection_roots()
+        launcher = roots.launcher_dir / _LAUNCHER_NAME
+        desktop = roots.desktop_dir / _DESKTOP_ENTRY_NAME
+        service = roots.service_dir / AETHER_GATEWAY_UNIT
+        launcher_bytes = (
+            "#!/usr/bin/env bash\n"
+            "# Aether product entry point — generated projection of the active release.\n"
+            "# The selector is runtime/current: this file is never release-specific.\n"
+            "set -euo pipefail\n"
+            "\n"
+            'data_home="${XDG_DATA_HOME:-$HOME/.local/share}"\n'
+            'state_home="${XDG_STATE_HOME:-$HOME/.local/state}"\n'
+            "\n"
+            'export AETHER_RUNTIME_ROOT="${AETHER_RUNTIME_ROOT:-'
+            '$data_home/aether/runtime/current}"\n'
+            'export AETHER_HERMES_ROOT="${AETHER_HERMES_ROOT:-'
+            '$state_home/aether/hermes}"\n'
+            "\n"
+            'exec "$AETHER_RUNTIME_ROOT/venv/bin/aether" "$@"\n'
+        ).encode("utf-8")
+        desktop_bytes = (
+            "[Desktop Entry]\n"
+            "Type=Application\n"
+            "Name=Hermes\n"
+            "GenericName=Hermes Desktop\n"
+            "Comment=Launch Hermes Desktop\n"
+            f"Exec={runtime_current}/venv/bin/hermes desktop\n"
+            "Terminal=false\n"
+            "Categories=Utility;\n"
+            "StartupNotify=true\n"
+            "StartupWMClass=Hermes\n"
+        ).encode("utf-8")
+        profile_home = self.store.profile_home("morfeo")
+        service_bytes = (
+            "[Unit]\n"
+            "Description=Aether-owned Hermes gateway (morfeo profile)\n"
+            "After=network-online.target\n"
+            "Wants=network-online.target\n"
+            "StartLimitIntervalSec=0\n"
+            "\n"
+            "[Service]\n"
+            "Type=simple\n"
+            f"ExecStart={runtime_current}/venv/bin/python -m hermes_cli.main "
+            "--profile morfeo gateway run\n"
+            f"WorkingDirectory={profile_home}\n"
+            f'Environment="PATH={runtime_current}/venv/bin:'
+            f"{data_parent}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:"
+            '/usr/bin:/sbin:/bin"\n'
+            f'Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
+            f'Environment="HERMES_HOME={profile_home}"\n'
+            "Restart=always\n"
+            "RestartSec=5\n"
+            "RestartForceExitStatus=75\n"
+            "RestartPreventExitStatus=78\n"
+            "KillMode=mixed\n"
+            "KillSignal=SIGTERM\n"
+            "ExecReload=/bin/kill -USR1 $MAINPID\n"
+            "TimeoutStopSec=90\n"
+            "StandardOutput=journal\n"
+            "StandardError=journal\n"
+            "\n"
+            "[Install]\n"
+            "WantedBy=default.target\n"
+        ).encode("utf-8")
+        _ = state_parent
+        return ProjectionSpec(
+            release=release,
+            runtime_current=runtime_current,
+            launcher_path=launcher,
+            desktop_path=desktop,
+            service_path=service,
+            launcher_bytes=launcher_bytes,
+            desktop_bytes=desktop_bytes,
+            service_bytes=service_bytes,
+        )
+
+    @staticmethod
+    def _write_projection(path: Path, data: bytes, *, mode: int) -> None:
+        """Atomically project one operator-visible file under a non-Aether directory."""
+
+        parent = path.parent
+        if parent.is_symlink():
+            raise IntegrityError("projection parent directory must not be a symlink")
+        parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+        if path.is_symlink() or (path.exists() and not path.is_file()):
+            raise IntegrityError("projection target is not a regular file")
+        temporary = parent / f".{path.name}.{secrets.token_hex(8)}.tmp"
+        try:
+            descriptor = os.open(
+                temporary,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
+                mode,
+            )
+            try:
+                _write_descriptor(descriptor, data)
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            os.chmod(temporary, mode)
+            os.replace(temporary, path)
+        except OSError as error:
+            raise IntegrityError("projection file could not be written") from error
+        finally:
+            temporary.unlink(missing_ok=True)
+        _fsync_directory(parent)
+
+    def _switch_runtime_current(self, release: Path) -> None:
+        """Atomically point the selector at one versioned release directory."""
+
+        target = self.store.root / "runtime"
+        ensure_private_dir(target)
+        link = target / "current"
+        if link.exists() and not link.is_symlink():
+            raise IntegrityError("runtime selector is not a managed symlink")
+        temporary = target / f".current.{secrets.token_hex(8)}.tmp"
+        try:
+            os.symlink(str(release), temporary)
+            os.replace(temporary, link)
+        except OSError as error:
+            raise IntegrityError("runtime selector could not be replaced") from error
+        finally:
+            temporary.unlink(missing_ok=True)
+        _fsync_directory(target)
+
+    def project_release(self, record: ReleaseRecord, *, restart_service: bool) -> dict[str, Any]:
+        """Project the launcher, Desktop entry, unit file and selector for one release."""
+
+        spec = self.projection_spec(record)
+        self._write_projection(spec.launcher_path, spec.launcher_bytes, mode=0o755)
+        self._write_projection(spec.desktop_path, spec.desktop_bytes, mode=0o644)
+        self._write_projection(spec.service_path, spec.service_bytes, mode=0o644)
+        self._switch_runtime_current(spec.release)
+        outcome = {
+            "runtime_current": str(spec.runtime_current),
+            "release": str(spec.release),
+            "launcher": str(spec.launcher_path),
+            "desktop_entry": str(spec.desktop_path),
+            "service_unit": str(spec.service_path),
+            "projection_digests": spec.digests(),
+            "service_restart": "not_requested",
+        }
+        if restart_service:
+            outcome["service_restart"] = self._restart_service(spec)
+        return outcome
+
+    def _restart_service(self, spec: ProjectionSpec) -> str:
+        """Restart only the Aether-owned unit, through the injected controller."""
+
+        if not self.service_controller.available():
+            return self.disabled_service_reason or "unavailable"
+        return self.service_controller.restart(spec.service_path.name)
+
+    def projection_status(self, record: ReleaseRecord) -> dict[str, Any]:
+        """Report the exact selector/projection coherence for one release record."""
+
+        spec = self.projection_spec(record)
+        status: dict[str, Any] = {"runtime_current": None, "mismatches": []}
+        try:
+            if not spec.runtime_current.is_symlink():
+                status["mismatches"].append("runtime_pointer_missing")
+            else:
+                observed = spec.runtime_current.resolve(strict=True)
+                status["runtime_current"] = str(observed)
+                if observed != spec.release:
+                    status["mismatches"].append("runtime_pointer_mismatch")
+        except OSError:
+            status["mismatches"].append("runtime_pointer_unresolvable")
+        for label, path, expected in (
+            ("launcher", spec.launcher_path, spec.launcher_bytes),
+            ("desktop", spec.desktop_path, spec.desktop_bytes),
+            ("service", spec.service_path, spec.service_bytes),
+        ):
+            try:
+                if path.is_symlink() or not path.is_file():
+                    status["mismatches"].append(f"{label}_projection_missing")
+                    continue
+                if path.read_bytes() != expected:
+                    status["mismatches"].append(f"{label}_projection_mismatch")
+            except OSError:
+                status["mismatches"].append(f"{label}_projection_unreadable")
+        status["projection_digests"] = spec.digests()
+        status["service_unit"] = spec.service_path.name
+        return status
+
+    def _deactivate_lifecycle_projections(self, record: ReleaseRecord) -> None:
+        """Remove only byte-identical Aether-owned projections of this release."""
+
+        spec = self.projection_spec(record)
+        for path, expected in (
+            (spec.launcher_path, spec.launcher_bytes),
+            (spec.desktop_path, spec.desktop_bytes),
+            (spec.service_path, spec.service_bytes),
+        ):
+            try:
+                if path.is_symlink() or not path.is_file():
+                    continue
+                if path.read_bytes() != expected:
+                    continue
+                path.unlink()
+            except OSError:
+                continue
+        try:
+            if spec.runtime_current.is_symlink():
+                spec.runtime_current.unlink()
+        except OSError:
+            pass
+        if self.store.root.joinpath("runtime").exists():
+            _fsync_directory(self.store.root / "runtime")
+
+    def preserved_state_report(self) -> dict[str, Any]:
+        """Return the mutable state this lifecycle never rewrites or rolls back."""
+
+        state = self.store.state_root
+        return {
+            "state_root": str(state),
+            "preserved": sorted(
+                child.name
+                for child in state.iterdir()
+                if child.is_dir() and child.name not in {"transitions", "staging"}
+            )
+            if state.exists()
+            else [],
+            "policy": "code/runtime/service only; user state is never rolled back",
+        }
+
+    def service_plan(self) -> dict[str, Any]:
+        """Describe the interruption an activation may cause."""
+
+        return {
+            "units": [AETHER_GATEWAY_UNIT],
+            "mode": "immediate restart, no drain",
+            "controller_available": self.service_controller.available(),
+            "controller_reason": self.disabled_service_reason,
+            "unrelated_services": "preserved",
+        }
+
     def doctor(self) -> DoctorResult:
         with self.store.mutation_lock():
             return self._doctor_locked()
@@ -4768,6 +6122,10 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             "observer_state": observer_state,
             "profile_count": 0,
             "transition_journal": transition_state,
+            "service_controller": {
+                "available": self.service_controller.available(),
+                "reason": self.disabled_service_reason,
+            },
         }
         if not observer_permissions_ok:
             codes.append("OBSERVATION_PERMISSION_MISMATCH")
@@ -4870,6 +6228,9 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
                 and executing_manager["fingerprint"] != expected_fingerprint
             ):
                 codes.append("EXECUTING_MANAGER_FINGERPRINT_MISMATCH")
+        hermes_source = self._release_hermes_source(release, details)
+        if hermes_source is None:
+            codes.append("RELEASE_LOCK_INVALID")
         try:
             runtime_python = self._environment_python(release / "runtime")
             hermes_version = self._installed_distribution_version(
@@ -4878,20 +6239,35 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         except IntegrityError:
             codes.append("HERMES_RUNTIME_INVALID")
         else:
-            if hermes_version != HERMES_BASELINE.version:
-                codes.append("HERMES_BASELINE_MISMATCH")
+            if hermes_source is not None and hermes_version != hermes_source.version:
+                codes.append("HERMES_SOURCE_MISMATCH")
             hook_probe, hooks_ok = self._observer_hook_probe(runtime_python)
             details["hook_probe"] = hook_probe
             if not hooks_ok:
                 codes.append("OBSERVER_HOOK_PROBE_FAILED")
-        if active.hermes_commit != HERMES_BASELINE.commit:
-            codes.append("HERMES_BASELINE_MISMATCH")
+        if hermes_source is not None and active.hermes_commit != hermes_source.commit:
+            codes.append("HERMES_SOURCE_MISMATCH")
         if active.observer_entry_point != HERMES_BASELINE.observer_entry_point:
             codes.append("OBSERVER_ENTRY_POINT_MISMATCH")
         try:
             self.validate_release(active.release_id)
         except IntegrityError:
             codes.append("ACTIVE_RELEASE_REVALIDATION_FAILED")
+        try:
+            projections = self.projection_status(active)
+        except IntegrityError as error:
+            codes.append("PROJECTION_STATE_UNAVAILABLE")
+            details["projection_error"] = str(error)
+        else:
+            details["projections"] = projections
+            for code, prefix in (
+                ("RUNTIME_POINTER_MISMATCH", "runtime_pointer"),
+                ("LAUNCHER_PROJECTION_MISMATCH", "launcher_projection"),
+                ("DESKTOP_PROJECTION_MISMATCH", "desktop_projection"),
+                ("SERVICE_PROJECTION_MISMATCH", "service_projection"),
+            ):
+                if any(item.startswith(prefix) for item in projections["mismatches"]):
+                    codes.append(code)
         if os.name == "posix":
             permission_targets = {
                 self.store.root: DIR_MODE,
@@ -4971,6 +6347,7 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         assert active is not None
         self._deactivate_profile_homes(active)
         self._deactivate_release_projections_locked(active)
+        self._deactivate_lifecycle_projections(active)
         self.store.active_pointer.unlink(missing_ok=True)
         for product_path in (
             self.store.releases,

@@ -100,6 +100,18 @@ def _build_parser() -> argparse.ArgumentParser:
     update_parser.add_argument("--wheel", type=Path, default=None)
     update_parser.add_argument("--hermes-checkout", type=Path, default=None)
     update_parser.add_argument("--release-lock", type=Path, default=None)
+    update_parser.add_argument(
+        "--local",
+        action="store_true",
+        help=(
+            "Promote one local candidate from explicit clean Aether and maintained-fork "
+            "commits. Preview is non-mutating; activation requires --yes."
+        ),
+    )
+    update_parser.add_argument("--aether-checkout", type=Path, default=None)
+    update_parser.add_argument("--aether-commit", default=None)
+    update_parser.add_argument("--fork-checkout", type=Path, default=None)
+    update_parser.add_argument("--fork-commit", default=None)
     update_parser.add_argument("--dry-run", action="store_true")
     update_parser.add_argument("--yes", action="store_true")
     update_parser.add_argument("--json", action="store_true")
@@ -403,10 +415,163 @@ def _select_release(manager, version: str | None, *, rollback: bool):
     return candidates[0]
 
 
+def _local_candidate_arguments(args: argparse.Namespace) -> tuple[Path, str, Path, str]:
+    """Validate the pinned local-candidate surface before any lifecycle work."""
+
+    from aether_agents.lifecycle import IntegrityError
+
+    conflicts = [
+        name
+        for name, present in (
+            ("[VERSION]", args.version is not None),
+            ("--prerelease", args.prerelease),
+            ("--wheel", args.wheel is not None),
+            ("--hermes-checkout", args.hermes_checkout is not None),
+            ("--release-lock", args.release_lock is not None),
+        )
+        if present
+    ]
+    if conflicts:
+        raise IntegrityError("--local is mutually exclusive with " + ", ".join(conflicts))
+    required = {
+        "--aether-checkout": args.aether_checkout,
+        "--aether-commit": args.aether_commit,
+        "--fork-checkout": args.fork_checkout,
+        "--fork-commit": args.fork_commit,
+    }
+    missing = [name for name, value in required.items() if value is None]
+    if missing:
+        raise IntegrityError(
+            "--local requires " + ", ".join(missing) + " (identity is never guessed)"
+        )
+    return (
+        args.aether_checkout,
+        args.aether_commit,
+        args.fork_checkout,
+        args.fork_commit,
+    )
+
+
+def _run_local_transition(args: argparse.Namespace) -> int:
+    """Preview or activate one local candidate from explicit clean commits."""
+
+    from aether_agents.lifecycle import IntegrityError
+
+    manager = _lifecycle_manager()
+    command = "update"
+    try:
+        aether_checkout, aether_commit, fork_checkout, fork_commit = _local_candidate_arguments(
+            args
+        )
+        executing_manager = manager.executing_active_manager()
+        candidate = manager.local_candidate(
+            aether_checkout=aether_checkout,
+            aether_commit=aether_commit,
+            fork_checkout=fork_checkout,
+            fork_commit=fork_commit,
+        )
+        if args.dry_run or not args.yes:
+            current = manager.store.active()
+            assert current is not None
+            envelope = Envelope(
+                command=command,
+                result="planned",
+                manager_version=product_version(),
+                active_version=current.version,
+                data={
+                    "mode": "local",
+                    "current_release_id": current.release_id,
+                    "candidate": candidate.to_record(),
+                    "service_interruption": manager.service_plan(),
+                    "preserved_state": manager.preserved_state_report(),
+                    "blockers": [],
+                },
+            )
+            if not args.yes and not args.dry_run:
+                envelope.warn(
+                    "CONFIRMATION_REQUIRED",
+                    "Re-run update --local with --yes to build and activate this candidate.",
+                )
+            return _emit(
+                envelope,
+                json_mode=args.json,
+                human=(
+                    f"planned local update: {current.version} -> {candidate.display_version} "
+                    f"(aether {candidate.aether_commit[:12]}, fork "
+                    f"{candidate.fork_commit[:12]})"
+                ),
+            )
+        manager.recover()
+        current = manager.store.active()
+        assert current is not None
+        selected = manager.update_local(
+            aether_checkout=aether_checkout,
+            aether_commit=aether_commit,
+            fork_checkout=fork_checkout,
+            fork_commit=fork_commit,
+            expected_active_release_id=current.release_id,
+        )
+    except IntegrityError as error:
+        envelope = Envelope(
+            command=command,
+            result="error",
+            manager_version=product_version(),
+            failure_kind="integrity_failure",
+        )
+        envelope.fail("LOCAL_UPDATE_REFUSED", str(error))
+        return _emit(envelope, json_mode=args.json, human=f"error: {error}")
+    envelope = Envelope(
+        command=command,
+        result="changed",
+        changed=True,
+        manager_version=product_version(),
+        active_version=selected.version,
+        data={
+            "mode": "local",
+            "active_release_id": selected.release_id,
+            "executing_manager_release_id": executing_manager.release_id,
+            "wheel_sha256": selected.wheel_sha256,
+            "hermes_commit": selected.hermes_commit,
+            "observation_state_preserved": True,
+        },
+    )
+    return _emit(
+        envelope,
+        json_mode=args.json,
+        human=f"active Aether release: {selected.version}",
+    )
+
+
 def _run_transition(args: argparse.Namespace, *, rollback: bool) -> int:
     from aether_agents.lifecycle import IntegrityError
 
     command = "rollback" if rollback else "update"
+    if not rollback and getattr(args, "local", False):
+        return _run_local_transition(args)
+    if not rollback and any(
+        value is not None
+        for value in (
+            getattr(args, "aether_checkout", None),
+            getattr(args, "aether_commit", None),
+            getattr(args, "fork_checkout", None),
+            getattr(args, "fork_commit", None),
+        )
+    ):
+        envelope = Envelope(
+            command=command,
+            result="error",
+            manager_version=product_version(),
+            failure_kind="integrity_failure",
+        )
+        envelope.fail(
+            "LOCAL_UPDATE_REFUSED",
+            "local candidate inputs require --local; identity is never guessed",
+        )
+        return _emit(
+            envelope,
+            json_mode=getattr(args, "json", False),
+            human="error: local candidate inputs require --local",
+        )
     manager = _lifecycle_manager()
     try:
         executing_manager = manager.executing_active_manager()
