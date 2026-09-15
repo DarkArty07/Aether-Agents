@@ -1741,21 +1741,49 @@ def test_same_native_status_coordinates_with_incompatible_outcomes_are_ambiguous
         assert root["latest_run_outcome"] == "unknown"
 
 
+def _conflicting_envelopes(verification: dict) -> list[dict]:
+    """Conflicting envelopes for one verified event, ordered by construction only.
+
+    The product version is part of every event's canonical bytes, so a digest relation
+    between two envelopes is not stable across releases.  This yields the same conflict
+    under a bounded set of unauthorized actor identities so the caller can select the
+    representative the reducer's ``min(canonical_digest)`` rule actually retains.
+    """
+
+    envelopes = []
+    for index in range(1, 65):
+        candidate = deepcopy(verification)
+        candidate["actor"] = {
+            "kind": "agent",
+            "id": f"implementer-{index}",
+            "profile": "implementer",
+            "role": "implementation",
+        }
+        envelopes.append(candidate)
+    return envelopes
+
+
 def test_completion_event_id_conflict_neutralizes_authority_in_any_order() -> None:
     fixture = complete_trace()
     verification = next(
         event for event in fixture.events if event["event_type"] == "contract.completion_verified"
     )
-    forged = deepcopy(verification)
-    forged["actor"] = {
-        "kind": "agent",
-        "id": "implementer-8",
-        "profile": "implementer",
-        "role": "implementation",
-    }
+    # Exercise the dangerous canonical representative: the reducer retains the smallest
+    # ``canonical_digest`` of a conflicting event id, so the conflict is dangerous exactly
+    # when the authorized bytes win that tie-break.  A canonical digest covers the shared
+    # product version the events carry, so the winning side is not a property of the
+    # product version: the conflicting envelope is selected by the ordering it produces,
+    # and the assertion below proves the dangerous side was the one selected.
+    forged = next(
+        (
+            candidate
+            for candidate in _conflicting_envelopes(verification)
+            if canonical_digest(verification) < canonical_digest(candidate)
+        ),
+        None,
+    )
+    assert forged is not None, "no conflicting envelope keeps the authorized bytes canonical"
     validate_event(forged)
-    # Exercise the dangerous canonical representative: the authorized bytes win the
-    # existing digest tie-break, so an EVENT_ID_CONFLICT used to remain `completed`.
     assert canonical_digest(verification) < canonical_digest(forged)
     base = [event for event in fixture.events if event is not verification]
 

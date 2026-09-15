@@ -135,8 +135,19 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     assert "`docs/capabilities.toml`](docs/capabilities.toml)" in readme
     assert "sole current implementation-status and traceability registry" in readme
     assert "documented transitional downstream" in readme
+    # The portal must state the current release identity and the disposition of the
+    # rejected predecessor.  It replaces the rc.1-era "**has been published**" sentence
+    # because the status has to stay true of the artifact this README is embedded into
+    # (the wheel's `METADATA` long description) and must not carry a time-bound promise.
+    assert "releases/tag/v1.0.0-rc.2" in readme
+    assert "package version `1.0.0rc2`" in readme
+    assert "Rc.2 is the candidate eligible for activation" in readme
     assert "releases/tag/v1.0.0-rc.1" in readme
-    assert "**has been published**" in readme
+    assert "remains published and byte-immutable but rejected, and must not be activated" in readme
+    status = [line for line in readme.splitlines() if line.startswith("**Status:**")]
+    assert len(status) == 1, f"expected exactly one status paragraph, found {len(status)}"
+    for time_bound in ("will be published", "not yet", "pending", "to be superseded"):
+        assert time_bound not in status[0], f"status paragraph carries {time_bound!r}"
     assert "beta stabilization build, not a release candidate" not in readme
     assert "no release candidate has been published" not in readme
     assert "**not** stable `1.0.0`" in readme

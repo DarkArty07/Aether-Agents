@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.0.0rc2 — release candidate (pre-stable successor to the published-but-rejected rc.1)
+
+The release identity is package version `1.0.0rc2`, annotated tag and GitHub prerelease
+`v1.0.0-rc.2` (`release_impact=major`, `release_action=publish`,
+`release_channel=prerelease`); `VERSION` remains the single product-version source.
+
+- Rc.2 supersedes `1.0.0rc1` / `v1.0.0-rc.1` as the release candidate eligible for
+  activation. The rc.1 annotated tag, its eight asset bytes and its rejection warning are
+  unchanged: rc.1 remains published and byte-immutable but rejected, and it must not be
+  activated. Rc.2 is not a repair of those published bytes — no asset was replaced and no
+  tag was moved — it is the successor artifact that carries the corrected status.
+- Reconciled `README.md` — embedded as this distribution's `METADATA` long description —
+  with the release status it is part of: it names package version `1.0.0rc2` and the
+  annotated prerelease `v1.0.0-rc.2`, states that rc.2 is the candidate eligible for
+  activation, and records rc.1 as published, immutable, rejected and not to be activated,
+  instead of denying that a release candidate exists.
+- Pinned the maintained-fork source this release builds from: `FORK_COMMIT` in
+  `.github/workflows/release.yml` is the accepted `DarkArty07/aether-hermes` `aether-main`
+  revision `7a4fdcd083409c31c09cfa3bfa345354e8576a7e`, the merge of the reviewed `#450`
+  terminal-worker reap fix through fork PR #14; `scripts/release_bundle.py` still resolves
+  and validates that exact commit rather than a branch tip, and the workflow's fail-closed
+  placeholder discipline, tag/identity validation and single release path are unchanged.
+- Registered the rc.2 contract-landing file `.aether/objective-contracts/oc_742f9f4797494bf9/v1.md`
+  in the canonical repository policy manifest so the declared tracked surface matches the
+  repository again, and reconciled the root `AGENTS.md` stabilization-authority paragraph
+  with the rc.2 objective, the rc.1 disposition and the single authorized automatic
+  existing-site Pages deployment.
+- This is a pre-stable release candidate. It is not stable `1.0.0`, no PyPI or other
+  package-index publication occurs, WSL2 (and any macOS/Windows lane) is unverified and
+  recorded as such, and issue #261 remains open with the deferred stable, PyPI/OIDC and
+  WSL2 obligations explicit. Bundle qualification, gate measurements, publication,
+  activation and rollback proof belong to the same objective's later units; this entry
+  records only the release-identity, public-status, fork-pin, manifest and guidance
+  reconciliation performed here.
+
 ## 1.0.0rc1 — release candidate (pre-stable, published but not accepted for activation)
 
 The release identity is package version `1.0.0rc1`, annotated tag and GitHub prerelease
