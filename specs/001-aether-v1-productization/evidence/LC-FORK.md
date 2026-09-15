@@ -414,4 +414,3 @@ the behavior commits are unchanged, and the attachment set is the only delta. Th
 raw log (1 082 245 bytes, sha256
 `87ffeb0788728e3535d9d22bcd4a26ad84805d1381ea19781052ca4aa42c79a5`) remained in the
 session scratch area only, which is why it is not itself an attachment.
-
