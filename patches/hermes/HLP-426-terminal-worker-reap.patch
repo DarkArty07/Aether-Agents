@@ -1,0 +1,733 @@
+diff --git a/hermes_cli/kanban.py b/hermes_cli/kanban.py
+index a12684f8c8..f1c2260f04 100644
+--- a/hermes_cli/kanban.py
++++ b/hermes_cli/kanban.py
+@@ -2981,6 +2981,7 @@ def _cmd_daemon(args: argparse.Namespace) -> int:
+         did_work = (
+             res.reclaimed or res.crashed or res.timed_out or res.promoted
+             or res.spawned or res.auto_blocked or res.stale
++            or res.superseded_reaped
+         )
+         if did_work:
+             print(
+@@ -2988,7 +2989,8 @@ def _cmd_daemon(args: argparse.Namespace) -> int:
+                 f"reclaimed={res.reclaimed} crashed={len(res.crashed)} "
+                 f"timed_out={len(res.timed_out)} stale={len(res.stale)} "
+                 f"promoted={res.promoted} spawned={len(res.spawned)} "
+-                f"auto_blocked={len(res.auto_blocked)}",
++                f"auto_blocked={len(res.auto_blocked)} "
++                f"superseded_reaped={len(res.superseded_reaped)}",
+                 flush=True,
+             )
+ 
+diff --git a/hermes_cli/kanban_db.py b/hermes_cli/kanban_db.py
+index b45739b152..aadf74586f 100644
+--- a/hermes_cli/kanban_db.py
++++ b/hermes_cli/kanban_db.py
+@@ -10523,6 +10523,16 @@ class DispatchResult:
+     DB writes this tick — the lock holder is making progress on the same
+     board. This is the steady-state signal that a single-writer guard is
+     actively preventing two dispatchers from racing on ``kanban.db``."""
++    superseded_reaped: list[dict] = field(default_factory=list)
++    """Terminal (non-current) runs whose worker process this tick found still
++    alive and terminated, one payload per reap. See
++    :func:`reap_superseded_workers` — a run is only signalled when its
++    recorded ``(pid, start_time)`` fingerprint still matches the live
++    process, so elapsed time is never what makes a worker a candidate."""
++    superseded_held: list[str] = field(default_factory=list)
++    """Task ids whose successor spawn this tick was withheld because a
++    superseded worker process survived termination. Retried on a later tick,
++    never spawned beside the process that still holds the workspace."""
+ 
+ 
+ # Bounded registry of recently-reaped worker child exits, populated by the
+@@ -10755,6 +10765,155 @@ def _terminate_reclaimed_worker(
+     return info
+ 
+ 
++def _process_start_time(pid: int) -> Optional[int]:
++    """Return the ``start_time`` PID-reuse fingerprint of ``pid``.
++
++    Delegates to the gateway's existing fingerprint helper so the Kanban reap
++    below shares the runtime's one ``(pid, start_time)`` identity convention
++    (Linux: field 22 of ``/proc/<pid>/stat``; elsewhere psutil's creation
++    time). ``None`` means the platform could not provide one.
++    """
++    try:
++        from gateway.status import get_process_start_time
++        return get_process_start_time(int(pid))
++    except Exception:
++        return None
++
++
++def reap_superseded_workers(
++    conn: sqlite3.Connection,
++    *,
++    signal_fn=None,
++) -> list[dict]:
++    """Terminate live worker processes whose run has already ended.
++
++    A run's process identity survives only in its ``spawned`` event:
++    ``_end_run`` — and every block/reclaim transition — clears
++    ``tasks.worker_pid`` / ``task_runs.worker_pid``, so the moment a run
++    reaches a terminal state the board can no longer name its process. When
++    that end came from outside the worker itself (a controller or operator
++    ``kanban_block``, a triage escalation, a flow rule), nothing else signals
++    the process either: the worker keeps running against the same workspace
++    while the dispatcher spawns its successor beside it (#450).
++
++    This pass rebuilds the identity from the spawn record and terminates any
++    process still alive for a run that has ended and is no longer the task's
++    current run. Elapsed time is never a criterion — a long-running but
++    *current* worker is not a candidate — so duration alone never kills live
++    work.
++
++    A candidate is signalled only when every half of the recorded identity
++    still agrees: same pid, same start-time fingerprint, same claiming host.
++    A recycled pid therefore never gets mistaken for the worker, and a spawn
++    record that predates the fingerprint is left alone rather than guessed
++    at.
++
++    SIGTERM is followed by a bounded 5 s wait and then SIGKILL, matching
++    :func:`_terminate_reclaimed_worker` and :func:`enforce_max_runtime`. Each
++    reap is durable as a ``superseded_worker_termination`` event so the action
++    is inspectable in ``hermes kanban tail`` even when the tick did nothing
++    else. Returns one payload per signalled run.
++    """
++    import signal
++
++    host = _claimer_id().split(":", 1)[0]
++    rows = conn.execute(
++        """
++        SELECT e.task_id AS task_id, e.run_id AS run_id, e.payload AS payload,
++               r.outcome AS run_outcome, t.status AS task_status
++          FROM task_events e
++          JOIN task_runs r ON r.id = e.run_id
++          JOIN tasks t ON t.id = e.task_id
++         WHERE e.kind = 'spawned'
++           AND e.run_id IS NOT NULL
++           AND r.ended_at IS NOT NULL
++           AND (t.current_run_id IS NULL OR t.current_run_id <> e.run_id)
++        """,
++    ).fetchall()
++    if not rows:
++        return []
++
++    kill = signal_fn if signal_fn is not None else (
++        os.kill if hasattr(os, "kill") else None
++    )
++    reaped: list[dict] = []
++    for row in rows:
++        try:
++            payload = json.loads(row["payload"] or "{}")
++        except (TypeError, ValueError):
++            continue
++        if not isinstance(payload, dict):
++            continue
++        raw_pid = payload.get("pid")
++        recorded_start = payload.get("start_time")
++        recorded_host = payload.get("claimer_host")
++        if not raw_pid or recorded_start is None or recorded_host != host:
++            continue
++        pid = int(raw_pid)
++        if not _pid_alive(pid):
++            continue
++        if _process_start_time(pid) != int(recorded_start):
++            continue
++
++        info: dict[str, Any] = {
++            "task_id": row["task_id"],
++            "run_id": int(row["run_id"]),
++            "run_outcome": row["run_outcome"],
++            "task_status": row["task_status"],
++            "prev_pid": pid,
++            "recorded_start_time": int(recorded_start),
++            "termination_attempted": kill is not None,
++            "terminated": False,
++            "sigkill": False,
++        }
++        if kill is not None:
++            try:
++                kill(pid, signal.SIGTERM)
++            except ProcessLookupError:
++                # Already gone between the liveness check and the signal:
++                # that is a successful reap, not a survival.
++                info["terminated"] = True
++            except OSError:
++                pass
++            else:
++                for _ in range(10):
++                    if not _pid_alive(pid):
++                        info["terminated"] = True
++                        break
++                    time.sleep(0.5)
++                if not info["terminated"] and _pid_alive(pid):
++                    try:
++                        kill(pid, getattr(signal, "SIGKILL", signal.SIGTERM))
++                        info["sigkill"] = True
++                    except (ProcessLookupError, OSError):
++                        pass
++                    info["terminated"] = not _pid_alive(pid)
++        with write_txn(conn):
++            _append_event(
++                conn, row["task_id"], "superseded_worker_termination",
++                info, run_id=int(row["run_id"]),
++            )
++        reaped.append(info)
++    return reaped
++
++
++def _record_superseded_hold(
++    conn: sqlite3.Connection,
++    task_id: str,
++    payload: dict,
++) -> None:
++    """Record that this tick withheld a spawn for a surviving stale worker."""
++    with write_txn(conn):
++        _append_event(
++            conn, task_id, "superseded_worker_hold",
++            {
++                "run_id": payload.get("run_id"),
++                "prev_pid": payload.get("prev_pid"),
++                "run_outcome": payload.get("run_outcome"),
++            },
++        )
++
++
+ def _worker_survived_termination(termination: dict) -> bool:
+     """True when we tried to kill our own host-local worker and it is still alive.
+ 
+@@ -11829,6 +11988,14 @@ def _set_worker_pid(conn: sqlite3.Connection, task_id: str, pid: int) -> None:
+     The event's payload carries the pid so a human reading ``hermes kanban
+     tail`` can correlate log lines with OS-level traces without opening
+     the drawer.
++
++    It also carries the ``(pid, start_time)`` fingerprint and the claiming
++    host of the process we just spawned. A terminal run's ``worker_pid`` is
++    cleared by every terminal transition (``_end_run`` and the block/reclaim
++    paths), so once a run ends the board can no longer name its process —
++    this event is the only durable identity left for a worker that outlives
++    its own run. ``start_time`` is what makes that identity reused-PID-safe
++    when :func:`reap_superseded_workers` acts on it later.
+     """
+     with write_txn(conn):
+         conn.execute(
+@@ -11841,7 +12008,15 @@ def _set_worker_pid(conn: sqlite3.Connection, task_id: str, pid: int) -> None:
+                 "UPDATE task_runs SET worker_pid = ? WHERE id = ?",
+                 (int(pid), run_id),
+             )
+-        _append_event(conn, task_id, "spawned", {"pid": int(pid)}, run_id=run_id)
++        _append_event(
++            conn, task_id, "spawned",
++            {
++                "pid": int(pid),
++                "start_time": _process_start_time(int(pid)),
++                "claimer_host": _claimer_id().split(":", 1)[0],
++            },
++            run_id=run_id,
++        )
+ 
+ 
+ def _clear_failure_counter(conn: sqlite3.Connection, task_id: str) -> None:
+@@ -12287,6 +12462,11 @@ def _dispatch_once_locked(
+     """Run one dispatcher tick.
+ 
+     Steps:
++      0. Terminate worker processes whose run already ended and is no longer
++         current (see :func:`reap_superseded_workers`), and withhold the spawn
++         of any task whose superseded worker survived that termination. Runs
++         first so nothing below can start a successor beside a terminal
++         non-current worker on the same workspace.
+       1. Reclaim stale running tasks (TTL expired).
+       2. Reclaim stale running tasks (no recent heartbeat).
+       3. Reclaim crashed running tasks (host-local PID no longer alive).
+@@ -12317,6 +12497,19 @@ def _dispatch_once_locked(
+     reap_worker_zombies()
+ 
+     result = DispatchResult()
++    if not dry_run:
++        # A worker whose run was terminalized from outside (controller or
++        # operator block, triage escalation, flow rule) was never signalled by
++        # that transition; it can still be running against the same workspace
++        # when this tick spawns a successor. Terminate it here — before any
++        # spawn below — so the successor never shares the workspace with a
++        # process whose run is already over (#450).
++        result.superseded_reaped = reap_superseded_workers(conn)
++    _superseded_held = {
++        entry["task_id"]: entry
++        for entry in result.superseded_reaped
++        if not entry.get("terminated")
++    }
+     result.reclaimed = release_stale_claims(conn)
+     if reconcile_orphans:
+         # Orphaned-card reconciliation: requeue 'running' cards whose claim
+@@ -12542,6 +12735,14 @@ def _dispatch_once_locked(
+                     _per_profile_running.get(row_assignee, 0) + 1
+                 )
+             continue
++        _superseded_hold = _superseded_held.get(row["id"])
++        if _superseded_hold is not None:
++            # This task's previous worker outlived its run and survived
++            # termination. Spawning a successor now would put two workers on
++            # one workspace; withhold it and retry on a later tick.
++            _record_superseded_hold(conn, row["id"], _superseded_hold)
++            result.superseded_held.append(row["id"])
++            continue
+         claimed = claim_task(conn, row["id"], ttl_seconds=ttl_seconds)
+         if claimed is None:
+             continue
+@@ -12711,6 +12912,13 @@ def _dispatch_once_locked(
+                     _per_profile_running.get(row["assignee"], 0) + 1
+                 )
+             continue
++        _superseded_hold = _superseded_held.get(row["id"])
++        if _superseded_hold is not None:
++            # Same rule as the ready lane: no review worker starts while the
++            # superseded worker of this task still holds the workspace.
++            _record_superseded_hold(conn, row["id"], _superseded_hold)
++            result.superseded_held.append(row["id"])
++            continue
+         claimed = claim_review_task(conn, row["id"], ttl_seconds=ttl_seconds)
+         if claimed is None:
+             continue
+diff --git a/tests/hermes_cli/test_kanban_superseded_worker_reap_450.py b/tests/hermes_cli/test_kanban_superseded_worker_reap_450.py
+new file mode 100644
+index 0000000000..23172abdd1
+--- /dev/null
++++ b/tests/hermes_cli/test_kanban_superseded_worker_reap_450.py
+@@ -0,0 +1,435 @@
++"""Regression: a terminal non-current worker must not outlive its run (#450).
++
++Defect (Aether Agents #450): during recovery of an RC contract, task
++``t_a18b5fc7`` run 264 was durably recorded terminal (``status=blocked``,
++``outcome=blocked``) while its already-spawned Hermes worker process stayed
++alive — parented by the gateway, sleeping with no children, cwd equal to the
++task worktree. The task was later resumed as run 269 with a different pid, so
++two workers coexisted against one worktree.
++
++Mechanism: the run was terminalized from *outside* the worker (an
++out-of-band ``kanban_block`` that the block-loop breaker routed to
++``triage``). That transition clears ``tasks.worker_pid`` /
++``task_runs.worker_pid`` and closes the run, but nothing signals the OS
++process, and nothing checked for it before the successor was spawned.
++
++These tests pin the acceptance invariant:
++
++* a worker whose run has ended and is no longer current is terminated before
++  the dispatch tick can spawn a successor (reaped or exited);
++* a long-running worker whose run is still current is never a candidate, so
++  elapsed time alone never kills live work;
++* a reused pid is never mistaken for the worker.
++"""
++
++from __future__ import annotations
++
++import json
++import os
++import signal
++import subprocess
++import sys
++import time
++from pathlib import Path
++
++import pytest
++
++from hermes_cli import kanban_db as kb
++
++# Captured before any test patches ``os.kill`` so cleanup always really kills.
++_REAL_OS_KILL = os.kill
++
++
++@pytest.fixture
++def kanban_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
++    home = tmp_path / ".hermes"
++    home.mkdir()
++    monkeypatch.setenv("HERMES_HOME", str(home))
++    monkeypatch.setattr(Path, "home", lambda: tmp_path)
++    kb.init_db()
++    return home
++
++
++def _spawn_workerish_child(seconds: int = 120) -> subprocess.Popen:
++    """A real, long-lived child process standing in for a worker.
++
++    ``start_new_session=True`` mirrors ``_default_spawn``, so the process has
++    the same session-leader shape the dispatcher actually creates.
++    """
++    return subprocess.Popen(
++        [sys.executable, "-c", f"import time; time.sleep({seconds})"],
++        start_new_session=True,
++        stdout=subprocess.DEVNULL,
++        stderr=subprocess.DEVNULL,
++    )
++
++
++def _reap_child(proc: subprocess.Popen) -> None:
++    """Clean up a stand-in worker, bypassing a test's patched ``os.kill``."""
++    if proc.poll() is None:
++        try:
++            _REAL_OS_KILL(proc.pid, signal.SIGKILL)
++        except (ProcessLookupError, OSError):
++            pass
++    proc.wait(timeout=10)
++
++
++def _running_task(conn, title: str = "superseded worker") -> str:
++    tid = kb.create_task(conn, title=title, assignee="worker")
++    with kb.write_txn(conn):
++        conn.execute("UPDATE tasks SET status = 'ready' WHERE id = ?", (tid,))
++    assert kb.claim_task(conn, tid) is not None
++    return tid
++
++
++def _events(conn, task_id: str) -> list[dict]:
++    rows = conn.execute(
++        "SELECT kind, payload FROM task_events WHERE task_id = ? ORDER BY id",
++        (task_id,),
++    ).fetchall()
++    out = []
++    for row in rows:
++        try:
++            payload = json.loads(row["payload"] or "{}")
++        except (TypeError, ValueError):
++            payload = {}
++        out.append({"kind": row["kind"], "payload": payload})
++    return out
++
++
++def _kinds(conn, task_id: str) -> list[str]:
++    return [e["kind"] for e in _events(conn, task_id)]
++
++
++def _write_spawn_event(conn, task_id: str, payload: dict) -> None:
++    """Write a raw ``spawned`` event (used to emulate older spawn records)."""
++    with kb.write_txn(conn):
++        run_id = kb._current_run_id(conn, task_id)
++        kb._append_event(conn, task_id, "spawned", payload, run_id=run_id)
++
++
++# ---------------------------------------------------------------------------
++# The defect: terminal run, live process, successor about to be spawned
++# ---------------------------------------------------------------------------
++
++
++def test_out_of_band_block_leaves_no_identity_then_reap_terminates_worker(
++    kanban_home: Path,
++) -> None:
++    """The exact #450 shape, end to end on the board surface.
++
++    A controller/operator ``kanban_block`` ends a live worker's run; the reap
++    then terminates the process and records the action durably.
++    """
++    with kb.connect_closing() as conn:
++        proc = _spawn_workerish_child()
++        try:
++            tid = _running_task(conn)
++            kb._set_worker_pid(conn, tid, proc.pid)
++
++            # Terminalized from outside the worker (block-loop breaker path).
++            assert kb.block_task(
++                conn, tid, reason="controller block", kind="needs_input",
++            )
++            task = kb.get_task(conn, tid)
++            assert task is not None
++            # No identity left on the board: the fix cannot rely on it.
++            assert task.worker_pid is None
++            run = conn.execute(
++                "SELECT worker_pid, ended_at FROM task_runs WHERE task_id = ?",
++                (tid,),
++            ).fetchone()
++            assert run is not None and run["ended_at"] is not None
++            assert run["worker_pid"] is None
++            assert kb._pid_alive(proc.pid), "precondition: worker still alive"
++
++            reaped = kb.reap_superseded_workers(conn)
++
++            assert [entry["prev_pid"] for entry in reaped] == [proc.pid]
++            assert reaped[0]["terminated"] is True
++            assert reaped[0]["termination_attempted"] is True
++            assert proc.wait(timeout=10) == -signal.SIGTERM
++            assert not kb._pid_alive(proc.pid)
++
++            terminations = [
++                e for e in _events(conn, tid)
++                if e["kind"] == "superseded_worker_termination"
++            ]
++            assert len(terminations) == 1
++            assert terminations[0]["payload"]["prev_pid"] == proc.pid
++            assert terminations[0]["payload"]["terminated"] is True
++        finally:
++            _reap_child(proc)
++
++
++def test_dispatch_tick_reaps_before_it_spawns_the_successor(
++    kanban_home: Path, monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    """The invariant at the successor boundary.
++
++    The tick that spawns the successor must not start it while the previous
++    worker process is alive: the spawn observes the reap's effect.
++    """
++    with kb.connect_closing() as conn:
++        proc = _spawn_workerish_child()
++        try:
++            tid = _running_task(conn)
++            kb._set_worker_pid(conn, tid, proc.pid)
++            assert kb.block_task(
++                conn, tid, reason="controller block", kind="needs_input",
++            )
++            # Re-queued for a successor.
++            assert kb.unblock_task(conn, tid)
++            unblocked = kb.get_task(conn, tid)
++            assert unblocked is not None and unblocked.status == "ready"
++
++            observed: list[dict] = []
++
++            def _stub_spawn(task, workspace, **kwargs):
++                # Evidence for ordering: what was true when the successor
++                # actually started.
++                observed.append({
++                    "task": task.id,
++                    "predecessor_alive": kb._pid_alive(proc.pid),
++                })
++                return None
++
++            monkeypatch.setattr(
++                "hermes_cli.profiles.profile_exists", lambda _name: True,
++            )
++            result = kb._dispatch_once_locked(
++                conn,
++                max_spawn=1,
++                reconcile_orphans=False,
++                spawn_fn=_stub_spawn,
++                failure_limit=5,
++            )
++
++            assert [entry["prev_pid"] for entry in result.superseded_reaped] == [proc.pid]
++            assert result.superseded_held == []
++            assert [entry["task"] for entry in observed] == [tid]
++            assert observed[0]["predecessor_alive"] is False
++            assert proc.wait(timeout=10) == -signal.SIGTERM
++        finally:
++            _reap_child(proc)
++
++
++def test_dispatch_tick_withholds_spawn_when_the_worker_survives_termination(
++    kanban_home: Path, monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    """A survivor must not get a successor spawned beside it.
++
++    SIGKILL cannot be ignored by a user-space process, so survival is
++    emulated by making the signal a no-op for this pid — the point of the
++    test is the hold path, not the kill.
++    """
++    with kb.connect_closing() as conn:
++        proc = _spawn_workerish_child()
++        try:
++            tid = _running_task(conn)
++            kb._set_worker_pid(conn, tid, proc.pid)
++            assert kb.block_task(
++                conn, tid, reason="controller block", kind="needs_input",
++            )
++            assert kb.unblock_task(conn, tid)
++
++            real_kill = os.kill
++
++            def _unkillable(pid, sig):
++                if int(pid) == proc.pid:
++                    return None
++                return real_kill(pid, sig)
++
++            monkeypatch.setattr(os, "kill", _unkillable)
++            monkeypatch.setattr(
++                "hermes_cli.profiles.profile_exists", lambda _name: True,
++            )
++
++            observed: list[str] = []
++
++            def _stub_spawn(task, workspace, **kwargs):
++                observed.append(task.id)
++                return None
++
++            result = kb._dispatch_once_locked(
++                conn,
++                max_spawn=1,
++                reconcile_orphans=False,
++                spawn_fn=_stub_spawn,
++                failure_limit=5,
++            )
++
++            assert [entry["prev_pid"] for entry in result.superseded_reaped] == [proc.pid]
++            assert result.superseded_reaped[0]["terminated"] is False
++            assert result.superseded_held == [tid]
++            assert observed == [], "no successor may start beside the survivor"
++            assert tid not in [spawned[0] for spawned in result.spawned]
++            assert "superseded_worker_hold" in _kinds(conn, tid)
++            assert proc.poll() is None
++        finally:
++            _reap_child(proc)
++
++
++# ---------------------------------------------------------------------------
++# Counter-cases: what must NOT be reaped
++# ---------------------------------------------------------------------------
++
++
++def test_current_running_worker_is_never_a_candidate_regardless_of_age(
++    kanban_home: Path,
++) -> None:
++    """Duration alone never kills live work.
++
++    The run is current and its worked is alive after eight hours of wall
++    clock plus a stale heartbeat: still not a candidate.
++    """
++    with kb.connect_closing() as conn:
++        proc = _spawn_workerish_child()
++        try:
++            tid = _running_task(conn)
++            kb._set_worker_pid(conn, tid, proc.pid)
++            stale = int(time.time()) - 8 * 3600
++            with kb.write_txn(conn):
++                conn.execute(
++                    "UPDATE task_runs SET started_at = ?, last_heartbeat_at = ? "
++                    "WHERE task_id = ?",
++                    (stale, stale, tid),
++                )
++                conn.execute(
++                    "UPDATE tasks SET last_heartbeat_at = ? WHERE id = ?",
++                    (stale, tid),
++                )
++
++            assert kb.reap_superseded_workers(conn) == []
++
++            assert kb._pid_alive(proc.pid)
++            assert proc.poll() is None
++            assert "superseded_worker_termination" not in _kinds(conn, tid)
++        finally:
++            _reap_child(proc)
++
++
++def test_ready_task_without_any_run_is_not_a_candidate(kanban_home: Path) -> None:
++    with kb.connect_closing() as conn:
++        tid = kb.create_task(conn, title="fresh", assignee="worker")
++        with kb.write_txn(conn):
++            conn.execute("UPDATE tasks SET status = 'ready' WHERE id = ?", (tid,))
++        assert kb.reap_superseded_workers(conn) == []
++        assert "superseded_worker_termination" not in _kinds(conn, tid)
++
++
++def test_recycled_pid_is_not_mistaken_for_the_worker(kanban_home: Path) -> None:
++    """The recorded fingerprint guards against a reused pid.
++
++    The spawn record names a live process, but with a start-time fingerprint
++    that does not match it — i.e. the pid was recycled into something else.
++    """
++    with kb.connect_closing() as conn:
++        proc = _spawn_workerish_child()
++        try:
++            tid = _running_task(conn)
++            live_start = kb._process_start_time(proc.pid)
++            assert live_start is not None
++            _write_spawn_event(conn, tid, {
++                "pid": proc.pid,
++                "start_time": int(live_start) + 12345,
++                "claimer_host": kb._claimer_id().split(":", 1)[0],
++            })
++            assert kb.block_task(conn, tid, reason="controller block")
++
++            assert kb.reap_superseded_workers(conn) == []
++
++            assert kb._pid_alive(proc.pid)
++            assert proc.poll() is None
++        finally:
++            _reap_child(proc)
++
++
++def test_spawn_record_without_a_fingerprint_is_left_alone(kanban_home: Path) -> None:
++    """Older spawn records are not guessed at — they carry no fingerprint."""
++    with kb.connect_closing() as conn:
++        proc = _spawn_workerish_child()
++        try:
++            tid = _running_task(conn)
++            _write_spawn_event(conn, tid, {"pid": proc.pid})
++            assert kb.block_task(conn, tid, reason="controller block")
++
++            assert kb.reap_superseded_workers(conn) == []
++            assert kb._pid_alive(proc.pid)
++        finally:
++            _reap_child(proc)
++
++
++def test_spawn_record_from_another_host_is_not_signalled(
++    kanban_home: Path,
++) -> None:
++    with kb.connect_closing() as conn:
++        proc = _spawn_workerish_child()
++        try:
++            tid = _running_task(conn)
++            _write_spawn_event(conn, tid, {
++                "pid": proc.pid,
++                "start_time": kb._process_start_time(proc.pid),
++                "claimer_host": "some-other-host",
++            })
++            assert kb.block_task(conn, tid, reason="controller block")
++
++            assert kb.reap_superseded_workers(conn) == []
++            assert proc.poll() is None
++        finally:
++            _reap_child(proc)
++
++
++def test_exited_worker_leaves_nothing_to_reap(kanban_home: Path) -> None:
++    """A worker that exits on its own is simply not a candidate."""
++    with kb.connect_closing() as conn:
++        proc = _spawn_workerish_child(seconds=0)
++        tid = _running_task(conn)
++        kb._set_worker_pid(conn, tid, proc.pid)
++        assert kb.block_task(conn, tid, reason="controller block")
++        proc.wait(timeout=10)
++
++        assert kb.reap_superseded_workers(conn) == []
++        assert "superseded_worker_termination" not in _kinds(conn, tid)
++
++
++def test_reap_is_idempotent(kanban_home: Path) -> None:
++    with kb.connect_closing() as conn:
++        proc = _spawn_workerish_child()
++        try:
++            tid = _running_task(conn)
++            kb._set_worker_pid(conn, tid, proc.pid)
++            assert kb.block_task(conn, tid, reason="controller block")
++
++            first = kb.reap_superseded_workers(conn)
++            second = kb.reap_superseded_workers(conn)
++
++            assert len(first) == 1
++            assert second == []
++            assert len([
++                e for e in _events(conn, tid)
++                if e["kind"] == "superseded_worker_termination"
++            ]) == 1
++        finally:
++            _reap_child(proc)
++
++
++def test_dry_run_tick_does_not_signal_anything(
++    kanban_home: Path, monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    with kb.connect_closing() as conn:
++        proc = _spawn_workerish_child()
++        try:
++            tid = _running_task(conn)
++            kb._set_worker_pid(conn, tid, proc.pid)
++            assert kb.block_task(conn, tid, reason="controller block")
++
++            result = kb._dispatch_once_locked(
++                conn, max_spawn=1, reconcile_orphans=False, dry_run=True,
++            )
++
++            assert result.superseded_reaped == []
++            assert kb._pid_alive(proc.pid)
++            assert proc.poll() is None
++        finally:
++            _reap_child(proc)
