@@ -491,11 +491,7 @@ jobs:
               ):
                   raise SystemExit(f'secret-like spec payload: {name}')
           PY
-          # `VERSION` carries the release's package identity. The accepted set mirrors the
-          # release workflow's own tag mapping: a stable `X.Y.Z`, the RC prerelease form
-          # `X.Y.ZrcN` (tag `vX.Y.Z-rc.N`, contract-decided for `1.0.0rc1`), or an existing
-          # development form. It stays a refusal for anything else.
-          grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+|\.dev[0-9]+)?$' VERSION
+          grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(\.dev[0-9]+)?$' VERSION
           ! git ls-files | grep -Eq '^(schemas|home/(profiles|skills|plugins|prompts))/'
           ! git grep -n -i -E 'daedalus|hefesto|ictinus|daimon|aether_mcp|olympus|acpmanager|harmonia|honcho|talk_to|orca-status' -- ':(exclude).github/workflows/policy.yml'
 
