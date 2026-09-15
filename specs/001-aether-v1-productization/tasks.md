@@ -40,7 +40,7 @@ blockers [#437](https://github.com/DarkArty07/Aether-Agents/issues/437),
 | Local candidate route | `aether update` gains a non-mutating local preview and explicit interrupting activation from explicit clean commits; identity never comes from cwd or recency | `LC-RUNTIME` implements it under the pinned CLI surface (Shared decision 5); `LC-DOCS` documents exactly that surface and the derived capability registry must match the real parser |
 | Release tooling split | `LC-RELTOOL` authors and unit-tests build/qualification/workflow tooling on a clean commit of its own; the integration card runs the accepted tooling against the integrated commit | No implementation unit needs another unit's accepted commit as its base; the bundle is built once, from the integrated tree |
 | Activation interruption | Activating the RC rewrites the Aether-owned service/launcher/Desktop projections and restarts the Aether-owned gateway, which owns the dispatcher and every running worker (including this objective's controller session) | The real activation/rollback/forward-activation lane is terminal-card work, sequenced so all evidence is durable first (Shared decision 12); the unrelated `hermes-gateway-hestia` service is never touched |
-| `policy.yml` literal manifest | Every tracked non-`specs/` file must appear in the workflow heredoc; units that add or rename such files record the exact lines instead of editing it | `LC-BLOCK` edits only the `HLP-425` line (#437); the integration card applies every other recorded line as bounded integration repair |
+| `policy.yml` literal manifest | Every tracked non-`specs/` file must appear in the workflow heredoc; units that add or rename such files record the exact lines instead of editing it | Measured at `410c172`: the heredoc holds 400 entries against 402 tracked non-`specs/` files, missing `patches/hermes/HLP-425-review-flow-continuity.patch` (#437) and `.aether/objective-contracts/oc_3397f9f05d780f8e/v1.md` (added by the contract commit itself). `LC-BLOCK` corrects both lines, because the manifest test compares the whole list and #437 cannot be shown green with only one; the integration card applies lines recorded for files other units add |
 | Test standard | `CONTRIBUTING.md` Python 3.11–3.13 exact-Hermes bootstrap; no gate weakening, no new skip | Units run focused nodes first, then the canonical commands for the surfaces they touch (Shared decision 11) |
 | Publication | Implementer units never push, PR, merge, tag, release, activate or mutate issues | `LC-INT` and `LC-CLOSE` own all remote and live effects under Shared decision 3 |
 
@@ -175,12 +175,29 @@ Real serialization is the integration/closeout chain:
     card's collaboration request path (`recipient: controller`) and keep unaffected parts
     moving. Do not silently widen scope, weaken an oracle, or create sibling cards.
 
+16. Integration-bound gates (measured at `410c172`). Two required verification gates span
+    more than one unit's exclusive surface and are therefore satisfied on the merged tree,
+    not on a unit branch:
+    - `scripts/check_documentation.py` enforces its registry/parser mapping
+      bidirectionally (`uncovered derived surface` at `scripts/check_documentation.py:419`,
+      `derived surface is not source-derived` at `:422`). `LC-DOCS` owns the registry rows
+      and `LC-RUNTIME` owns the parser options, so each branch reports exactly the errors
+      attributable to the other unit's pending deliverable, in opposite directions.
+      Neither unit may take the other's surface, neither may claim green, and both record
+      the exact attributable error text in their evidence. `LC-INT` verifies green on the
+      merged tree and may run the generator's `--write` mechanically, proving the rendered
+      reference is byte-identical.
+    - The literal `policy.yml` manifest is compared as a whole list by
+      `tests/test_public_artifacts.py::test_canonical_base_manifest_matches_tracked_non_specs_files`,
+      so `LC-BLOCK` corrects both missing lines (see the executability row).
+
 ## LC-DOCS — canonical design, docs and capability reconciliation
 
 - Source: contract Owner Intent / Decision "Maintained fork" / "Layout" / "Activation
   interruption" / "Release identity"; in-scope 1 and 11; deliverable D1; AC-15.
-- Outcome: the owning design, roadmap, root guidance, guide/reference docs, capability
-  registry and changelog state the accepted RC reality without competing authority: the
+- Outcome: the owning design, roadmap, root guidance, guide/reference docs and capability
+  registry state the accepted RC reality without competing authority (`CHANGELOG.md` and
+  `VERSION` remain `LC-RELTOOL`'s exclusive surface): the
   maintained fork (not the fixed public baseline, not a `.patch`/editable replay) as
   executable Hermes source, the post-separation XDG data/state layout, the supported
   interrupting `aether update` local-candidate route and state-preserving rollback, the
@@ -202,8 +219,11 @@ Real serialization is the integration/closeout chain:
 - Judgement: wording, structure, which documents need the RC statement, and whether a
   capability row is added, re-scoped or re-statused — provided the registry keeps
   matching the real parser and no second authority is created.
-- Verification: `uv run --frozen python scripts/check_documentation.py` green with the
-  declared surfaces matching the actual CLI; focused `tests/test_documentation.py`,
+- Verification: `uv run --frozen python scripts/check_documentation.py` is green on the
+  merged tree; on the unit branch alone the five pinned `cli.option.aether.update.*` rows
+  are pending `LC-RUNTIME`'s parser surface, so the branch reports exactly those five
+  `derived surface is not source-derived` errors and nothing else, recorded verbatim
+  (Shared decision 16); focused `tests/test_documentation.py`,
   `tests/test_contract_quality_documents.py`, `tests/test_a1_contracts.py`,
   `tests/test_public_artifacts.py`; `uv run --frozen ruff check` / `ruff format --check`
   on touched paths; `git diff --check`. Evidence record lists each reconciled claim with
