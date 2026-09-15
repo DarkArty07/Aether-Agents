@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tarfile
 import types
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -36,6 +37,27 @@ def _load_tool() -> types.ModuleType:
 @pytest.fixture(scope="module")
 def tool() -> types.ModuleType:
     return _load_tool()
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _restore_product_module_cache() -> Iterator[None]:
+    """Leave the ``aether_agents`` module cache as this module found it.
+
+    ``load_product`` imports the product from the checkout under qualification and purges
+    every cached ``aether_agents`` module to do it, which is deliberate: the release tool
+    must never inspect a stale copy of the code it is qualifying.  Test modules collected
+    after this one hold module-scope references to the previous objects, and the product's
+    own function-local imports would otherwise start resolving to the freshly imported
+    copies, so the cache is put back once this module's tests have finished.
+    """
+
+    saved = {
+        name: module for name, module in sys.modules.items() if name.split(".")[0] == "aether_agents"
+    }
+    yield
+    for name in [name for name in sys.modules if name.split(".")[0] == "aether_agents"]:
+        del sys.modules[name]
+    sys.modules.update(saved)
 
 
 def _git(repo: Path, *arguments: str) -> str:
