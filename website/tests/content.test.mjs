@@ -151,9 +151,27 @@ test('all generated local links, resources and anchors resolve', async () => {
   assert.deepEqual(failures,[]);
 });
 
+// The site renders every tracked canonical document (see src/lib/docs.ts), so the
+// search index oracle derives its expectation from that corpus through Git instead of
+// a fixed count that silently drifts when a document enters or leaves docs/.
+const repository = execFileSync('git',['rev-parse','--show-toplevel'],{encoding:'utf8'}).trim();
+const canonicalDocSlugs = execFileSync('git',['ls-files','--','docs'],{cwd:repository,encoding:'utf8'})
+  .trim().split('\n').filter(file=>file.endsWith('.md'))
+  .map(file=>file.replace(/^docs\//,'').replace(/\.md$/,''))
+  .sort();
+
 test('documentation is rendered, linked to revision and searchable', async () => {
   const index=JSON.parse(await readFile(path.join(output,'docs/search.json'),'utf8'));
-  assert.equal(index.length,16);
+  assert.equal(index.length,canonicalDocSlugs.length,`Search index must hold every canonical document (corpus has ${canonicalDocSlugs.length})`);
+  assert.deepEqual(index.map(d=>d.slug).sort(),canonicalDocSlugs,'Search index must cover the canonical docs corpus exactly');
+  // src/lib/docs.ts is at once the description map and the docs reading order, so a document
+  // missing from it renders with its title as description and sorts ahead of every described
+  // document. Assert map and corpus agree exactly, in both directions.
+  const mapSource=await readFile('src/lib/docs.ts','utf8');
+  const mapBody=mapSource.slice(mapSource.indexOf('const descriptions: Record<string, string> = {'));
+  const descriptionMap=Object.fromEntries([...mapBody.slice(0,mapBody.indexOf('};')).matchAll(/^\s*'([^']+)':\s*'([^']+)',$/gm)].map(m=>[m[1],m[2]]));
+  assert.deepEqual(Object.keys(descriptionMap).sort(),canonicalDocSlugs,'src/lib/docs.ts must describe every canonical document and nothing else');
+  for (const entry of index) assert.equal(entry.description,descriptionMap[entry.slug],`Search index must carry the description map text for ${entry.slug} instead of the title fallback`);
   assert.ok(index.find(d=>d.slug==='guides/project-knowledge').text.includes('Graphify'));
   const manual=await doc('docs/guides/execution/index.html');
   assert.ok(manual.querySelector('.prose h1'));

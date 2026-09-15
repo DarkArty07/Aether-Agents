@@ -1,7 +1,12 @@
 # Website workstream
 
 Read the root AGENTS.md and website/IMPLEMENTATION_PLAN.md. Work only in this isolated
-website workstream; no commit, push, merge, deployment or Aether runtime activation.
+website workstream. This workstream performs no deployment and no Aether runtime
+activation, and Implementer never publishes: push, PR and green merge stay
+Supervisor-owned. Scoped local commits are permitted only when a current owner-authorized
+objective explicitly requires them. An owner-authorized Supervisor merge of a website/ or
+docs/ change may trigger the repository's own GitHub Pages workflow; that run is then
+observed and verified, never assumed.
 
 The owner's first review authorized a Spanish copy refinement and removal of visible
 sketch numbering; the current owner review additionally authorizes a broader clarity
