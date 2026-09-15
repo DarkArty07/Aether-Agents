@@ -52,7 +52,9 @@ def _restore_product_module_cache() -> Iterator[None]:
     """
 
     saved = {
-        name: module for name, module in sys.modules.items() if name.split(".")[0] == "aether_agents"
+        name: module
+        for name, module in sys.modules.items()
+        if name.split(".")[0] == "aether_agents"
     }
     yield
     for name in [name for name in sys.modules if name.split(".")[0] == "aether_agents"]:
