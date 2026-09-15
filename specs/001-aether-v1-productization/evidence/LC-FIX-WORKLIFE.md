@@ -6,7 +6,7 @@
 - **Deliverable status:** source fix produced and proven in a maintained-fork worktree; **nothing pushed, no PR, no merge, no dispatch, no activation, no runtime/service/tag/release change**.
 - **Maintained-fork candidate:** `622678efe9296a7485a817a7625eabfa00a65620` on branch `fix/450-terminal-worker-reap`, branched from `origin/aether-main` tip `9031bae0e8b0ab40c4fd7ba50c644972ff512611` (fetched before branching).
 - **Aether-side artifacts:** `patches/hermes/HLP-426-terminal-worker-reap.patch`, `HERMES_LOCAL_PATCHES.md` (index-table row + `### HLP-426` section), `specs/001-aether-v1-productization/fixtures/qualify_superseded_worker_reap_450.py` (qualification canary), this note.
-- **Exact local evidence** (task/run ids, epochs, worker pids, the installed release directory identity, the stale worker's own transcript behaviour) is kept in the unit card handoff and its evidence bundle, not in this public artifact, per root `AGENTS.md`'s boundary between local runtime evidence and public source. The reads that produced it are described in §1 and §7.
+- **Exact local evidence** (task/run ids, epochs, worker pids, the installed release directory identity, the stale worker's own transcript behaviour) is kept in the unit card handoff notes, not in this public artifact, per root `AGENTS.md`'s boundary between local runtime evidence and public source. The reads that produced it are described in §1 and §7.
 
 ## 1. The defect, verified from the record
 
@@ -71,7 +71,7 @@ Explicitly **not** changed: `_end_run`, `block_task`, the reclaim paths, the lan
 
 ## 5. Verification
 
-All commands were run against the candidate tree unless stated otherwise; the fork venv was provisioned with the repository's own documented step (`uv sync --locked --python 3.11 --extra all --extra dev`). Raw outputs for every run below are attached to the unit card (`fork-focused-tests.out`, `fork-affected-surface-tests.out`, `fork-full-suite.out`, `fork-base-attribution.out`, `canary-*.log`, `canary-*.json`).
+All commands were run against the candidate tree unless stated otherwise; the fork venv was provisioned with the repository's own documented step (`uv sync --locked --python 3.11 --extra all --extra dev`). The raw output of every run below is recorded in the unit card's handoff notes (the exact local identifiers, per-run canary verdicts, and the failed-node A/B list), because local board ids, epochs and process ids do not belong in a public artifact.
 
 ### 5.1 Focused and affected-surface tests
 
@@ -102,13 +102,13 @@ $ scripts/run_tests.sh <the same 21 files + test_model_metadata.py>    # base 90
 EXIT=1
 ```
 
-The failure set is **identical** on both revisions: the same 21 files with the same per-file failure counts, plus the same collection-error file. Diffing the two lists is empty, so all 90 failures are pre-existing at the base and unaffected by this change. They are confined to auxiliary/provider, plugin, tool-environment and lifecycle-guard areas; the Kanban/dispatch surface is green (§5.1). No test was weakened, skipped, or made conditional to obtain these numbers.
+The failure set is **identical at node level**, not merely at file level: 90 failed node IDs on the candidate and 90 on the base, and `diff` of the two sorted node lists is empty (same files, same per-file counts, same nodes). No changed-path regression, and no delta to diagnose. Two failures sit in Kanban/lifecycle-adjacent files and are worth naming explicitly because they are the only ones a reviewer might suspect: `tests/cron/test_cron_kanban_env_isolation.py::test_every_dispatcher_kanban_var_is_identity_gated` (its invariant enumerates the `HERMES_KANBAN_*` environment variables the dispatcher injects; this change adds no environment variable) and the ten `tests/hermes_cli/test_gateway_restart_loop.py::TestLifecycleGuardModule` nodes (script-based lifecycle detection in `cron/lifecycle_guard.py`, untouched here) — both fail with the same assertion on the unmodified base. The rest are auxiliary/provider, plugin and tool-environment nodes. No test was weakened, skipped, or made conditional to obtain these numbers.
 
 ### 5.3 Disposable-board canary (the coexistence proof)
 
 `specs/001-aether-v1-productization/fixtures/qualify_superseded_worker_reap_450.py` drives the real board surface — `claim_task`, `_set_worker_pid`, `block_task`, `unblock_task`, `_dispatch_once_locked` with a stub `spawn_fn` — on a scratch `HERMES_HOME`/board. Only the *worker binary* is a stand-in (a process that appends to a marker file inside the task workspace and dies on SIGTERM); the claim bookkeeping, the spawn-time identity record, the out-of-band terminalization, the tick, the reap and both lanes are the real code paths. The script refuses to run if its resolved DB is not inside the scratch root, and prints the live board path it leaves untouched.
 
-Runs are parameterized by tree only (`<BASE>` = base worktree at `9031bae0e8`, `<FIX>` = candidate worktree). Stand-in pids below are shown as the run's own placeholders rather than literal process ids; the attached logs carry the unmodified values.
+Runs are parameterized by tree only (`<BASE>` = base worktree at `9031bae0e8`, `<FIX>` = candidate worktree). Stand-in pids below are shown as the run's own placeholders rather than literal process ids; the card handoff carries the unmodified values.
 
 ```
 $ A=<unit>; BASE=<BASE>; FIX=<FIX>; PY=$FIX/.venv/bin/python; S=$A/specs/001-aether-v1-productization/fixtures/qualify_superseded_worker_reap_450.py
@@ -202,8 +202,23 @@ The downstream record is `patches/hermes/HLP-426-terminal-worker-reap.patch` wit
 
 ## 8. Scope corrections applied mid-unit, and residual limitations
 
-- **`.github/workflows/policy.yml` restored.** The base-manifest allow-list entry for the new patch was drafted and then reverted to the unit base on the design steward's scope correction: `.github/workflows/*` is outside this unit's writable surface. Consequence, recorded rather than absorbed: the repository's base-manifest equality check will report `patches/hermes/HLP-426-terminal-worker-reap.patch` as unlisted until Supervisor adds it under its own authority. The fix and its evidence do not depend on that wiring.
-- **Scratch removed from the deliverable.** The canary's scratch `HERMES_HOME`/board directory (databases, logs, marker files) is disposable and was deleted before handoff; the raw logs it produced are attached to the unit card instead.
+- **`.github/workflows/policy.yml` restored.** The base-manifest allow-list entry for the new patch was drafted and then reverted to the unit base on the design steward's scope correction: `.github/workflows/*` is outside this unit's writable surface. The consequence is measured, not estimated — emulating the workflow's own manifest check (`heredoc` from `policy.yml` vs `git ls-files | grep -v '^specs/'`, both sorted) yields exactly one unlisted tracked path:
+
+  ```
+  unlisted tracked paths: ['patches/hermes/HLP-426-terminal-worker-reap.patch']
+  manifest entries with no tracked file: []
+  ```
+
+  Supervisor adds that one line under its own authority; the fix and its evidence do not depend on it.
+- **Committed reconciliation evidence is stale in one derived section, for the same reason.** The HLP convention requires the `HERMES_LOCAL_PATCHES.md` record, and that file's digest is one of the aggregate's committed inputs, so `scripts/validate_hermes_patch_reconciliation.py --check --fork-checkout <clean checkout at the selected revision>` now reports `status: stale`, `differing sections: source_ledger_sha256` — nothing else differs: `records: 29`, `present: 27`, `partial: 0`, `absent: 0`, `unverified: [HLP-246, HLP-247]`, `refusing: []`. Regenerating the derived aggregate/preflight is the same mechanical step the merge already requires (the entry for `HLP-426` can only be declared once the pinned revision contains the patch), and that step belongs to the Supervisor/integration lane, so it is recorded here rather than absorbed:
+
+  ```bash
+  uv run --frozen python scripts/validate_hermes_patch_reconciliation.py \
+      --observed-at-utc <UTC timestamp> \
+      --fork-checkout <checkout at the revision the release lock will pin>
+  ```
+- **Scratch removed from the deliverable.** The canary's scratch `HERMES_HOME`/board directory (databases, logs, marker files) is disposable and was deleted before handoff; the raw verdicts and the exact local identifiers it produced are recorded in the unit card's handoff notes.
+- **Aether-side checks run locally on this commit:** `scripts/check_public_artifacts.py` → passed; `scripts/check_documentation.py` → passed; `uv run --frozen python -m pytest tests/test_hermes_patch_reconciliation.py -q` → 23 passed; `python3 -m unittest discover -s tests -p 'test_policy_hooks.py'` → 24 tests OK; the reconciliation `--check` result quoted above.
 - **Source-only delivery.** The fix is *not* active in the running installation: the live runtime still loads its own release tree, and this unit performed no activation, reload, selector change, service restart or runtime promotion. No claim is made that the live environment is repaired.
 - **Between the run ending and the next tick** a superseded process can still run (up to one dispatch interval). What the fix guarantees is the accepted invariant — no successor starts beside it — not instantaneous exit. The "exits" half is satisfied by termination at the successor boundary; making a worker observe its own supersession mid-turn would be a separate, larger change and was not authorized here.
 - **Runs spawned before this change** carry no fingerprint in their `spawned` event and are therefore never signalled by the reap (it refuses to guess). That is a deliberate fail-safe; a pre-existing stale worker from an older runtime remains an operator action.
