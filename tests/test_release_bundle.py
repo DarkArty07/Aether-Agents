@@ -890,10 +890,22 @@ def _lock(tool: types.ModuleType, lifecycle, tmp_path: Path) -> dict:
         "distribution": "aether-agents",
         "version": "1.0.0rc1",
         "python_requires": ">=3.11,<3.14",
-        "observer": {"plugin_name": "aether-contract-observer"},
+        "observer": {
+            "plugin_name": "aether-contract-observer",
+            "group": "hermes_agent.plugins",
+            "target": "aether_agents.observation.capture.hermes_plugin",
+        },
         "sha256": _sha256(payload),
         "observer_requirements_sha256": "b" * 64,
-        "observation_compatibility": {"event_write_version": "aether.observation.event.v1"},
+        "observation_compatibility": {
+            "event_write_version": "aether.observation.event.v1",
+            "event_read_versions": ["aether.observation.event.v1"],
+            "summary_write_version": "aether.observation.summary.v1",
+            "summary_read_versions": ["aether.observation.summary.v1"],
+            "segment_manifest_write_version": "aether.observation.segment-manifest.v1",
+            "segment_manifest_read_versions": ["aether.observation.segment-manifest.v1"],
+            "projection_schema_version": "aether.observation.projection.v1",
+        },
     }
     fork = {
         "commit": "c" * 40,
@@ -915,7 +927,7 @@ def _lock(tool: types.ModuleType, lifecycle, tmp_path: Path) -> dict:
 
 
 def test_release_lock_binds_the_pinned_maintained_fork_identity(
-    tool: types.ModuleType, tmp_path: Path
+    tool: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     lifecycle = tool.load_product(ROOT)
     lock = _lock(tool, lifecycle, tmp_path)
@@ -932,19 +944,42 @@ def test_release_lock_binds_the_pinned_maintained_fork_identity(
         "/releases/download/v1.0.0-rc.1/" + lock["hermes"]["artifacts"][0]["filename"]
     )
 
-    with pytest.raises(tool.BundleError) as drift:
-        tool.validate_lock(lock, aether_checkout=ROOT, allow_schema_drift=False)
-    assert drift.value.code == "lock-schema-drift"
-
-    recorded = tool.validate_lock(lock, aether_checkout=ROOT, allow_schema_drift=True)
-    assert recorded["schema_validation"] == "not_applicable"
-    assert recorded["repository_schema_version"] == 3
-    assert recorded["pinned_identity"] == [
+    # Integration state: the canonical schema this checkout ships declares 4, so strict
+    # validation applies it (this unit's branch shipped while it still declared 3, which is
+    # why the pair is only resolvable on the merged tree).
+    applied = tool.validate_lock(lock, aether_checkout=ROOT, allow_schema_drift=False)
+    assert applied["schema_validation"] == "applied"
+    assert applied["repository_schema_version"] == 4
+    assert applied["pinned_identity"] == [
         "schema_version=4",
         "hermes.source_mode=maintained_fork",
         "hermes.repository=https://github.com/DarkArty07/aether-hermes",
         "hermes.branch=aether-main",
     ]
+
+    recorded = tool.validate_lock(lock, aether_checkout=ROOT, allow_schema_drift=True)
+    assert recorded["schema_validation"] == "applied"
+    assert recorded["repository_schema_version"] == 4
+    assert recorded["pinned_identity"] == applied["pinned_identity"]
+
+    # Drift refusal stays covered: a repository whose canonical schema still declares the
+    # retired version must refuse the v4 lock under strict validation rather than accept a
+    # shape it cannot check, and the unchanged pinned identity is what the lenient path
+    # records instead.
+    legacy_path = tmp_path / "legacy-release-lock.schema.json"
+    legacy = json.loads(json.dumps(_v4_lock_schema()))
+    legacy["properties"]["schema_version"] = {"const": 3}
+    legacy_path.write_text(json.dumps(legacy), encoding="utf-8")
+    monkeypatch.setattr(tool, "_lock_schema_path", lambda checkout: legacy_path)
+
+    with pytest.raises(tool.BundleError) as drift:
+        tool.validate_lock(lock, aether_checkout=ROOT, allow_schema_drift=False)
+    assert drift.value.code == "lock-schema-drift"
+
+    recorded_legacy = tool.validate_lock(lock, aether_checkout=ROOT, allow_schema_drift=True)
+    assert recorded_legacy["schema_validation"] == "not_applicable"
+    assert recorded_legacy["repository_schema_version"] == 3
+    assert recorded_legacy["pinned_identity"] == applied["pinned_identity"]
 
 
 def _v4_lock_schema() -> dict:
