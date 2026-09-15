@@ -13,7 +13,9 @@ The release identity is package version `1.0.0rc1`, annotated tag and GitHub pre
   and refuses a dirty checkout, a mismatched revision, a foreign repository, a build that
   is not byte-reproducible from the same commit, a private-path or canonical-secret
   finding in Aether-authored bytes, an incomplete member set, a tampered digest, and a
-  missing release-identity surface.
+  missing release-identity surface. It also reports the exact member set a publication
+  must attach and refuses a published release whose asset names or `sha256:` digests
+  disagree with that bundle.
 - Qualified the bundle before publication: member inspection of the wheel, sdist and
   source archive, a private-path and secret scan over the public bytes, a clean install of
   the exact wheel plus the locked runtime closure into fresh disposable roots with the
@@ -24,8 +26,12 @@ The release identity is package version `1.0.0rc1`, annotated tag and GitHub pre
   import/version/plugin discovery, and the canonical TUI `--check`).
 - Reconciled `.github/workflows/release.yml` with the existing tag and release-identity
   validation: the release job builds and qualifies the bundle from the tagged commit and
-  attaches those exact bytes to the GitHub prerelease, so the attached artifact set is the
-  qualified artifact set. No second release path is introduced.
+  attaches that exact member set — the verified members plus `SHA256SUMS` — to the GitHub
+  prerelease, so the attached artifact set is the qualified artifact set. A re-run that
+  finds the release already published attaches nothing (`gh release edit` takes no file
+  arguments) and instead re-verifies the published assets by name and `sha256:` digest,
+  failing closed when the release and the qualified bundle disagree. No second release
+  path is introduced.
 - This is a pre-stable release candidate. It is not stable `1.0.0`, no PyPI or other
   package-index publication occurs, WSL2 (and any macOS/Windows lane) is unverified and
   recorded as such, and issue #261 remains open with the deferred stable, PyPI/OIDC and
