@@ -641,7 +641,7 @@ No coverage percentage is invented. Supervisor must require tests that exercise 
 
 | Gate | Required owner action | Work allowed before it |
 |---|---|---|
-| Transitional-fork push/release | authorize remote publication, only if that source mode is selected | local residual-patch reconciliation, tests, artifact build |
+| Maintained-fork push/release | authorize remote publication of the maintained-fork source and its release bundle, only if that source mode is selected | local fork-source reconciliation, tests, artifact build |
 | GitHub settings | authorize Pages/Discussions/private reporting/environment changes | workflow/docs/config preparation |
 | PyPI project/publisher | configure/authorize pending Trusted Publisher | package build and TestPyPI-ready verification without publication |
 | RC publication | authorize tag/GitHub/PyPI prerelease | complete deterministic local qualification |
@@ -652,11 +652,13 @@ No coverage percentage is invented. Supervisor must require tests that exercise 
 
 A gate denial is authoritative. Workers must not route around it with another tool, account, package index, repository, or local substitution.
 
+Maintained-fork reconciliation (2026-09-15, Objective Contract `oc_3397f9f05d780f8e@v1`): the first gate above was stated as "Transitional-fork push/release" with "local residual-patch reconciliation" as its pre-gate work. The accepted source mode is `maintained_fork`, so the gate is restated as the maintained-fork push/release gate and its pre-gate work as local fork-source reconciliation; the owner's authorization requirement itself is unchanged.
+
 ## 15. Risks and mitigations
 
 | Risk | Mitigation |
 |---|---|
-| Transitional fork becomes permanent or drifts into a general Hermes product | upstream-default source mode, prohibition on new downstream-only capability, residual patch ledger, stable-tag bases, upstream every general fix, executable retirement criteria |
+| The maintained fork drifts into a general Hermes product or becomes a permanent architecture destination | deliberate upstream adoption instead of a default source mode, prohibition on new downstream-only capability, the fork's retirement-bound boundary with recorded per-change retirement conditions, upstream every general fix |
 | PyPI manager and runtime become mixed versions | immutable release lock, active record, doctor mismatch detection, reconcile/rollback |
 | uv upgrades bypass Aether update | detect honestly; permit read-only recovery; refuse incompatible activation |
 | Updating product policy overwrites personal state | path ownership classification, drift report, backup, unknown-file preservation, forward-only user data |
@@ -667,6 +669,8 @@ A gate denial is authoritative. Workers must not route around it with another to
 | Live model evidence is provider-specific | claim only Aether path compatibility through one public provider; preserve provider-agnostic configuration without claiming every provider was tested |
 | Existing dirty work is swallowed | baseline inventory, narrow diffs, no reset/clean/discard, hotspot flags, review before commits |
 | Policy denies benign validation as gateway lifecycle | preserve the denial as evidence, open the required issue when authorized, reproduce with a minimal test, and narrow classification without weakening real stop/restart protection |
+
+Maintained-fork reconciliation (2026-09-15, Objective Contract `oc_3397f9f05d780f8e@v1`): the fork-drift risk above was stated against the retired transitional fork with an "upstream-default source mode" and "residual patch ledger" mitigation. It is restated against the maintained fork; upstream is now adopted only when deliberately selected, and `.patch`/HLP records are audit evidence rather than a carried ledger. The prohibition on new downstream-only capability, the retirement-bound boundary and upstreaming every general fix are unchanged.
 
 ## 16. Artifacts intentionally absent
 

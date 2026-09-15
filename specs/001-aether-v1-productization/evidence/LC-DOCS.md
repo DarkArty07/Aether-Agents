@@ -310,7 +310,7 @@ accepted schema version rather than the retired one.
 
 | Path / line | What it still states | Why LC-DOCS did not edit it |
 | --- | --- | --- |
-| `specs/r8-workspaces-and-integration/spec.md:44,174` | "The transitional fork carries the patch until …" and "which is why A1 begins in transitional-fork mode" | R8 is outside the review's surface extension; needs a Supervisor decision (extend the surface or route it) |
+| `specs/r8-workspaces-and-integration/spec.md:44,174` | "The transitional fork carries the patch until …" and "which is why A1 begins in transitional-fork mode" | R8 is outside the review's surface extension; needs a Supervisor decision (extend the surface or route it). **Resolved in §8**: run 17 extended the surface for these statements and both are reconciled there |
 | `specs/002-aether-contract-observation/evidence/implementation-validation.md:132,135,139-141,152,672,1363` | canonical/local release-lock schema as version 3 | Historical implementation-validation record outside the extension; same class as the manifest lines routed in §6.2 |
 | `specs/002-aether-contract-observation/evidence/implementation-validation.md:148-150` | product-owned profile homes under `XDG_DATA_HOME/aether/profiles/...` | Same file; out-of-surface historical record |
 | `INCOMPLETE_IMPLEMENTATIONS.md:123`, `specs/followup-aether-bugs/evidence/FBUG-INT.md:125`, `specs/telegram-monitor/evidence/MON-04.md:165,181` | "transitional" used as a historical descriptor of the pre-separation runtime | Trackers/historical evidence outside the declared surface; no normative claim about the RC |
@@ -318,3 +318,119 @@ accepted schema version rather than the retired one.
 
 These are surfaced rather than fixed; resolving them is Supervisor's call (surface extension or a
 separate routed correction), exactly as the manifest lines were handled in §6.2.
+
+## 8. Re-review-17 delta — final class-closing corrections
+
+Supervisor's re-review run 17 verified the §7 delta sound and required three remaining live references to
+the retired source mode to be reconciled, plus a tree-wide sweep report in which every remaining hit is
+classified. This section records that correction. §1's non-claims and §5.1's honesty rules are unchanged:
+the RC is not a stable `1.0.0` claim, not a PyPI publication and not WSL2-qualified, and no check is
+claimed green where it is integration-bound.
+
+### 8.1 Corrections applied (post-edit line numbers)
+
+| # | Superseded statement | Reconciled at |
+| --- | --- | --- |
+| 1 (required) | `specs/r8-workspaces-and-integration/spec.md:44` — FR-804c: "The transitional fork carries the patch until the exact ready/review first-spawn matrix passes on an upstream release." | `:44` — the repair is carried as the accepted maintained-fork source (`DarkArty07/aether-hermes`, branch `aether-main`, the release lock's `maintained_fork` source mode, `schema_version` 4), never as a replayed `.patch`, and it retires when the matrix passes on an exactly released upstream artifact. The selected-tag defect and the `#198` closure fact are preserved. |
+| 2 (required) | `specs/r8-workspaces-and-integration/spec.md:174` — "…which is why A1 begins in transitional-fork mode." | `:174` — "…which is why A1 carries the repair as maintained-fork source (`DarkArty07/aether-hermes`, branch `aether-main`) instead of relying on that public tag — never as a replayed `.patch`", plus the dated reconciliation clause (2026-09-15, `oc_3397f9f05d780f8e@v1`). |
+| 3 (required) | `specs/001-aether-v1-productization/plan.md:644` — §14 gate row "Transitional-fork push/release \| authorize remote publication, only if that source mode is selected \| local residual-patch reconciliation, tests, artifact build". | `:644` — "Maintained-fork push/release \| authorize remote publication of the maintained-fork source and its release bundle, only if that source mode is selected \| local fork-source reconciliation, tests, artifact build"; the dated paragraph at `:655` records the former wording. The owner's authorization requirement itself is unchanged. |
+| 4 (additional, same class) | `specs/001-aether-v1-productization/plan.md:659` (pre-edit) — §15 risk row "Transitional fork becomes permanent or drifts into a general Hermes product \| upstream-default source mode, … residual patch ledger, stable-tag bases, … executable retirement criteria". | `:661` — "The maintained fork drifts into a general Hermes product or becomes a permanent architecture destination \| deliberate upstream adoption instead of a default source mode, prohibition on new downstream-only capability, the fork's retirement-bound boundary with recorded per-change retirement conditions, upstream every general fix"; the dated paragraph at `:673` records the superseded wording. |
+
+Item 4 was **not** among the three named in the review. It lies inside this unit's original writable
+surface (`plan.md` in whole) and is the same class the review is closing: it was the only further
+statement found by the required sweep whose live text still carried retired source-mode policy
+("upstream-default source mode", "residual patch ledger") as a mitigation. It is reported here and
+flagged in the re-review request rather than changed silently.
+
+`specs/r8-workspaces-and-integration/spec.md` was used only at those two statements, as the extension
+allowed; R8's header, tables, other requirements, criteria and sections are untouched.
+
+### 8.2 Sweep — exact commands and complete hit classification
+
+```text
+$ git grep -nE 'transitional[ _-]fork'            # the exact sweep the review required (case-sensitive)
+62 hits
+
+$ git grep -niE 'transitional[ _-]fork'           # case-insensitive census; adds the capital form only
+63 hits
+
+$ git grep -nE 'Transitional[ _-]fork'
+specs/001-aether-v1-productization/plan.md:655    # the single extra hit: this unit's own new dated note quoting the former gate name
+```
+
+Per-file census of the 63 case-insensitive hits, every one classified:
+
+| Class | Hits | Locations |
+| --- | --- | --- |
+| A — reconciled negation: the retired mode appears only as refused/retired/superseded, or as quoted history inside this delta's dated notes | 36 | `AGENTS.md:15,97`; `ROADMAP.md:9,72,91`; `docs/capabilities.toml:136`; `docs/getting-started.md:45`; `docs/guides/policy-and-recovery.md:83`; `docs/product-boundary.md:40`; `docs/reference/capabilities.md:694`; `docs/reference/cli.md:83`; `docs/reference/limitations-and-troubleshooting.md:16`; `specs/001-aether-v1-productization/spec.md:5,163,170,388`; `…/plan.md:104,324,384,506,655,673`; `…/research.md:19,34,206,227`; `…/contracts/cli.md:39`; `specs/r4-hermes-boundary/spec.md:42,155`; `specs/r13-synthesis-and-release/spec.md:139,143,214,226`; `specs/r13-synthesis-and-release/plan.md:11,24,43` |
+| B — historical decision records carrying a dated superseding note in the same section | 6 | `specs/r4-hermes-boundary/research.md:325,333` (note at `:335`); `specs/r13-synthesis-and-release/research.md:1190,1213` (note at `:1194`, whose "elsewhere in this section" clause covers the `:1213` historical schema sentence) |
+| C — frozen records, never edited | 3 | `.aether/objective-contracts/oc_5c2dad1b37b20a80/v1.md:32`; `.aether/objective-contracts/oc_fd2332ffe34aa5f7/v1.md:64`; `CHANGELOG.md:111` (LC-RELTOOL adds the RC entry) |
+| D — LC-RUNTIME-owned surfaces | 7 | `specs/001-aether-v1-productization/contracts/release-lock.schema.json:47,92`; `tests/test_a1_contracts.py:102,105,134,135,138` |
+| E — test-owned historical comments, outside this unit's surface | 3 | `tests/test_observation_lifecycle.py:521`; `tests/test_observation_qualification.py:122,722` (issue `#234` rationale comments; no RC-normative claim) |
+| F — this unit's own evidence record | 7 | `specs/001-aether-v1-productization/evidence/LC-DOCS.md` — §3/§7 quoted commands and superseded-statement references (7 hits when the census was taken, before this section was written; §8 adds its own quoted occurrences of the same kind) |
+| G — historical caution, frozen at the review's direction | 1 | `specs/006-tools-memory-stability/spec.md:16` ("stale transitional-fork wording does not authorize copying dirty …") — an explicit caution, not a mode assertion |
+
+36 + 6 + 3 + 7 + 3 + 7 + 1 = 63. Re-running the identical census after this section was written returns
+70 hits: 14 inside this record (§8's own quotations, class F) and the same 56 elsewhere, distributed
+exactly as classified above (36 + 6 + 3 + 7 + 3 + 1). No remaining hit asserts the retired mode as
+current policy.
+`specs/r8-workspaces-and-integration/` now contains **zero** `transitional` hits: both former statements
+are reconciled (`$ git grep -niE 'transitional' -- specs/r8-workspaces-and-integration/` → no output,
+exit 1).
+
+The two class-specific greps re-run with this unit's record excluded:
+
+```text
+$ git grep -nF '`upstream` or `transitional_fork`' -- ':!specs/001-aether-v1-productization/evidence/LC-DOCS.md'
+(no output)                                                 # EMPTY — no upstream-or-transitional_fork lock requirement remains
+
+$ git grep -nE '(share/aether|XDG_DATA_HOME)[^"`)]*(profiles|projects)' -- ':!specs/001-aether-v1-productization/evidence/LC-DOCS.md'
+specs/002-aether-contract-observation/evidence/implementation-validation.md:149   # out-of-surface historical record, ruled "do not edit" (§8.4)
+```
+
+### 8.3 Re-run verification — raw results (post-edit)
+
+```text
+$ uv run --frozen python scripts/check_documentation.py
+documentation validation failed:
+- derived surface is not source-derived: cli.option.aether.update.--aether-checkout
+- derived surface is not source-derived: cli.option.aether.update.--aether-commit
+- derived surface is not source-derived: cli.option.aether.update.--fork-checkout
+- derived surface is not source-derived: cli.option.aether.update.--fork-commit
+- derived surface is not source-derived: cli.option.aether.update.--local
+EXIT=1        # unchanged from §5.1/§7.3; integration-bound per shared decision 16 — not claimed green
+
+$ uv run --frozen python scripts/run_tests.py tests/test_documentation.py \
+    tests/test_contract_quality_documents.py tests/test_a1_contracts.py tests/test_public_artifacts.py
+2 failed, 64 passed
+FAILED tests/test_a1_contracts.py::CanonicalContractConsistencyTests::test_release_lock_schema_and_plan_agree_on_version_three   # §7.4, integration-bound to LC-RUNTIME
+FAILED tests/test_public_artifacts.py::test_canonical_base_manifest_matches_tracked_non_specs_files                               # pre-existing at base, §5.3 / LC-BLOCK
+
+$ uv run --frozen ruff check <touched paths>          → "No Python files found under the given path(s)" / All checks passed!  exit 0
+$ uv run --frozen ruff format --check <touched paths> → 2 files already formatted  exit 0
+$ git diff --check                                    → exit 0
+$ uv run --frozen python scripts/check_public_artifacts.py --root . → public artifact path scan passed: tracked surface + 0 artifact(s)
+```
+
+Manifest re-measured with the test's own extraction logic: 400 manifest entries versus 402 tracked
+non-`specs/` files, missing exactly `.aether/objective-contracts/oc_3397f9f05d780f8e/v1.md` and
+`patches/hermes/HLP-425-review-flow-continuity.patch` — identical to §5.3/§7.3 and still LC-BLOCK's.
+(Pytest's `assert expected == actual` view prints a shifted "first extra item" because of list
+alignment; the measured set difference is exactly those two paths.)
+
+### 8.4 Review rulings consumed (no edits made)
+
+Run 17's rulings on the §7.5 residues were consumed as direction; none of these files was edited in this
+delta:
+
+| Residue | Ruling | Disposition |
+| --- | --- | --- |
+| `.aether/objective-contracts/**` | frozen contracts, never edited | non-applicable, untouched |
+| `CHANGELOG.md:111` | historical entry describing a past release; LC-RELTOOL adds the RC entry | non-applicable to this unit (also §6.4) |
+| `specs/002-aether-contract-observation/evidence/implementation-validation.md` | point-in-time evidence record, do **not** edit; reported as preserved in the terminal residue report | untouched; its single hit is reproduced in §8.2 |
+| `INCOMPLETE_IMPLEMENTATIONS.md`, `specs/followup-aether-bugs/**`, `specs/telegram-monitor/**` | historical descriptors with no normative RC claim | non-applicable, untouched |
+| `specs/001-aether-v1-productization/contracts/release-lock.schema.json` | LC-RUNTIME's authoritative change (source mode `maintained_fork`, retired mode refused) | not this unit's; §8.2 class D |
+| `specs/r8-workspaces-and-integration/spec.md:44,174` | surface extended for these statements only | **applied in §8.1**; R8 has zero remaining `transitional` hits |
+
+Integration-bound expectations are unchanged: §5.1 (documentation gate green after LC-RUNTIME merges),
+§7.4 (coupling test moves with the schema constant) and §5.3 (manifest lines, LC-BLOCK).
