@@ -185,7 +185,7 @@ result. The directed next step is canonical rework of #428 (and separate classif
 | Item | Value |
 | --- | --- |
 | PR | [#442](https://github.com/DarkArty07/Aether-Agents/pull/442) — merged green, no bypass |
-| Required checks | `policy (3.11/3.12/3.13)` + `pull-request-target`: **pass** on run `34970497239`; the `observation-qualification` matrix also passed all three interpreters (including its coverage floor reaching `coverage report`) |
+| Required checks | `policy (3.11/3.12/3.13)` + `pull-request-target`: **pass** on run `34970497239`; the `observation-qualification` matrix also passed all three interpreters (including its coverage floor reaching `coverage report`). **This is not a claim that every workflow at this revision is green** — see §6.6 |
 | Merged `main` | `748aa24ce5684185f65aa88b0e85919627ff6538` (tree `35ec0c5d6e287e30335948fc738c595fec233568`, **identical** to the reviewed integration tip `9779efc`) |
 | Tag object | `cda1eccae588197251ca22e9a0fdffaf81c4d599` (annotated, type `tag`) |
 | Tag dereferences to | `748aa24ce5684185f65aa88b0e85919627ff6538` = accepted `origin/main` at publication |
@@ -260,3 +260,25 @@ additionally gated on the two corrected sources landing on `main`, per the owner
 requirement that discovered defects enter canonical source, review and `main` before any runtime
 promotion. No PyPI publication occurred, and no stable `1.0.0` claim is made anywhere in this
 record.
+
+### 6.6 Check state at the release revision, stated completely
+
+The required checks were green — that is what the merge gate consumed — but two other workflows
+are red at `748aa24`, and the record must not imply otherwise:
+
+| Workflow at `748aa24` | State | Attribution |
+| --- | --- | --- |
+| `policy (3.11/3.12/3.13)`, `pull-request-target` (required) | pass | required checks, run `34970497239` |
+| `observation-qualification (3.11/3.12/3.13)` | pass | not required, and previously red on `main`; repaired by LC-FIX-COVLANE |
+| `release.yml` (Publish Release) | **fail, zero jobs** | **objective-caused** — invalid job-level `runner` context (§6.3); unit LC-FIX-RELWF, issue #445 |
+| `Website Pages` | **fail** | **pre-existing and unrelated** — `website/tests/content.test.mjs:156` asserts a literal search-index length of 16 while the canonical corpus renders 17; the extra document entered via `59a0c8f`, an ancestor of the old `main`, and this objective never touched that file. Unit LC-FIX-WEBSITE, issue #446 |
+
+Neither red workflow was a required check, and neither changes the published artifacts — but under
+the owner's standing requirement that discovered defects reach canonical source, review and `main`
+before any runtime promotion, both are routed as focused units rather than reported and left.
+
+One tension is surfaced rather than resolved: `website/AGENTS.md` states that workstream is
+isolated and must not commit, push, merge or deploy, while the owner's boundary requires a
+discovered defect to reach canonical source and `main`. Those two instructions cannot both hold
+for LC-FIX-WEBSITE, so that unit produces a verified local candidate and leaves the repository
+effect as an explicit question for the design steward/owner.
