@@ -180,20 +180,105 @@ failures, and CI never reaches `coverage report` at all. Neither number is offer
 result. The directed next step is canonical rework of #428 (and separate classification of the
 3.12-only symptom) with an independent review lane, which is why publication is deferred.
 
-## 6. Publication (completed after the tag exists)
+## 6. Publication — completed
 
-To be recorded here once created: PR number, run IDs, required-check results, the merged
-`main` commit, the annotated tag object id and its dereferenced commit, the release flags,
-every attached artifact with its local and downloaded SHA-256, and the fresh
-artifact-installed CLI handshake. The qualified release identity is package `1.0.0rc1`,
-tag/prerelease `v1.0.0-rc.1`, `prerelease = true`, not draft; no PyPI publication and no
-stable `1.0.0` claim.
+| Item | Value |
+| --- | --- |
+| PR | [#442](https://github.com/DarkArty07/Aether-Agents/pull/442) — merged green, no bypass |
+| Required checks | `policy (3.11/3.12/3.13)` + `pull-request-target`: **pass** on run `34970497239`; the `observation-qualification` matrix also passed all three interpreters (including its coverage floor reaching `coverage report`). **This is not a claim that every workflow at this revision is green** — see §6.6 |
+| Merged `main` | `748aa24ce5684185f65aa88b0e85919627ff6538` (tree `35ec0c5d6e287e30335948fc738c595fec233568`, **identical** to the reviewed integration tip `9779efc`) |
+| Tag object | `cda1eccae588197251ca22e9a0fdffaf81c4d599` (annotated, type `tag`) |
+| Tag dereferences to | `748aa24ce5684185f65aa88b0e85919627ff6538` = accepted `origin/main` at publication |
+| Release | `https://github.com/DarkArty07/Aether-Agents/releases/tag/v1.0.0-rc.1` — `prerelease: true`, `draft: false`, eight assets |
+| Qualified identity | package `1.0.0rc1`, display/tag `1.0.0-rc.1` / `v1.0.0-rc.1`; lock `schema_version` 4, `hermes.source_mode=maintained_fork` |
 
-### Publication path notes
+### 6.1 Artifact verification (local qualified vs downloaded from the live release)
 
-- `.github/workflows/release.yml` performs the build and the create/reconcile from the
-  tagged commit; `FORK_COMMIT` is pinned to the accepted fork revision (§3).
-- The workflow's create path attaches the tool's verified eight-member set, checksum file
-  included; the reconcile path re-verifies published names and digests or fails closed
-  (`gh release edit` accepts no file arguments, so it can never attach bytes).
-- `gh release upload` and `--clobber` are not used anywhere.
+All eight members were downloaded from the published release and re-hashed. Every one matches the
+qualified local bundle byte-for-byte, GitHub's own `digest` fields agree, the downloaded
+`SHA256SUMS` verifies the downloaded members, and `scripts/release_bundle.py
+verify-published-assets` exits 0 against the live listing.
+
+| Member | SHA-256 |
+| --- | --- |
+| `aether_agents-1.0.0rc1-py3-none-any.whl` | `19c6cf5248c05485ec883cfea5ee29c7b1fbbdf7b8f352d085b29b3bfced354a` |
+| `aether_agents-1.0.0rc1.tar.gz` | `f8eac2a4a00dee85b9cd53b0761c087524303e06285deec210f310f58673fcb5` |
+| `aether-hermes-source-9031bae0e8b0ab40c4fd7ba50c644972ff512611.tar.gz` | `61b7ee62045f8a80d0d6aeaff46a86e1f83687e220c6d9b7504652619f709db6` |
+| `aether-agents-1.0.0rc1-release-lock.json` | `0ac3b355651164bb9d54b28b5bb0761135ed10e3202b6f1457fcde610575f653` |
+| `aether-agents-1.0.0rc1-provenance.json` | `0a76c5d87f392073472e5c5710cfb441981c8a263e4aeac0dc1501a32e2c5382` |
+| `aether-agents-1.0.0rc1-package-members.json` | `578257b0c005fcf90de0882fecd1efb4163d141ee682fa2e2cf8fa3a10087ddf` |
+| `aether-agents-1.0.0rc1-clean-install.json` | `249affb58f864162bdda55c6b1420dfc021708cf4f8f76e67f51f3abf147da9e` |
+| `SHA256SUMS` | `0c12d8757dc0bf655efe5b392cfa2f696605add49f88b3e071c482369f896589` |
+
+### 6.2 Fresh artifact-installed CLI handshake
+
+The **downloaded** wheel was installed into a brand-new Python 3.11 environment: installed
+distribution version `1.0.0rc1`; `aether --version` → `aether 1.0.0rc1`; `aether version --json`
+→ `product_version 1.0.0rc1`; the full pinned `aether update --local` option surface present
+(`--local`, `--aether-checkout`, `--aether-commit`, `--fork-checkout`, `--fork-commit`,
+`--dry-run`, `--yes`, `--json`); the published lock bound to `748aa24…` and fork
+`9031bae0…`/`aether-main`.
+
+### 6.3 Publication path, and the accepted workflow defect
+
+The tag push did **not** publish. Run `34973974807` reported *"This run likely failed because of a
+workflow file issue"* with **zero jobs**. Root cause, verified: `.github/workflows/release.yml:37`
+placed `RELEASE_BUNDLE_DIR: ${{ runner.temp }}/release-bundle` in the **job-level** `env:`, where
+the `runner` context is not available, so GitHub rejected the whole file. It previously worked
+(`v0.22.0`, `v0.23.0`, `v0.24.0` all `success`), and the line is absent from old `main` — this is
+objective-caused, introduced by the reviewed release-tooling reconciliation. Alternatives were
+ruled out by measurement: valid YAML, no BOM/CRLF/control characters/conflict markers/duplicate
+keys, all pinned action SHAs resolve, and the working `policy.yml` uses `runner.*` only at step
+level.
+
+Publication therefore used the **contract-authorized** path — "non-destructive GitHub prerelease
+creation/edit plus artifact upload" — running the reviewed workflow's own create command shape
+(`gh release create v1.0.0-rc.1 --verify-tag --generate-notes --prerelease <the tool's 8-member
+list>`) from the qualified bundle, with `main` and the tag untouched. The artifacts are what the
+workflow would have built: same commit, same reviewed tooling, same member set, byte-identical.
+The provenance difference is real and is not hidden here.
+
+### 6.4 Findings routed, not absorbed
+
+| # | Finding | Disposition |
+| --- | --- | --- |
+| [#445](https://github.com/DarkArty07/Aether-Agents/issues/445) | `release.yml` invalid on `main`; blocks every future automated release | Focused unit **LC-FIX-RELWF** (`t_5cd52e79`), gated into LC-CLOSE |
+| [#239](https://github.com/DarkArty07/Aether-Agents/issues/239) | `README.md` status denies any published release candidate, and those exact bytes are embedded in the published wheel's `METADATA` | Focused unit **LC-FIX-README** (`t_191474c2`), gated into LC-CLOSE |
+| [#261](https://github.com/DarkArty07/Aether-Agents/issues/261) | Auto-closed by the PR-#442 merge: the prose "This PR does not close #261" contains a closing keyword GitHub parsed | **Reopened** with RC evidence; PR prose reworded. Contract AC-13 requires it open |
+
+### 6.5 Material discrepancy the owner must weigh
+
+The published RC's immutable bytes contain the stale README sentence. The correction to
+`README.md` reaches **future builds only**: repairing the published wheel/sdist would require
+replacing published assets or rewriting the tag, both of which are forbidden by the contract and
+by this card. So the artifact published as `v1.0.0-rc.1` is publicly self-contradictory about its
+own existence, and this lane cannot repair it without an authorization it does not have.
+
+Recorded, not resolved: whether that discrepancy blocks owner-objective acceptance is the
+contract's material-discrepancy question, not an integration verdict. LC-CLOSE activation is
+additionally gated on the two corrected sources landing on `main`, per the owner's standing
+requirement that discovered defects enter canonical source, review and `main` before any runtime
+promotion. No PyPI publication occurred, and no stable `1.0.0` claim is made anywhere in this
+record.
+
+### 6.6 Check state at the release revision, stated completely
+
+The required checks were green — that is what the merge gate consumed — but two other workflows
+are red at `748aa24`, and the record must not imply otherwise:
+
+| Workflow at `748aa24` | State | Attribution |
+| --- | --- | --- |
+| `policy (3.11/3.12/3.13)`, `pull-request-target` (required) | pass | required checks, run `34970497239` |
+| `observation-qualification (3.11/3.12/3.13)` | pass | not required, and previously red on `main`; repaired by LC-FIX-COVLANE |
+| `release.yml` (Publish Release) | **fail, zero jobs** | **objective-caused** — invalid job-level `runner` context (§6.3); unit LC-FIX-RELWF, issue #445 |
+| `Website Pages` | **fail** | **pre-existing and unrelated** — `website/tests/content.test.mjs:156` asserts a literal search-index length of 16 while the canonical corpus renders 17; the extra document entered via `59a0c8f`, an ancestor of the old `main`, and this objective never touched that file. Unit LC-FIX-WEBSITE, issue #446 |
+
+Neither red workflow was a required check, and neither changes the published artifacts — but under
+the owner's standing requirement that discovered defects reach canonical source, review and `main`
+before any runtime promotion, both are routed as focused units rather than reported and left.
+
+One tension is surfaced rather than resolved: `website/AGENTS.md` states that workstream is
+isolated and must not commit, push, merge or deploy, while the owner's boundary requires a
+discovered defect to reach canonical source and `main`. Those two instructions cannot both hold
+for LC-FIX-WEBSITE, so that unit produces a verified local candidate and leaves the repository
+effect as an explicit question for the design steward/owner.
