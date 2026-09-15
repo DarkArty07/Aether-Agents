@@ -1,4 +1,9 @@
-"""Tests for transactional Hermes editable reconciliation."""
+"""Tests for transactional Hermes editable reconciliation.
+
+The disposable fork these oracles build against is self-contained: it vendors its own
+PEP 517/660 backend, so an offline editable or wheel build needs no network and no warm
+package cache.
+"""
 
 from __future__ import annotations
 
@@ -23,6 +28,203 @@ from aether_agents.hermes_editable import (
     verify_editable_mapping,
 )
 
+# The disposable fork must build with no network and no warm package cache: a
+# ``setuptools`` ``build-system.requires`` entry can only be resolved offline from a
+# populated uv cache, so these oracles passed on a developer machine and failed on a
+# clean runner ("setuptools was not found in the cache"). The fixture therefore vendors
+# its own PEP 517/660 backend and reaches it through ``backend-path``, keeping the
+# offline editable build genuinely offline instead of cache-dependent (#428).
+_FIXTURE_BACKEND_DIRECTORY = "_aether_fixture_backend"
+_FIXTURE_BACKEND_MODULE = "aether_disposable_backend"
+
+_DISPOSABLE_BACKEND_SOURCE = r"""'''Self-contained PEP 517/660 build backend for the disposable Hermes fork fixture.
+
+The fixture must be buildable offline with no warm package cache, so this backend
+declares no external build requirement and lives inside the disposable fork itself
+(reached through ``backend-path``). Its observable install surface mirrors the
+setuptools editable install these oracles were written against: the
+``__editable__.hermes_agent-<version>.pth`` mapping file, the
+``__editable___hermes_agent_<version>_finder.py`` meta path finder, the
+``hermes_agent-<version>.dist-info`` metadata set and the legacy
+``hermes_agent.egg-info`` build artifact the reconciler removes as debris.
+'''
+
+from __future__ import annotations
+
+import base64
+import csv
+import hashlib
+import io
+import tomllib
+import zipfile
+from pathlib import Path
+
+WHEEL_TAG = 'py3-none-any'
+GENERATOR = 'aether-disposable-fork-backend'
+SOURCE_ROOT = Path(__file__).resolve().parents[1]
+
+_FINDER_TEMPLATE = '''# PEP 660 editable mapping installed by the disposable fixture backend.
+from __future__ import annotations
+
+import importlib.abc
+import importlib.util
+import sys
+from pathlib import Path
+
+MODULES = __MODULES__
+SOURCE_ROOT = Path(__SOURCE_ROOT__)
+
+
+class _FixtureFinder(importlib.abc.MetaPathFinder):
+    # Resolve only the modules declared by the fixture packaging inventory.
+
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname not in MODULES:
+            return None
+        origin = SOURCE_ROOT / (fullname + '.py')
+        if not origin.is_file():
+            return None
+        return importlib.util.spec_from_file_location(fullname, origin)
+
+
+def install() -> None:
+    if not any(isinstance(finder, _FixtureFinder) for finder in sys.meta_path):
+        sys.meta_path.insert(0, _FixtureFinder())
+'''
+
+
+def _settings() -> tuple[str, str, list[str]]:
+    data = tomllib.loads((SOURCE_ROOT / 'pyproject.toml').read_text(encoding='utf-8'))
+    project = data['project']
+    modules = list(data.get('tool', {}).get('setuptools', {}).get('py-modules', []))
+    return str(project['name']), str(project['version']), modules
+
+
+def _dist_info(name: str, version: str) -> str:
+    return f'{name.replace("-", "_")}-{version}.dist-info'
+
+
+def _metadata(name: str, version: str) -> str:
+    return f'Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n'
+
+
+def _wheel_metadata() -> str:
+    return (
+        f'Wheel-Version: 1.0\nGenerator: {GENERATOR}\n'
+        f'Root-Is-Purelib: true\nTag: {WHEEL_TAG}\n'
+    )
+
+
+def _dist_info_files(name: str, version: str) -> dict[str, bytes]:
+    dist_info = _dist_info(name, version)
+    return {
+        f'{dist_info}/METADATA': _metadata(name, version).encode('utf-8'),
+        f'{dist_info}/WHEEL': _wheel_metadata().encode('utf-8'),
+    }
+
+
+def _wheel_files(name: str, version: str, modules: list[str]) -> dict[str, bytes]:
+    files = _dist_info_files(name, version)
+    files.update({f'{module}.py': (SOURCE_ROOT / f'{module}.py').read_bytes() for module in modules})
+    return files
+
+
+def _write_wheel(wheel_directory: str, files: dict[str, bytes], name: str, version: str) -> str:
+    dist_info = _dist_info(name, version)
+    rows = []
+    for path, payload in sorted(files.items()):
+        digest = base64.urlsafe_b64encode(hashlib.sha256(payload).digest()).rstrip(b'=')
+        rows.append(f'{path},sha256={digest.decode()},{len(payload)}')
+    rows.append(f'{dist_info}/RECORD,,')
+    record = io.StringIO()
+    csv.writer(record, lineterminator='\n').writerows(csv.reader(rows))
+    files[f'{dist_info}/RECORD'] = record.getvalue().encode('utf-8')
+
+    wheel_name = f'{name.replace("-", "_")}-{version}-{WHEEL_TAG}.whl'
+    target = Path(wheel_directory) / wheel_name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as archive:
+        for path, payload in sorted(files.items()):
+            archive.writestr(path, payload)
+    return wheel_name
+
+
+def _write_legacy_build_artifact(name: str, version: str, modules: list[str]) -> None:
+    # Emit the setuptools-style build artifact the reconciler removes as debris.
+    egg_info = SOURCE_ROOT / f'{name.replace("-", "_")}.egg-info'
+    egg_info.mkdir(exist_ok=True)
+    (egg_info / 'PKG-INFO').write_text(_metadata(name, version), encoding='utf-8')
+    (egg_info / 'top_level.txt').write_text(
+        ''.join(f'{module}\n' for module in modules), encoding='utf-8'
+    )
+
+
+def get_requires_for_build_wheel(config_settings=None) -> list[str]:
+    return []
+
+
+def get_requires_for_build_editable(config_settings=None) -> list[str]:
+    return []
+
+
+def prepare_metadata_for_build_wheel(metadata_directory: str, config_settings=None) -> str:
+    name, version, _ = _settings()
+    dist_info = _dist_info(name, version)
+    target = Path(metadata_directory) / dist_info
+    target.mkdir(parents=True, exist_ok=True)
+    (target / 'METADATA').write_text(_metadata(name, version), encoding='utf-8')
+    (target / 'WHEEL').write_text(_wheel_metadata(), encoding='utf-8')
+    (target / 'RECORD').write_text('', encoding='utf-8')
+    return dist_info
+
+
+def prepare_metadata_for_build_editable(metadata_directory: str, config_settings=None) -> str:
+    return prepare_metadata_for_build_wheel(metadata_directory, config_settings)
+
+
+def build_wheel(wheel_directory: str, config_settings=None, metadata_directory=None) -> str:
+    name, version, modules = _settings()
+    _write_legacy_build_artifact(name, version, modules)
+    return _write_wheel(wheel_directory, _wheel_files(name, version, modules), name, version)
+
+
+def build_editable(wheel_directory: str, config_settings=None, metadata_directory=None) -> str:
+    # An editable wheel maps to the source tree: it must not ship module copies, or a
+    # rolled-back reconciliation would keep resolving the withdrawn module from
+    # site-packages instead of reporting it as unmapped.
+    name, version, modules = _settings()
+    _write_legacy_build_artifact(name, version, modules)
+    normalized = name.replace('-', '_')
+    finder = f'__editable___{normalized}_{version.replace(".", "_")}_finder'
+    files = _dist_info_files(name, version)
+    files[f'{finder}.py'] = (
+        _FINDER_TEMPLATE.replace('__MODULES__', repr(modules))
+        .replace('__SOURCE_ROOT__', repr(str(SOURCE_ROOT)))
+        .encode('utf-8')
+    )
+    files[f'__editable__.{normalized}-{version}.pth'] = (
+        f'import {finder}; {finder}.install()\n'
+    ).encode('utf-8')
+    return _write_wheel(wheel_directory, files, name, version)
+"""
+
+
+def _pyproject_text(modules: list[str], *, version: str = "0.20.4") -> str:
+    """Render the disposable fork's pyproject.toml for a declared module inventory."""
+    return f"""[build-system]
+requires = []
+build-backend = "{_FIXTURE_BACKEND_MODULE}"
+backend-path = ["{_FIXTURE_BACKEND_DIRECTORY}"]
+
+[project]
+name = "hermes-agent"
+version = "{version}"
+dependencies = []
+
+[tool.setuptools]
+py-modules = {json.dumps(list(modules))}
+"""
+
 
 def _create_disposable_venv(path: Path) -> Path:
     """Create a fast, disposable virtualenv using uv."""
@@ -44,21 +246,20 @@ def _create_disposable_hermes_fork(
     modules: list[str],
     version: str = "0.20.4",
 ) -> Path:
-    """Initialize a minimal disposable Hermes fork repository."""
+    """Initialize a minimal disposable Hermes fork repository.
+
+    The fork vendors its own build backend so its editable and wheel builds resolve
+    with no network and no warm package cache.
+    """
     path.mkdir(parents=True, exist_ok=True)
-    pyproject_content = f"""[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "hermes-agent"
-version = "{version}"
-dependencies = []
-
-[tool.setuptools]
-py-modules = {json.dumps(modules)}
-"""
-    (path / "pyproject.toml").write_text(pyproject_content, encoding="utf-8")
+    backend_dir = path / _FIXTURE_BACKEND_DIRECTORY
+    backend_dir.mkdir(parents=True, exist_ok=True)
+    (backend_dir / f"{_FIXTURE_BACKEND_MODULE}.py").write_text(
+        _DISPOSABLE_BACKEND_SOURCE, encoding="utf-8"
+    )
+    (path / "pyproject.toml").write_text(
+        _pyproject_text(modules, version=version), encoding="utf-8"
+    )
 
     for mod in modules:
         mod_file = path / f"{mod}.py"
@@ -165,19 +366,7 @@ def test_red_green_editable_reconciliation(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     pyproject_path = fork_dir / "pyproject.toml"
-    new_pyproject = f"""[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "hermes-agent"
-version = "0.20.4"
-dependencies = []
-
-[tool.setuptools]
-py-modules = {json.dumps(all_intended_modules)}
-"""
-    pyproject_path.write_text(new_pyproject, encoding="utf-8")
+    pyproject_path.write_text(_pyproject_text(all_intended_modules), encoding="utf-8")
 
     # RED: python -I reports find_spec is None before reconciliation
     for interp in interpreters:
@@ -241,21 +430,7 @@ def test_atomic_rollback_on_later_interpreter_failure(tmp_path: Path) -> None:
     new_module = "hermes_state_compaction"
     all_intended = [*initial_modules, new_module]
     (fork_dir / f"{new_module}.py").write_text("MAGIC = 999\n", encoding="utf-8")
-    (fork_dir / "pyproject.toml").write_text(
-        f"""[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "hermes-agent"
-version = "0.20.4"
-dependencies = []
-
-[tool.setuptools]
-py-modules = {json.dumps(all_intended)}
-""",
-        encoding="utf-8",
-    )
+    (fork_dir / "pyproject.toml").write_text(_pyproject_text(all_intended), encoding="utf-8")
 
     # Force failure on interpreter 2 (idx 1) after interpreter 1 was updated
     with pytest.raises(EditableReconciliationError) as exc_info:
@@ -652,19 +827,7 @@ def test_real_canary_failure_rolls_back_metadata_faithfully(tmp_path: Path) -> N
     # expected module: the reinstall succeeds, the canary fails on its own.
     (fork_dir / "hermes_state_compaction.py").write_text("COMPACT = 1\n", encoding="utf-8")
     (fork_dir / "pyproject.toml").write_text(
-        f"""[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "hermes-agent"
-version = "0.20.4"
-dependencies = []
-
-[tool.setuptools]
-py-modules = {json.dumps([*modules, "hermes_state_compaction"])}
-""",
-        encoding="utf-8",
+        _pyproject_text([*modules, "hermes_state_compaction"]), encoding="utf-8"
     )
 
     pre_state: dict[Path, tuple[Path, dict[str, bytes]]] = {}
@@ -776,21 +939,7 @@ def test_fork_packaging_orphaned_module_detected(tmp_path: Path) -> None:
     fork_dir = _create_disposable_hermes_fork(tmp_path / "fork", modules=["hermes_constants"])
 
     # Overwrite pyproject.toml to declare nonexistent_module
-    (fork_dir / "pyproject.toml").write_text(
-        f"""[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "hermes-agent"
-version = "0.20.4"
-dependencies = []
-
-[tool.setuptools]
-py-modules = {json.dumps(declared)}
-""",
-        encoding="utf-8",
-    )
+    (fork_dir / "pyproject.toml").write_text(_pyproject_text(declared), encoding="utf-8")
 
     result = check_fork_packaging_inventory(fork_dir)
     assert not result.is_coherent
