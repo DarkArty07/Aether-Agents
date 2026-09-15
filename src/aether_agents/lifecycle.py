@@ -5869,9 +5869,9 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             'state_home="${XDG_STATE_HOME:-$HOME/.local/state}"\n'
             "\n"
             'export AETHER_RUNTIME_ROOT="${AETHER_RUNTIME_ROOT:-'
-            '$data_home/aether/runtime/current"}\n'
+            '$data_home/aether/runtime/current}"\n'
             'export AETHER_HERMES_ROOT="${AETHER_HERMES_ROOT:-'
-            '$state_home/aether/hermes"}\n'
+            '$state_home/aether/hermes}"\n'
             "\n"
             'exec "$AETHER_RUNTIME_ROOT/venv/bin/aether" "$@"\n'
         ).encode("utf-8")

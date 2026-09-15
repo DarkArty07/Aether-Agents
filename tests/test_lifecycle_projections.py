@@ -492,6 +492,98 @@ def test_projection_follows_the_selector_and_reports_coherence(
     assert manager.projection_status(record)["mismatches"] == []
 
 
+def _write_stub_entry_point(runtime_root: Path) -> Path:
+    """Install an echo stub where the launcher execs the selected release binary."""
+
+    executable = runtime_root / "venv" / "bin" / "aether"
+    executable.parent.mkdir(parents=True, exist_ok=True)
+    executable.write_text(
+        "#!/bin/sh\n"
+        'printf "runtime_root=%s\\n" "${AETHER_RUNTIME_ROOT:-}"\n'
+        'printf "hermes_root=%s\\n" "${AETHER_HERMES_ROOT:-}"\n'
+        'printf "arguments=%s\\n" "$*"\n',
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+    return executable
+
+
+def test_projected_launcher_parses_and_forwards_arguments_to_the_selector(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The projected entry point must be valid bash *and* reach the selected release.
+
+    Content equality plus the executable bit would accept a ``chmod +x`` script that
+    cannot run at all: the pre-``1.0.0rc1`` template closed the ``${VAR:-default}``
+    quote *before* the brace, so ``bash -n`` rejected the projected launcher with exit 2
+    while ``projection_status`` still compared bytes and called it coherent.  The
+    projected bytes are therefore parsed and executed here, and the stub release behind
+    ``runtime/current`` must receive both the operator arguments and the resolved roots.
+    """
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    manager = _manager(tmp_path)
+    spec = manager.projection_spec(_record(manager.store))
+    spec.launcher_path.parent.mkdir(parents=True, exist_ok=True)
+    spec.launcher_path.write_bytes(spec.launcher_bytes)
+    spec.launcher_path.chmod(0o755)
+
+    data_home = tmp_path / "data"
+    runtime_current = data_home / "aether" / "runtime" / "current"
+    state_home = tmp_path / "state"
+    _write_stub_entry_point(runtime_current)
+    environment = {
+        **os.environ,
+        "HOME": str(tmp_path / "home"),
+        "XDG_DATA_HOME": str(data_home),
+        "XDG_STATE_HOME": str(state_home),
+    }
+    # The default-resolution case must not inherit an operator override; the explicit
+    # override below is set deliberately.
+    environment.pop("AETHER_RUNTIME_ROOT", None)
+    environment.pop("AETHER_HERMES_ROOT", None)
+
+    parsed = subprocess.run(
+        ["bash", "-n", str(spec.launcher_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert parsed.returncode == 0, parsed.stderr
+
+    executed = subprocess.run(
+        [str(spec.launcher_path), "update", "--local"],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert executed.returncode == 0, executed.stderr
+    assert executed.stdout.splitlines() == [
+        f"runtime_root={runtime_current}",
+        f"hermes_root={state_home / 'aether' / 'hermes'}",
+        "arguments=update --local",
+    ]
+
+    # The ``:-`` default must stay overridable, which the pre-fix quoting also broke.
+    override = tmp_path / "override"
+    _write_stub_entry_point(override)
+    overridden = subprocess.run(
+        [str(spec.launcher_path), "--json"],
+        env={**environment, "AETHER_RUNTIME_ROOT": str(override)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert overridden.returncode == 0, overridden.stderr
+    assert overridden.stdout.splitlines() == [
+        f"runtime_root={override}",
+        f"hermes_root={state_home / 'aether' / 'hermes'}",
+        "arguments=--json",
+    ]
+
+
 def test_doctor_reports_fail_closed_projection_mismatches(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

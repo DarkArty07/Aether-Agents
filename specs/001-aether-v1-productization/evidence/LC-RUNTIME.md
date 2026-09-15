@@ -5,8 +5,8 @@
 **Authority**: Objective Contract `oc_3397f9f05d780f8e@v1`
 (SHA-256 `4d4c7650bf8ea93fc7cffe3d87f7f974e172d66cefcf6a74a2d83051568a4879`), base commit
 `410c172ae69ffa87f6e32960ae4aef3b8d6598f0`, Supervisor breakdown with shared decisions 1–17
-(`specs/001-aether-v1-productization/tasks.md` at `61124bc1`, amended at `5ede8524` and `337a071`).
-Never edited the contract.
+(`specs/001-aether-v1-productization/tasks.md` at `61124bc1`, amended at `5ede8524` and `337a071`) plus
+the review-round canonical-encoding decision 19 (`4cb3235`, §7.9). Never edited the contract.
 **Delivered scope**: contract in-scope 3–6, 9 and 10 (disposable lane); deliverables D2–D5;
 acceptance obligations AC-01…AC-08 (implementation half).
 **Working fork candidate**: `DarkArty07/aether-hermes:aether-main` at
@@ -84,7 +84,7 @@ this run — including the complete 1704-test suite — and every comparison rep
 
 | File | Change |
 | --- | --- |
-| `src/aether_agents/lifecycle.py` | maintained-fork `HermesSource`/lock validation with per-mode retired-mode refusal (`_retired_mode_message`, each mode's own reason), `LocalCandidate` verification, `update_local`, projection seams (`ProjectionRoots`, confined derivation, disabled controller for non-installed stores), doctor/`service_plan` detail, duplicate `verify_clean_checkout` definition removed |
+| `src/aether_agents/lifecycle.py` | maintained-fork `HermesSource`/lock validation with per-mode retired-mode refusal (`_retired_mode_message`, each mode's own reason), `LocalCandidate` verification, `update_local`, projection seams (`ProjectionRoots`, confined derivation, disabled controller for non-installed stores), doctor/`service_plan` detail, duplicate `verify_clean_checkout` definition removed, and the launcher-projection template quoting repaired so the projected entry point is valid bash (§11) |
 | `src/aether_agents/cli.py` | pinned `--local --aether-checkout --aether-commit --fork-checkout --fork-commit` surface, mutual exclusions, `_run_local_transition` preview/activation envelopes and refusals |
 | `src/aether_agents/paths.py` | explicit `user_bin_dir`/`applications_dir`/`systemd_user_dir` resolvers |
 | `src/aether_agents/resources/schemas/**` | packaged copy is Hatch-force-included from the contract copy, so the two stay byte-identical by construction (`pyproject.toml:55`) |
@@ -93,7 +93,7 @@ this run — including the complete 1704-test suite — and every comparison rep
 | `scripts/validate_hermes_patch_reconciliation.py` | maintained-fork generation/check mode (`--check` never writes), fail-closed partial/absent entries, one trailing newline in the generated preflight (fixed `git diff --check` whitespace error) |
 | `HERMES_LOCAL_PATCHES.md` + `specs/.../evidence/hermes-patch-*` | ledger/aggregate/preflight reconciled to the maintained fork at `54eeb56` |
 | `scripts/aether_tui.py` | owner launcher separation, byte-identical to the primary checkout |
-| `tests/test_lifecycle_projections.py` (new) | preview/refusals, projection coherence, doctor mismatch, recovery reprojection, interruption at the service projection, update/rollback/forward-activation with hash-level state preservation, #439 isolation controls |
+| `tests/test_lifecycle_projections.py` (new) | preview/refusals, projection coherence, doctor mismatch, recovery reprojection, interruption at the service projection, update/rollback/forward-activation with hash-level state preservation, #439 isolation controls, and the launcher parse-and-execute assertion (§11) |
 | `tests/test_observation_lifecycle.py` | maintained-fork lock fixtures and refusals, profile homes under the state root, RC-source `hermes_exact` lane, two assertion repairs (below), and the release-lock fixture version derived from the built wheel instead of a stale `0.24.0` literal (cross-unit repair requested by `LC-RELTOOL`/Supervisor); the retired-mode refusal block now asserts each mode's own reason instead of any borrowed one (§10) |
 | `tests/test_a1_contracts.py` | schema v4 agreement with the owning r13 plan line, retired-mode/const-key refusals |
 | `tests/test_hermes_patch_reconciliation.py`, `tests/test_aether_tui_launcher.py` | maintained-fork reconciliation and launcher-separation coverage |
@@ -113,7 +113,7 @@ before the intended observer-digest assertion; the test now restores both fields
 | AC-03 layout/preservation | `tests/test_lifecycle_projections.py::test_local_update_preserves_mutable_state_bytes_and_rolls_back_exactly`; `tests/test_observation_lifecycle.py::test_update_rollback_reupdate_preserves_unknown_observation_bytes` | release code stays under the data root, operational homes and mutable state under the state root; observation bytes, a profile-home `sessions.sqlite3`, an owner memory file and monitor state keep identical SHA-256 across install → update → rollback → forward activation; the generic `~/.local/bin/hermes` was never touched. |
 | AC-04 local preview | `tests/test_lifecycle_projections.py` (preview + every refusal); `test_cli_local_route_requires_the_complete_pinned_surface` | preview is read-only (`before == after` file list, no staging/releases/active pointer), reports exact Aether/fork revisions, target version/tag, HLP coverage, artifacts/hash, service interruption, preserved state and blockers; refuses dirty trees, commit mismatch, foreign origin, `VERSION`≠tag, wrong branch, incompatible Python, stale/refusing coverage, missing or conflicting pinned inputs and incomplete option surfaces without staging or activation. |
 | AC-05 immutable candidate | `tests/test_observation_lifecycle.py::test_exact_public_lifecycle_uses_real_plugin_profiles_query_and_recovery` with `AETHER_MAINTAINED_FORK_CHECKOUT=<clean fork checkout at 54eeb56>` | 1 passed in 89.55s against the real maintained fork: wheel install into versioned manager/runtime environments, all three profile homes materialized, observer plugin loads/unloads with 22 callbacks and zero remaining, query reads the trace, update → rollback → forward activation preserve unknown-newer bytes, doctor reports not-ready on a deliberately broken runtime and rollback recovers, uninstall preserves observation state. Without a provisioned fork checkout the same lane proves the retired public baseline is refused (`not the selected repository`) and publishes nothing. |
-| AC-06 atomic activation | `tests/test_lifecycle_projections.py::test_projection_follows_the_selector_and_reports_coherence`, `::test_interrupted_service_projection_restores_and_recovers_the_release`, `::test_recovery_reprojects_a_partial_transition` | after one transition the active record, `runtime/current`, launcher, Desktop entry and unit bytes agree; an injected interruption at the service projection leaves the previous release active with coherent projections, the transition journal failed, no service signalled, and a reopened manager reconciles the same durable state without a second transition. Unrelated services are never addressed (single-unit controller). |
+| AC-06 atomic activation | `tests/test_lifecycle_projections.py::test_projection_follows_the_selector_and_reports_coherence`, `::test_interrupted_service_projection_restores_and_recovers_the_release`, `::test_recovery_reprojects_a_partial_transition`, `::test_projected_launcher_parses_and_forwards_arguments_to_the_selector` | after one transition the active record, `runtime/current`, launcher, Desktop entry and unit bytes agree; an injected interruption at the service projection leaves the previous release active with coherent projections, the transition journal failed, no service signalled, and a reopened manager reconciles the same durable state without a second transition. The projected launcher is *executed*, not only compared: `bash -n` accepts it (rc 0), running it forwards the operator arguments to the selector's binary together with the resolved runtime/state roots, and an explicit `AETHER_RUNTIME_ROOT` override is honoured (§11). Unrelated services are never addressed (single-unit controller). |
 | AC-07 doctor | `tests/test_lifecycle_projections.py::test_doctor_reports_fail_closed_projection_mismatches`; `tests/test_observation_lifecycle.py -k doctor` | `projection_status` reports `launcher_projection_mismatch`, `desktop_projection_missing`, `runtime_pointer_mismatch`; doctor maps them to `RUNTIME_POINTER_MISMATCH`/`LAUNCHER_PROJECTION_MISMATCH`/`DESKTOP_PROJECTION_MISMATCH`/`SERVICE_PROJECTION_MISMATCH` and now also reports the service-controller availability/reason. |
 | AC-08 rollback | `tests/test_lifecycle_projections.py::test_local_update_preserves_mutable_state_bytes_and_rolls_back_exactly`; `tests/test_observation_lifecycle.py::test_rollback_uses_the_durable_predecessor_of_the_latest_activation` | rollback moves code/runtime/service back to the durable predecessor (selector and three service restarts observed through the injected controller) while every mutable-state SHA-256 stays identical; forward activation of the same target preserves them again. The real activation/rollback/forward-activation lane on published bytes is `LC-CLOSE`. |
 
@@ -156,7 +156,7 @@ All commands run from the unit worktree; Hermes-facing lanes use the repository 
   five errors, all attributable to `LC-DOCS`'s pending registry rows** (integration-bound, see §7):
   `uncovered derived surface: cli.option.aether.update.--local`, `--aether-checkout`, `--aether-commit`,
   `--fork-checkout`, `--fork-commit`. No other documentation error is present. Re-confirmed unchanged at
-  the review-round commit `59fa15c` (same five lines, no sixth error).
+  the review-round commit `59fa15c` and again at this round's frozen tip (same five lines, no sixth error).
 - Reconciliation: `uv run --frozen python scripts/validate_hermes_patch_reconciliation.py --check --fork-checkout <clean fork checkout> --json` → `reconciliation validation passed: reconciliation evidence is current`; `tests/test_hermes_patch_reconciliation.py` → **23 passed**.
 - Whitespace: `git diff --check` → clean (one generated blank-line-at-EOF error in the run-7 preflight was fixed in the generator **and** the committed file so regeneration stays byte-identical).
 - Skips: no test skip was added, removed or weakened by this unit. The RC-source lane's conditional
@@ -200,6 +200,34 @@ All commands run from the unit worktree; Hermes-facing lanes use the repository 
   mtime-identical**, the same values the Supervisor captured independently in review run 30;
   `aether-gateway-morfeo.service` absent before and after, and no `systemctl` invocation was made
   (`WITNESS UNCHANGED`).
+- Second review round (Supervisor run 39, changes requested: invalid launcher template, §11):
+  `uv run --frozen python scripts/run_tests.py -- -q -p no:cacheprovider tests/test_lifecycle_projections.py`
+  → **18 passed in 6.32s** at the frozen tip (the module gained the launcher parse-and-execute node, was
+  17 before);
+  with the pre-fix template restored in the module, the strengthened node alone →
+  **1 failed in 0.15s** (`assert 2 == 0` at the `bash -n` assertion, `line 12: unexpected EOF while
+  looking for matching '"'`); the fixed module restored byte-exactly (module SHA-256
+  `b32a10b75e6fc011224f6e9c8430c620c7b0fa998e4923ef5b4b6c549b37ad84`) → **1 passed in 0.13s**.
+  Rendered projection bytes: fixed template `7c70dfda…` (503 bytes) `bash -n` → **rc 0**; the inverse
+  (pre-fix) rendering `ca2479e4…` (503 bytes, the value the earlier rounds measured on the live path)
+  `bash -n` → **rc 2**.
+- Second review round, focused sweep
+  (`… tests/test_lifecycle_projections.py tests/test_a1_contracts.py tests/test_hermes_patch_reconciliation.py tests/test_hermes_baseline.py tests/test_hermes_editable.py tests/test_observation_packaging.py tests/test_aether_tui_launcher.py tests/test_public_artifacts.py`)
+  → **2 failed, 126 passed, 20 subtests passed in 45.08s** at the frozen tip; the two failures are exactly the
+  integration-bound r13 plan line (§7.2) and the policy manifest (§7.3), with no new failure.
+  `ruff check src/aether_agents tests scripts` → **All checks passed**; `ruff format --check` on the same
+  trees → **165 files already formatted**; `mypy src/aether_agents` → **Success: no issues found in 67
+  source files**; `git diff --check` → clean. Operator-destination witness before and after that round:
+  `~/.local/bin/aether` `4edab4f9…` mtime `1789454504`, `hermes.desktop` `a6091be1…` mtime `1789454504`,
+  `hermes-gateway-morfeo.service` `1b7421b1…` mtime `1789445613` — byte- and mtime-identical across every
+  invocation (§11.3 records the launcher replacement that happened outside this unit).
+- Full suite at this repair round: **not re-run, and no figure is claimed.** The measured machine state
+  (load `9.69, 10.70, 12.65`; 0 GB RAM free, 2 GB available; `/tmp` tmpfs 99 % full with
+  `pytest-of-darkarty` at 5.2 GB) is the invalidation class the Supervisor hit in review run 39, where a
+  full run collapsed with 261 spurious failures. The repaired surface is two files (one template string
+  plus one focused module), the focused sweep above covers every module that consumes or asserts the
+  launcher projection, and the merged-tree full-suite and coverage gates remain `LC-INT`'s obligation on
+  a quiet machine (Shared decision 16).
 
 ### 6.1 Coverage result
 
@@ -305,6 +333,9 @@ Measured facts and disposition:
   releases and an injected recording controller. It proves the route's sequencing, atomicity and
   fail-closed identity behavior; it does not prove a real systemd restart (deliberately: that is
   the bounded live lane, and the unit is forbidden from restarting the operator's services).
+- The live `~/.local/bin/aether` is no longer the run-7 escape write: it was replaced at `1789454504`
+  by a non-template launcher written outside this unit (§11.3). The activation lane replaces whatever
+  occupies that path, and nothing in this unit depends on the current occupant.
 - `hermes.tag` is optional for `maintained_fork` because no tag exists at the fork candidate; a
   declared tag is still verified to dereference to the locked commit. Re-pinning at `LC-INT` must keep
   `commit`/`source_tree_sha256`/artifact digests consistent — the validator refuses mismatches.
@@ -346,3 +377,78 @@ Applied in this round, entirely inside the declared writable surface:
 Refusal behaviour is unchanged: both retired modes still refuse before any staging or activation,
 each naming the maintained fork, branch and exact-commit regeneration path. Nothing in this round
 changed acceptance, the pinned identifiers, a shared interface or another unit's file.
+
+## 11. Second review round (Supervisor run 39) and its disposition
+
+Review run 39 confirmed the run-30 wording repair — including an independently reproduced RED/GREEN of the
+per-mode refusal assertions — and returned **changes requested** for one release-blocking defect in the
+same file: the launcher projection was invalid bash, so the projected `aether` entry point could not run.
+This section records the defect, the repair, the new assertion and the live consequence.
+
+### 11.1 Measured defect
+
+| Fact | Measurement |
+| --- | --- |
+| Template before the repair | `src/aether_agents/lifecycle.py:5871-5874` closed the expansion quote *inside* the braces: `export AETHER_RUNTIME_ROOT="${AETHER_RUNTIME_ROOT:-$data_home/aether/runtime/current"}` (same for `AETHER_HERMES_ROOT`) |
+| Rendered bytes | `ca2479e4b6f69baffaf84475c336dd84cdb51b1d2b8b9c8633f45b6cdcd6215d`, 503 bytes — reproduced here by inverting the two moved quotes on the fixed render, and identical to the value the earlier rounds measured on the live path |
+| `bash -n` on those bytes | **exit 2**, `line 12: unexpected EOF while looking for matching '"'` (`… línea 12: EOF inesperado mientras se buscaba un '"' coincidente` in this locale) |
+| Why the tests stayed green | `tests/test_lifecycle_projections.py:483-484` asserted byte equality with `spec.launcher_bytes` plus `os.access(X_OK)`: a `chmod +x` script that cannot run satisfies both, and `projection_status` compares bytes, so doctor called the projection *coherent* while the operator's entry point was dead. `grep -rn "bash -n" tests/` was empty until this repair added the node below — the only match left is that node's own docstring |
+| Attribution | Base `410c172` has **zero** launcher-projection code (`git show 410c172:src/aether_agents/lifecycle.py | grep -c launcher` → `0`), and the fragment was introduced by this objective's own first LC-RUNTIME commit `a9c6137` (`git log -S 'runtime/current"}'`). The Supervisor found it in this unit; reproduced here |
+
+### 11.2 Repair and its assertion (all inside the declared writable surface)
+
+Delivered as this round's local commit on the unit branch (`fix(lifecycle): emit a parseable launcher
+projection and execute it in test`; the exact SHA is recorded in the review handoff, not here, because
+this record is part of that commit).
+
+- `lifecycle.py:5871-5874` now reads
+  `export AETHER_RUNTIME_ROOT="${AETHER_RUNTIME_ROOT:-$data_home/aether/runtime/current}"` with the closing
+  quote *after* the brace, identically for `AETHER_HERMES_ROOT`. Every other byte of the template is
+  unchanged (503 bytes before and after; the two forms differ only by the position of two characters).
+  Rendered bytes now `7c70dfdae4537d32a77164cddba2a774aee454ab5b503aba2fbabab8f7683d47`, `bash -n` **rc 0**.
+- New node `tests/test_lifecycle_projections.py::test_projected_launcher_parses_and_forwards_arguments_to_the_selector`:
+  writes the projected bytes to the disposable projection root, requires `bash -n` **rc 0**, installs an
+  echo stub at `<root>/data/aether/runtime/current/venv/bin/aether`, runs the launcher as
+  `["update", "--local"]` with `XDG_DATA_HOME`/`XDG_STATE_HOME` pointed at the disposable root and asserts
+  the stub received the resolved `AETHER_RUNTIME_ROOT`, the resolved `AETHER_HERMES_ROOT` and the operator
+  arguments verbatim; it then repeats the execution with an explicit `AETHER_RUNTIME_ROOT` override to
+  pin that the `:-` default stayed overridable. Nothing in the node touches an operator destination — the
+  projections are the disposable roots `ProjectionRoots.disposable` derives.
+- RED/GREEN measured, not assumed: with the pre-fix template restored in the module the node fails
+  (**1 failed in 0.15s**, `assert 2 == 0` at the `bash -n` assertion, same `unexpected EOF` text); with the
+  fixed module restored byte-exactly (SHA-256
+  `b32a10b75e6fc011224f6e9c8430c620c7b0fa998e4923ef5b4b6c549b37ad84`) it passes (**1 passed in 0.13s**),
+  and the module is **18 passed** overall (6.32s at the frozen tip). The node is hermetic: it passes with
+  `AETHER_RUNTIME_ROOT`/`AETHER_HERMES_ROOT` exported in the ambient environment, which is why the
+  default-resolution case removes inherited values rather than assuming an operator override exists.
+
+### 11.3 Live consequence (recorded as required)
+
+- At review time the live `~/.local/bin/aether` **was** the pre-fix projection write of the run-7 escape:
+  byte-identical to `ca2479e4…` and invalid bash, exactly as the review states.
+- Measured again at `1789454809` (2026-09-15 00:46 local) that path holds a **different** file:
+  SHA-256 `4edab4f95ebd45e30692e49750dbbd9cfd5fb78592c913c27c7130a702eebf16`, 583 bytes, mtime
+  `1789454504`, `bash -n` **rc 0**. It is a "separated runtime selector" entry point that also exports
+  `AETHER_PROJECT_ROOT` and carries a machine-specific note; that text exists nowhere in this repository —
+  every ref and the full commit history searched with `git log --all -S` — nor in the live release venv, so
+  neither this unit's code nor any code in this repository produced it. The `hermes.desktop` written in the
+  same second (`a6091be1…`) carries an `Icon=` line the template never writes, and the Aether-owned unit
+  file was untouched (`1b7421b1…`, mtime `1789445613`), so no Aether lifecycle transition ran at that
+  instant. **This unit performed no write to any operator destination in any run** (command log plus the
+  witness harness in §6); the replacement is recorded as an external, non-unit change whose author is not
+  identifiable from the artifacts available here.
+- Consequence for the delivery is unchanged and now stronger: the projection emits valid bash and the
+  activation lane replaces whatever occupies the launcher path, so the operator's `aether` command is
+  functional after the RC's first promotion. The earlier statement that the path "is the run-7 escape
+  write" no longer describes the current bytes; what it must not be preserved as is a *healthy baseline
+  measured against the pre-fix template*, which is the point the review made.
+
+### 11.4 Optional strengthening deliberately not taken
+
+The review offered — explicitly as optional and only if the pinned interface stays intact — wiring
+`projection_status`/doctor to flag an *unparseable* launcher. Not implemented, as a local and reversible
+judgement: the four doctor mismatch codes this unit already delivers are the pinned AC-07 vocabulary, and
+adding a fifth, parse-level condition would extend a contract for a case the fixed producer can no longer
+create. The defect class is instead closed at the producer side by the execution node above, which is
+where it can be reproduced without touching a shared interface. If the integration lane wants the
+doctor-side check, it is a reviewed interface addition, not something to slip in here.
