@@ -155,7 +155,8 @@ All commands run from the unit worktree; Hermes-facing lanes use the repository 
 - Documentation gate: `uv run --frozen python scripts/check_documentation.py` → **fails with exactly
   five errors, all attributable to `LC-DOCS`'s pending registry rows** (integration-bound, see §7):
   `uncovered derived surface: cli.option.aether.update.--local`, `--aether-checkout`, `--aether-commit`,
-  `--fork-checkout`, `--fork-commit`. No other documentation error is present.
+  `--fork-checkout`, `--fork-commit`. No other documentation error is present. Re-confirmed unchanged at
+  the review-round commit `59fa15c` (same five lines, no sixth error).
 - Reconciliation: `uv run --frozen python scripts/validate_hermes_patch_reconciliation.py --check --fork-checkout <clean fork checkout> --json` → `reconciliation validation passed: reconciliation evidence is current`; `tests/test_hermes_patch_reconciliation.py` → **23 passed**.
 - Whitespace: `git diff --check` → clean (one generated blank-line-at-EOF error in the run-7 preflight was fixed in the generator **and** the committed file so regeneration stays byte-identical).
 - Skips: no test skip was added, removed or weakened by this unit. The RC-source lane's conditional
@@ -187,6 +188,18 @@ All commands run from the unit worktree; Hermes-facing lanes use the repository 
   `ruff check src/aether_agents/lifecycle.py tests/test_observation_lifecycle.py` →
   **All checks passed**; `ruff format --check` on the same two files → **2 files already formatted**.
   Both retirement texts were rendered and read directly (§10) instead of being assumed.
+- End-state full suite at the review-round commit (`59fa15c`):
+  `uv run --frozen python scripts/run_tests.py -- -q --tb=no -rf -p no:cacheprovider` →
+  **3 failed, 1709 passed, 70 skipped, 587 subtests passed in 398.59s (0:06:38)**, the same three
+  integration-bound failures and no others (`test_release_lock_schema_and_plan_agree_on_version_four`,
+  `test_canonical_base_manifest_matches_tracked_non_specs_files`,
+  `test_telegram_monitor_cli_plugin.py::test_d15r_fixture_and_environment_gaps_chain_end_to_end`).
+  Operator-destination witness captured before (`00:00:41`) and after (`00:07:21`) the run:
+  `~/.local/bin/aether` `ca2479e4…` mtime `1789443062`, `hermes.desktop` `2338dfa7…` mtime
+  `1789443068`, `hermes-gateway-morfeo.service` `1b7421b1…` mtime `1789445613` — all **byte- and
+  mtime-identical**, the same values the Supervisor captured independently in review run 30;
+  `aether-gateway-morfeo.service` absent before and after, and no `systemctl` invocation was made
+  (`WITNESS UNCHANGED`).
 
 ### 6.1 Coverage result
 
