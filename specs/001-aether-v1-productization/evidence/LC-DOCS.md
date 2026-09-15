@@ -4,7 +4,11 @@
 **Authority:** Objective Contract `oc_3397f9f05d780f8e@v1` (SHA-256
 `4d4c7650bf8ea93fc7cffe3d87f7f974e172d66cefcf6a74a2d83051568a4879`), base commit
 `410c172ae69ffa87f6e32960ae4aef3b8d6598f0`, plus the Supervisor breakdown
-`61124bc1dea787fbc5408fcc7f7b4f654f342e78:specs/001-aether-v1-productization/tasks.md`.
+`specs/001-aether-v1-productization/tasks.md` at its current revision
+`5ede8524df57ecc5b1c1a9b5bf2d056cf19d2a55` (supersedes `61124bc1` for reading shared decisions; shared decision 16
+owns the integration-bound gates recorded in §5.1 and §6.1). Supervisor independently re-measured the five-error
+attribution, the bidirectional registry/parser mapping (`scripts/check_documentation.py:419` and `:422`) and the
+400-versus-402 manifest gap before closing the request.
 **Scope delivered:** in-scope 1 (owning-artifact reconciliation), 7 and 11 as they touch
 documentation; deliverable D1; AC-15.
 **Unit-level only:** this record reports LC-DOCS's own compatibility evidence. It is not an
@@ -178,11 +182,14 @@ $ git diff --check
    isolation. LC-INT merges LC-RUNTIME before LC-DOCS verification and requires the plain
    check green; `--write` is only for a genuine deterministic byte difference. Manifest
    finding acknowledged and routed separately.
-2. **Manifest lines to apply (LC-BLOCK/LC-INT).** `.aether/objective-contracts/oc_3397f9f05d780f8e/v1.md`
+2. **Manifest lines — routed to LC-BLOCK by Supervisor.** `.aether/objective-contracts/oc_3397f9f05d780f8e/v1.md`
    and `patches/hermes/HLP-425-review-flow-continuity.patch`, each as a literal manifest line
    in `.github/workflows/policy.yml`, are required for
    `test_public_artifacts.py::test_canonical_base_manifest_matches_tracked_non_specs_files`
-   to pass. LC-DOCS does not own that workflow.
+   to pass. Supervisor extended LC-BLOCK's boundary to correct **both** base-missing lines (the
+   contract-file line attributed as a directly evidenced same-class blocker under contract
+   in-scope 2, not as part of #437), because the test compares the whole list. LC-DOCS does not
+   own that workflow and changed nothing there.
 3. **Release-lock schema version has a second consumer.** `tests/test_a1_contracts.py::test_release_lock_schema_and_plan_agree_on_version_three`
    asserts `release-lock.schema.json` const `3` **and** the string `release-lock schema is
    integer `3`` in `specs/r13-synthesis-and-release/plan.md:35` (a file in no unit's declared
