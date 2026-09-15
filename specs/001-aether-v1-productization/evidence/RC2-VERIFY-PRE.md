@@ -611,7 +611,7 @@ after this record is tracked (see the card handoff for the captured output).
   | `m5c-interpreters.txt` | 564 | `f57e64b152a73f40cd8cdff827b80a97909df2a43ceb8aa17729796b7694f76f` | the two interpreter classes named in §6 |
   | `m5_canary.sh` | 2297 | `176d1367f1f03d3ead733d56b962bcf1adfef16c578c45e828e675439ab23ef7` | §6 canary orchestration, including the live-board before/after snapshots |
   | `m5b_guard.py` | 1655 | `e7ed49ed9bcf06facb8a3ffe9b4bd6403bf3b51c199b44f4d287cd2ba46cb8b1` | §6 private-root refusal guard |
-  | `RC2-VERIFY-PRE-retained-evidence-inventory.txt.gz` | 3446 | `80501175972b159c8efe95607f9b7a599d9cff9319714af37c501e3cf269d344` | file-by-file inventory of the whole retained set (gunzip → 8989 B, `ca734f155fe56379cda84187b1863e7f37a8fb1fc1fd2c5c4229abcb0da85517`) |
+  | `RC2-VERIFY-PRE-retained-evidence-inventory.txt.gz` | 3446 | `80501175972b159c8efe95607f9b7a599d9cff9319714af37c501e3cf269d344` | file-by-file inventory of the retained set as packaged for this correction (gunzip → 8989 B, `ca734f155fe56379cda84187b1863e7f37a8fb1fc1fd2c5c4229abcb0da85517`) |
 
 - **Temporary-only (not attached), beyond the two §6 module logs above:** the remaining
   per-measurement transcripts (`logs/m1-*`, `logs/m2-*`, `logs/m3-*`, `logs/m4-*`,
@@ -622,3 +622,7 @@ after this record is tracked (see the card handoff for the captured output).
   lists and the values digest. Each one's size and SHA-256 is in the attached inventory; the
   transcripts are reproducible from the commands quoted in the section that used them, and
   they are temporary rather than durable evidence.
+- The inventory was packaged before this correction's own bookkeeping files existed, so it
+  does not list them: the runner script for the correction (`m8_verify_commit.sh`) and its
+  transcript (`logs-m8.txt` — the attachment readback, scratch cleanup, commit and card
+  checks) were added to the same scratch root afterwards and are retained there unlisted.
