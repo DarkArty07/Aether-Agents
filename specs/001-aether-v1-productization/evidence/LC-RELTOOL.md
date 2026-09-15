@@ -65,10 +65,16 @@ required two bounded items:
    `clean-install.json` (14358 vs 14404 bytes) and consequently `provenance.json` and
    `SHA256SUMS`, because `uv` reports how long each resolution, preparation, install and
    check took and that elapsed value was captured verbatim. Captured tool output is now
-   normalized (`in <elapsed>`) where it is excerpted into a report, which removes the only
-   run-to-run variance without hiding anything else, so the reconcile claim below — a
-   re-run succeeds exactly when the release already carries these bytes — is now true
-   rather than aspirational.
+   normalized (`in <elapsed>`) where it is excerpted into a report, so the elapsed value can
+   no longer reach a member.
+
+   **Run-50 correction to this item.** The sentence that stood here — "removes the *only*
+   run-to-run variance …, so the reconcile claim below … is now true rather than
+   aspirational" — claimed more than the evidence supported. The elapsed value was one of
+   three environment-dependent values in that same member trio; the run-50 re-review
+   measured the other two, and the run-50 repair below closed them. The elapsed
+   normalization from this round stands unchanged; the reconcile claim is asserted only for
+   the axes proven in the run-50 section.
 
 Repaired in commit `867d7982737470605663995dab12e80b18f6fc26`. The bundle below was rebuilt
 there with four real builds, all naming the same two revisions in their reports: two run in
@@ -79,17 +85,84 @@ across all four; the bundle supersedes the
 `4688b6d9c197b5531a80e1389f958fd0e9b88304` qualification. The maintained-fork archive
 digest is unchanged across every round.
 
+## Review repair (Supervisor run 50, changes requested)
+
+The re-review verified round-34 item 1 as closed (the lock's `hermes.branch`, with the full
+sensitivity matrix against the release-runtime unit's real v4 schema) and returned one
+consolidated item: finish the normalization, or correct the claim. Two environment-dependent
+axes remained, both reaching the same three members the run-34 round had touched
+(`clean-install.json` → `provenance.json` → `SHA256SUMS`), and the run-34 four-build proof
+could not see either because all four builds ran in the same directory tree with an
+already-populated venv:
+
+1. **The venv's interpreter alias.** `uv` exposes one interpreter as `bin/python` and
+   `bin/python3`, and which alias a run records depends only on whether the build's own venv
+   already existed (the first `uv run` after `.venv` is deleted records `python`, the next
+   one `python3`). The build interpreter normally lives *inside* the Aether checkout
+   (`<aether-checkout>/.venv/bin/python3`), and the mask list replaced the checkout path
+   before the interpreter path, so the alias survived into every capture it appeared in.
+2. **The truncation footer.** `_excerpt` computed `[truncated N characters]` on the **raw**
+   text and `_portable` masked the paths afterwards, so the count encoded the real lengths
+   of the checkout and work directories: the same content recorded from a longer or shorter
+   build directory differed in the footer, and therefore in the member bytes.
+
+Repaired in commit `1aa83ff02c90ca83b6f731e0aabaa0d0b7dc4c20`:
+
+- `_capture` masks host-local paths **first** and excerpts **second**, so the recorded text
+  and its footer depend only on the portable text;
+- `_normalize_captured` records every interpreter leaf canonically as `bin/<interpreter>`
+  (`bin/python`, `bin/python3`, `bin/python3.13`; not `bin/python-config` or
+  `bin/activate`) exactly the way elapsed values are recorded as `in <elapsed>`;
+- `_report_masks` masks the build interpreter **and its resolved target** before the checkout
+  it normally lives in, so the alias cannot survive anywhere in a capture.
+
+The captures in the qualified bundle now read `Using CPython 3.13.15 interpreter at:
+<probe-interpreter>` in the manager and runtime venv steps, `<probe-interpreter>
+<disposable-root>/tui-repo/scripts/aether_tui.py --check` for the TUI probe and
+`<disposable-root>/runtime/bin/<interpreter> -c …` for the runtime probe. A scan of
+`clean-install.json` for `bin/python` with or without a version suffix finds no literal
+left: the interpreter appears only as the canonical `bin/<interpreter>` leaf (runtime probe
+argv) and as `<probe-interpreter>` (venv steps, TUI probe argv).
+
+### Proof — three builds of the same two revisions, all eight digests equal
+
+| Build | Work / output directory | Interpreter the build itself ran with |
+| --- | --- | --- |
+| 1 | `/tmp/r6-work-a` → `/tmp/r6-bundle-a` | `<checkout>/.venv/bin/python3` (venv already existed) |
+| 2 | `/tmp/r6-work-b-with-a-much-longer-directory-name` → `/tmp/r6-bundle-b-longer-name` | `<checkout>/.venv/bin/python3` (venv already existed) |
+| 3 | `/tmp/r6-work-fresh` → `/tmp/r6-bundle-fresh`, run as the **first** `uv run` after `.venv` was deleted | `<checkout>/.venv/bin/python` — recorded by the wrapper that ran the build as `BUILD_INTERPRETER=…/.venv/bin/python` |
+
+Member-by-member comparison of the three `sha256sum` tables: all eight digests identical in
+every pair, and `sha256sum --check --strict SHA256SUMS` passes inside all three bundles.
+Build 3 exercises the fresh-venv alias, builds 1 and 2 differ in both directory lengths, and
+all three share only the two revisions as inputs.
+
+### What is claimed, and what is not
+
+- **Claimed:** on the declared toolchain the eight-member set is a function of the two
+  revisions alone — independent of the build directory and of whether the build venv already
+  existed. Both measured axes are closed, and each is pinned by a test that runs the real
+  capture path and fails on the pre-repair revision
+  (`test_recorded_capture_does_not_depend_on_the_build_directory_or_the_venv_alias`,
+  `test_build_interpreter_is_masked_before_the_checkout_it_lives_in`,
+  `test_captured_interpreter_leaf_is_normalized_like_the_elapsed_value`).
+- **Not claimed:** the recorded interpreter *version* (`python_version: 3.13.15`), `uv`'s own
+  version and `SOURCE_DATE_EPOCH` are declared toolchain inputs — the workflow pins
+  `uv 0.12.3` with `uv sync --frozen` under `requires-python >=3.11,<3.14`. A rebuild on a
+  different CPython minor version records that version; that is a toolchain identity, not the
+  host-path/venv-state variance this repair removes.
+
 ## Deliverables
 
 | Path | Change |
 | --- | --- |
 | `VERSION` | reconciled to `1.0.0rc1` |
 | `CHANGELOG.md` | new `1.0.0rc1` entry stating the pre-stable RC scope, no PyPI/index publication and unverified WSL2 |
-| `scripts/release_bundle.py` | new tool: `build`, `verify`, `members` and `verify-published-assets` subcommands; captured tool output is normalized so every member is reproducible |
-| `tests/test_release_bundle.py` | new focused module, 32 tests |
+| `scripts/release_bundle.py` | new tool: `build`, `verify`, `members` and `verify-published-assets` subcommands; captured tool output is masked before it is excerpted and records elapsed values and interpreter leaves canonically, so all eight members are reproducible from the two revisions alone |
+| `tests/test_release_bundle.py` | new focused module, 35 tests |
 | `.github/workflows/release.yml` | reconciled: tag/identity validation preserved, the tagged commit is built and qualified, the create path attaches the tool's verified eight-member set, and a reconcile re-verifies the published assets instead of attaching nothing |
 
-Qualified commit: `867d7982737470605663995dab12e80b18f6fc26` (clean checkout, remote
+Qualified commit: `1aa83ff02c90ca83b6f731e0aabaa0d0b7dc4c20` (clean checkout, remote
 `https://github.com/DarkArty07/Aether-Agents`; the digests below are that revision's). The
 maintained-fork input is unchanged: `https://github.com/DarkArty07/aether-hermes` commit
 `54eeb56dabefc98821d696656ed58c55dd777346`, clean checkout, proven reachable from
@@ -97,22 +170,37 @@ maintained-fork input is unchanged: `https://github.com/DarkArty07/aether-hermes
 `bb5e9a422f3135371557e75bcd1db01c5f8fc3ba` — the candidate is three commits ahead because
 it is not published yet).
 
+Re-measured this round, the candidate revision is still absent from the declared repository:
+`git fetch --no-tags origin 54eeb56dabefc98821d696656ed58c55dd777346` fails with
+`upload-pack: not our ref`, `gh api repos/DarkArty07/aether-hermes/commits/54eeb56d…`
+answers `No commit found for SHA` (HTTP 422), and the object is not in the fetched history of
+`refs/heads/aether-main` (`bb5e9a422f3135371557e75bcd1db01c5f8fc3ba`). The qualification
+therefore used a local clean checkout of the exact revision, exactly as the earlier rounds
+did; the consequence for the publication path is recorded under integration dependencies.
+
 ## Produced bundle members (byte sizes and SHA-256)
 
 | Member | Bytes | SHA-256 |
 | --- | --- | --- |
-| `aether_agents-1.0.0rc1-py3-none-any.whl` | 658758 | `7ab13e9642ac17ae5e6f35882023ba5a91c5c284bffdd3960fb2b599408ee47f` |
-| `aether_agents-1.0.0rc1.tar.gz` | 1010005 | `4dfdf64aa2f59baf5db439688878d2395c76d96445fddf25edb96789f092a122` |
+| `aether_agents-1.0.0rc1-py3-none-any.whl` | 658758 | `84a6ee00a4b6de82c940e0d0fa63ea56f05acab947e685f03e8d880d0bb02fef` |
+| `aether_agents-1.0.0rc1.tar.gz` | 1010905 | `1c4b4a84ee6f60a847cc4db229f8596980c084f572dd5e31265e5d7fce89ba07` |
 | `aether-hermes-source-54eeb56dabefc98821d696656ed58c55dd777346.tar.gz` | 65892746 | `cf766ef8665c810b85d93e990e621192110e78a27ecb692170008c217dd42542` |
-| `aether-agents-1.0.0rc1-release-lock.json` | 2356 | `3660895c3a6a8683a30e12f6850e8dddea5656eae740b9d5aa8bebdc80e2f44a` |
-| `aether-agents-1.0.0rc1-provenance.json` | 2949 | `51287ef9173969339f02732486bbb68e7112e0954af54fe3f3227ac8a449719b` |
-| `aether-agents-1.0.0rc1-package-members.json` | 2453323 | `d7783b7b001ab5d000564610365f8d007b2c2b610d961f194129b99c3f98c5d2` |
-| `aether-agents-1.0.0rc1-clean-install.json` | 14432 | `c63a0d19512e88f9b8aca46b9c30c104583b9bb9edf8c7f20b31ecae90d3aa84` |
-| `SHA256SUMS` | 767 | `02f111ddd16a6b256ebd2d548083f485474fe42621fef36702ca3236722bb093` |
+| `aether-agents-1.0.0rc1-release-lock.json` | 2356 | `3dc4eff39fd5c7072c46858d5a4ffc5ffcf3e715020d06ce2bf1afc7849f07d5` |
+| `aether-agents-1.0.0rc1-provenance.json` | 2949 | `559975712efdd5cedd21f79e11a6c59c74fa10e46beed02ccb3b07070b0ba1e8` |
+| `aether-agents-1.0.0rc1-package-members.json` | 2453323 | `067e67b911094a6ebbe710a1ba0807c770e92bd3fb4b0c88b3cfc618a808696c` |
+| `aether-agents-1.0.0rc1-clean-install.json` | 14424 | `43361ff8439263d4c1b13fba8a6c7f9475387ff204d54bdbad3e26426fad5968` |
+| `SHA256SUMS` | 767 | `e6936ac2c1512d217d993bbb5210c03c49445a526fb2d3ee7ad412c8b550109b` |
 
-Candidate bundle directory for this qualification: `/tmp/r5-bundle-a` (the four builds
-above produced identical bytes; `/tmp/r4-bundle-a` and `/tmp/r4-bundle-b` are the earlier
-pair, which the round-34 re-review inspected).
+Candidate bundle directory for this qualification: `/tmp/r6-bundle-a`; the three builds of
+the run-50 proof produced identical bytes as `/tmp/r6-bundle-b-longer-name` and
+`/tmp/r6-bundle-fresh`. The wheel and sdist bytes are bound to the qualified commit (the
+commit timestamp is `SOURCE_DATE_EPOCH`, and the sdist also carries the tool, test and
+`specs/` sources), so these digests — unlike the maintained-fork archive, which is unchanged
+across every round — differ from the `867d7982…` table they replace. The digests belong to
+`1aa83ff0…`, the revision that carries the tool, the tests and `VERSION`; the branch tip adds
+only this evidence file, and because the sdist ships `specs/`, a rebuild at any later commit
+necessarily has a different sdist digest — LC-INT rebuilds at the integrated revision and
+attaches those bytes, as recorded below.
 
 **What the workflow does with exactly these eight names:** `scripts/release_bundle.py
 members --bundle <bundle>` prints this list — the seven members `SHA256SUMS` covers, plus
@@ -133,8 +221,8 @@ fail-closed placeholder so wrong bytes cannot be published).
 ```json
 "schema_version": 4,
 "aether": {"version": "1.0.0-rc.1", "package_version": "1.0.0rc1", "distribution": "aether-agents",
-           "git_tag": "v1.0.0-rc.1", "git_commit": "867d7982…", "python_requires": ">=3.11,<3.14",
-           "observer_requirements_sha256": "798d9f1f…", "wheel_sha256": "7ab13e96…"},
+           "git_tag": "v1.0.0-rc.1", "git_commit": "1aa83ff0…", "python_requires": ">=3.11,<3.14",
+           "observer_requirements_sha256": "798d9f1f…", "wheel_sha256": "84a6ee00…"},
 "hermes": {"source_mode": "maintained_fork", "repository": "https://github.com/DarkArty07/aether-hermes",
            "branch": "aether-main", "version": "0.20.1", "tag": "54eeb56d…",
            "commit": "54eeb56d…", "source_tree_sha256": "4f0c6fab…",
@@ -162,11 +250,11 @@ Command form: `uv run --frozen python scripts/release_bundle.py …`.
 
 | Check | Result |
 | --- | --- |
-| `build --aether-checkout . --aether-commit 867d7982… --fork-checkout <provisioned fork checkout> --fork-commit 54eeb56… --work /tmp/r5-a --out /tmp/r5-bundle-a --pre-integration`, then the same into `/tmp/r5-b` / `/tmp/r5-bundle-b` | both exit 0; 8 members written by each; the second build spans 60 s (00:48:33 → 00:49:33 local, measured from its first materialized work entry to the written report); `finished_bundle: {members_rehashed: 7, plain_text_scan: clean}` (the counter is the seven members `SHA256SUMS` covers; the checksum file is the eighth, and `members` reports all eight) |
-| **Byte reproducibility of the whole member set** (round-34 item 2) | four builds of the same two revisions into four different work/output directories — `/tmp/r5-bundle-a`, `/tmp/r5-bundle-b` and the earlier `/tmp/r4-bundle-a`, `/tmp/r4-bundle-b` — agree on all eight digests; every pairwise comparison is byte-identical, including `clean-install.json`, `provenance.json` and `SHA256SUMS`, which the round-34 re-review measured as differing. No timestamp field exists in either report; the only run-to-run variance was the captured `uv` elapsed values, now recorded as `in <elapsed>` |
-| Byte reproducibility of the distributions from the same commit (the tool builds twice and compares) | `{"wheel": true, "sdist": true, "source_date_epoch": 1789453965}` with `SOURCE_DATE_EPOCH` pinned to the commit timestamp |
-| Rebuilt lock validated against the release-runtime unit's **real v4 schema** (round-34 item 1) | `validate_lock(lock, aether_checkout=…, allow_schema_drift=False)` with the schema path pointed at that unit's `specs/001-aether-v1-productization/contracts/release-lock.schema.json`: `schema_validation: applied`, `repository_schema_version: 4`, pinned identity `hermes.branch=aether-main`; the same lock with `hermes.branch` deleted refuses `lock-identity: release lock identity: hermes.branch is None` |
-| `verify --bundle /tmp/r5-bundle-a --expect-aether-commit 867d7982… --expect-fork-commit 54eeb56… --pre-integration --clean-install` | exit 0; every member re-hashed against `SHA256SUMS`; 9/9 install steps exit 0; 13 probes = 6 required handshakes `pass`, 5 optional fail-closed envelopes `refused` as documented, 1 optional probe `unavailable` (`aether update --local --dry-run`, the option surface that does not exist at this revision) and 1 required probe `unavailable` (`pinned aether update --local option surface`), which the report records in `failed_probes` rather than hiding; `hermes-agent` 0.20.1 importable; the four Aether plugin entry points discovered from the artifact-installed wheel |
+| `build --aether-checkout . --aether-commit 1aa83ff0… --fork-checkout <provisioned fork checkout> --fork-commit 54eeb56… --work /tmp/r6-work-a --out /tmp/r6-bundle-a --pre-integration`, then the same into `/tmp/r6-work-b-with-a-much-longer-directory-name` / `/tmp/r6-bundle-b-longer-name` and, as the first `uv run` after `rm -rf .venv`, into `/tmp/r6-work-fresh` / `/tmp/r6-bundle-fresh` | all three exit 0 in 64.4 s, 55.6 s and 80.0 s; 8 members written by each; `finished_bundle: {members_rehashed: 7, plain_text_scan: clean}` (the counter is the seven members `SHA256SUMS` covers; the checksum file is the eighth, and `members` reports all eight) |
+| **Byte reproducibility of the whole member set** (round-34 item 2, completed in run 50) | three builds of the same two revisions — two different work/output directory pairs plus one fresh-venv build (`.venv` deleted first; a wrapper recorded the build's own `sys.executable` as `<checkout>/.venv/bin/python`, the fresh alias the other two builds recorded as `python3`) — agree on all eight digests, member by member; `sha256sum --check --strict SHA256SUMS` passes in each. No timestamp field exists in either report; the captured `uv` elapsed values are recorded as `in <elapsed>`, every interpreter leaf as `bin/<interpreter>` (or `<probe-interpreter>` for the build interpreter), and excerpt footers are counted on the masked text, so neither the build directory nor the venv state reaches a member |
+| Byte reproducibility of the distributions from the same commit (the tool builds twice and compares) | `{"wheel": true, "sdist": true, "source_date_epoch": 1789457806}` with `SOURCE_DATE_EPOCH` pinned to the commit timestamp |
+| Rebuilt lock validated against the release-runtime unit's **real v4 schema** (round-34 item 1, re-measured in run 50) | `validate_lock(lock, aether_checkout=…, allow_schema_drift=False)` with `_lock_schema_path` pointed at that unit's `specs/001-aether-v1-productization/contracts/release-lock.schema.json` (asserted to be the `schema_version` 4 file): accepted with `schema_validation: applied`, `repository_schema_version: 4`, pinned identity `hermes.branch=aether-main`; sensitivity held under the same schema — `branch` deleted → `lock-identity: release lock identity: hermes.branch is None`; `branch: "main"` → `lock-identity: … hermes.branch is 'main'`; an extra `hermes` property → `lock-schema-invalid: … Additional properties are not allowed ('unexpected' was unexpected)`; `artifacts: []` → `lock-schema-invalid: … hermes/artifacts: [] should be non-empty; hermes/artifacts: [] does not contain items matching the given schema`; `source_mode: upstream` → `lock-identity`; `schema_version: 3` → `lock-identity: … schema_version is not 4`. The built lock's `hermes` key set is exactly the nine v4 properties: `artifacts, branch, commit, python_requires, repository, source_mode, source_tree_sha256, tag, version` |
+| `verify --bundle /tmp/r6-bundle-a --expect-aether-commit 1aa83ff0… --expect-fork-commit 54eeb56… --pre-integration --clean-install` | exit 0 in 42.3 s; every member re-hashed against `SHA256SUMS`; 9/9 install steps exit 0; 13 probes = 6 required handshakes `pass`, 5 optional fail-closed envelopes `refused` as documented (`doctor`, `status`, `setup --dry-run`, `update --dry-run`, `rollback --dry-run`), 1 optional probe `unavailable` (`aether update --local --dry-run`, the option surface that does not exist at this revision) and 1 required probe `unavailable` (`pinned aether update --local option surface`), which the report records in `failed_probes` rather than hiding; `hermes-agent` 0.20.1 importable; the four Aether plugin entry points discovered from the artifact-installed wheel |
 | Source not mutated by the build | post-build `HEAD` equals the requested commit and `git status --porcelain` is empty |
 | Wheel inspection (product `LifecycleManager._inspect_wheel`) | 158 members; `aether-agents` 1.0.0rc1; entry point `aether-contract-observer=aether_agents.observation.capture.hermes_plugin`; installed-file fingerprint `cac9cb16…`; observation schema digests `7b239fce…`/`b854701e…`/`9d134b4d…` |
 | Sdist inspection | 261 members; root entries `.gitignore`, `LICENSE`, `PKG-INFO`, `README.md`, `VERSION`, `pyproject.toml`, `scripts`, `specs`, `src`, `tests` |
@@ -178,8 +266,8 @@ Command form: `uv run --frozen python scripts/release_bundle.py …`.
 | Runtime handshake | `hermes-agent` 0.20.1 importable (`import hermes_cli`), all four Aether plugin entry points discovered from the artifact-installed wheel |
 | CLI handshakes | `aether --version`, `aether version --json` (reports `1.0.0rc1`), `aether --help`, `aether update --help` → pass; `doctor`/`status`/`setup --dry-run`/`update --dry-run`/`rollback --dry-run` → documented fail-closed envelopes (exit 3/4) |
 | TUI handshake | `scripts/aether_tui.py --check` (exact commit) against a disposable launcher layout and the artifact-installed runtime → `result: ready` |
-| `verify --bundle <bundle> --expect-aether-commit 4688b6d… --expect-fork-commit 54eeb56… --pre-integration --clean-install` (run-28 round, superseded by the `867d7982…` row above; kept as history) | exit 0 in 37.7 s: every member re-hashed against `SHA256SUMS`, wheel/archive re-matched against the lock, scans re-run, fresh artifact-installed handshake repeated |
-| `members --bundle <bundle>` | exit 0; prints the eight absolute member paths in sorted order, `SHA256SUMS` first |
+| `verify --bundle <bundle> --expect-aether-commit 4688b6d… --expect-fork-commit 54eeb56… --pre-integration --clean-install` (run-28 round, superseded by the `1aa83ff0…` row above; kept as history) | exit 0 in 37.7 s: every member re-hashed against `SHA256SUMS`, wheel/archive re-matched against the lock, scans re-run, fresh artifact-installed handshake repeated |
+| `members --bundle <bundle>` | exit 0; prints the eight absolute member paths in sorted order, `SHA256SUMS` first (re-measured on this bundle) |
 | `verify-published-assets --bundle <bundle> --tag v1.0.0-rc.1 --assets -` (the workflow's stdin form) against the qualified digests | exit 0: `published release carries the qualified bytes: v1.0.0-rc.1` and the eight names |
 | The shipped release step executed for real (extracted step script + real `scripts/release_bundle.py` + stub `gh` that logs argv) | create path: `release view` then `release create` with exactly the eight qualified paths (`--verify-tag --generate-notes --prerelease`); reconcile path: `release view` then `release edit` with **no file arguments** and the verification in between; drift cases: non-zero exit, diagnostic on stderr, **no** create/edit invocation logged. Tests: `test_release_step_attaches_exactly_the_qualified_member_set`, `test_release_step_reconcile_verifies_the_release_and_passes_no_files`, `test_release_step_reconcile_fails_closed_before_editing_anything`, `test_release_step_refuses_a_bundle_that_drifted_before_attaching` |
 | Real `gh` interface check (read-only, against a public release) | `gh release view --json assets --jq '.assets[] | "\(.name)\t\(.digest // "")"'` emits `name<TAB>sha256:<hex>` lines — the shape the tool parses; `gh release edit --help` shows `USAGE: gh release edit <tag>`, with no `[<filename>...]` (unlike `gh release create`, whose help documents asset files), and `gh release edit <tag> --prerelease f1 f2` is rejected locally with `accepts 1 arg(s), received 3` |
@@ -188,18 +276,18 @@ Command form: `uv run --frozen python scripts/release_bundle.py …`.
 
 | Case | Observed | Exit |
 | --- | --- | --- |
-| strict mode at this revision (no `--pre-integration`) | `lock-schema-drift: the repository schema declares schema_version 3; the maintained-fork schema is supplied by the release-runtime unit and only exists after integration` — re-measured at `867d7982…` | 1 |
-| lock without the declared branch (against the real v4 schema) | `lock-identity: release lock identity: hermes.branch is None` — and with every pinned value correct but the shape drifted (`artifacts: []`, one extra property): `lock-schema-invalid: release lock does not validate: hermes: Additional properties are not allowed ('unexpected' was unexpected); hermes/artifacts: [] should be non-empty; hermes/artifacts: [] does not contain items matching the given schema` (round-34 item 1; the same refusals are pinned by the test) | 1 |
-| wrong Aether revision | `revision-mismatch: aether checkout HEAD 867d7982737470605663995dab12e80b18f6fc26 is not the requested commit 410c172ae69ffa87f6e32960ae4aef3b8d6598f0` — re-measured at this revision | 1 |
+| strict mode at this revision (no `--pre-integration`) | `lock-schema-drift: the repository schema declares schema_version 3; the maintained-fork schema is supplied by the release-runtime unit and only exists after integration` — re-measured at `1aa83ff0…` | 1 |
+| lock without the declared branch (against the real v4 schema) | `lock-identity: release lock identity: hermes.branch is None`; `branch: "main"` → `lock-identity: … hermes.branch is 'main'`; `source_mode: upstream` → `lock-identity`; `schema_version: 3` → `lock-identity: … schema_version is not 4`; and with every pinned value correct but the shape drifted (`artifacts: []`, one extra property) → `lock-schema-invalid: release lock does not validate: hermes: Additional properties are not allowed ('unexpected' was unexpected); hermes/artifacts: [] should be non-empty; hermes/artifacts: [] does not contain items matching the given schema` — all re-measured in run 50, and the same refusals are pinned by the tests | 1 |
+| wrong Aether revision | `revision-mismatch: aether checkout HEAD 1aa83ff02c90ca83b6f731e0aabaa0d0b7dc4c20 is not the requested commit 410c172ae69ffa87f6e32960ae4aef3b8d6598f0` — re-measured at this revision | 1 |
 | wrong revision form | `unknown-revision: aether commit '2e9bf8a' is not a full 40-hex id` | 1 |
 | foreign maintained-fork repository | `repository-identity: maintained-fork source must be https://github.com/DarkArty07/aether-hermes, observed https://github.com/NousResearch/hermes-agent.git` | 1 |
 | dirty checkout (modified file at report time) | `dirty-checkout: aether checkout has uncommitted changes: ?? scratch-dirty-probe` — re-measured at this revision; the probe file was removed afterwards and `git status --porcelain` is empty again | 1 |
 | divergent fork commit | `branch-divergence: commit … is not reachable from aether-main (observed …)` (test) | — |
-| tampered member byte | `digest-mismatch: aether_agents-1.0.0rc1.tar.gz hashes to 430d4a9d75ea807f4e97c3e9fb91bfc02dddccc491c572c73d72da6cf6dff0dc, not the recorded 4dfdf64aa2f59baf5db439688878d2395c76d96445fddf25edb96789f092a122` — re-measured at this revision on a copy; the qualified bundle is untouched | 1 |
+| tampered member byte | `digest-mismatch: aether_agents-1.0.0rc1.tar.gz hashes to 1a44164b7c407411c1771fd7590f34500d74216f001546a658061d5f0a7c7eb7, not the recorded 1c4b4a84ee6f60a847cc4db229f8596980c084f572dd5e31265e5d7fce89ba07` — re-measured at this revision on a copy; the qualified bundle is untouched | 1 |
 | removed member | `member-drift: bundle members do not match SHA256SUMS: extra [], missing ['aether-agents-1.0.0rc1-provenance.json']` — re-measured at this revision | 1 |
-| rewritten checksum entry | `digest-mismatch: aether-agents-1.0.0rc1-clean-install.json hashes to c63a0d19512e88f9b8aca46b9c30c104583b9bb9edf8c7f20b31ecae90d3aa84, not the recorded 0000000000000000000000000000000000000000000000000000000000000000` — re-measured at this revision | 1 |
+| rewritten checksum entry | `digest-mismatch: aether-agents-1.0.0rc1-clean-install.json hashes to 43361ff8439263d4c1b13fba8a6c7f9475387ff204d54bdbad3e26426fad5968, not the recorded 0000000000000000000000000000000000000000000000000000000000000000` — re-measured at this revision | 1 |
 | unlisted file in the bundle directory (attach set) | `member-drift: bundle members do not match SHA256SUMS: extra ['stray.bin'], missing []` — `members` refuses, so the create path attaches nothing (re-measured at this revision) | 1 |
-| published release, one asset digest differs | `published-asset-mismatch: release v1.0.0-rc.1 bytes do not match the qualified bundle: aether_agents-1.0.0rc1.tar.gz is sha256:00000000a2f59baf5db439688878d2395c76d96445fddf25edb96789f092a122, not the qualified sha256:4dfdf64aa2f59baf5db439688878d2395c76d96445fddf25edb96789f092a122` — re-measured against a listing built from this bundle | 1 |
+| published release, one asset digest differs | `published-asset-mismatch: release v1.0.0-rc.1 bytes do not match the qualified bundle: aether_agents-1.0.0rc1.tar.gz is sha256:0000000000000000000000000000000000000000000000000000000000f, not the qualified sha256:1c4b4a84ee6f60a847cc4db229f8596980c084f572dd5e31265e5d7fce89ba07` — re-measured against a listing built from this bundle | 1 |
 | published release missing the checksum file | `published-asset-drift: release v1.0.0-rc.1 does not carry the qualified bundle: missing ['SHA256SUMS'], unexpected []` — re-measured at this revision (a listing without `SHA256SUMS`, the exact shape the tool's own checksum file cannot produce) | 1 |
 | published release carrying an extra asset | `published-asset-drift: … does not carry the qualified bundle: missing [], unexpected ['aether-agents-1.0.0rc1-unexpected.json']` | 1 |
 | published asset without a digest (older upload) | `published-asset-unverifiable: release v1.0.0-rc.1 assets carry no digest, so the qualified bytes cannot be verified: ['aether_agents-1.0.0rc1-py3-none-any.whl']` | 1 |
@@ -221,18 +309,27 @@ and digest-less releases.
 | Gate | Result |
 | --- | --- |
 | `uv build` | exit 0; `dist/aether_agents-1.0.0rc1.tar.gz`, `dist/aether_agents-1.0.0rc1-py3-none-any.whl` |
-| `uv run --frozen python scripts/run_tests.py` (full bootstrap, exact-Hermes, clean tree at the qualified commit `867d7982…`) | **7 failed, 1716 passed, 70 skipped** in 484.35 s — failures analysed below; my new module's 32 tests pass. The seventh failure is the latency-percentile oracle in `tests/test_observation_performance.py` (p95 5.84 ms against its 5.0 ms budget) under suite load; it passes 3/3 when run alone |
+| `uv run --frozen python scripts/run_tests.py` (full bootstrap, exact-Hermes, clean tree at the qualified commit `1aa83ff0…`) | **6 failed, 1720 passed, 70 skipped** in 383.00 s — the same six attributed classes as the previous round (1 VERSION-coupled node owned by LC-RUNTIME's module, 1 policy-manifest line for LC-INT, 4 monitor nodes of the pre-existing #438 class); my new module's 35 tests pass and the load-sensitive latency oracle of `tests/test_observation_performance.py` passed in this run |
 | `uv run --frozen ruff check src/aether_agents tests scripts` | exit 0 |
 | `uv run --frozen ruff format --check src/aether_agents tests scripts` | exit 0 (166 files already formatted) |
 | `uv run --frozen mypy src/aether_agents` | exit 0 (renders `Success: no issues found in 67 source files`) |
 | `uv run --frozen python scripts/check_documentation.py` | exit 0 (`documentation validation passed`) |
 | `uv run --frozen python scripts/check_public_artifacts.py --root .` | exit 0 (`public artifact path scan passed: tracked surface + 0 artifact(s)`) |
 | `git diff --check` / `git diff --cached --check` | exit 0 (no whitespace damage; nothing staged at report time) |
-| `.github/workflows/release.yml` YAML parse (re-measured at this revision) | parses; one job, seven steps; the identity checks are intact (`git rev-parse "refs/tags/$RELEASE_TAG^{commit}"` against `refs/remotes/origin/main`, and the second check that records `release_commit`); exactly one real `gh release create` invocation and exactly one real `gh release edit` invocation (the other match is a comment stating that `gh release edit` takes no file arguments); the six bounded-effect verbs (release upload, repo edit, container push, package publish, tag, push) all count 0; the tag step still emits exactly `version` and `prerelease`; `FORK_COMMIT` is still the fail-closed zero placeholder that LC-INT replaces |
-| `uv run --frozen pytest -q tests/test_a1_contracts.py -k ReleaseWorkflow` (the existing release-workflow suite, not edited by this unit) | 10 passed, 8 subtests passed — the reconciled workflow still keeps that behaviour, including the no-bundle identity reconcile |
-| `uv run --frozen pytest -q tests/test_release_bundle.py` | 32 passed |
+| `.github/workflows/release.yml` YAML parse (re-measured at this revision) | parses; one job, seven steps; the identity checks are intact (`refs/tags/$RELEASE_TAG^{commit}` against `refs/remotes/origin/main`); exactly one `gh release create "$RELEASE_TAG"` and one `gh release edit "$RELEASE_TAG"` occurrence (the second `gh release edit` mention is a comment stating that it takes no file arguments); the tag step still emits exactly `version` and `prerelease`; `FORK_COMMIT` is still the fail-closed zero placeholder that LC-INT replaces |
+| `uv run --frozen pytest -q tests/test_a1_contracts.py -k ReleaseWorkflow` (the existing release-workflow suite, not edited by this unit) | 10 passed, 8 subtests passed — including `test_workflow_keeps_release_effects_and_permissions_bounded`, which forbids the publication verbs, and the no-bundle identity reconcile |
+| `uv run --frozen pytest -q tests/test_release_bundle.py` | 35 passed |
+
+Three of the module's tests pin the run-50 repair behaviourally and fail on the pre-repair
+revision `2475fe88` (verified: `3 failed, 2 passed` for the same selection against the old
+tool): `test_recorded_capture_does_not_depend_on_the_build_directory_or_the_venv_alias`,
+`test_build_interpreter_is_masked_before_the_checkout_it_lives_in`,
+`test_captured_interpreter_leaf_is_normalized_like_the_elapsed_value`.
 
 ### Failures in the full bootstrap, attributed
+
+The run-50 suite is **6 failed, 1720 passed, 70 skipped**; the six are the same classes the
+round-34 record attributed, re-measured at `1aa83ff0…`:
 
 1. `tests/test_public_artifacts.py::test_canonical_base_manifest_matches_tracked_non_specs_files`
    — **my files need manifest lines.** The heredoc in `.github/workflows/policy.yml`
@@ -248,8 +345,9 @@ and digest-less releases.
 ```
 
    With those two lines applied the remaining undeclared files are exactly the two
-   pre-existing ones above, and the manifest test failed at base `410c172` for the same
-   pre-existing reason.
+   pre-existing ones above (re-measured: declared 400, tracked non-`specs/` 404, the four
+   undeclared names are precisely those four), and the manifest test failed at base
+   `410c172` for the same pre-existing reason.
 2. `tests/test_observation_lifecycle.py::test_prepare_release_installs_one_wheel_in_manager_and_exact_runtime`
    — **cross-unit collision caused by `VERSION`, owned by the LC-RUNTIME module.** That
    test builds the repository's real distributions and compares them with a lock fixture
@@ -270,19 +368,28 @@ and digest-less releases.
    clone (7 failures there, a different subset: exactly the order/environment-dependent
    symptom of #438). LC-BLOCK owns #437/#438; nothing in this unit's diff touches the
    monitor, the policy manifest logic or the lifecycle.
-4. `tests/test_observation_performance.py::test_native_plugin_callback_latency_includes_projection_validation_and_append`
-   — **load-sensitive timing oracle, not a behaviour change.** It asserts a p95 latency
-   budget of 5.0 ms over the `pre_api_request`/`post_api_request` hook samples; under this
-   suite run it measured p95 5.84 ms, and it passed 3/3 when re-run alone at the same
-   revision. No design-recorded constant was adjusted. The previous round's full suite
-   (6 failures) and the Supervisor's own run happened to be lighter at that point; this
-   unit's diff contains no runtime code path the probe exercises.
+
+The load-sensitive latency oracle that failed under the round-34 suite load
+(`tests/test_observation_performance.py::test_native_plugin_callback_latency_includes_projection_validation_and_append`,
+p95 5.84 ms against its 5.0 ms budget) passed in this run; it remains a timing oracle whose
+result depends on suite load, not on this unit's diff.
 
 ## Integration dependencies recorded for LC-INT
 
 - `policy.yml`: the two exact manifest lines above (recorded, not edited, per the card).
 - Release identity constant: set `FORK_COMMIT` in `.github/workflows/release.yml` to the
   accepted `aether-main` revision; the workflow otherwise refuses.
+- **The accepted fork revision must be reachable from the declared repository before the
+  publication path can resolve it.** Re-measured in run 50: `54eeb56d…` is not fetchable
+  (`git fetch --no-tags origin 54eeb56d…` → `upload-pack: not our ref`), GitHub answers
+  `No commit found for SHA` (HTTP 422) for it, and it is not in the history of the current
+  `refs/heads/aether-main` (`bb5e9a422f…`). The contract records it as the accepted
+  revision "three commits ahead of remote `bb5e9a422f…`", so the integration must publish
+  that branch (the three commits fast-forward it) before the tag is pushed — otherwise the
+  workflow's `--fork-repository` resolution fails closed with `revision-unavailable`, and
+  even a fetchable commit would still have to pass `verify_branch_membership` against the
+  branch. This is a property of the accepted revision, not of the tool: the tool refuses
+  rather than deriving an identity from a branch tip, the working directory or recency.
 - The workflow runs the tool in **strict** mode, and round-34 item 1 closed the schema half
   of that coupling: the lock now emits `hermes.branch: aether-main` and validates against
   the release-runtime unit's real v4 schema (`schema_validation: applied`,
@@ -293,10 +400,11 @@ and digest-less releases.
   tool fails closed and the delta must come back to this unit rather than being worked
   around.
 - **The released bytes are revision-bound.** The digests above belong to a bundle built from
-  `867d7982…`; LC-INT must rebuild from the integrated revision and attach *those* bytes,
+  `1aa83ff0…`; LC-INT must rebuild from the integrated revision and attach *those* bytes,
   then verify them with the same `members` / `verify-published-assets` pair. Rebuilding from
-  the same inputs reproduces all eight members byte-for-byte (round-34 item 2), so the
-  reconcile branch is reachable on a re-run rather than only on a first run.
+  the same inputs on the declared toolchain reproduces all eight members byte-for-byte
+  (run-50 proof), so the reconcile branch is reachable on a re-run rather than only on a
+  first run.
 - Reconcile is verification-only by construction: a re-run or `workflow_dispatch` for a tag
   whose release already exists succeeds exactly when that release carries these exact bytes.
   A release that exists *without* them (for example one created before this reconciliation,
@@ -316,10 +424,12 @@ A1 contract's no-bundle identity reconcile. `VERSION` moved to the contract-deci
 repository-wide test identified in failure 2 needs its version-derived reconciliation. The
 bundle is built once from exact clean revisions; its artifact digests are reproducible from
 the same commit, and its release lock binds the exact commit/tree identities rather than
-any machine or live state. The round-34 repair only tightened those two properties: the lock
-gained `hermes.branch` (a v4 requirement, validated against the real schema) and captured
-tool output is normalized so the entire member set, not just the distributions, is
-reproducible. No aggregate release conclusion, channel or impact is asserted
+any machine or live state. The round-34 and run-50 repairs only tightened those two
+properties: the lock gained `hermes.branch` (a v4 requirement, validated against the real
+schema), and captured tool output is masked before it is excerpted with elapsed values and
+interpreter leaves recorded canonically, so the entire member set — not just the
+distributions — is reproducible from the two revisions regardless of the build directory or
+the build venv's state. No aggregate release conclusion, channel or impact is asserted
 here; `release_impact=major`, `release_action=publish`, `release_channel=prerelease`
 remain the contract's decision for the integration and closeout cards.
 
@@ -330,15 +440,29 @@ remain the contract's decision for the integration and closeout cards.
   only against the shape assumed here, but the coupling remains: if either changes, the tool
   refuses (`lock-schema-invalid` / `unavailable`) and the delta must return to this unit.
 - `tests/test_observation_performance.py`'s latency-percentile oracle is load-sensitive: it
-  failed once under this suite run (p95 5.84 ms against a 5.0 ms budget) and passed 3/3 when
-  run alone at the same revision. It is not this unit's file and no constant was adjusted;
-  recorded so a future red suite is not mis-attributed to this change.
-- **Runtime observation (not a unit claim):** one read-only workflow-inspection command was
-  refused by the Aether pre-tool hook with `AETHER-IMPLEMENTER-EXTERNAL-EFFECT` because the
-  inline script text contained the verb strings the guard matches (used there only as
-  dictionary keys for counters). No external effect was attempted; the inspection was
-  completed with a script file instead. Recorded for the runtime owner, not treated as a
-  unit defect.
+  failed once under the round-34 suite load (p95 5.84 ms against a 5.0 ms budget) and passed
+  in the run-50 suite and when run alone at the same revisions. It is not this unit's file
+  and no constant was adjusted; recorded so a future red suite is not mis-attributed to this
+  change.
+- **Reproducibility boundary.** The claim proven in the run-50 section covers the build
+  directory and the fresh-vs-existing venv state. The recorded interpreter *version*
+  (`python_version: 3.13.15`), `uv`'s own version and `SOURCE_DATE_EPOCH` are declared
+  toolchain inputs (the workflow pins `uv 0.12.3` and runs `uv sync --frozen` under
+  `requires-python >=3.11,<3.14`); a rebuild on a different CPython minor version records
+  that version instead, so cross-toolchain byte equality is not claimed.
+- **Runtime observation (not a unit claim):** two read-only inspection calls were affected by
+  the Aether pre-tool hook. One workflow-inspection command was refused with
+  `AETHER-IMPLEMENTER-EXTERNAL-EFFECT` because the inline script text contained the verb
+  strings the guard matches (used there only as dictionary keys for counters); the inspection
+  was completed with a script file instead. One large record patch then failed the hook with
+  `hook … failed closed: timed out after 5s` and succeeded on retry. No external effect was
+  attempted in either case; recorded for the runtime owner, not treated as a unit defect.
+- **Fork-revision availability (cross-unit, reported above):** the accepted maintained-fork
+  revision is not fetchable from the declared repository today, so the workflow's
+  `--fork-repository` resolution would refuse `revision-unavailable` until the fork branch
+  carries it. The qualification therefore used a local clean checkout of the exact commit;
+  the bytes and the locked tree digest are unaffected by where the commit object came from,
+  but a rebuild that must fetch it will fail closed until the branch is published.
 - The reconcile verification depends on GitHub reporting a `sha256:` digest per release
   asset. When a digest is absent (an upload predating asset digests) the step refuses with
   `published-asset-unverifiable` instead of accepting the release; that is deliberate, and
