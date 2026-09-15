@@ -363,3 +363,66 @@ The loopback preview was left running for the owner. If stopped, restart from `w
 with `npm run preview`; after edits, run `npm run build` first. All installation/build
 commands and source locations are documented in README.md. Owner corrections and
 explicit integration approval are the next gates, not automatic publication.
+
+## LC-FIX-WEBSITE #446 — canonical corpus oracle correction — 2026-09-15
+
+Status: prepared for the required same-card Supervisor review. The correction is
+confined to the website workstream and is not yet integrated or published. The owner
+has now authorized the existing automatic GitHub Pages path for this exact correction,
+but that authorization does not replace technical review or authorize this
+Implementer to push, open a PR, merge, or deploy.
+
+The red Pages gate used `assert.equal(index.length,16)` even though the site rendered
+17 tracked `docs/**/*.md` entries. The local candidate replaces that drifting literal
+with a count derived from `git ls-files -- docs` and an exact sorted-slug comparison;
+`index.length` remains asserted. The neighboring `Graphify`, execution-guide heading,
+revision-link, and `.docs-sidebar` assertions remain present and required.
+
+The same candidate adds the missing `guides/telegram-monitor` description and its
+coherent `guides/*` order position in `src/lib/docs.ts`. The content test parses the
+explicit description map and asserts bidirectional exact equality with the canonical
+corpus, then checks each search result carries the mapped description. Controls
+previously measured against the built output fail for both a removed map entry and a
+stale map key (19 pass / 1 fail); the restored candidate passes 20 / 20 with zero
+skips. Before the map entry, the document used the title fallback `Telegram Monitor`
+and sorted at position 0; after it uses
+`Reportes horarios de progreso y límites del monitor de Telegram.` and sorts at
+position 11.
+
+Candidate history is preserved on local branch `aether-agents-2/t_a18b5fc7-lc-fix-website-pages-content-oracle-must`:
+`ee5dc3d` (oracle), `1ef647b` (description map and regression), and `0144dfe`
+(guidance reconciliation), with current HEAD
+`0144dfee4c5ab21c60051cddb83716c121e4f5e2`. The guidance now distinguishes that this
+workstream performs no deployment from the fact that an owner-authorized Supervisor
+merge may trigger the repository's existing Pages workflow; the workflow result must
+be observed, not assumed.
+
+Recorded CI-order verification from `website/` is: `npm ci` exit 0 (320 packages,
+0 vulnerabilities), `npm run check` exit 0, `npm run build` exit 0, and `npm test`
+exit 0 with 20 tests passed, 0 failed, 0 skipped. The Pages artifact verification
+also passed for 21 HTML pages. No push, PR, merge, deployment, release/issue mutation,
+workflow/settings change, runtime activation, or rc.1 tag/asset change has occurred
+from this unit. The remaining landing and post-merge Pages/live-site readback belong
+to Supervisor after review; the owner's deployment authorization is recorded, not
+executed here.
+
+### Supervisor review outcome (same-card review, run 285)
+
+Reviewed and accepted at `0144dfee4c5ab21c60051cddb83716c121e4f5e2` before landing, then synced
+with `main` by merge and re-gated. The status sentences above are point-in-time as of
+2026-09-15 *before* this review; the landing outcome is recorded in
+`specs/001-aether-v1-productization/evidence/LC-FIX-WEBSITE.md`, on issue #446, and in the terminal
+closeout record — not by editing this historical section.
+
+Re-run in the workflow's own step order on the merged tree: `npm run check` rc 0 (0 errors/0
+warnings/0 hints), `npm run build` rc 0 (21 pages), `npm test` rc 0 (`# pass 20 / # fail 0 /
+# skipped 0`), `AETHER_PAGES=1 npm run build` rc 0, and `node scripts/verify-pages-build.mjs` rc 0
+("GitHub Pages base-path verification passed for 21 HTML pages"). In the Pages artifact build,
+`docs/search.json` holds 17 entries, `guides/telegram-monitor` carries the mapped description at
+position 11, and entries falling back to the title are 0.
+
+Two negative controls on the committed tree — removing the `guides/telegram-monitor` map entry, and
+staging one new canonical document — each fail `not ok 18` on
+`src/lib/docs.ts must describe every canonical document and nothing else` (19 pass / 1 fail), so the
+repair catches a newly entering document rather than only today's count. The tree was restored
+byte-exactly after each control.
