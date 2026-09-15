@@ -3,7 +3,7 @@
 **Decision authority**: owner
 **Current conceptual baseline**: `DESIGN.md` through PD-76
 **Current product contracts**: `specs/001-aether-v1-productization/`, `specs/002-aether-contract-observation/`, and the stabilization plan `specs/004-operational-simplification-and-e2e-reliability/plan.md`
-**Current synthesis/entry**: `specs/r13-synthesis-and-release/`, reopened until the PD-74 reliability gate passes
+**Current synthesis/entry**: `specs/r13-synthesis-and-release/`, A1-reconciled on 2026-09-15 to the maintained-fork release mode, the XDG data/state split and release-lock `schema_version` 4; reopened until the PD-74 reliability gate passes
 **Selected Hermes base**: `NousResearch/hermes-agent` `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, `hermes-agent` `0.20.4`, Python `>=3.11,<3.14` — retained as the public reference baseline for upstream-compatible behavior and historical evidence, not as the executable release input
 **Executable Hermes source**: maintained fork `DarkArty07/aether-hermes` branch `aether-main`, bound by release-lock `schema_version` 4 source mode `maintained_fork` (repository, exact commit, source-tree digest, artifact closure and provenance); Hermes keeps its own distribution identity `hermes-agent`
 **A1 release mode**: `maintained_fork`; the retired `transitional_fork` mode (fixed public baseline plus replayed residual patches) is refused for new preparation
@@ -119,7 +119,7 @@ These are dependency phases and release-evidence gates, not a claim that code mu
 | 10 | Live public-path RC qualification | pending | Preregistered realistic three-role path plus a controlled contract-observation trace pass with independently reviewed evidence. **External gates** for credentials, spend, and live run |
 | 11 | Stable release decision | pending | Exact accepted RC and all non-waived criteria agree. **External gate** for stable tag/release/PyPI/announcement/cutover |
 
-The complete testing standard and Supervisor handoff are in `specs/r13-synthesis-and-release/plan.md` §§3–7. Morfeo creates no implementation units.
+The complete testing standard and Supervisor handoff are in `specs/r13-synthesis-and-release/plan.md` §§3–7, A1-reconciled to the maintained-fork release mode. The bounded `1.0.0rc1` release-candidate objective executes against `specs/001-aether-v1-productization/plan.md` under its Objective Contract. Morfeo creates no implementation units.
 
 ## 6. Evidence boundary
 
@@ -170,7 +170,7 @@ The following release-visible limitations remain open:
 - `#220` — protected remote CI qualification for Contract Observation; and
 - `#242` — an immutable Hermes/Aether runtime set: the `1.0.0rc1` lifecycle (validated release lock, versioned releases, `runtime/current`, state-preserving rollback) is the objective's answer for the Aether side; the item stays open until that published release candidate is activated and re-verified.
 
-The selected public Hermes tag's first-spawn branch behavior remains a transitional-patch retirement gate. An issue or upstream merge is not qualification by itself. Aether 1.0 is not complete, release-ready, or production-ready while these limitations remain open.
+The selected public Hermes tag's first-spawn branch behavior remains an accepted fork change whose upstream retirement gate is open. An issue or upstream merge is not qualification by itself. Aether 1.0 is not complete, release-ready, or production-ready while these limitations remain open.
 
 ## 8. Change and regression
 

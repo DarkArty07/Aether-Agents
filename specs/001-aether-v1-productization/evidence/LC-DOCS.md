@@ -81,6 +81,12 @@ pre-existing gaps are recorded in §5.3). `VERSION`, `CHANGELOG.md`, `src/**`, `
 `tests/**`, `.github/**`, `HERMES_LOCAL_PATCHES.md`, the release-lock schema, other unit
 records, `home/` and the owner's primary checkout were not touched.
 
+The review-8 delta (§7) additionally changed `ROADMAP.md`,
+`specs/r4-hermes-boundary/{spec.md,research.md}`, `specs/r9-state-and-recovery/spec.md`,
+`specs/r11-evidence-and-observability/spec.md` and
+`specs/r13-synthesis-and-release/{spec.md,plan.md,research.md}` within the extended surface. It
+still adds, renames and removes no tracked file, so it also requires no manifest line.
+
 ## 5. Verification actually run
 
 ### 5.1 Documentation gate — raw result
@@ -136,7 +142,9 @@ $ uv run --frozen python scripts/run_tests.py tests/test_documentation.py \
 FAILED tests/test_public_artifacts.py::test_canonical_base_manifest_matches_tracked_non_specs_files
 ```
 
-The single failure is pre-existing and unrelated to this unit (§5.3).
+The single failure is pre-existing and unrelated to this unit (§5.3). The review-8 delta (§7.3) adds
+one further attributable failure, `test_release_lock_schema_and_plan_agree_on_version_three`, which is
+integration-bound to LC-RUNTIME and analysed in §7.4; this section's §5.1 honesty rules are unchanged.
 `tests/test_documentation.py`, `tests/test_contract_quality_documents.py` and
 `tests/test_a1_contracts.py` are green, including the registry-content assertions
 (`test_canonical_skill_capabilities_are_statused_and_traceable`,
@@ -190,11 +198,13 @@ $ git diff --check
    contract-file line attributed as a directly evidenced same-class blocker under contract
    in-scope 2, not as part of #437), because the test compares the whole list. LC-DOCS does not
    own that workflow and changed nothing there.
-3. **Release-lock schema version has a second consumer.** `tests/test_a1_contracts.py::test_release_lock_schema_and_plan_agree_on_version_three`
-   asserts `release-lock.schema.json` const `3` **and** the string `release-lock schema is
-   integer `3`` in `specs/r13-synthesis-and-release/plan.md:35` (a file in no unit's declared
-   surface). Moving the schema to 4 therefore requires that test (LC-RUNTIME) and that r13
-   plan line to change together.
+3. **Release-lock schema version has a second consumer — resolved into this unit's delta.** `tests/test_a1_contracts.py::test_release_lock_schema_and_plan_agree_on_version_three`
+   asserts `release-lock.schema.json` const `3` **and** the string `release-lock schema is integer
+   `3`` in `specs/r13-synthesis-and-release/plan.md` (then in no unit's declared surface). Supervisor's
+   review extended LC-DOCS's surface to that plan line, and §7.1 item 3 reconciles it to the accepted
+   schema `4`. Moving the schema to `4` therefore needs LC-RUNTIME's schema constant and matching test
+   update, which the review recorded as an integration-bound condition; the test is red on this branch
+   for exactly that reason and is not weakened here (§7.4).
 4. **`CHANGELOG.md` non-applicability.** The card's outcome sentence mentions the changelog,
    but the card's explicit do-not-touch list and the breakdown's file-disjoint assignment
    place `CHANGELOG.md` and `VERSION` with LC-RELTOOL. The design steward confirmed this
@@ -204,3 +214,107 @@ $ git diff --check
    parser until LC-RUNTIME lands; the documentation describes a pinned interface that the
    integration must confirm. Everything else in this unit is verifiable from the committed
    diff, the focused tests and the documentation gate.
+
+## 7. Review-8 delta — owning-stage reconciliation debt (Shared decision 17)
+
+Supervisor's review run 8 verified the attempt-1 delivery sound but returned it: the card outcome
+"without creating a competing authority" was not met while live normative statements in the owning
+stage artifacts still contradicted the contract's decisions. This section records that bounded
+correction. The §5.1 honesty rules are unchanged, and the correction invented no principle, role,
+interface or authority. R10's supply-chain gates and R12's model-identifier items from A1 spec §10
+were deliberately **not** absorbed, as the review directed.
+
+### 7.1 Reconciled statements (post-edit line numbers)
+
+| # | Superseded statement | Where it lived | Reconciled at |
+| --- | --- | --- | --- |
+| 1 | `transitional_fork` as a permitted/initial release mode or as the declared lock enum | `specs/r4-hermes-boundary/spec.md:42-43,156`; `specs/r4-hermes-boundary/research.md:333`; `specs/r11-evidence-and-observability/spec.md:125`; `specs/r13-synthesis-and-release/spec.md:122,139`; `specs/r13-synthesis-and-release/plan.md:9-10,20,22`; `specs/r13-synthesis-and-release/research.md:1190,1211` | `r4/spec.md:42` (FR-403a), `:43` (FR-403b: `upstream` or `maintained_fork`), `:150-157` (dated §9 note), `:164` (FR-425), `:204` (SC-407); `r4/research.md:335` (dated superseding note); `r11/spec.md:125` (FR-1138); `r13/spec.md:11,19-20` (header), `:124` (component 2), `:139` (dated §4 note), `:143` (FR-1337), `:222-227` (dated note on the completed checklist); `r13/plan.md:9-13` (header), `:22`, `:24`, `:102-111` (§2.5), `:168-176` (Phase 2), `:178` (Phase 3), `:255` (§6 risk), `:274` (§7 item 3); `r13/research.md:1194` (dated superseding note) |
+| 2 | `profiles/` and `projects/` placed under the data root | `specs/r9-state-and-recovery/spec.md:44,49`; `specs/r13-synthesis-and-release/plan.md:62,68-69` | `r9/spec.md:44-45` (tree split) and `:50` (dated reconciliation clause); `r13/plan.md:64-73` (tree split) and `:87` |
+| 3 | `release-lock schema is integer `3`` in the r13 plan (the coupling assertion) | `specs/r13-synthesis-and-release/plan.md:35` | `r13/plan.md:37` states integer `4` (with the historical `3` marked as such); `:43` states the schema-4 `upstream`/`maintained_fork` modes and the refused `transitional_fork` mode |
+| 4 | Research decision records and one completed checklist | `specs/r4-hermes-boundary/research.md:321-337`; `specs/r13-synthesis-and-release/research.md:1170-1230`; `specs/r13-synthesis-and-release/spec.md:210-216` | dated superseding notes added at `r4/research.md:335`, `r13/research.md:1194` and `r13/spec.md:222-227`; the original wording was **not** rewritten, matching the discipline already applied to the A1 artifacts in §3 |
+| 5 | `ROADMAP.md` routing readers into the unreconciled r13 artifacts | `ROADMAP.md:6,122` (plus `:173`'s stale "transitional-patch" descriptor) | `ROADMAP.md:6` (A1-reconciled pointer), `:122` (r13 plan named as A1-reconciled, RC objective bound to the A1 plan), `:173` |
+
+### 7.2 Verification greps — exact searches and results
+
+```text
+$ git grep -nF '`upstream` or `transitional_fork`'          # retired lock enum
+(no output)                                                  # EMPTY
+
+$ git grep -nE '(MUST declare|begins in|enters build work in|initial candidate uses|Initial release mode|release mode is)[^.]*transitional_fork'
+specs/r4-hermes-boundary/research.md:333   # retained historical decision, immediately followed by the dated superseding note at :335
+```
+
+The retired mode is therefore asserted nowhere as current policy. A whole-tree census of the token
+`transitional` (86 tracked hits) separates the survivors: explicit negations ("the retired … mode is
+refused"), the capability-registry status value `transitional` (a different vocabulary owned by
+`docs/authority.md` and required by `scripts/check_documentation.py:30`), dated historical records
+whose sections carry superseding notes, and LC-RUNTIME's own surfaces
+(`specs/001-aether-v1-productization/contracts/release-lock.schema.json:47,92`,
+`src/aether_agents/resources/hermes-baseline.json:68`, `tests/**`). Three out-of-surface residues
+remain and are reported, not edited, in §7.5.
+
+```text
+$ git grep -nE '(share/aether|XDG_DATA_HOME)[^"`)]*(profiles|projects)'   # retired XDG placement
+specs/002-aether-contract-observation/evidence/implementation-validation.md:149   # out-of-surface historical record, §7.5
+```
+
+No reconciled artifact places profiles or projects under the data root any more.
+
+### 7.3 Re-run verification — raw results
+
+```text
+$ uv run --frozen python scripts/check_documentation.py
+documentation validation failed:
+- derived surface is not source-derived: cli.option.aether.update.--aether-checkout
+- derived surface is not source-derived: cli.option.aether.update.--aether-commit
+- derived surface is not source-derived: cli.option.aether.update.--fork-checkout
+- derived surface is not source-derived: cli.option.aether.update.--fork-commit
+- derived surface is not source-derived: cli.option.aether.update.--local
+EXIT=1        # unchanged from §5.1; integration-bound, not claimed green
+
+$ uv run --frozen python scripts/run_tests.py tests/test_documentation.py \
+    tests/test_contract_quality_documents.py tests/test_a1_contracts.py tests/test_public_artifacts.py
+2 failed, 64 passed
+FAILED tests/test_a1_contracts.py::CanonicalContractConsistencyTests::test_release_lock_schema_and_plan_agree_on_version_three   # this delta, §7.4
+FAILED tests/test_public_artifacts.py::test_canonical_base_manifest_matches_tracked_non_specs_files                              # pre-existing at base, §5.3
+
+$ uv run --frozen ruff check <touched paths>      → "No Python files found under the given path(s)" / All checks passed!  exit 0
+$ uv run --frozen ruff format --check <touched paths> → 8 files already formatted  exit 0
+$ git diff --check                                → exit 0
+$ uv run --frozen python scripts/check_public_artifacts.py --root . → public artifact path scan passed: tracked surface + 0 artifact(s)
+```
+
+Manifest re-measured with the test's own extraction logic: 400 manifest entries versus 402 tracked
+non-`specs/` files, missing exactly
+`.aether/objective-contracts/oc_3397f9f05d780f8e/v1.md` and
+`patches/hermes/HLP-425-review-flow-continuity.patch` — unchanged from §5.3 and still LC-BLOCK's.
+
+### 7.4 Coupling test — exact attribution and integration condition
+
+```text
+        self.assertEqual(schema["properties"]["schema_version"]["const"], 3)          # PASSES
+>       self.assertIn("release-lock schema is integer `3`", plan)                     # FAILS
+E       AssertionError: 'release-lock schema is integer `3`' not found in ...
+tests/test_a1_contracts.py:201
+```
+
+`test_release_lock_schema_and_plan_agree_on_version_three` asserts the schema constant **and** that
+literal string; its `A1_PLAN_PATH` (`tests/test_a1_contracts.py:22`) is
+`specs/r13-synthesis-and-release/plan.md`. LC-RUNTIME owns `release-lock.schema.json` and the test;
+this unit owns the plan line. **The test passes only after LC-RUNTIME lands the schema constant `4`
+with its matching test update** — integration-bound, the same temporal class as §5.1. Neither unit
+weakens the test: LC-DOCS edited neither the test nor the schema, and the plan now states the
+accepted schema version rather than the retired one.
+
+### 7.5 Residual findings outside this unit's surface (reported, not edited)
+
+| Path / line | What it still states | Why LC-DOCS did not edit it |
+| --- | --- | --- |
+| `specs/r8-workspaces-and-integration/spec.md:44,174` | "The transitional fork carries the patch until …" and "which is why A1 begins in transitional-fork mode" | R8 is outside the review's surface extension; needs a Supervisor decision (extend the surface or route it) |
+| `specs/002-aether-contract-observation/evidence/implementation-validation.md:132,135,139-141,152,672,1363` | canonical/local release-lock schema as version 3 | Historical implementation-validation record outside the extension; same class as the manifest lines routed in §6.2 |
+| `specs/002-aether-contract-observation/evidence/implementation-validation.md:148-150` | product-owned profile homes under `XDG_DATA_HOME/aether/profiles/...` | Same file; out-of-surface historical record |
+| `INCOMPLETE_IMPLEMENTATIONS.md:123`, `specs/followup-aether-bugs/evidence/FBUG-INT.md:125`, `specs/telegram-monitor/evidence/MON-04.md:165,181` | "transitional" used as a historical descriptor of the pre-separation runtime | Trackers/historical evidence outside the declared surface; no normative claim about the RC |
+| `CHANGELOG.md:111` | historical changelog entry under the declared `transitional_fork` mode | LC-RELTOOL's exclusive surface (§6.4) |
+
+These are surfaced rather than fixed; resolving them is Supervisor's call (surface extension or a
+separate routed correction), exactly as the manifest lines were handled in §6.2.

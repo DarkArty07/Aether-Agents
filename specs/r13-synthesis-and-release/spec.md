@@ -8,6 +8,7 @@
 **Amended**: 2026-08-21 — private-local implementation entry superseded by PD-48–PD-68, A1, and the 002 contract-observation prerequisite
 **Reopened**: 2026-08-26 — reliability/E2E gate now precedes feature expansion and release qualification
 **Amended**: 2026-09-04 — autonomous stewardship, canonical procedures, and terminal closeout reconciled
+**Amended**: 2026-09-15 — maintained-fork and Aether `1.0.0rc1` release-candidate reconciliation under Objective Contract `oc_3397f9f05d780f8e@v1`
 **Decision authority**: Christopher
 **Contract owner**: Morfeo
 **Execution owner**: Supervisor
@@ -15,7 +16,8 @@
 **Parent roadmap**: `../../ROADMAP.md`
 **Research**: `research.md`
 **Plan**: `plan.md`
-**Selected Hermes baseline**: `NousResearch/hermes-agent` `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, distribution version `0.20.4`, Python `>=3.11,<3.14`
+**Selected Hermes reference baseline**: `NousResearch/hermes-agent` `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, distribution version `0.20.4`, Python `>=3.11,<3.14`
+**Executable Hermes source**: maintained fork `DarkArty07/aether-hermes`, branch `aether-main`, bound by release-lock `schema_version` 4 source mode `maintained_fork` (repository, branch, exact commit, source-tree digest, artifact closure and provenance)
 
 ## 1. Purpose and precedence
 
@@ -119,7 +121,7 @@ step MUST have a concrete non-applicability reason in the final evidence.
 Aether 1.0 consists of two independently versioned but release-locked products:
 
 1. the `aether-agents` Python distribution and `aether` CLI, which own setup, project mapping, service lifecycle, diagnosis, update, rollback, uninstall, schemas, release lock, and sanitized product resources; and
-2. the original `hermes-agent` distribution, consumed from the exact public source/artifacts selected by the lock in `upstream` or `transitional_fork` mode.
+2. the original `hermes-agent` distribution, consumed from the exact `upstream` or `maintained_fork` source/artifacts selected by the lock.
 
 The manager treats Hermes as an external executable and MUST NOT import Hermes modules. Hermes cannot update the manager or fetch mutable Aether policy. Aether installs the locked runtime under Aether-owned XDG state and does not replace another Hermes installation.
 
@@ -132,11 +134,13 @@ The manager treats Hermes as an external executable and MUST NOT import Hermes m
 
 ## 4. Selected Hermes base and adaptation mode
 
-The selected upstream base is release `v2026.8.18`; its annotated tag object and commit are recorded in the header. The source archive observed during reconciliation had SHA-256 `1e3d39d3638ec15fa9d31af262568a953e9272090deb1c50c44cd401175f5b80`. The previously supplied `9f13bb131670169467d9b2453ae2e8848814ff6e` does not resolve and MUST NOT appear as a release commit.
+The selected upstream reference baseline is release `v2026.8.18`; its annotated tag object and commit are recorded in the header. The source archive observed during reconciliation had SHA-256 `1e3d39d3638ec15fa9d31af262568a953e9272090deb1c50c44cd401175f5b80`. The previously supplied `9f13bb131670169467d9b2453ae2e8848814ff6e` does not resolve and MUST NOT appear as a release commit.
+
+**Maintained-fork reconciliation (2026-09-15, Objective Contract `oc_3397f9f05d780f8e@v1`):** the executable release source is the maintained fork `DarkArty07/aether-hermes`, branch `aether-main`, bound by the release lock's `schema_version` 4 `maintained_fork` source mode through repository, branch, exact commit, source-tree digest, artifact closure and provenance. The retired `transitional_fork` mode is refused for new preparation and `.patch` records are never replayed onto an active release. The baseline above remains the reference for upstream-compatible behavior and historical evidence.
 
 Direct drift review found six indispensable guarantees not yet present as qualifying behavior in the selected tag: sticky initial blocking, agent-facing retry override, human-gated escalation recovery, one durable terminal handoff, first-spawn branch propagation, and asymmetric per-profile concurrency. R4 research §13 owns the patch-by-patch evidence, upstream PR state, and retirement gates.
 
-- **FR-1337**: A1 begins in `transitional_fork` mode. Phase 2 may change the candidate to `upstream` only if the exact selected upstream artifact passes every indispensable guarantee without a downstream core change.
+- **FR-1337**: A1's accepted candidate uses `maintained_fork` mode, bound to the exact maintained-fork revision and its digests. `upstream` mode is selected only deliberately, when the exact released upstream artifact passes every indispensable guarantee without a downstream core change; the retired `transitional_fork` mode is refused for new preparation.
 - **FR-1338**: No new Aether product capability may require a downstream-only Hermes change. Generally useful fixes go upstream; Aether-specific policy remains in the Aether package.
 - **FR-1339**: A downstream candidate preserves upstream package identity, license, attribution, and source history. It is public, minimal, tested, separately versioned/locked, and published only after its external gate.
 - **FR-1340**: A patch retires only when an exact released upstream artifact passes its behavior gate. Merge status or containment in a branch is insufficient.
@@ -149,7 +153,7 @@ Supervisor receives this specification, A1's accepted spec/plan/research/contrac
 2. build and deterministically test the disposable E2E harness/canary;
 3. run the authorized real E2E matrix and satisfy the rolling PD-74 reliability gate;
 4. only then resume manager/package skeleton and remaining schemas;
-5. transitional downstream reconciliation and local artifact production;
+5. maintained-fork source reconciliation and local artifact production;
 6. runtime install/update/rollback/reconcile/uninstall;
 7. portable project initialization, setup/service and public resource completion;
 8. supply-chain/path/privacy qualification plus public docs/GitHub/workflows;
@@ -214,3 +218,10 @@ the last green canary, do not disguise the false positive as user authority.
 - [ ] Minimal edge policy, aligned portable role resources and disposable E2E harness pass deterministic qualification.
 - [ ] The PD-74 real E2E reliability gate passes under separately authorized model/provider spend.
 - [ ] A1 implementation, deterministic RC qualification, live public-path RC qualification, and publication remain unperformed and separately gated.
+
+> **Maintained-fork reconciliation note (2026-09-15, Objective Contract `oc_3397f9f05d780f8e@v1`).** The
+> completed items above are retained as history. The recorded upstream base remains the reference baseline
+> for upstream-compatible behavior and historical evidence; the initial release mode recorded there is
+> superseded by the maintained-fork source mode (`schema_version` 4, `maintained_fork`), with the retired
+> `transitional_fork` mode refused for new preparation. This note records the supersession only; it
+> completes none of the items above.

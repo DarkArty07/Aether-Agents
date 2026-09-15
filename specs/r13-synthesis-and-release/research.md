@@ -1191,6 +1191,8 @@ Current source changed the adaptation boundary materially:
 
 **Assumption**: all six accepted workflow guarantees remain required, and no qualified plugin/profile-only adaptation currently supplies them on the exact selected upstream artifact. Phase 2 may switch to `upstream` before publication only if that exact artifact passes every behavior gate without carrying a downstream core patch.
 
+**Superseding note (2026-09-15, maintained-fork reconciliation under Objective Contract `oc_3397f9f05d780f8e@v1`).** The decision and assumption above are retained as the historical rationale for the six accepted changes; the mode selection is superseded, and this note supersedes the release-mode wording used elsewhere in this section. The executable release source is the maintained fork `DarkArty07/aether-hermes`, branch `aether-main`, bound by release-lock `schema_version` 4 source mode `maintained_fork` through repository, branch, exact commit, source-tree digest, artifact closure and provenance. The retired `transitional_fork` shape — a fixed public baseline plus replayed residual patch IDs — is refused for new preparation, and `.patch`/HLP records are never replayed onto an active release. The release-lock schema consequently moves from the version `3` recorded below to `4`, and the six accepted changes are carried as fork source rather than as residual patch lines. Retiring the fork is no longer a mandatory goal: upstream is adopted only when deliberately selected, with the Aether changes reconciled and verified.
+
 **Reasons**:
 
 1. Calling the candidate `upstream` while silently dropping guarantees would weaken PD-65 rather than comply with it.
