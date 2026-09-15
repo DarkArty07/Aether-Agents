@@ -33,6 +33,17 @@ The command validates or writes `.aether/project.toml`, maps its portable UUID t
 
 The package has local lifecycle candidate commands (`setup`, `update`, `rollback`, and `uninstall`), but these are not a complete public installation path. Do not run a state-changing lifecycle command merely to explore the documentation. The current supported discovery commands are `--help`, `--version`, `observe --help`, and read-only `doctor`; see [CLI reference](reference/cli.md) and [limitations](reference/limitations-and-troubleshooting.md).
 
+`aether update` is nonetheless the only supported promotion and activation boundary, and its
+local-candidate route has a non-mutating preview: `aether update --local --aether-checkout
+PATH --aether-commit SHA --fork-checkout PATH --fork-commit SHA` reports the exact Aether and
+maintained-fork revisions, target version and release ID, active HLP coverage, artifacts and
+hashes, expected service interruption, preserved state and any blockers without staging or
+activating anything. Activation happens only with an explicit `--yes`, may interrupt
+Aether-owned instances immediately, and `aether rollback` restores product code without
+rolling user state backward. The managed Hermes source is the release-lock `maintained_fork`
+identity (`schema_version` 4, repository `https://github.com/DarkArty07/aether-hermes`); the
+retired `transitional_fork` mode is refused for new preparation.
+
 ## Inspect the Telegram Monitor without changing anything
 
 `aether monitor status --json` and `aether monitor history --json` read durable monitor state and are safe to run before deciding anything; `aether monitor on` and `aether monitor off` change the installation and require the provisioned runtime. The deterministic qualification lane performs no model call and no Telegram send:
