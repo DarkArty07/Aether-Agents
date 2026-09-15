@@ -24,12 +24,20 @@ commit on the unit branch, and scratch roots under a temporary directory (report
 
 - Each measurement states the command that produced it and the observed output.
 - **Sanitization.** Operator paths appear as `<aether-unit-worktree>`, `<fork-checkout>`,
-  `<fork-worktree@rev>`, `<scratch-root>` and `<live-board-db>`; process ids appear as
-  `<pid …>`; board tasks as `<canary task A/B>` and `<successor task>`; the branch name of
-  a reviewed PR, when it embeds an execution-card id, appears as `<unit-branch>`. Commit
-  and object digests, SHA-256 asset digests, PR numbers, workflow-run ids and public URLs
-  are published verbatim because the measurement is meaningless without them. The raw,
-  unsanitized logs of every command below are attached to the owning card.
+  `<fork-worktree@rev>`, `<fork-dev-venv>`, `<unit-venv>`, `<scratch-root>` and
+  `<live-board-db>`; process ids appear as `<pid …>`; board tasks as `<canary task A/B>` and
+  `<successor task>`; the branch name of a reviewed PR, when it embeds an execution-card id,
+  appears as `<unit-branch>`. Commit and object digests, SHA-256 asset digests, PR numbers,
+  workflow-run ids and public URLs are published verbatim because the measurement is
+  meaningless without them.
+- **Raw evidence.** The unsanitized transcripts, canary verdict JSONs and runner scripts of
+  the measurements below are not tracked in this repository: repository policy keeps machine
+  paths, board data, logs and session state out of public artifacts, and this record is
+  sanitized for the same reason. They are retained in a temporary scratch root
+  (`<scratch-root>`, a directory under the system temporary area — not durable and not part
+  of the repository), enumerated file by file with size, class and SHA-256 in the attached
+  `RC2-VERIFY-PRE-retained-evidence-inventory.txt.gz`. §11 states exactly which files are
+  attached to the owning card and which of them exist only in that temporary root.
 - Where a value is a live-state value rather than an artifact identity (the live board
   digest), it is published only as the before/after equality the measurement requires.
 
@@ -278,6 +286,15 @@ $ git -C <fork-checkout> rev-parse HEAD          # unchanged, still on aether-ma
 54eeb56dabefc98821d696656ed58c55dd777346
 ```
 
+**Interpreter class.** Every `<interpreter>` marker in this section denotes the same
+interpreter class: `<fork-dev-venv>`, the fork checkout's own provisioned development
+virtualenv (Python 3.11.15, `psutil` 7.2.2, `pytest` 9.1.1), reached from the fork checkout
+and never from this unit's worktree. The class is named rather than quoted because the
+fork's `tests/conftest.py` autouse live-system guard needs `psutil` to prove that a child
+PID is inside the test process subtree, so a different interpreter changes the outcome — the
+labelled counter-run below records that effect in full. Interpreter identities: attached
+`m5c-interpreters.txt`.
+
 The canary imports the real board surface, so the record states which module it exercised.
 Ran from inside the checkout under test, `hermes_cli` resolves to that tree, and the file
 bytes equal the Git object at the accepted revision:
@@ -350,12 +367,47 @@ process liveness and empty candidate sets — so it carries no timing threshold 
 number is claimed from it.)
 
 **The revision's own regression module also passes** on the same tree (extra, not required
-by the card's measurement set):
+by the card's measurement set). Because the quoted `<interpreter>` decides this outcome (see
+the interpreter-class note above), the run was re-executed with its transcript retained and
+the class named inline — attached log `m5c-forkvenv-pytest.txt`:
 
 ```console
-$ PYTHONPATH=<fork-worktree@7a4fdcd> <interpreter> -m pytest tests/hermes_cli/test_kanban_superseded_worker_reap_450.py -q
-11 passed in 8.60s
+$ cd <fork-worktree@7a4fdcd>
+$ PYTHONPATH=<fork-worktree@7a4fdcd> <fork-dev-venv>/bin/python -m pytest tests/hermes_cli/test_kanban_superseded_worker_reap_450.py -q
+...........                                                              [100%]
+11 passed in 9.02s
+EXIT=0
 ```
+
+(An earlier inline invocation of the same command, before the transcript was retained,
+recorded `11 passed in 8.60s`; that earlier value is the one carried in the raw digest. The
+two agree on the verdict.)
+
+**Counter-run — the unit-venv artifact is not a regression.** The same module executed by
+*this unit worktree's own* virtualenv (`<unit-venv>`: Python 3.13.15, **no `psutil`**,
+`pytest` 9.1.1) reports `3 failed, 8 passed`, and each failure is the fork's live-system
+guard refusing the reap's signal:
+
+```console
+$ cd <fork-worktree@7a4fdcd>
+$ PYTHONPATH=<fork-worktree@7a4fdcd> <unit-venv>/bin/python -m pytest tests/hermes_cli/test_kanban_superseded_worker_reap_450.py -q
+FF.......F.                                                              [100%]
+...
+E       RuntimeError: tests/conftest.py live-system guard: blocked os.kill(<pid>, 15) — PID is outside the test process subtree. ...
+FAILED tests/hermes_cli/test_kanban_superseded_worker_reap_450.py::test_out_of_band_block_leaves_no_identity_then_reap_terminates_worker
+FAILED tests/hermes_cli/test_kanban_superseded_worker_reap_450.py::test_dispatch_tick_reaps_before_it_spawns_the_successor
+FAILED tests/hermes_cli/test_kanban_superseded_worker_reap_450.py::test_reap_is_idempotent
+3 failed, 8 passed in 7.59s
+EXIT=1
+```
+
+(The traceback bodies are elided above; the attached transcript carries them verbatim.)
+Without `psutil` the guard cannot establish that a worker child PID is inside the test
+process subtree, so it blocks `os.kill(<pid>, 15)` and the reap never runs — an artifact of
+the unit venv's dependency set, not a defect in the revision under test. A later reader must
+not misread it as a regression: under `<fork-dev-venv>` exactly the same module is
+`11 passed`. Full transcript attached gzipped as `m5c-unitvenv-pytest.txt.gz` (gunzip →
+`11238` bytes, sha256 `4e36c6161a518239c4928c006c8533bd992774d50fe2f959f150b9e4656722fc`).
 
 **Private-root refusal guard.** Exercised in isolation — no board was opened, and both
 refusals fire before any DB access:
@@ -479,9 +531,12 @@ Commands run by this unit are read-only with respect to those surfaces: `git fet
 `git ls-remote`, `git rev-parse`/`git cat-file`/`git merge-base`/`git for-each-ref`,
 `git show`, `git worktree add/remove` (scratch), `gh pr view|checks`, `gh run view|list`,
 `gh release view|download`, `gh api` GET, `curl` GET, `sqlite3` read-only, `sha256sum`,
-`pytest` (in the scratch tree). Scratch roots under a temporary directory contain the
-consumer clone, the canary scratch boards, the downloaded rc.1 assets and the logs; they
-are disposable and are reported here rather than left as objective residue.
+`pytest` (in the scratch tree). The scratch root under a temporary directory holds the
+retained runner scripts, the transcripts and the machine-readable values digest, all
+enumerated in the attached inventory and summarized in §11; its disposable parts — the
+consumer clone, the canary scratch boards, the downloaded rc.1 assets and the detached fork
+worktree — were removed after use; the fork worktree was then re-created detached at the same
+accepted revision for the §6 module re-run, so the unit leaves no objective residue.
 
 `git diff --check` is clean, and
 `uv run --frozen python scripts/check_public_artifacts.py --root .` reports no violations
@@ -514,9 +569,12 @@ after this record is tracked (see the card handoff for the captured output).
    were checked on the index route and one documentation route plus the search index; not
    every rendered page was fetched.
 4. **Fork-side test suite beyond the reap module.** The revision's own
-   `test_kanban_superseded_worker_reap_450.py` passes (11 tests); the wider fork suite was
-   not re-run here — it is not part of this unit's measurement set, and the v1 lane's
-   whole-suite numbers remain that lane's evidence, not this record's.
+   `test_kanban_superseded_worker_reap_450.py` passes under `<fork-dev-venv>` (11 tests, §6);
+   under this unit worktree's own `<unit-venv>` the same module reports `3 failed, 8 passed`
+   for the guard/dependency reason recorded in §6, which is an interpreter artifact and not a
+   regression. The wider fork suite was not re-run here — it is not part of this unit's
+   measurement set, and the v1 lane's whole-suite numbers remain that lane's evidence, not
+   this record's.
 5. **Machine load during the canary.** No load figure was captured for the canary window;
    its verdicts are structural (process liveness, reap membership, candidate sets), so no
    gate number is derived from it either way.
@@ -534,6 +592,33 @@ after this record is tracked (see the card handoff for the captured output).
   `PYTHONPATH` pointing at that checkout, `CANARY_LIVE_BOARD_DB` set to the live board path
   (used only for the guard), an explicit `--scratch` root and `--json-out` capture; the
   fixture's own `--help` documents the usage.
-- Large raw logs (per-measurement command transcripts, canary JSON verdicts, live board
-  snapshots, downloaded-asset digest list) are attached to the owning card, which is the
-  only place the unsanitized execution values live.
+- The §6 fork-module runs are reproduced from inside the scratch checkout with `PYTHONPATH`
+  pointing at it: `<fork-dev-venv>/bin/python -m pytest
+  tests/hermes_cli/test_kanban_superseded_worker_reap_450.py -q` → `11 passed`; the same
+  command with `<unit-venv>/bin/python` → `3 failed, 8 passed` (the live-system guard
+  artifact described in §6, not a regression).
+- **Where the raw evidence lives.** No unsanitized value is tracked in this repository —
+  repository policy keeps machine paths, board data, logs and session state out of public
+  artifacts — so the raw set is retained in the temporary scratch root `<scratch-root>`
+  (not durable, not part of the repository) and attached to the owning card as far as that
+  surface allows. Attached:
+
+  | Attachment | bytes | sha256 | backs |
+  | --- | --- | --- | --- |
+  | `RC2-VERIFY-PRE-raw-digest.txt` | 1137 | `03bd9a2f47913169636cc2f783ee062efd31e972c450b6de8b98ecfd86c870b4` | machine-readable values digest behind §1 |
+  | `m5c-forkvenv-pytest.txt` | 271 | `e4ec1361d2793e2793dc13fdd4d2506c8ec83f769eb8e922a5a45562139b5fb0` | §6 fork-module run under `<fork-dev-venv>` (`11 passed`) |
+  | `m5c-unitvenv-pytest.txt.gz` | 2193 | `6582efbc28e5280670fb9920d9f203ebc5e8dce0076ee52439fc0410bac7cdb0` | §6 counter-run under `<unit-venv>` (gunzip → 11238 B, `4e36c6161a518239c4928c006c8533bd992774d50fe2f959f150b9e4656722fc`) |
+  | `m5c-interpreters.txt` | 564 | `f57e64b152a73f40cd8cdff827b80a97909df2a43ceb8aa17729796b7694f76f` | the two interpreter classes named in §6 |
+  | `m5_canary.sh` | 2297 | `176d1367f1f03d3ead733d56b962bcf1adfef16c578c45e828e675439ab23ef7` | §6 canary orchestration, including the live-board before/after snapshots |
+  | `m5b_guard.py` | 1655 | `e7ed49ed9bcf06facb8a3ffe9b4bd6403bf3b51c199b44f4d287cd2ba46cb8b1` | §6 private-root refusal guard |
+  | `RC2-VERIFY-PRE-retained-evidence-inventory.txt.gz` | 3446 | `80501175972b159c8efe95607f9b7a599d9cff9319714af37c501e3cf269d344` | file-by-file inventory of the whole retained set (gunzip → 8989 B, `ca734f155fe56379cda84187b1863e7f37a8fb1fc1fd2c5c4229abcb0da85517`) |
+
+- **Temporary-only (not attached), beyond the two §6 module logs above:** the remaining
+  per-measurement transcripts (`logs/m1-*`, `logs/m2-*`, `logs/m3-*`, `logs/m4-*`,
+  `logs/m5.txt`, `logs/m6.txt`, the two canary verdict JSONs, the live-board before/after
+  snapshots, the downloaded-asset digest list, the live-site payloads), the remaining runner
+  scripts (`capture.sh`, `cleanup.sh`, `commit_and_check.sh`, `m2_consumer_fetch.sh`,
+  `m4_site.sh`, `m4b_oracle.sh`, `m5c_pytest_reexport.sh`, `m7_inventory.sh`), the corpus
+  lists and the values digest. Each one's size and SHA-256 is in the attached inventory; the
+  transcripts are reproducible from the commands quoted in the section that used them, and
+  they are temporary rather than durable evidence.
