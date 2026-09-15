@@ -171,6 +171,20 @@ def _excerpt(text: str, limit: int = _MAX_EXCERPT) -> str:
     return value[:limit] + f"\n[truncated {len(value) - limit} characters]"
 
 
+# ``uv`` reports how long each resolution, preparation, install and check took.  That
+# elapsed value is the one part of its output that differs between two builds of the exact
+# same revisions (the same resolution is 8 ms in one run and 10 ms in the next), and the
+# qualified member set has to be reproducible from those identical inputs, so the value is
+# recorded as ``<elapsed>`` rather than certified as a member byte.
+_ELAPSED_RE = re.compile(r"\bin (?:\d+m )?\d+(?:\.\d+)?(?:ns|µs|us|ms|s)\b")
+
+
+def _normalize_captured(text: str) -> str:
+    """Keep captured tool output, drop the run-to-run elapsed values from it."""
+
+    return _ELAPSED_RE.sub("in <elapsed>", text)
+
+
 def _write_json(path: Path, payload: Any) -> None:
     data = json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
     path.write_text(data, encoding="utf-8")
@@ -817,6 +831,7 @@ def build_release_lock(
         "hermes": {
             "source_mode": HERMES_SOURCE_MODE,
             "repository": MAINTAINED_FORK_REPOSITORY,
+            "branch": fork["branch"],
             "version": fork["version"],
             "tag": fork["tag"],
             "commit": fork["commit"],
@@ -870,6 +885,10 @@ def validate_lock(
         failures.append(f"hermes.repository is {hermes['repository']!r}")
     else:
         pinned.append(f"hermes.repository={MAINTAINED_FORK_REPOSITORY}")
+    if hermes.get("branch") != MAINTAINED_FORK_BRANCH:
+        failures.append(f"hermes.branch is {hermes.get('branch')!r}")
+    else:
+        pinned.append(f"hermes.branch={MAINTAINED_FORK_BRANCH}")
     if not _COMMIT_RE.match(hermes["commit"]):
         failures.append("hermes.commit is not a full 40-hex id")
     if not re.fullmatch(r"[0-9a-f]{64}", hermes["source_tree_sha256"]):
@@ -977,8 +996,8 @@ def _probe(
         "required": required,
         "expectation": expectation,
         "ok": outcome in {"pass", "refused"} if not required else outcome == "pass",
-        "stdout": _portable(_excerpt(completed.stdout, 900), report_mask),
-        "stderr": _portable(_excerpt(completed.stderr, 900), report_mask),
+        "stdout": _portable(_excerpt(_normalize_captured(completed.stdout), 900), report_mask),
+        "stderr": _portable(_excerpt(_normalize_captured(completed.stderr), 900), report_mask),
     }
 
 
@@ -1078,14 +1097,17 @@ def clean_install(
             {
                 "step": name,
                 "exit_code": completed.returncode,
-                "stderr": _portable(_excerpt(completed.stderr, 500), masks),
+                "stderr": _portable(_excerpt(_normalize_captured(completed.stderr), 500), masks),
             }
         )
         if completed.returncode != 0:
             raise BundleError(
                 code,
                 f"{name} failed: "
-                + _portable(_excerpt(completed.stderr or completed.stdout, 400), masks),
+                + _portable(
+                    _excerpt(_normalize_captured(completed.stderr or completed.stdout), 400),
+                    masks,
+                ),
             )
 
     record("manager-venv", uv("venv", "--python", sys.executable, str(manager)), "install-failed")

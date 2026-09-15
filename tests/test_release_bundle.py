@@ -564,6 +564,39 @@ def test_scan_bundle_reviews_upstream_fork_bytes_without_vetoing(
     assert report["secrets"]["strict_result"] == "clean"
 
 
+def test_captured_tool_output_records_no_run_to_run_elapsed_value(
+    tool: types.ModuleType, tmp_path: Path
+) -> None:
+    """The elapsed value is the only part of uv's output that differs between two runs of
+    the same inputs, and the qualified member set must be reproducible from them."""
+
+    lines = (
+        "Resolved 6 packages in 8ms",
+        "Prepared 1 package in 29ms",
+        "Checked 6 packages in 0.50ms",
+        "Installed 1 package in 1.2s",
+        "Audited 5 packages in 1m 3s",
+    )
+    for line in lines:
+        assert tool._normalize_captured(line) == line.split(" in ")[0] + " in <elapsed>"
+    assert tool._normalize_captured("nothing timed here") == "nothing timed here"
+
+    recorded = tool._probe(
+        "elapsed",
+        [
+            sys.executable,
+            "-c",
+            "import sys; sys.stderr.write('Installed 1 package in 35ms\\n')",
+        ],
+        root=tmp_path,
+        environment=dict(os.environ),
+        required=True,
+        expectation="exit-zero",
+    )
+    assert recorded["exit_code"] == 0
+    assert recorded["stderr"] == "Installed 1 package in <elapsed>"
+
+
 # ---------------------------------------------------------------------------- verify
 
 
@@ -793,6 +826,7 @@ def _lock(tool: types.ModuleType, lifecycle, tmp_path: Path) -> dict:
         "commit": "c" * 40,
         "version": "0.20.1",
         "tag": "v2026.8.18",
+        "branch": "aether-main",
         "python_requires": ">=3.11,<3.14",
         "source_tree_sha256": "d" * 64,
     }
@@ -815,6 +849,7 @@ def test_release_lock_binds_the_pinned_maintained_fork_identity(
     assert lock["schema_version"] == tool.RELEASE_LOCK_SCHEMA_VERSION == 4
     assert lock["hermes"]["source_mode"] == "maintained_fork"
     assert lock["hermes"]["repository"] == "https://github.com/DarkArty07/aether-hermes"
+    assert lock["hermes"]["branch"] == "aether-main"
     assert lock["aether"]["version"] == "1.0.0-rc.1"
     assert lock["aether"]["package_version"] == "1.0.0rc1"
     assert lock["aether"]["git_tag"] == "v1.0.0-rc.1"
@@ -835,22 +870,109 @@ def test_release_lock_binds_the_pinned_maintained_fork_identity(
         "schema_version=4",
         "hermes.source_mode=maintained_fork",
         "hermes.repository=https://github.com/DarkArty07/aether-hermes",
+        "hermes.branch=aether-main",
     ]
+
+
+def _v4_lock_schema() -> dict:
+    """The v4 lock shape, key-set closed, for the schema-declares-four test.
+
+    This mirrors the key sets of the release-runtime unit's
+    `specs/001-aether-v1-productization/contracts/release-lock.schema.json` (the schema this
+    repository ships once that unit lands), including `hermes.branch` being a closed-block
+    requirement with the constant `aether-main`.  It is a key-set stub, not a copy: nested
+    payloads the product's own inspection supplies (`observer`,
+    `observation_compatibility`) are only required to be objects here.
+    """
+
+    entry_stub = {"type": "object"}
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["schema_version", "aether", "hermes", "profile_bundle"],
+        "properties": {
+            "schema_version": {"const": 4},
+            "aether": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "version",
+                    "package_version",
+                    "distribution",
+                    "git_tag",
+                    "git_commit",
+                    "python_requires",
+                    "observer",
+                    "wheel_sha256",
+                    "observer_requirements_sha256",
+                    "observation_compatibility",
+                ],
+                "properties": {
+                    "version": {"type": "string"},
+                    "package_version": {"type": "string"},
+                    "distribution": {"const": "aether-agents"},
+                    "git_tag": {"type": "string"},
+                    "git_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+                    "python_requires": {"const": ">=3.11,<3.14"},
+                    "observer": entry_stub,
+                    "wheel_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                    "observer_requirements_sha256": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$",
+                    },
+                    "observation_compatibility": entry_stub,
+                },
+            },
+            "hermes": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "source_mode",
+                    "repository",
+                    "branch",
+                    "version",
+                    "commit",
+                    "python_requires",
+                    "source_tree_sha256",
+                    "artifacts",
+                ],
+                "properties": {
+                    "source_mode": {"const": "maintained_fork"},
+                    "repository": {"const": "https://github.com/DarkArty07/aether-hermes"},
+                    "branch": {"const": "aether-main"},
+                    "version": {"type": "string"},
+                    "tag": {"type": "string"},
+                    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+                    "python_requires": {"type": "string"},
+                    "source_tree_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                    "artifacts": {"type": "array", "minItems": 1, "items": entry_stub},
+                },
+            },
+            "profile_bundle": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["version", "sha256", "roles"],
+                "properties": {
+                    "version": {"const": "2"},
+                    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                    "roles": {"type": "array", "minItems": 3, "maxItems": 3},
+                },
+            },
+        },
+    }
 
 
 def test_lock_validation_applies_the_repository_schema_when_it_declares_four(
     tool: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """A lock without `hermes.branch` cannot pass: the pinned identity and the closed v4 shape
+    each refuse it, so this test fails if the tool stops emitting the declared branch."""
+
     lifecycle = tool.load_product(ROOT)
     lock = _lock(tool, lifecycle, tmp_path)
-    schema = {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {"schema_version": {"const": 4}},
-        "required": ["schema_version", "aether", "hermes", "profile_bundle"],
-    }
     schema_path = tmp_path / "release-lock.schema.json"
-    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+    schema_path.write_text(json.dumps(_v4_lock_schema()), encoding="utf-8")
     monkeypatch.setattr(tool, "_lock_schema_path", lambda checkout: schema_path)
 
     applied = tool.validate_lock(lock, aether_checkout=ROOT, allow_schema_drift=False)
@@ -862,6 +984,23 @@ def test_lock_validation_applies_the_repository_schema_when_it_declares_four(
     with pytest.raises(tool.BundleError) as refusal:
         tool.validate_lock(broken, aether_checkout=ROOT, allow_schema_drift=False)
     assert refusal.value.code == "lock-identity"
+
+    del lock["hermes"]["branch"]
+    with pytest.raises(tool.BundleError) as unpinned:
+        tool.validate_lock(lock, aether_checkout=ROOT, allow_schema_drift=False)
+    assert unpinned.value.code == "lock-identity"
+    assert "hermes.branch is None" in str(unpinned.value)
+
+    # Every pinned value is correct here, so only the schema can refuse this: a stub that
+    # required just `schema_version` would accept a lock the v4 shape rejects.
+    drifted = _lock(tool, lifecycle, tmp_path)
+    drifted["hermes"]["artifacts"] = []
+    drifted["hermes"]["unexpected"] = True
+    with pytest.raises(tool.BundleError) as unshaped:
+        tool.validate_lock(drifted, aether_checkout=ROOT, allow_schema_drift=False)
+    assert unshaped.value.code == "lock-schema-invalid"
+    assert "'unexpected' was unexpected" in str(unshaped.value)
+    assert "hermes/artifacts" in str(unshaped.value)
 
 
 # ------------------------------------------------------------------------------- cli
