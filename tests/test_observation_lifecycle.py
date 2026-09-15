@@ -329,11 +329,13 @@ def _prepared_release_with_target_manager(
     )
 
 
-def _aether_identity(version: str) -> dict[str, object]:
+def _aether_identity(version: str, *, display_version: str | None = None) -> dict[str, object]:
+    """One synthetic Aether identity; ``version`` is the PEP 440 package version."""
+
     return {
         "distribution": "aether-agents",
         "package_version": version,
-        "git_tag": f"v{version}",
+        "git_tag": f"v{display_version or version}",
         "git_commit": "a" * 40,
         "python_requires": ">=3.11,<3.14",
         "observer": {
@@ -415,11 +417,12 @@ def _write_release_lock(
 ) -> Path:
     path = root / f"release-lock-{version}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
+    display = lifecycle._display_version(version)
     payload = {
         "schema_version": 4,
         "aether": {
-            "version": version,
-            **_aether_identity(version),
+            "version": display,
+            **_aether_identity(version, display_version=display),
             "wheel_sha256": aether_wheel_sha256 or ("a" * 64),
             "observer_requirements_sha256": hashlib.sha256(
                 (
@@ -1867,6 +1870,10 @@ def test_prepare_release_installs_one_wheel_in_manager_and_exact_runtime(
         text=True,
     )
     [wheel] = distribution_dir.glob("*.whl")
+    # The fixture lock tracks the identity of the wheel this test actually builds, so it
+    # never goes stale when VERSION moves (product_version() would read the possibly
+    # older installed distribution instead of the artifact under test).
+    wheel_version = LifecycleManager._inspect_wheel(wheel)["version"]
 
     # Checkout-shape mechanics are covered separately above.  This integration slice
     # substitutes only the public release provenance so it can exercise the expensive
@@ -1895,7 +1902,7 @@ def test_prepare_release_installs_one_wheel_in_manager_and_exact_runtime(
         hermes_checkout=checkout,
         release_lock=_write_release_lock(
             tmp_path,
-            "0.24.0",
+            wheel_version,
             aether_wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
             hermes_checkout=checkout,
             hermes_commit=fixture_commit,
@@ -3713,8 +3720,8 @@ def test_disposable_public_install_capture_query_update_rollback_uninstall_purge
 
     # Stage locally without changing authority, then enter through the public source
     # launcher.  The child process cannot inherit either fixture monkeypatch, so a
-    # successful switch proves it was the real installed 1.0.0 manager validating the
-    # already immutable 1.0.1 release rather than this 0.24.0/source interpreter.
+    # successful switch proves it was the real installed manager validating the already
+    # immutable newer release rather than this source interpreter.
     source_manager = cli_module._lifecycle_manager()
     with source_manager.store.mutation_lock():
         staged = source_manager.store._register_locked(
