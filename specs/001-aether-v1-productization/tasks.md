@@ -219,6 +219,21 @@ Real serialization is the integration/closeout chain:
       the treatment already applied to the A1 artifacts.
     - `ROADMAP.md` must stop designating a contradicting artifact as the current
       synthesis/entry while pointing readers at it for the testing standard.
+18. Delegated-child snapshot leak (issue #404, HLP-310). Measured by the terminal card
+    before activation: the pre-RC installed runtime leaks `HERMES_DELEGATED_CHILD_CONTEXT`
+    and `HERMES_KANBAN_*` into the reusable terminal snapshot, while the maintained-fork
+    candidate excludes both. Canary (portable, disposable roots, module origins printed):
+    `specs/001-aether-v1-productization/fixtures/hlp310_snapshot_canary.py`; its RED and
+    GREEN legs and the candidate's focused regression are recorded in
+    `specs/001-aether-v1-productization/evidence/LC-CLOSE.md` §3. No fork source repair is
+    required, so no additional implementer unit exists for it. Obligations: `LC-INT` runs
+    the candidate's `tests/tools/test_delegate_kanban_isolation.py` and
+    `tests/tools/test_snapshot_session_id_leak.py` at the merged fork commit with the
+    fork's own runner; `LC-CLOSE` re-runs the canary on the activated RC. Issue #404 closes
+    only when the accepted commit carries the exclusion, those modules pass at it, and the
+    canary passes on the activated runtime — otherwise it stays open with the failure
+    recorded. This is a directly evidenced behavioral claim about HLP-310, so it is never
+    accepted from historical focused tests alone.
 
 ## LC-DOCS — canonical design, docs and capability reconciliation
 
