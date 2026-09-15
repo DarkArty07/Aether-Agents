@@ -39,6 +39,10 @@ not taken here.
   `3076d61adc4909d2fa3bd2ade6a746db9a34169d`, the revision of this record immediately
   before this paragraph was reworded: the only difference to the delivered commit is this
   record's own text, so the measured code, identity and test files are byte-identical.
+- One post-review correction is recorded in §3 (the built wheel's size, a transcription
+  error) and carried by `rc2-identity-gate-digest-correction.txt`, attached to the owning
+  card; it lands as the follow-up commit on the unit branch, touches no delivered file, and
+  supersedes that single line of the digest named above.
 - `git status --porcelain` and `git diff --numstat` below are the pre-commit state of the
   exact delivered set; this record is added by the same commit and therefore appears as one
   new tracked path in it.
@@ -140,8 +144,19 @@ release-advertised digest recorded in `specs/001-aether-v1-productization/eviden
 ```console
 $ uv build --wheel --out-dir <scratch-root>/dist
 Successfully built <scratch-root>/dist/aether_agents-1.0.0rc2-py3-none-any.whl
-# sha256 d3393e07fefe6a7d27ae82086e49334ba79c502e841feec7ea4176c68fa197d6, 674 916 bytes
+# sha256 d3393e07fefe6a7d27ae82086e49334ba79c502e841feec7ea4176c68fa197d6, 674 913 bytes
 ```
+
+**Corrected figure (post-review).** An earlier revision of this record stated `674 916 bytes`
+for the wheel above. The file that carries sha256 `d3393e07…` is **674 913 bytes**:
+re-measured on the retained build, `stat -c '%s'` and `os.path.getsize` both report `674 913`
+for `<scratch-root>/dist/aether_agents-1.0.0rc2-py3-none-any.whl`, whose sha256 re-verifies as
+`d3393e07…` — one byte string cannot carry two sizes. The figure was transcribed, not
+measured: no gate step prints a wheel-size line, so the wrong value never had a source in the
+transcript. The corrected figure appears above and in §5; the immutable attachments
+`rc2-identity-gate-digest-3076d61.txt:22` and `rc2-identity-gate-digest.txt:22` keep the
+superseded one, and `rc2-identity-gate-digest-correction.txt`, attached alongside this record,
+supersedes that line.
 
 | Measurement | rc.1 wheel (published) | rc.2 wheel (this unit) |
 | --- | --- | --- |
@@ -231,7 +246,7 @@ unchanged.
 | Whitespace | `git diff --check` | no output, rc 0 |
 | Workflow parse | `yaml.safe_load` on both edited workflows | `release.yml: parse=ok jobs=['release'] env_keys=['FORK_COMMIT','FORK_REPOSITORY']`, `FORK_COMMIT=7a4fdcd083409c31c09cfa3bfa345354e8576a7e`; `policy.yml: parse=ok jobs=['observation-qualification','policy','pull-request-target']` |
 | Release-workflow contract tests | `uv run --frozen pytest tests/test_release_bundle.py -q -k "workflow or version_file or release_identity"` | `6 passed, 29 deselected` |
-| Wheel build | `uv build --wheel --out-dir <scratch-root>/dist` | `aether_agents-1.0.0rc2-py3-none-any.whl`, sha256 `d3393e07fefe6a7d27ae82086e49334ba79c502e841feec7ea4176c68fa197d6`, 674 916 bytes |
+| Wheel build | `uv build --wheel --out-dir <scratch-root>/dist` | `aether_agents-1.0.0rc2-py3-none-any.whl`, sha256 `d3393e07fefe6a7d27ae82086e49334ba79c502e841feec7ea4176c68fa197d6`, 674 913 bytes (§3 corrects the earlier figure) |
 
 Deployment boundary: `.github/workflows/pages.yml` triggers on pushes to `main` touching
 `website/**`, `docs/**` or itself. No delivered path matches, so this change cannot cause a
