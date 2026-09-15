@@ -34,7 +34,6 @@ jobs:
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ github.token }}
-      RELEASE_BUNDLE_DIR: ${{ runner.temp }}/release-bundle
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -71,6 +70,7 @@ jobs:
       - name: Build and qualify the release bundle
         env:
           RELEASE_VERSION: ${{ steps.validate.outputs.version }}
+          RELEASE_BUNDLE_DIR: ${{ runner.temp }}/release-bundle
         shell: bash
         run: |
           set -euo pipefail
@@ -97,6 +97,7 @@ jobs:
         env:
           RELEASE_VERSION: ${{ steps.validate.outputs.version }}
           RELEASE_PRERELEASE: ${{ steps.validate.outputs.prerelease }}
+          RELEASE_BUNDLE_DIR: ${{ runner.temp }}/release-bundle
         shell: bash
         run: |
           set -euo pipefail
