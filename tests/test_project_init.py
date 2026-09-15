@@ -15,10 +15,17 @@ from pathlib import Path
 
 import pytest
 
+from aether_agents import lifecycle
+from aether_agents.commands import init as init_command
 from aether_agents.commands.init import run_init
 from aether_agents.objective_contracts import ObjectiveContractStore
 from aether_agents.observation.context import ProjectRegistry
 from aether_agents.project_marker import validate_project_marker
+
+#: The published Aether RC ships this PEP 440 package version; the contract's display
+#: and tag identity for the same release is ``_DISPLAY_IDENTITY``.
+_PEP440_IDENTITY = "1.0.0rc1"
+_DISPLAY_IDENTITY = "1.0.0-rc.1"
 
 _PROJECTS_SCHEMA = """
 CREATE TABLE projects (
@@ -115,6 +122,37 @@ def test_brownfield_init_writes_valid_marker_and_binds_one_hermes_project(
     assert envelope.data["hermes_project_id"] == "p_exact"
     assert registry.project_path(marker["project_id"]) == repository
     assert registry.verify_with_marker(marker["project_id"]) is True
+
+
+def test_marker_carries_the_release_identity_when_the_product_version_is_pep440(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The RC installs as ``1.0.0rc1``; the portable marker must stay schema-conforming.
+
+    ``initialized_by`` is constrained to SemVer by the canonical project schema, so the
+    writer records the release's display identity instead of the package version.
+    """
+    repository = _git_repository(tmp_path / "repo")
+    monkeypatch.setenv(
+        "HERMES_HOME",
+        str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)])),
+    )
+    monkeypatch.setattr(init_command, "product_version", lambda: _PEP440_IDENTITY)
+
+    envelope = run_init(_args(repository), registry=registry)
+
+    assert envelope.result == "changed", envelope.errors
+    marker = tomllib.loads((repository / ".aether" / "project.toml").read_text(encoding="utf-8"))
+    validate_project_marker(marker)
+    assert marker["initialized_by"] == _DISPLAY_IDENTITY
+
+
+def test_the_marker_writer_normalizes_through_the_release_identity_converter() -> None:
+    """One converter, shared with the release-lock identity path (never a second regex)."""
+    assert init_command.display_version is lifecycle.display_version
+    assert lifecycle.display_version(_PEP440_IDENTITY) == _DISPLAY_IDENTITY
+    # A SemVer package version is already the display identity and passes through.
+    assert lifecycle.display_version("0.24.0") == "0.24.0"
 
 
 def test_init_is_idempotent(
