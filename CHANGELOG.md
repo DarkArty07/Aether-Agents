@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0rc1 — release candidate (pre-stable, not yet published)
+## 1.0.0rc1 — release candidate (pre-stable, published but not accepted for activation)
 
 The release identity is package version `1.0.0rc1`, annotated tag and GitHub prerelease
 `v1.0.0-rc.1` (`release_impact=major`, `release_action=publish`,
