@@ -190,14 +190,43 @@ Real serialization is the integration/closeout chain:
     - The literal `policy.yml` manifest is compared as a whole list by
       `tests/test_public_artifacts.py::test_canonical_base_manifest_matches_tracked_non_specs_files`,
       so `LC-BLOCK` corrects both missing lines (see the executability row).
+17. Owning-artifact reconciliation for the four decisions (in-scope 1, D1, AC-15). A1
+    `spec.md` §10 "Impact and reconciliation" already requires it in its own words: the
+    owning and derived artifacts MUST be reconciled before implementation closes, and it
+    names R4, R9, R11 and R13 among them; `DESIGN.md` §12/§13 assigns those questions to
+    those stages and states that another artifact "may not become a competing source of
+    truth". Measured at the LC-DOCS review: live normative statements still contradict the
+    contract decisions and must be reconciled in the owning stage artifacts.
+    - maintained fork: `specs/r4-hermes-boundary/spec.md` FR-403a/FR-403b (a release lock
+      "MUST declare `upstream` or `transitional_fork`") and FR-425;
+      `specs/r11-evidence-and-observability/spec.md` FR-1138 ("the exact locked public
+      `upstream` or `transitional_fork` artifact");
+      `specs/r13-synthesis-and-release/spec.md` FR-1337 and its component list;
+      `specs/r13-synthesis-and-release/research.md` §18.3 and
+      `specs/r4-hermes-boundary/research.md` (release-mode decision records).
+    - post-separation layout: `specs/r9-state-and-recovery/spec.md` §2.1 places `profiles/`
+      and `projects/` under `~/.local/share/aether/`, and
+      `specs/r13-synthesis-and-release/plan.md` repeats that tree; the accepted layout puts
+      every operational Hermes home and all product state under the XDG state root.
+    - release-lock schema: `specs/r13-synthesis-and-release/plan.md` states "release-lock
+      schema is integer `3`", which
+      `tests/test_a1_contracts.py::test_release_lock_schema_and_plan_agree_on_version_three`
+      asserts together with the schema constant. `LC-RUNTIME` owns the schema and that test;
+      the plan line is `LC-DOCS`'s. Neither may change alone, and the test must not be
+      weakened.
+    - historical records are preserved, not rewritten: research decision records and
+      completed checklists receive a dated superseding note rather than deletion, matching
+      the treatment already applied to the A1 artifacts.
+    - `ROADMAP.md` must stop designating a contradicting artifact as the current
+      synthesis/entry while pointing readers at it for the testing standard.
 
 ## LC-DOCS — canonical design, docs and capability reconciliation
 
 - Source: contract Owner Intent / Decision "Maintained fork" / "Layout" / "Activation
   interruption" / "Release identity"; in-scope 1 and 11; deliverable D1; AC-15.
-- Outcome: the owning design, roadmap, root guidance, guide/reference docs and capability
-  registry state the accepted RC reality without competing authority (`CHANGELOG.md` and
-  `VERSION` remain `LC-RELTOOL`'s exclusive surface): the
+- Outcome: the owning design, roadmap, root guidance, guide/reference docs, capability
+  registry and the owning stage artifacts state the accepted RC reality without competing
+  authority (`CHANGELOG.md` and `VERSION` remain `LC-RELTOOL`'s exclusive surface): the
   maintained fork (not the fixed public baseline, not a `.patch`/editable replay) as
   executable Hermes source, the post-separation XDG data/state layout, the supported
   interrupting `aether update` local-candidate route and state-preserving rollback, the
@@ -205,17 +234,24 @@ Real serialization is the integration/closeout chain:
   the explicit remaining stable/PyPI/WSL2 gates. Excludes runtime code, schema,
   ledger/evidence machinery, release tooling, push/PR/tag/publication, and any live effect.
 - Inputs: base `410c172`; Contract decisions and AC-15; the pinned CLI surface and release
-  identity (Shared decisions 2, 5); observed live layout as evidence only. No prerequisite
-  unit.
+  identity (Shared decisions 2, 5); observed live layout as evidence only; the
+  owning-artifact reconciliation debt and its measured statement list (Shared decision 17).
+  No prerequisite unit.
 - Boundaries: writable `DESIGN.md`, `ROADMAP.md`, root `AGENTS.md`, `README.md`,
   `docs/**` including `docs/capabilities.toml` and the generated
   `docs/reference/capabilities.md`, `specs/001-aether-v1-productization/spec.md`,
-  `plan.md`, `research.md` and `contracts/cli.md`, plus this objective's
+  `plan.md`, `research.md` and `contracts/cli.md`,
+  `specs/r4-hermes-boundary/{spec.md,research.md}`,
+  `specs/r9-state-and-recovery/spec.md`,
+  `specs/r11-evidence-and-observability/spec.md`,
+  `specs/r13-synthesis-and-release/{spec.md,plan.md,research.md}` — the stage surfaces only
+  as far as Shared decision 17's measured statements — plus this objective's
   `specs/001-aether-v1-productization/evidence/LC-DOCS.md`. Preserve
   `HERMES_LOCAL_PATCHES.md`, `specs/001-aether-v1-productization/tasks.md`,
   `specs/001-aether-v1-productization/evidence/**` other than the unit record,
   `specs/001-aether-v1-productization/contracts/release-lock.schema.json`,
-  `src/**`, `scripts/**`, `tests/**`, `.github/**`, `VERSION`, `CHANGELOG.md`.
+  `src/**`, `scripts/**`, `tests/**`, `.github/**`, `VERSION`, `CHANGELOG.md`, and every
+  R0–R12 stage artifact other than the three named above.
 - Judgement: wording, structure, which documents need the RC statement, and whether a
   capability row is added, re-scoped or re-statused — provided the registry keeps
   matching the real parser and no second authority is created.
@@ -226,9 +262,16 @@ Real serialization is the integration/closeout chain:
   (Shared decision 16); focused `tests/test_documentation.py`,
   `tests/test_contract_quality_documents.py`, `tests/test_a1_contracts.py`,
   `tests/test_public_artifacts.py`; `uv run --frozen ruff check` / `ruff format --check`
-  on touched paths; `git diff --check`. Evidence record lists each reconciled claim with
-  the file and line that carries it, and states explicitly that the RC is not a stable
-  1.0.0 claim.
+  on touched paths; `git diff --check`. For Shared decision 17 the unit additionally proves
+  by re-grep that no tracked artifact outside the surfaces that LC-RUNTIME owns still
+  asserts the retired source mode, an `upstream`-or-`transitional_fork` release-lock
+  requirement, or the retired XDG placement — reporting the exact search and its empty
+  result — and states that
+  `tests/test_a1_contracts.py::test_release_lock_schema_and_plan_agree_on_version_three`
+  only passes once `LC-RUNTIME` lands the schema constant and the test's own expected
+  version together (integration-bound; neither unit may weaken the test). Evidence record
+  lists each reconciled claim with the file and line that carries it, and states explicitly
+  that the RC is not a stable 1.0.0 claim.
 
 ## LC-BLOCK — release blockers #437 and #438
 
