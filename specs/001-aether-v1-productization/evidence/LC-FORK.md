@@ -129,8 +129,22 @@ lazy installs disabled`, missing Daytona/Modal/Fal/Hindsight extras, gateway
 lifecycle probes); no file this candidate changes, and none of the four test
 modules it touches, appears in any failing set.
 
-The summary blocks of all three runs travel with this task as attachments; the raw
-runner output is summarized there rather than attached in full.
+Attachments for this section, so the numbers above are re-fetchable rather than
+quoted: `LC-FORK-complete-suite-candidate-387705ea1.txt` (run 1; 14 093 bytes, sha256
+`85f1a8b544cd608a7f2477617ccf04e3925dcebcd07e311d3c14ed36ee8ec202`),
+`LC-FORK-complete-suite-base-control-bb5e9a422f.txt` (base control; 13 279 bytes,
+sha256 `9683b19adb673607da8d106e7cf479eba96226011d2611bc7952efb52c88c559`; it also
+carries a two-line identification header) and
+`LC-FORK-complete-suite-candidate-387705ea1-run2-summary.txt.gz` (run 2; 3 027 bytes
+gzipped, sha256 `9468fa8e0d768dfb16cf1a959c16b02262268b7dd800c2d20a3f38b5990d1cae`;
+uncompressed 13 849 bytes, sha256
+`03b7a027eb3130bd92047ad8973aa0350caae7a9c8a21a2bafc3aaaa7fcd850e`). Each attachment
+is the runner's preamble, its `=== Summary:` block, its deduplicated `FAILED` line list
+and its file-level failure sections, with the per-test traceback detail elided; the raw
+runner output (~1.0–1.1 MB per run) is not attached, because the session scratch copy is
+not durable — re-running the command in this section re-creates it. The run-2 digest is
+reproducible by the rule recorded in §12, which was validated by reproducing the run-1
+digest byte-exactly (the derived file's sha256 equals the run-1 attachment's).
 
 ## 5. Per-HLP attribution at the candidate revision
 
@@ -193,8 +207,20 @@ ancestor, every named file exists): `HLP-313`, `HLP-353`, `B292`, `B294`,
 commits, the HLP-305 maintained-fork holder files and the HLP-226b files — 13 of
 13 verified, 0 requiring attention.
 
-The machine-readable attribution (component hashes, anchor lines, ancestry
-results) travels with this task as an attachment.
+The machine-readable attribution — per-entry component presence, byte size and
+SHA-256, recorded-commit ancestry results and anchor line numbers — is attached as
+`LC-FORK-attribution-387705ea1.json.gz` (7 886 bytes, sha256
+`11d9006830c11287ea350ad85e33ee80d856203a67294a3d75eedf579817ede1`, produced with
+`gzip -9 -n` so the archive itself is reproducible; uncompressed 50 982 bytes, sha256
+`51913566efd655b454898074efd0076123b23281f3e253d4be1c553caa8107d9`). It names
+`candidate_revision = 387705ea1dd76f43585fca220b11859173cc4a6b` and
+`candidate_tree_object = ead7e6c3c4a55ce2cc997fd705f1c0fe17c4455d`, so the report is
+run against the exact candidate revision rather than against the pinned source
+revision. Its `entries` map is byte-identical to the same report computed at the
+contract-named source revision `54eeb56dab` (the tip's parent, §6) — verified by
+comparing the two JSON documents, whose only differences are `candidate_revision` and
+the candidate tree object — so no component, ancestry or anchor result depends on
+which of those two revisions the report is run against.
 
 ## 6. Tree-digest inputs for the Aether release lock
 
@@ -217,6 +243,25 @@ The projection is reported as an input, computed with the documented
 path-and-file-byte encoding; the authoritative value remains LC-RUNTIME's, and
 the encoding is reproducible from the commit alone (no working tree, no
 platform-bound metadata).
+
+Every projection value in the table is a **blob-based** projection of the fork tree
+(rows are `(path, sha256(blob bytes))` in global path order). These values are fork
+evidence, and they are **not** the release lock's `hermes.source_tree_sha256`: that field
+is re-derived by the shipping validator, so its canonical encoding is
+`src/aether_agents/lifecycle.py::_tree_sha256` over the *materialized* (git-archive
+extracted) source — `sha256(json.dumps(rows, separators=(",", ":"), ensure_ascii=True))`
+with rows in `os.walk` DFS order and per-level sorted names. Measured here so the two
+encodings are not read as contradicting figures: at `387705ea1d` the materialized digest
+is `fb3e5336a0106ad96ccac88345f23880a9f2597235f023aab246add4a2498337`, produced by
+calling that validator function on the `git archive` extraction of the candidate (9 375
+regular files, zero symlinks), which reproduces the vector recorded in shared decision 19
+of `specs/001-aether-v1-productization/tasks.md` (commit `4cb3235`). The cause is
+mechanical and re-measured here: `.gitattributes` gives the nine `*.ps1` files
+`text: set` / `eol: crlf`, and exactly those nine files differ between blob bytes (LF)
+and materialized bytes (CRLF) — the other 9 366 files are byte-identical. Row order
+matters as well: the same materialized tree under a global path sort digests to
+`c6088578…` rather than to the DFS value. LC-RUNTIME/LC-INT own the lock value; nothing
+in this table is it.
 
 ## 7. HLP-420 (collaboration request 2 / peer response 3) — owned by LC-PORT420
 
@@ -288,7 +333,7 @@ Residual risk and limits:
 | In-scope 8 / AC-01 (fork half): clean exact fork input, normal branch/PR path without history rewrite, fork identity `DarkArty07/aether-hermes:aether-main` | §1, §2, §8 |
 | AC-02 (fork half) / D6: every detailed active HLP record attributable at the selected fork revision; fork docs/tests updated; no `.patch` replayed | §3, §5 (28/29 fully attributed; HLP-420 owned by LC-PORT420), §2 documentation |
 | Shared decision 4 (maintained-fork identity; `hermes-agent` 0.20.1) | §2, §6 |
-| Shared decision 10 (one evidence record; larger logs as task attachments) | this file plus the attached logs/JSON |
+| Shared decision 10 (one evidence record; larger logs as task attachments) | this file plus the card's attachments: the focused-suite log and the three complete-suite digests (§4.1) and the machine-readable attribution (§5) |
 | Shared decision 11 (fork test standard; no skip added or weakened) | §4 (focused first, then the complete suite; the single skip is the runner's Windows-only case) |
 | Shared decision 14 (policy manifest) | the only Aether file added is under `specs/`, so no `.github/workflows/policy.yml` line is required |
 | Shared decision 15 (stop expanding a defective unit; report instead) | §7 — reported with measured evidence instead of widening scope |
@@ -323,4 +368,50 @@ candidate revision inside a disposable harness (a bounded test-only unit). Both
 were offered to the flow controller together with these measurements; creating that
 unit is decomposition, not a local implementation choice, so LC-FORK did not create
 it on its own authority.
+
+## 12. Review return disposition and the run-digest rule
+
+The Supervisor review of this record (review run 19; comment 36) independently
+reproduced the candidate revision and its fast-forwardability, the absence of patch
+replay, the distribution identity, the four HLP-425 behaviour anchors, the 19-file
+focused suite (`399 passed / 0 failed / 1 skipped`), the lint and format status, the tree
+object and the deterministic projection, and returned one bounded correction: two
+sentences claimed attachments that had not been delivered — the machine-readable
+attribution (§5) and the run-2 summary (§4.1). Disposition of that return:
+
+1. §5 now names `LC-FORK-attribution-387705ea1.json.gz` with both hashes, and the report
+   was recomputed at the exact candidate revision instead of the pinned source revision;
+   the two reports' `entries` maps are byte-identical (§5).
+2. §4.1 now names all three run digests, says which is rule-derived and states what is
+   not attached.
+3. The run-2 digest was derived from the raw run-2 log by this rule:
+   1. the runner's first three lines, verbatim;
+   2. the `=== Summary:` block, verbatim, from the blank line before it up to (excluding)
+      the `=== Per-file subprocess time distribution ===` header;
+   3. a generated `FAILED lines: <count>` line, where the count is the number of raw
+      `^FAILED ` lines;
+   4. the raw `^FAILED ` lines themselves, in raw order, verbatim;
+   5. the trailing region, verbatim and including its leading blank line, from the
+      `=== N files with test failures … ===` header to the final `EXIT=` line.
+
+   The rule is validated rather than asserted: applied to the run-1 raw log it reproduces
+   the run-1 attachment byte-exactly — sha256
+   `85f1a8b544cd608a7f2477617ccf04e3925dcebcd07e311d3c14ed36ee8ec202`, the same value the
+   card records for that attachment. Applied to the base-control raw log it reproduces
+   that digest as well, except for the attachment's own two-line header and the
+   `Durations cached to test_durations.json …` line it omits (measured diff: 3 lines), so
+   the base-control digest is described by its content and is not claimed as rule-derived.
+4. §6 gained the blob-versus-materialized clarification requested by the flow controller
+   while this record was being edited (peer note citing shared decision 19): the
+   projection values in §6 are blob-based fork evidence, while the lock's
+   `hermes.source_tree_sha256` is the materialized-tree digest of
+   `src/aether_agents/lifecycle.py::_tree_sha256`, measured here at the candidate as
+   `fb3e5336…`.
+
+No fork-side change, no history rewrite and no new scope came out of the review return:
+the candidate revision `387705ea1dd76f43585fca220b11859173cc4a6b`, the branch, the tree and
+the behavior commits are unchanged, and the attachment set is the only delta. The run-2
+raw log (1 082 245 bytes, sha256
+`87ffeb0788728e3535d9d22bcd4a26ad84805d1381ea19781052ca4aa42c79a5`) remained in the
+session scratch area only, which is why it is not itself an attachment.
 
