@@ -135,7 +135,16 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     assert "`docs/capabilities.toml`](docs/capabilities.toml)" in readme
     assert "sole current implementation-status and traceability registry" in readme
     assert "documented transitional downstream" in readme
-    assert "beta stabilization build, not a release candidate" in readme
+    assert "releases/tag/v1.0.0-rc.1" in readme
+    assert "**has been published**" in readme
+    assert "beta stabilization build, not a release candidate" not in readme
+    assert "no release candidate has been published" not in readme
+    assert "**not** stable `1.0.0`" in readme
+    assert "**not** a PyPI or other package-index publication" in readme
+    assert "**not** a WSL2 qualification result" in readme
+    assert (
+        "#261 therefore stays open with the stable, PyPI/OIDC and WSL2 gates outstanding" in readme
+    )
     assert "remain explicit unsupported placeholders" in readme
     assert "Historical snapshot" in incomplete
     assert "does not state the current implementation" in incomplete
