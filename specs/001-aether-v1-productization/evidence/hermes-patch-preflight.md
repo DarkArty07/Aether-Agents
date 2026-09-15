@@ -1,6 +1,6 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-09-15T03:16:31Z`
+Observation timestamp: `2026-09-15T08:29:21Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
@@ -135,7 +135,6 @@ Source ledger SHA-256: `7d734946d05954e7810f0c2a8464409736b73535fa50ecbbc51c9bea
 - `HLP-393` (uncertainty): Upstream does not capture or restore durable commissioning origin for cron-spawned tasks at the inspected revision.
 - `HLP-420` (artifact): Portable reconstruction passed and the focused candidate checks are green, but public upstream equivalence is unavailable: both inspected upstream revisions still synthesize finish_reason=stop for incomplete/cancelled terminals and still concatenate every message item. No live runtime was activated by this unit.
 - `HLP-420` (retirement_gate): Retirement gate status is not_executed.
-- `HLP-420` (selected_source): Declared source path(s) missing at the selected revision 54eeb56dabefc98821d696656ed58c55dd777346: tests/agent/test_auxiliary_client_responses_terminal_420.py.
 - `HLP-420` (uncertainty): tool_choice passthrough covers call_llm, _call_llm_impl, _build_call_kwargs, the Responses adapter and the synchronous same-provider retry; the asynchronous auxiliary entry point and the emergency fallback candidate builders still omit tool_choice, so a fallback attempt keeps the route default instead of forcing the structured call.
 - `HLP-420` (uncertainty): The forced submit_graph_fragment structured-call contingency is not implemented here; this unit only makes the transport capable of carrying it deterministically, and the async path would need its own change before a forced call could be proven there.
 - `HLP-420` (uncertainty): A completed response with empty output and no top-level output_text still returns no content with finish_reason=stop; classifying that hollow response as retryable remains the caller's decision.
@@ -178,18 +177,17 @@ Source ledger SHA-256: `7d734946d05954e7810f0c2a8464409736b73535fa50ecbbc51c9bea
 
 ## Selected maintained-fork source
 
-Selected source: `https://github.com/DarkArty07/aether-hermes@54eeb56dabefc98821d696656ed58c55dd777346` (presence resolved from a checkout: `true`)
+Selected source: `https://github.com/DarkArty07/aether-hermes@9031bae0e8b0ab40c4fd7ba50c644972ff512611` (presence resolved from a checkout: `true`)
 
 | Verdict | Entries |
 | --- | --- |
-| present | 26 |
-| partial | 1 |
+| present | 27 |
+| partial | 0 |
 | absent | 0 |
 | unverified | 2 |
 
 - `HLP-246`: unverified — no repository-relative component path or declared portable patch path is recorded for this entry
 - `HLP-247`: unverified — no repository-relative component path or declared portable patch path is recorded for this entry
-- `HLP-420`: partial — missing: tests/agent/test_auxiliary_client_responses_terminal_420.py
 
 ## Safe next decisions
 
