@@ -299,6 +299,20 @@ def test_report_scan_refuses_operator_paths_in_plain_text_members(
     }
 
 
+def test_path_shapes_do_not_match_the_canonical_patterns(
+    tool: types.ModuleType, tmp_path: Path
+) -> None:
+    lifecycle = tool.load_product(ROOT)
+    for literal in (
+        "/" + "home" + "/user/",
+        "/" + "Users" + "/Example/",
+        "C:\\" + "Users" + "\\Someone\\",
+    ):
+        shaped = tool._path_shape(literal)
+        assert "<name>" in shaped
+        assert tool._operator_path_matches(lifecycle, shaped.encode()) == []
+
+
 def test_portable_masks_every_host_path_a_report_could_disclose(tmp_path: Path) -> None:
     tool = _load_tool()
     roots = tmp_path / "work" / "install-roots"
@@ -359,8 +373,9 @@ def test_scan_bundle_reviews_upstream_fork_bytes_without_vetoing(
     )
     fork_scan = report["private_paths"]["maintained_fork"]
     assert fork_scan["result"] == "reviewed"
-    example = "/" + "home" + "/user/"
-    assert example in fork_scan["distinct_matches"]
+    shape = "/" + "home" + "/<name>/"
+    assert shape in fork_scan["distinct_match_shapes"]
+    assert all("<name>" in value for value in fork_scan["distinct_match_shapes"])
     assert report["secrets"]["strict_result"] == "clean"
 
 

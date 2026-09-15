@@ -57,6 +57,9 @@ _STABLE_VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 _RC_VERSION_RE = re.compile(r"^(?P<base>[0-9]+\.[0-9]+\.[0-9]+)rc(?P<serial>[1-9][0-9]*)$")
 _COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 _MAX_EXCERPT = 1600
+# Records one user-home component so a report can name the match shape without publishing
+# an operator-path literal that the canonical scanner would flag in Aether-authored bytes.
+_HOME_SEGMENT = re.compile(r"(?i)((?:^|[/\\])(?:home|Users)[/\\])[^/\\]+")
 # High-confidence credential shapes.  A private-key marker only counts as material when a
 # base64 body follows it, so the repository's own scanner pattern literals never match.
 _SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
@@ -589,6 +592,12 @@ def _operator_path_matches(lifecycle: Any, payload: bytes) -> list[str]:
     return found
 
 
+def _path_shape(literal: str) -> str:
+    """Report one operator-path match as a portable shape instead of the literal itself."""
+
+    return _HOME_SEGMENT.sub(lambda match: f"{match.group(1)}<name>", literal)
+
+
 def scan_report_bytes(lifecycle: Any, files: Sequence[Path]) -> dict[str, Any]:
     """Strict operator-path check over the plain-text members the scanner cannot open.
 
@@ -668,19 +677,25 @@ def scan_bundle(
                 "canonical path scanner failed on the fork archive: " + _excerpt(fork_output, 400),
             )
         literals: list[str] = []
+        labels: set[str] = set()
         for artifact in fork_artifacts:
-            for _, payload in _iter_artifact_payloads(artifact):
-                literals.extend(_operator_path_matches(lifecycle, payload))
+            for label, payload in _iter_artifact_payloads(artifact):
+                matches = _operator_path_matches(lifecycle, payload)
+                if matches:
+                    labels.add(label.rsplit("!", 1)[-1])
+                literals.extend(_path_shape(value) for value in matches)
         reviewed.update(
             {
                 "result": "reviewed" if fork_code == 1 else "clean",
-                "distinct_matches": sorted(set(literals))[:200],
+                "distinct_match_shapes": sorted(set(literals))[:200],
                 "distinct_match_count": len(set(literals)),
+                "matched_member_count": len(labels),
                 "disposition": (
                     "upstream-derived maintained-fork source: exact-commit bytes are bound by "
                     "the locked tree digest; matches are generic example paths in upstream code "
-                    "and documentation and are reported for review, not treated as an operator "
-                    "disclosure. Aether-authored bytes above are enforced strictly."
+                    "and documentation, reported as shapes (the user component is replaced by "
+                    "<name>) so this report never republishes an operator-path literal. "
+                    "Aether-authored bytes above are enforced strictly."
                 ),
             }
         )
