@@ -80,6 +80,14 @@ predates HLP-310's snapshot exclusion, and not of the maintained-fork candidate,
 carries the exclusion and passes its focused regression. No fork source repair is required,
 so no additional implementer unit was created for it.
 
+Corroboration: LC-FORK independently reached the same classification by its own measurement
+(candidate exclusion at `tools/environments/base.py:533/576/585`, focused regressions
+`12 passed`, and zero occurrences of the marker in the effective runtime source, whose
+snapshot prelude is the pre-HLP-310 `AI_AGENT HERMES_AGENT` form). Its record is
+`specs/001-aether-v1-productization/evidence/LC-FORK.md` §11. The two measurements were made
+separately and agree, which is why this classification is treated as settled rather than
+single-author.
+
 ### 3.3 Remaining obligation (this card owns it)
 
 The GREEN leg above ran the candidate **source** under the pre-RC runtime's interpreter
