@@ -21,8 +21,12 @@ env:
   # commit from this repository and refuses a foreign repository, a wrong revision or a
   # dirty source. It never derives the identity from a branch tip, the working directory or
   # recency, so an unset/incorrect pin fails closed instead of publishing wrong bytes.
+  #
+  # Pinned by the Aether 1.0.0-rc.1 release integration: the merge of the reviewed
+  # `fix/425-review-flow-continuity` (PR #12) and `fix/420-responses-terminal-fidelity`
+  # (PR #13) branches into the maintained fork's `aether-main`.
   FORK_REPOSITORY: https://github.com/DarkArty07/aether-hermes
-  FORK_COMMIT: "0000000000000000000000000000000000000000"
+  FORK_COMMIT: "9031bae0e8b0ab40c4fd7ba50c644972ff512611"
 
 jobs:
   release:
