@@ -267,3 +267,77 @@ outside this unit's mandate ("This is a context-placement repair, not a workflow
   pinned in `FORK_COMMIT` being servable by the remote, which is the integration lane's obligation.
 - No claim about `main`'s state after the merge, about stable `1.0.0`, PyPI or WSL2.
 - No full-suite bootstrap result (§5), and no independent review: this is the unit's own evidence.
+
+## 10. Review addendum — the empirical proof in §7, completed by the publication lane
+
+*Added by the Supervisor review run (run 101) that reviewed this unit. §1–§9 above are the
+implementing lane's record and are unaltered; this section reports the verification that lane
+could not perform under its publication boundary.*
+
+### 10.1 The push, and its observation
+
+The reviewed commit was pushed on its own branch and the run list read back before and after.
+
+| | Value |
+| --- | --- |
+| Branch | `aether-agents-2/t_5cd52e79-lc-fix-relwf-release-workflow-must-be-va` |
+| Commit | `304c469387752b426088d7244d317dbed78b865f` |
+| Workflow observed | `322473622` (`.github/workflows/release.yml`) |
+| Before | `total_count = 19`; 15 failures, **all zero-job**; newest datum `34979146475` (`push`, `main`, `f8e88467`, 14:04:14Z) |
+| Immediately preceding branch push | `34976915020` (`push`, `aether-agents-2/lc-int-evidence-completion`, 13:44:01Z) — **created a zero-job run** |
+| After | `total_count = 19` — **unchanged**; runs for commit `304c469…`: **0**; no new run of any kind |
+
+Re-read after a further 150 s: still `total_count = 19`, still 0 runs for the commit, newest run
+still `34979146475`. Scheduling lag is therefore excluded rather than assumed away.
+
+The pair is discriminating because both sides are the **same event type on the same workflow**: a
+push to a non-default branch carrying the invalid file produced a zero-job run (two independent
+observations, `34976208051` at 13:37:36Z and `34976915020` at 13:44:01Z), while the same push
+carrying the fixed file produced no run at all — which is what a valid file with a
+tag-only trigger must do.
+
+### 10.2 Why "no run" is not merely "nothing happened"
+
+`policy.yml` triggers only on `push` to `main` and `pull_request` targeting `main` (verified from
+the file: `on: push: branches: [main]` / `on: pull_request: branches: [main]`), so a feature-branch
+push is *expected* to start nothing. That removes an easy misreading in both directions: the
+absence of a `policy.yml` run here is not evidence either way, and the absence of a `release.yml`
+run is the whole test. Confirmation that the push was processed, on the same event, follows from
+the merge state in §10.4.
+
+Byte-level and rule-level checks by the reviewing lane, independent of the implementing lane's
+tooling choices: `actionlint` **1.7.7** (a different build than the 1.7.12 used in §2) reports the
+identical single finding on the pre-change file — `release.yml:37:31: context "runner" is not
+allowed here. available contexts are "github", "inputs", "matrix", "needs", "secrets", "strategy",
+"vars"` — and `rc=0` on the fixed file; `policy.yml` is `rc=0` under the same binary; and reverting
+the fixed file to job level reproduces the pre-change bytes exactly and the same error at the same
+position. Per-step/per-key comparison from the reviewer's own model: triggers, permissions,
+workflow-level `env`, `runs-on`, job set and step count all identical; job env keys
+`['GH_TOKEN','RELEASE_BUNDLE_DIR','RELEASE_TAG'] → ['GH_TOKEN','RELEASE_TAG']`; exactly two
+step-level deltas, both the relocated key; all seven steps identical in name, `uses`, `with`,
+`shell` and `run`-body digest. The two readers of the variable (`--out "$RELEASE_BUNDLE_DIR"`,
+`bundle_dir="${RELEASE_BUNDLE_DIR:-}"`) are exactly the two steps that now declare it.
+
+### 10.3 The validation logic, re-executed
+
+The shipped `Validate release tag` body was extracted from the fixed workflow and executed against
+a controlled origin. With `origin/main` equal to the tag commit: `rc=0`,
+`GITHUB_OUTPUT: version=1.0.0rc1` / `prerelease=true`. Negative controls: `RELEASE_TAG=v1.0.0` →
+`rc=1` (version mismatch); `RELEASE_TAG=nonsense` → `rc=1` (`Unsupported release tag: nonsense`).
+
+### 10.4 The interaction in §8, demonstrated
+
+Re-running the same body with `origin/main` advanced to the post-merge commit
+`f8e88467c0441280e3ab49b247c6cfd7039db12a` fails (`rc=1`) on the
+`refs/tags/X^{commit} == refs/remotes/origin/main` assertion. The §8 consequence is therefore
+measured, not predicted: once this correction lands, `workflow_dispatch` can no longer reconcile
+`v1.0.0-rc.1`, and the already-published release must not be deleted, moved or rewritten to restore
+that path.
+
+### 10.5 What this addendum does not claim
+
+It does not re-open §9's non-claims. Specifically: the fix is proven accepted by GitHub's workflow
+parser for the branch that carries it, and the merge-push observation on `main` is recorded
+alongside this unit (issue #445 and the task ledger) rather than in this file, because it could only
+be made after the merge. No release, tag, asset, `VERSION` or other workflow was touched, and the
+published `v1.0.0-rc.1` artifacts remain exactly as verified by the integration lane.
