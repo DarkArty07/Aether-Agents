@@ -171,6 +171,31 @@ def _native_preflight(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(runtime_module, "_module_problems", lambda: [])
 
 
+@pytest.fixture(autouse=True)
+def _native_configuration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin the native configuration every manager-only regression here reads.
+
+    ``configured_owner_language`` resolves the installation's own Hermes configuration
+    through ``hermes_cli.config`` whenever that module is importable in this process, and
+    the exact-Hermes lane imports it as a side effect.  Left unpinned, an unrelated
+    regression would therefore read whatever ``HERMES_HOME`` this process inherited — the
+    operator's live profile — and re-render an already enqueued outbox part under that
+    profile's language, so the result would depend on collection order and on the machine
+    running the suite.  This fixture pins the resolution to a disposable, empty
+    configuration: every result in this module then depends only on what the regression
+    itself sets.  The real installation configuration keeps being exercised where it
+    belongs, by the exact-Hermes lane and by
+    ``test_configured_owner_language_prefers_plugin_settings``, which substitutes its own
+    configuration module.
+    """
+
+    home = tmp_path / "pinned-native-home"
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "config.yaml").write_text("plugins: {}\n", encoding="utf-8")
+    monkeypatch.setenv("HERMES_HOME", str(home))
+    monkeypatch.delenv("AETHER_MONITOR_LANGUAGE", raising=False)
+
+
 class _FrozenRuntimeDateTime(datetime):
     """A ``datetime`` whose ``now`` is the fixed store anchor.
 

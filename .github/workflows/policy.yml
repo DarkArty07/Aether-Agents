@@ -85,6 +85,7 @@ jobs:
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v1.md
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v2.md
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v3.md
+          .aether/objective-contracts/oc_3397f9f05d780f8e/v1.md
           .aether/project.toml
           .aether/skills/aether-observe/SKILL.md
           AGENTS.md
@@ -142,6 +143,7 @@ jobs:
           patches/hermes/HLP-388-cron-session-launch-workdir.patch
           patches/hermes/HLP-393-cron-commissioning-origin-subscription.patch
           patches/hermes/HLP-420-responses-terminal-fidelity.patch
+          patches/hermes/HLP-425-review-flow-continuity.patch
           patches/hermes/HLP-369-goal-mode-review-recovery.patch
           patches/hermes/HLP-275-aux-image-prep-cap.patch
           patches/hermes/HLP-382-bounded-transcript-publication.patch
@@ -337,6 +339,7 @@ jobs:
           tests/test_project_init.py
           tests/test_public_artifacts.py
           tests/test_same_card_phase_predicates.py
+          tests/test_telegram_monitor_ambient_isolation.py
           tests/test_telegram_monitor_cli_plugin.py
           tests/test_telegram_monitor_delivery.py
           tests/test_telegram_monitor_reporting.py
