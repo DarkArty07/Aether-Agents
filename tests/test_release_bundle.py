@@ -277,6 +277,43 @@ def test_secret_scan_refuses_credential_material(tool: types.ModuleType) -> None
     assert tool._secret_hits_bytes("member.py", token.encode(), ("github-token",))
 
 
+def test_report_scan_refuses_operator_paths_in_plain_text_members(
+    tool: types.ModuleType, tmp_path: Path
+) -> None:
+    """Reports, the lock and SHA256SUMS are plain text; the canonical scanner cannot open them."""
+
+    lifecycle = tool.load_product(ROOT)
+    operator_path = "/" + "home" + "/operator/" + "Desk" + "top/agentes/product"
+    report = tmp_path / "aether-agents-1.0.0rc1-clean-install.json"
+    report.write_text(json.dumps({"note": operator_path}), encoding="utf-8")
+    with pytest.raises(tool.BundleError) as refusal:
+        tool.scan_report_bytes(lifecycle, [report])
+    assert refusal.value.code == "private-path-scan"
+
+    clean = tmp_path / "aether-agents-1.0.0rc1-provenance.json"
+    clean.write_text(json.dumps({"note": "<disposable-root>/manager"}), encoding="utf-8")
+    scanned = tool.scan_report_bytes(lifecycle, [clean])
+    assert scanned == {
+        "scope": ["aether-agents-1.0.0rc1-provenance.json"],
+        "result": "clean",
+    }
+
+
+def test_portable_masks_every_host_path_a_report_could_disclose(tmp_path: Path) -> None:
+    tool = _load_tool()
+    roots = tmp_path / "work" / "install-roots"
+    bundle = tmp_path / "bundle"
+    checkout = tmp_path / "checkout"
+    masks = tool._report_masks(roots, tmp_path / "work", bundle, checkout)
+    text = f"{roots}/manager {bundle}/x.whl {checkout}/src {sys.executable}"
+    masked = tool._portable(text, masks)
+    assert str(tmp_path) not in masked
+    assert "<disposable-root>/manager" in masked
+    assert "<bundle>/x.whl" in masked
+    assert "<aether-checkout>/src" in masked
+    assert "<probe-interpreter>" in masked
+
+
 def test_private_path_scan_refuses_aether_authored_bytes(
     tool: types.ModuleType, tmp_path: Path
 ) -> None:

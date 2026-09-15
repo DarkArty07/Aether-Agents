@@ -168,14 +168,27 @@ def _write_json(path: Path, payload: Any) -> None:
     path.write_text(data, encoding="utf-8")
 
 
-def _portable(text: str, roots: Sequence[Path]) -> str:
+def _portable(text: str, replacements: Sequence[tuple[Path | str, str]]) -> str:
     """Replace host-local scratch paths so reports stay portable."""
 
     value = text
-    for index, root in enumerate(roots):
-        token = "<disposable-root>" if index == 0 else f"<disposable-root-{index}>"
-        value = value.replace(str(root), token)
+    for source, token in replacements:
+        value = value.replace(str(source), token)
     return value
+
+
+def _report_masks(
+    roots: Path, work: Path, bundle: Path, aether_checkout: Path
+) -> tuple[tuple[Path | str, str], ...]:
+    """Mask every host-local path a report could otherwise disclose."""
+
+    return (
+        (work, "<work>"),
+        (roots, "<disposable-root>"),
+        (bundle, "<bundle>"),
+        (aether_checkout, "<aether-checkout>"),
+        (Path(sys.executable), "<probe-interpreter>"),
+    )
 
 
 # --------------------------------------------------------------------- release identity
@@ -576,6 +589,24 @@ def _operator_path_matches(lifecycle: Any, payload: bytes) -> list[str]:
     return found
 
 
+def scan_report_bytes(lifecycle: Any, files: Sequence[Path]) -> dict[str, Any]:
+    """Strict operator-path check over the plain-text members the scanner cannot open.
+
+    The canonical scanner reads archives; reports, the lock and ``SHA256SUMS`` are plain
+    text and are checked here with the same canonical patterns.
+    """
+
+    findings = sorted(
+        path.name for path in files if _operator_path_matches(lifecycle, path.read_bytes())
+    )
+    if findings:
+        raise BundleError(
+            "private-path-scan",
+            "Aether-authored public bytes contain operator paths: " + ", ".join(findings),
+        )
+    return {"scope": sorted(path.name for path in files), "result": "clean"}
+
+
 def _run_path_scanner(
     scanner: Path, aether_checkout: Path, artifacts: Sequence[Path]
 ) -> tuple[int, str]:
@@ -626,6 +657,7 @@ def scan_bundle(
             "private-path-scan",
             "Aether-authored public bytes contain operator paths: " + _excerpt(strict_output, 800),
         )
+    plain_text = scan_report_bytes(lifecycle, extra_files)
 
     reviewed: dict[str, Any] = {"artifacts": [path.name for path in fork_artifacts]}
     if fork_artifacts:
@@ -690,6 +722,7 @@ def scan_bundle(
                     *(path.name for path in extra_files),
                 ],
                 "result": "clean",
+                "plain_text": plain_text,
             },
             "maintained_fork": reviewed,
         },
@@ -892,6 +925,7 @@ def _probe(
     environment: dict[str, str],
     required: bool,
     expectation: str,
+    mask: Sequence[tuple[Path | str, str]] = (),
     stdout_contains: str | None = None,
 ) -> dict[str, Any]:
     completed = _run(argv, cwd=root, env=environment)
@@ -909,16 +943,17 @@ def _probe(
             outcome = "fail"
     if outcome == "pass" and stdout_contains and stdout_contains not in completed.stdout:
         outcome = "fail"
+    report_mask = tuple(mask) + ((root, "<probe-root>"),)
     return {
         "name": name,
-        "argv": _portable(" ".join(argv), (root,)),
+        "argv": _portable(" ".join(argv), report_mask),
         "exit_code": completed.returncode,
         "outcome": outcome,
         "required": required,
         "expectation": expectation,
         "ok": outcome in {"pass", "refused"} if not required else outcome == "pass",
-        "stdout": _portable(_excerpt(completed.stdout, 900), (root,)),
-        "stderr": _portable(_excerpt(completed.stderr, 900), (root,)),
+        "stdout": _portable(_excerpt(completed.stdout, 900), report_mask),
+        "stderr": _portable(_excerpt(completed.stderr, 900), report_mask),
     }
 
 
@@ -999,6 +1034,11 @@ def clean_install(
     roots.mkdir(parents=True)
     manager = roots / "manager"
     runtime = roots / "runtime"
+    masks = _report_masks(roots, work, bundle, aether_checkout)
+
+    def probe(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        return _probe(*args, mask=masks, **kwargs)
+
     environment = _isolated_environment()
     steps: list[dict[str, Any]] = []
 
@@ -1013,14 +1053,14 @@ def clean_install(
             {
                 "step": name,
                 "exit_code": completed.returncode,
-                "stderr": _portable(_excerpt(completed.stderr, 500), (roots, work)),
+                "stderr": _portable(_excerpt(completed.stderr, 500), masks),
             }
         )
         if completed.returncode != 0:
             raise BundleError(
                 code,
                 f"{name} failed: "
-                + _portable(_excerpt(completed.stderr or completed.stdout, 400), (roots, work)),
+                + _portable(_excerpt(completed.stderr or completed.stdout, 400), masks),
             )
 
     record("manager-venv", uv("venv", "--python", sys.executable, str(manager)), "install-failed")
@@ -1101,7 +1141,7 @@ def clean_install(
     )
     aether = manager / "bin" / "aether"
     probes: list[dict[str, Any]] = [
-        _probe(
+        probe(
             "aether --version",
             [str(aether), "--version"],
             root=roots,
@@ -1110,7 +1150,7 @@ def clean_install(
             expectation="exit-zero",
             stdout_contains=identity["package_version"],
         ),
-        _probe(
+        probe(
             "aether version --json",
             [str(aether), "version", "--json"],
             root=roots,
@@ -1119,7 +1159,7 @@ def clean_install(
             expectation="json-envelope",
             stdout_contains=identity["package_version"],
         ),
-        _probe(
+        probe(
             "aether --help",
             [str(aether), "--help"],
             root=roots,
@@ -1127,7 +1167,7 @@ def clean_install(
             required=True,
             expectation="exit-zero",
         ),
-        _probe(
+        probe(
             "aether doctor --json",
             [str(aether), "doctor", "--json"],
             root=roots,
@@ -1173,7 +1213,7 @@ def clean_install(
         ("aether rollback --dry-run", ["rollback", "--dry-run", "--json"]),
     ):
         probes.append(
-            _probe(
+            probe(
                 label,
                 [str(aether), *arguments],
                 root=roots,
@@ -1184,7 +1224,7 @@ def clean_install(
         )
     update_help = _run([str(aether), "update", "--help"], cwd=roots, env=manager_environment)
     probes.append(
-        _probe(
+        probe(
             "aether update --help",
             [str(aether), "update", "--help"],
             root=roots,
@@ -1194,7 +1234,7 @@ def clean_install(
         )
     )
     probes.append(
-        _probe(
+        probe(
             "hermes import/version/plugin discovery",
             [str(runtime_python), "-c", _HERMES_PROBE],
             root=roots,
@@ -1211,7 +1251,7 @@ def clean_install(
         lifecycle=lifecycle,
     )
     probes.append(
-        _probe(
+        probe(
             "tui --check",
             [sys.executable, str(tui_repo / "scripts" / "aether_tui.py"), "--check"],
             root=tui_repo,
@@ -1533,6 +1573,15 @@ def run_build(arguments: argparse.Namespace) -> dict[str, Any]:
         sums += f"{provenance_entry['sha256']}  {members['provenance']}\n"
         (out / members["sums"]).write_text(sums, encoding="ascii")
 
+        finished_members, _ = verify_members(out)
+        finished_scan = scan_report_bytes(
+            lifecycle, [out / name for name in sorted(finished_members)]
+        )
+        finished = {
+            "members_rehashed": len(finished_members),
+            "plain_text_scan": finished_scan,
+        }
+
         summary = {
             "schema": REPORT_SCHEMA,
             "mode": "build",
@@ -1557,6 +1606,7 @@ def run_build(arguments: argparse.Namespace) -> dict[str, Any]:
             "hermes_commit": arguments.fork_commit,
             "lock_validation": lock_validation,
             "reproducibility": reproducible,
+            "finished_bundle": finished,
             "scans": scans,
             "failed_probes": [probe["name"] for probe in failed],
         }
@@ -1655,16 +1705,24 @@ def run_verify(arguments: argparse.Namespace) -> dict[str, Any]:
             "archive-lock-mismatch",
             "the maintained-fork archive does not match the digest bound by the release lock",
         )
+    aether_archives = [
+        bundle / name
+        for name in expected
+        if name != archive_name and name.endswith((".whl", ".tar.gz"))
+    ]
+    if not aether_archives:
+        raise BundleError("wheel-missing", "bundle carries no Aether wheel or sdist")
+    extra_files = [
+        bundle / name
+        for name in expected
+        if name not in {archive_name} and not name.endswith((".whl", ".tar.gz"))
+    ]
     scans = scan_bundle(
         lifecycle=lifecycle,
         aether_checkout=aether_checkout,
-        aether_artifacts=[
-            bundle / name
-            for name in expected
-            if name.startswith("aether_agents-") or name.startswith("aether-agents-")
-        ],
+        aether_artifacts=aether_archives,
         fork_artifacts=[bundle / archive_name],
-        extra_files=[bundle / name for name in expected if name.endswith(".json")],
+        extra_files=extra_files,
     )
     report: dict[str, Any] = {
         "schema": REPORT_SCHEMA,
