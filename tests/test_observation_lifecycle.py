@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import tomllib
 import threading
 import zipfile
 from pathlib import Path
@@ -31,6 +32,9 @@ import aether_agents.lifecycle as lifecycle
 from aether_agents.cli import main
 from aether_agents.lifecycle import (
     HERMES_BASELINE,
+    MAINTAINED_FORK_BRANCH,
+    MAINTAINED_FORK_REPOSITORY,
+    MAINTAINED_FORK_SOURCE_MODE,
     OBSERVATION_COMPATIBILITY,
     CheckoutEvidence,
     IntegrityError,
@@ -78,7 +82,7 @@ def test_cli_lifecycle_separates_immutable_data_from_mutable_state(
     assert manager.store.root == data / "aether"
     assert manager.store.state_root == state / "aether"
     assert manager.store.releases == data / "aether" / "releases"
-    assert manager.store.profile_homes == data / "aether" / "profiles"
+    assert manager.store.profile_homes == state / "aether" / "hermes" / "profiles"
     assert manager.store.transitions == state / "aether" / "transitions"
 
 
@@ -153,18 +157,27 @@ def _git(path: Path, *args: str) -> str:
     return completed.stdout.strip()
 
 
+#: The fixture checkout declares the maintained fork's own distribution version.
+FIXTURE_HERMES_VERSION = "0.20.4"
+
+
 def _clean_tagged_checkout(tmp_path: Path) -> tuple[Path, str]:
+    """Build one clean maintained-fork-shaped Hermes checkout fixture."""
+
     checkout = tmp_path / "hermes"
     checkout.mkdir()
-    _git(checkout, "init", "-q")
+    _git(checkout, "init", "-q", "-b", MAINTAINED_FORK_BRANCH)
     _git(checkout, "config", "user.name", "Aether Test")
     _git(checkout, "config", "user.email", "aether@example.invalid")
+    _git(checkout, "remote", "add", "origin", MAINTAINED_FORK_REPOSITORY)
     (checkout / "pyproject.toml").write_text(
         '[build-system]\nrequires = ["hatchling"]\n'
         'build-backend = "hatchling.build"\n\n'
-        '[project]\nname = "hermes-agent"\nversion = "0.20.4"\n'
+        '[project]\nname = "hermes-agent"\nversion = "{}"\n'
         'requires-python = ">=3.11,<3.14"\n\n'
-        '[tool.hatch.build.targets.wheel]\npackages = ["hermes_cli"]\n',
+        '[tool.hatch.build.targets.wheel]\npackages = ["hermes_cli"]\n'.format(
+            FIXTURE_HERMES_VERSION
+        ),
         encoding="utf-8",
     )
     (checkout / "hermes_cli").mkdir()
@@ -379,6 +392,15 @@ def _source_tree_sha256(checkout: Path, commit: str) -> str:
         return lifecycle._tree_sha256(destination)
 
 
+def _maintained_fork_checkout() -> Path | None:
+    """The clean reviewed maintained-fork checkout this lane qualifies, if provisioned."""
+
+    configured = os.environ.get("AETHER_MAINTAINED_FORK_CHECKOUT", "").strip()
+    if not configured:
+        return None
+    return Path(configured).expanduser()
+
+
 def _write_release_lock(
     root: Path,
     version: str,
@@ -386,13 +408,15 @@ def _write_release_lock(
     aether_wheel_sha256: str | None = None,
     hermes_checkout: Path | None = None,
     hermes_commit: str | None = None,
+    hermes_tag: str | None = None,
+    hermes_version: str | None = None,
     source_tree_sha256: str | None = None,
     observation_compatibility: dict[str, object] | None = None,
 ) -> Path:
     path = root / f"release-lock-{version}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "schema_version": 3,
+        "schema_version": 4,
         "aether": {
             "version": version,
             **_aether_identity(version),
@@ -405,11 +429,11 @@ def _write_release_lock(
             "observation_compatibility": (observation_compatibility or OBSERVATION_COMPATIBILITY),
         },
         "hermes": {
-            "source_mode": "upstream",
-            "repository": "https://github.com/NousResearch/hermes-agent",
-            "version": HERMES_BASELINE.version,
-            "tag": HERMES_BASELINE.tag,
-            "commit": HERMES_BASELINE.commit,
+            "source_mode": MAINTAINED_FORK_SOURCE_MODE,
+            "repository": MAINTAINED_FORK_REPOSITORY,
+            "branch": MAINTAINED_FORK_BRANCH,
+            "version": hermes_version or FIXTURE_HERMES_VERSION,
+            "commit": hermes_commit or HERMES_BASELINE.commit,
             "python_requires": HERMES_BASELINE.python_requires,
             "source_tree_sha256": (
                 source_tree_sha256
@@ -425,8 +449,8 @@ def _write_release_lock(
             "artifacts": [
                 {
                     "kind": "source",
-                    "filename": "hermes-agent.tar.gz",
-                    "url": "https://example.invalid/hermes-agent.tar.gz",
+                    "filename": "aether-hermes-source.tar.gz",
+                    "url": "https://example.invalid/aether-hermes-source.tar.gz",
                     "sha256": "b" * 64,
                     "provenance_url": "https://example.invalid/provenance",
                 }
@@ -438,6 +462,8 @@ def _write_release_lock(
             "roles": ["morfeo", "supervisor", "implementer"],
         },
     }
+    if hermes_tag is not None:
+        payload["hermes"]["tag"] = hermes_tag
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
 
@@ -646,13 +672,70 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
     return json.loads(completed.stdout)
 
 
-def test_release_lock_uses_the_exact_public_hermes_baseline() -> None:
+def test_release_lock_uses_the_maintained_fork_identity_not_the_public_baseline() -> None:
+    # The packaged baseline resource stays as the historical/derived-document anchor.
     assert HERMES_BASELINE.repository == "https://github.com/NousResearch/hermes-agent.git"
     assert HERMES_BASELINE.tag == "v2026.8.18"
     assert HERMES_BASELINE.tag_object == "9f13bbbf8423427e159c78066356ca0e27ca6b74"
     assert HERMES_BASELINE.commit == "e624e9fde561e1add9388384012b295fde669ade"
     assert HERMES_BASELINE.distribution == "hermes-agent"
     assert HERMES_BASELINE.version == "0.20.4"
+
+    # A maintained-fork lock carries its own source identity, and the retired modes are
+    # refused with an actionable message instead of silently selecting the baseline.
+    assert MAINTAINED_FORK_SOURCE_MODE == "maintained_fork"
+    assert MAINTAINED_FORK_REPOSITORY == "https://github.com/DarkArty07/aether-hermes"
+    assert MAINTAINED_FORK_BRANCH == "aether-main"
+
+    lock = lifecycle.HermesSource.from_record(
+        {
+            "source_mode": MAINTAINED_FORK_SOURCE_MODE,
+            "repository": MAINTAINED_FORK_REPOSITORY,
+            "branch": MAINTAINED_FORK_BRANCH,
+            "version": "0.20.1",
+            "commit": "f" * 40,
+            "python_requires": ">=3.11,<3.14",
+            "source_tree_sha256": "e" * 64,
+            "artifacts": [
+                {
+                    "kind": "source",
+                    "filename": "aether-hermes-source.tar.gz",
+                    "url": "https://example.invalid/aether-hermes-source.tar.gz",
+                    "sha256": "b" * 64,
+                    "provenance_url": "https://example.invalid/provenance",
+                }
+            ],
+        }
+    )
+    assert lock.commit == "f" * 40
+
+    with pytest.raises(IntegrityError, match="retired"):
+        lifecycle.HermesSource.from_record(
+            {
+                "source_mode": "transitional_fork",
+                "repository": "https://github.com/DarkArty07/hermes-agent",
+                "version": "0.20.5",
+                "tag": "aether-v0.20.5-1",
+                "commit": HERMES_BASELINE.commit,
+                "python_requires": HERMES_BASELINE.python_requires,
+                "source_tree_sha256": "e" * 64,
+                "upstream_base": {
+                    "repository": "https://github.com/NousResearch/hermes-agent",
+                    "tag": HERMES_BASELINE.tag,
+                    "commit": HERMES_BASELINE.commit,
+                },
+                "residual_patches": ["HLP-191"],
+                "artifacts": [
+                    {
+                        "kind": "source",
+                        "filename": "hermes-agent.tar.gz",
+                        "url": "https://example.invalid/hermes-agent.tar.gz",
+                        "sha256": "b" * 64,
+                        "provenance_url": "https://example.invalid/provenance",
+                    }
+                ],
+            }
+        )
 
 
 def test_release_record_schema_three_binds_exact_observation_compatibility(
@@ -777,7 +860,8 @@ def test_activation_materializes_three_explicit_profile_homes_under_store(
 
     for role in ("morfeo", "supervisor", "implementer"):
         home = store.profile_home(role)
-        assert home == store.root / "profiles" / role
+        assert home == store.profile_homes / role
+        assert home == store.state_root / "hermes" / "profiles" / role
         for name in ("config.yaml", "SOUL.md"):
             assert (home / name).read_bytes() == (
                 Path(lifecycle.__file__).parent / "resources" / "profiles" / role / name
@@ -1506,13 +1590,23 @@ def test_release_lock_identity_is_explicit_and_semantically_matches_the_wheel(
     assert identity.package_version == wheel_identity["version"]
     assert identity.digest != wheel_identity["installed_file_fingerprint"]
     payload = json.loads(release_lock.read_text(encoding="utf-8"))
+    # The lock's display version and package version must describe one release.
     payload["aether"]["package_version"] = "9.9.9"
+    release_lock.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(IntegrityError, match="package version disagree"):
+        lifecycle.load_aether_prebuild_identity(release_lock)
+
+    # A forged identity that stays internally coherent is still refused against the
+    # inspectable wheel metadata.
+    payload["aether"]["package_version"] = "9.9.9"
+    payload["aether"]["version"] = "9.9.9"
     release_lock.write_text(json.dumps(payload), encoding="utf-8")
     forged = lifecycle.load_aether_prebuild_identity(release_lock)
     with pytest.raises(IntegrityError, match="wheel"):
         LifecycleManager._validate_aether_identity(forged, wheel_identity)
 
     payload["aether"]["package_version"] = "1.0.0"
+    payload["aether"]["version"] = "1.0.0"
     payload["aether"]["observer_requirements_sha256"] = "e" * 64
     release_lock.write_text(json.dumps(payload), encoding="utf-8")
     forged_lock = lifecycle.load_release_lock(release_lock)
@@ -3293,17 +3387,62 @@ def test_exact_public_lifecycle_uses_real_plugin_profiles_query_and_recovery(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """One no-monkeypatch evidence lane for #221 against the exact public checkout."""
+    """One no-monkeypatch evidence lane for #221 against the exact RC Hermes source.
 
-    checkout = _exact_hermes_checkout()
+    Aether 1.0's executable Hermes source is the maintained fork, so the lane qualifies
+    the fork checkout named by ``AETHER_MAINTAINED_FORK_CHECKOUT`` when one is
+    provisioned.  Without it the lane keeps its obligation by proving the retired fixed
+    public baseline is refused as the maintained-fork source instead of being silently
+    accepted as the RC runtime.
+    """
+
+    fork_checkout = _maintained_fork_checkout()
+    if fork_checkout is None:
+        public_checkout = _exact_hermes_checkout()
+        public_evidence = verify_clean_checkout(
+            public_checkout,
+            expected_tag=HERMES_BASELINE.tag,
+            expected_commit=HERMES_BASELINE.commit,
+            expected_tag_object=HERMES_BASELINE.tag_object,
+        )
+        assert public_evidence.clean is True
+        retired_wheel = _build_wheel(tmp_path / "retired-source-build", "1.0.0")
+        retired_store = ReleaseStore(
+            tmp_path / "retired-data" / "aether",
+            state_root=tmp_path / "retired-state" / "aether",
+        )
+        retired_manager = LifecycleManager(
+            store=retired_store,
+            python_executable=Path(sys.executable),
+        )
+        with pytest.raises(IntegrityError, match="not the selected repository"):
+            retired_manager.install(
+                wheel=retired_wheel,
+                hermes_checkout=public_checkout,
+                release_lock=_write_release_lock(
+                    tmp_path,
+                    "1.0.0",
+                    aether_wheel_sha256=hashlib.sha256(retired_wheel.read_bytes()).hexdigest(),
+                    hermes_checkout=public_checkout,
+                ),
+                expected_active_release_id=None,
+            )
+        assert retired_store.active(required=False) is None
+        assert not retired_store.releases.exists()
+        return
+
+    fork_commit = _git(fork_checkout, "rev-parse", "HEAD")
+    fork_version = tomllib.loads(
+        _git(fork_checkout, "show", f"{fork_commit}:pyproject.toml")
+    )["project"]["version"]
+    checkout = fork_checkout
     evidence = verify_clean_checkout(
         checkout,
-        expected_tag=HERMES_BASELINE.tag,
-        expected_commit=HERMES_BASELINE.commit,
-        expected_tag_object=HERMES_BASELINE.tag_object,
+        expected_commit=fork_commit,
+        expected_tag=MAINTAINED_FORK_BRANCH,
     )
     assert evidence.clean is True
-    hermes_source_tree_sha256 = _source_tree_sha256(checkout, HERMES_BASELINE.commit)
+    hermes_source_tree_sha256 = _source_tree_sha256(checkout, fork_commit)
     first_wheel = _build_wheel(tmp_path / "first-build", "1.0.0")
     second_wheel = _build_wheel(tmp_path / "second-build", "1.0.1")
     data_home = tmp_path / "data"
@@ -3321,6 +3460,8 @@ def test_exact_public_lifecycle_uses_real_plugin_profiles_query_and_recovery(
             tmp_path,
             "1.0.0",
             aether_wheel_sha256=hashlib.sha256(first_wheel.read_bytes()).hexdigest(),
+            hermes_commit=fork_commit,
+            hermes_version=fork_version,
             source_tree_sha256=hermes_source_tree_sha256,
         ),
         expected_active_release_id=None,
@@ -3439,6 +3580,8 @@ def test_exact_public_lifecycle_uses_real_plugin_profiles_query_and_recovery(
             tmp_path,
             "1.0.1",
             aether_wheel_sha256=hashlib.sha256(second_wheel.read_bytes()).hexdigest(),
+            hermes_commit=evidence.commit,
+            hermes_version=fork_version,
             source_tree_sha256=hermes_source_tree_sha256,
         ),
         expected_active_release_id=first.release_id,
