@@ -491,7 +491,13 @@ jobs:
               ):
                   raise SystemExit(f'secret-like spec payload: {name}')
           PY
-          grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(\.dev[0-9]+)?$' VERSION
+          # `VERSION` carries the release's package identity, so it must be one this
+          # repository can actually release. `.github/workflows/release.yml` maps the
+          # stable tag `vX.Y.Z` to `X.Y.Z` and the RC tag `vX.Y.Z-rc.N` to `X.Y.ZrcN`,
+          # and refuses leading zeros and an RC number below 1; those bounds apply here
+          # too. The pre-existing development form `X.Y.Z.devN` stays accepted, and the
+          # display/tag identity (`1.0.0-rc.1`) is not a package identity.
+          grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(rc[1-9][0-9]*|\.dev[0-9]+)?$' VERSION
           ! git ls-files | grep -Eq '^(schemas|home/(profiles|skills|plugins|prompts))/'
           ! git grep -n -i -E 'daedalus|hefesto|ictinus|daimon|aether_mcp|olympus|acpmanager|harmonia|honcho|talk_to|orca-status' -- ':(exclude).github/workflows/policy.yml'
 
