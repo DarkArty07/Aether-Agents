@@ -93,6 +93,7 @@ jobs:
         env:
           RELEASE_VERSION: ${{ steps.validate.outputs.version }}
           RELEASE_PRERELEASE: ${{ steps.validate.outputs.prerelease }}
+        shell: bash
         run: |
           set -euo pipefail
           if [[ "$RELEASE_PRERELEASE" == true ]]; then
@@ -103,17 +104,34 @@ jobs:
             echo "Invalid prerelease state: $RELEASE_PRERELEASE" >&2
             exit 1
           fi
-          bundle_files=()
+          # The attach set is the tool's own qualified member list, checksum file included:
+          # a file the bundle does not list is refused rather than attached.
           bundle_dir="${RELEASE_BUNDLE_DIR:-}"
+          bundle_files=()
           if [[ -n "$bundle_dir" ]]; then
             (cd "$bundle_dir" && sha256sum --check --strict SHA256SUMS)
-            while IFS= read -r -d '' file; do
-              bundle_files+=("$file")
-            done < <(find "$bundle_dir" -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z)
-            [[ "${#bundle_files[@]}" -gt 0 ]]
+            member_list="$(uv run --frozen python scripts/release_bundle.py members --bundle "$bundle_dir")"
+            mapfile -t bundle_files <<< "$member_list"
+            [[ -n "${bundle_files[0]:-}" ]]
           fi
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release edit "$RELEASE_TAG" "$prerelease_arg" "${bundle_files[@]}"
+          published_assets=""
+          release_exists=false
+          if published_assets="$(gh release view "$RELEASE_TAG" --json assets \
+              --jq '.assets[] | "\(.name)\t\(.digest // "")"' 2>/dev/null)"; then
+            release_exists=true
+          fi
+          if [[ "$release_exists" == true ]]; then
+            # `gh release edit` accepts no file arguments, so a reconcile can never attach
+            # bytes: it is only correct when the release already carries exactly the
+            # qualified members. Verify names and digests, or fail closed with the reason.
+            if [[ -n "$bundle_dir" ]]; then
+              printf '%s\n' "$published_assets" | uv run --frozen python scripts/release_bundle.py \
+                verify-published-assets --bundle "$bundle_dir" --tag "$RELEASE_TAG" --assets -
+            else
+              echo "No qualified bundle directory: reconciling release identity only." >&2
+            fi
+            gh release edit "$RELEASE_TAG" "$prerelease_arg"
           else
-            gh release create "$RELEASE_TAG" --verify-tag --generate-notes "$prerelease_arg" "${bundle_files[@]}"
+            gh release create "$RELEASE_TAG" --verify-tag --generate-notes "$prerelease_arg" \
+              "${bundle_files[@]}"
           fi

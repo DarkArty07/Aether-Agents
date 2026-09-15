@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -161,10 +162,14 @@ def test_workflow_keeps_identity_validation_and_attaches_the_qualified_bytes(too
     assert '--expect-package-version "$RELEASE_VERSION"' in workflow
     assert "if-no-files-found: error" in workflow
     assert "FORK_REPOSITORY: https://github.com/DarkArty07/aether-hermes" in workflow
+    # the attach set is the tool's verified member list, and a reconcile re-verifies the
+    # published bytes instead of passing files to `gh release edit`
+    assert "scripts/release_bundle.py members --bundle" in workflow
+    assert "verify-published-assets --bundle" in workflow
     # exactly one release path: no second create/edit invocation set
-    assert workflow.count("gh release view") == 1
-    assert workflow.count("gh release create") == 1
-    assert workflow.count("gh release edit") == 1
+    assert workflow.count('gh release view "$RELEASE_TAG"') == 1
+    assert workflow.count('gh release create "$RELEASE_TAG"') == 1
+    assert workflow.count('gh release edit "$RELEASE_TAG"') == 1
 
 
 def test_workflow_forbidden_effects_stay_absent() -> None:
@@ -186,6 +191,186 @@ def test_release_step_still_reconciles_identity_without_a_bundle() -> None:
     script = _step_script("Create or reconcile GitHub Release")
     assert 'bundle_dir="${RELEASE_BUNDLE_DIR:-}"' in script
     assert "$prerelease_arg" in script
+
+
+# -------------------------------------------------- release step, exercised for real
+
+_MEMBER_NAMES = (
+    "aether_agents-1.0.0rc1-py3-none-any.whl",
+    "aether_agents-1.0.0rc1.tar.gz",
+    "aether-hermes-source-" + "5" * 40 + ".tar.gz",
+    "aether-agents-1.0.0rc1-release-lock.json",
+    "aether-agents-1.0.0rc1-provenance.json",
+    "aether-agents-1.0.0rc1-package-members.json",
+    "aether-agents-1.0.0rc1-clean-install.json",
+)
+_QUALIFIED_NAMES = tuple(sorted([*_MEMBER_NAMES, "SHA256SUMS"]))
+
+_RELEASE_GH_STUB = '''#!__PYTHON__
+"""Record every gh invocation; answer the two reads the release step performs."""
+
+import json
+import os
+import sys
+from pathlib import Path
+
+args = sys.argv[1:]
+with Path(os.environ["GH_STUB_LOG"]).open("a", encoding="utf-8") as stream:
+    json.dump(args, stream)
+    stream.write("\\n")
+if args[:2] == ["release", "view"]:
+    if os.environ.get("GH_STUB_RELEASE_EXISTS") != "1":
+        print("release not found", file=sys.stderr)
+        raise SystemExit(1)
+    assets = json.loads(Path(os.environ["GH_STUB_ASSETS"]).read_text(encoding="utf-8"))
+    if "--jq" in args:
+        for asset in assets:
+            print(f"{asset['name']}\\t{asset.get('digest') or ''}")
+    else:
+        print(json.dumps({"assets": assets}))
+    raise SystemExit(0)
+if args[:2] in (["release", "create"], ["release", "edit"]):
+    raise SystemExit(0)
+raise SystemExit(97)
+'''
+
+
+def _workflow_bundle(root: Path) -> Path:
+    """A bundle directory shaped like the tool's own output (eight named members)."""
+
+    root.mkdir(parents=True, exist_ok=True)
+    payloads = {name: f"payload:{name}\n".encode() for name in _MEMBER_NAMES}
+    for name, payload in payloads.items():
+        (root / name).write_bytes(payload)
+    (root / "SHA256SUMS").write_text(
+        "".join(f"{_sha256(payload)}  {name}\n" for name, payload in sorted(payloads.items())),
+        encoding="ascii",
+    )
+    return root
+
+
+def _published_assets(bundle: Path) -> list[dict[str, str]]:
+    return [
+        {"name": name, "digest": "sha256:" + _sha256((bundle / name).read_bytes())}
+        for name in _QUALIFIED_NAMES
+    ]
+
+
+def _run_release_step(
+    root: Path,
+    *,
+    bundle: Path | None = None,
+    release_exists: bool,
+    assets: list[dict[str, str]] | None = None,
+) -> tuple[subprocess.CompletedProcess[str], list[list[str]]]:
+    """Run the shipped step script with the real tool and a stub `gh` on PATH."""
+
+    bin_path = root / "bin"
+    bin_path.mkdir(parents=True, exist_ok=True)
+    stub = bin_path / "gh"
+    stub.write_text(_RELEASE_GH_STUB.replace("__PYTHON__", sys.executable), encoding="utf-8")
+    stub.chmod(0o755)
+    assets_path = root / "published-assets.json"
+    assets_path.write_text(json.dumps(assets or []), encoding="utf-8")
+    log_path = root / "gh-calls.jsonl"
+    environment = dict(os.environ)
+    environment.update(
+        RELEASE_TAG="v1.0.0-rc.1",
+        RELEASE_PRERELEASE="true",
+        GH_STUB_LOG=str(log_path),
+        GH_STUB_RELEASE_EXISTS="1" if release_exists else "0",
+        GH_STUB_ASSETS=str(assets_path),
+        PATH=f"{bin_path}{os.pathsep}{environment.get('PATH', '')}",
+    )
+    environment.pop("RELEASE_BUNDLE_DIR", None)
+    if bundle is not None:
+        environment["RELEASE_BUNDLE_DIR"] = str(bundle)
+    completed = subprocess.run(
+        ("bash",),
+        cwd=ROOT,
+        env=environment,
+        input=_step_script("Create or reconcile GitHub Release"),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    calls = []
+    if log_path.exists():
+        calls = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+    return completed, calls
+
+
+def test_release_step_attaches_exactly_the_qualified_member_set(tmp_path: Path) -> None:
+    bundle = _workflow_bundle(tmp_path / "bundle")
+    completed, calls = _run_release_step(tmp_path, bundle=bundle, release_exists=False)
+
+    assert completed.returncode == 0, completed.stderr
+    assert [call[:2] for call in calls] == [["release", "view"], ["release", "create"]]
+    create = calls[1]
+    assert create[2] == "v1.0.0-rc.1"
+    attached = [argument for argument in create[3:] if not argument.startswith("-")]
+    assert attached == [str(bundle / name) for name in _QUALIFIED_NAMES]
+    assert len(attached) == 8, attached
+    for flag in ("--verify-tag", "--generate-notes", "--prerelease"):
+        assert flag in create
+
+
+def test_release_step_reconcile_verifies_the_release_and_passes_no_files(tmp_path: Path) -> None:
+    bundle = _workflow_bundle(tmp_path / "bundle")
+    completed, calls = _run_release_step(
+        tmp_path, bundle=bundle, release_exists=True, assets=_published_assets(bundle)
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "carries the qualified bytes" in completed.stdout
+    assert [call[:2] for call in calls] == [["release", "view"], ["release", "edit"]]
+    assert calls[1] == ["release", "edit", "v1.0.0-rc.1", "--prerelease"]
+
+
+def test_release_step_reconcile_fails_closed_before_editing_anything(tmp_path: Path) -> None:
+    bundle = _workflow_bundle(tmp_path / "bundle")
+    tampered = _published_assets(bundle)
+    for asset in tampered:
+        if asset["name"] == _MEMBER_NAMES[1]:
+            asset["digest"] = "sha256:" + "0" * 64
+
+    drifted, drifted_calls = _run_release_step(
+        tmp_path / "drifted", bundle=bundle, release_exists=True, assets=tampered
+    )
+    assert drifted.returncode != 0
+    assert "published-asset-mismatch" in drifted.stderr
+    assert _MEMBER_NAMES[1] in drifted.stderr
+    assert all(call[:2] != ["release", "edit"] for call in drifted_calls)
+    assert all(call[:2] != ["release", "create"] for call in drifted_calls)
+
+    incomplete = [asset for asset in _published_assets(bundle) if asset["name"] != "SHA256SUMS"]
+    missing, missing_calls = _run_release_step(
+        tmp_path / "missing", bundle=bundle, release_exists=True, assets=incomplete
+    )
+    assert missing.returncode != 0
+    assert "published-asset-drift" in missing.stderr
+    assert "SHA256SUMS" in missing.stderr
+    assert all(call[:2] != ["release", "edit"] for call in missing_calls)
+
+    digestless = _published_assets(bundle)
+    digestless[0]["digest"] = ""
+    unverifiable, unverifiable_calls = _run_release_step(
+        tmp_path / "digestless", bundle=bundle, release_exists=True, assets=digestless
+    )
+    assert unverifiable.returncode != 0
+    assert "published-asset-unverifiable" in unverifiable.stderr
+    assert all(call[:2] != ["release", "edit"] for call in unverifiable_calls)
+
+
+def test_release_step_refuses_a_bundle_that_drifted_before_attaching(tmp_path: Path) -> None:
+    bundle = _workflow_bundle(tmp_path / "bundle")
+    (bundle / "unlisted.bin").write_bytes(b"unlisted\n")
+
+    completed, calls = _run_release_step(tmp_path, bundle=bundle, release_exists=False)
+
+    assert completed.returncode != 0
+    assert "member-drift" in completed.stderr
+    assert all(call[:2] != ["release", "create"] for call in calls)
 
 
 # ------------------------------------------------------------------------ checkouts
@@ -418,6 +603,162 @@ def test_verify_members_refuses_member_drift(tool: types.ModuleType, tmp_path: P
     with pytest.raises(tool.BundleError) as extra:
         tool.verify_members(bundle)
     assert extra.value.code == "member-drift"
+
+
+def _published(bundle: Path) -> list[str]:
+    return [
+        f"{path.name}\tsha256:{_sha256(path.read_bytes())}"
+        for path in sorted(bundle.iterdir())
+        if path.is_file()
+    ]
+
+
+def test_qualified_members_are_the_verified_set_plus_the_checksum_file(
+    tool: types.ModuleType, tmp_path: Path
+) -> None:
+    bundle = _bundle(tmp_path / "bundle")
+    members = tool.qualified_members(bundle)
+    assert sorted(members) == ["SHA256SUMS", "a.bin", "b.bin"]
+    assert members["a.bin"] == {"sha256": _sha256(b"alpha\n"), "bytes": 6}
+    assert members["SHA256SUMS"]["sha256"] == _sha256((bundle / "SHA256SUMS").read_bytes())
+
+    (bundle / "unlisted.bin").write_bytes(b"unlisted\n")
+    with pytest.raises(tool.BundleError) as unlisted:
+        tool.qualified_members(bundle)
+    assert unlisted.value.code == "member-drift"
+
+
+def test_verify_published_assets_accepts_only_the_qualified_bytes(
+    tool: types.ModuleType, tmp_path: Path
+) -> None:
+    bundle = _bundle(tmp_path / "bundle")
+    report = tool.verify_published_assets(bundle, tag="v1.0.0-rc.1", lines=_published(bundle))
+    assert report["result"] == "verified"
+    assert report["tag"] == "v1.0.0-rc.1"
+    assert sorted(report["assets"]) == ["SHA256SUMS", "a.bin", "b.bin"]
+
+
+def test_verify_published_assets_refuses_every_way_a_release_can_disagree(
+    tool: types.ModuleType, tmp_path: Path
+) -> None:
+    bundle = _bundle(tmp_path / "bundle")
+    qualified = _published(bundle)
+
+    tampered = [
+        "a.bin\tsha256:" + "0" * 64 if line.startswith("a.bin\t") else line for line in qualified
+    ]
+    with pytest.raises(tool.BundleError) as mismatch:
+        tool.verify_published_assets(bundle, tag="v1.0.0-rc.1", lines=tampered)
+    assert mismatch.value.code == "published-asset-mismatch"
+    assert "a.bin" in str(mismatch.value)
+    assert _sha256(b"alpha\n") in str(mismatch.value)
+
+    missing = [line for line in qualified if not line.startswith("b.bin\t")]
+    with pytest.raises(tool.BundleError) as drift:
+        tool.verify_published_assets(bundle, tag="v1.0.0-rc.1", lines=missing)
+    assert drift.value.code == "published-asset-drift"
+    assert "['b.bin']" in str(drift.value)
+
+    unexpected = [*qualified, "stray.bin\tsha256:" + "1" * 64]
+    with pytest.raises(tool.BundleError) as extra:
+        tool.verify_published_assets(bundle, tag="v1.0.0-rc.1", lines=unexpected)
+    assert extra.value.code == "published-asset-drift"
+    assert "['stray.bin']" in str(extra.value)
+
+    digestless = ["a.bin\t" if line.startswith("a.bin\t") else line for line in qualified]
+    with pytest.raises(tool.BundleError) as unverifiable:
+        tool.verify_published_assets(bundle, tag="v1.0.0-rc.1", lines=digestless)
+    assert unverifiable.value.code == "published-asset-unverifiable"
+    assert "['a.bin']" in str(unverifiable.value)
+
+    malformed = [line for line in qualified if not line.startswith("a.bin\t")] + ["a.bin"]
+    with pytest.raises(tool.BundleError) as malformed_line:
+        tool.verify_published_assets(bundle, tag="v1.0.0-rc.1", lines=malformed)
+    assert malformed_line.value.code == "published-assets-malformed"
+
+
+def test_members_and_verify_published_assets_cli(
+    tool: types.ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    bundle = _bundle(tmp_path / "bundle")
+    assert tool.main(["members", "--bundle", str(bundle)]) == 0
+    printed = capsys.readouterr().out.splitlines()
+    assert printed == [str(bundle / name) for name in ("SHA256SUMS", "a.bin", "b.bin")]
+
+    listing = tmp_path / "published.tsv"
+    listing.write_text("".join(f"{line}\n" for line in _published(bundle)), encoding="utf-8")
+    assert (
+        tool.main(
+            [
+                "verify-published-assets",
+                "--bundle",
+                str(bundle),
+                "--tag",
+                "v1.0.0-rc.1",
+                "--assets",
+                str(listing),
+            ]
+        )
+        == 0
+    )
+    assert "v1.0.0-rc.1" in capsys.readouterr().out
+
+    # the workflow pipes the asset listing in on stdin
+    monkeypatch.setattr(
+        sys, "stdin", io.StringIO("".join(f"{line}\n" for line in _published(bundle)))
+    )
+    assert (
+        tool.main(
+            [
+                "verify-published-assets",
+                "--bundle",
+                str(bundle),
+                "--tag",
+                "v1.0.0-rc.1",
+                "--assets",
+                "-",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    listing.write_text("a.bin\tsha256:" + "0" * 64 + "\n", encoding="utf-8")
+    assert (
+        tool.main(
+            [
+                "verify-published-assets",
+                "--bundle",
+                str(bundle),
+                "--tag",
+                "v1.0.0-rc.1",
+                "--assets",
+                str(listing),
+            ]
+        )
+        == 1
+    )
+    assert "published-asset-drift" in capsys.readouterr().err
+
+    assert tool.main(["verify-published-assets", "--bundle", str(bundle), "--tag", "t"]) == 2
+    assert (
+        tool.main(
+            [
+                "verify-published-assets",
+                "--bundle",
+                str(bundle),
+                "--tag",
+                "v1.0.0-rc.1",
+                "--assets",
+                str(tmp_path / "absent.tsv"),
+            ]
+        )
+        == 1
+    )
+    assert "assets-missing" in capsys.readouterr().err
 
 
 # ------------------------------------------------------------------------------ lock

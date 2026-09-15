@@ -9,7 +9,12 @@ tool never publishes, tags, pushes, activates live instances or mutates live sta
 publication is the Supervisor-owned integration step that attaches these exact bytes.
 
 ``build`` writes the bundle; ``verify`` re-proves an existing bundle (for example after a
-download) without rebuilding it.
+download) without rebuilding it.  ``members`` prints the exact member paths a publication
+must attach - the verified set plus ``SHA256SUMS``, so an unlisted extra file is refused
+rather than attached - and ``verify-published-assets`` proves an existing GitHub release
+already carries exactly those bytes by name and digest.  ``gh release edit`` accepts no
+file arguments, so a reconcile that disagrees with the qualified bytes is refused with a
+precise diagnostic instead of silently attaching nothing.
 """
 
 from __future__ import annotations
@@ -1676,6 +1681,86 @@ def verify_members(bundle: Path) -> tuple[dict[str, str], dict[str, Any]]:
     return expected, verified
 
 
+def qualified_members(bundle: Path) -> dict[str, dict[str, Any]]:
+    """The exact attachable member set of a qualified bundle, checksum file included.
+
+    ``verify_members`` re-hashes every member listed in ``SHA256SUMS`` and refuses drift;
+    this adds ``SHA256SUMS`` itself, so a publication attaches the verified set and nothing
+    else.  A file the checksum file does not list is a ``member-drift`` refusal here, never
+    an extra attachment.
+    """
+
+    expected, verified = verify_members(bundle)
+    members = {name: dict(verified[name]) for name in sorted(expected)}
+    sums = bundle / "SHA256SUMS"
+    members["SHA256SUMS"] = {"sha256": _sha256_file(sums), "bytes": sums.stat().st_size}
+    return dict(sorted(members.items()))
+
+
+def verify_published_assets(bundle: Path, *, tag: str, lines: Iterable[str]) -> dict[str, Any]:
+    """Prove an existing release carries exactly the qualified bytes, by name and digest.
+
+    ``gh release edit`` accepts no file arguments, so the reconcile path can never attach
+    bytes: it is only correct when the release already carries the qualified members.  The
+    listing is one ``<name>\\t<digest>`` line per published asset, as
+    ``gh release view --json assets --jq`` prints it.  A missing, unexpected, digest-less or
+    differently-hashed asset is refused with the offending names, so nothing is silently
+    accepted.
+    """
+
+    qualified = qualified_members(bundle)
+    published: dict[str, str] = {}
+    for raw in lines:
+        line = raw.rstrip("\n")
+        if not line.strip():
+            continue
+        name, separator, digest = line.partition("\t")
+        if not separator or not name.strip():
+            raise BundleError(
+                "published-assets-malformed",
+                f"expected '<name>\\t<digest>' per published asset, observed {line!r}",
+            )
+        name = name.strip()
+        if name in published:
+            raise BundleError("published-assets-malformed", f"duplicate published asset {name!r}")
+        published[name] = digest.strip()
+    missing = sorted(set(qualified) - set(published))
+    unexpected = sorted(set(published) - set(qualified))
+    if missing or unexpected:
+        raise BundleError(
+            "published-asset-drift",
+            f"release {tag} does not carry the qualified bundle: missing {missing}, "
+            f"unexpected {unexpected}",
+        )
+    unverifiable = sorted(name for name in qualified if not published[name])
+    if unverifiable:
+        raise BundleError(
+            "published-asset-unverifiable",
+            f"release {tag} assets carry no digest, so the qualified bytes cannot be "
+            f"verified: {unverifiable}",
+        )
+    mismatched = sorted(
+        name for name in qualified if published[name] != f"sha256:{qualified[name]['sha256']}"
+    )
+    if mismatched:
+        detail = "; ".join(
+            f"{name} is {published[name]}, not the qualified sha256:{qualified[name]['sha256']}"
+            for name in mismatched
+        )
+        raise BundleError(
+            "published-asset-mismatch",
+            f"release {tag} bytes do not match the qualified bundle: {detail}",
+        )
+    return {
+        "schema": REPORT_SCHEMA,
+        "mode": "verify-published-assets",
+        "tag": tag,
+        "bundle": str(bundle),
+        "result": "verified",
+        "assets": {name: qualified[name]["sha256"] for name in sorted(qualified)},
+    }
+
+
 def run_verify(arguments: argparse.Namespace) -> dict[str, Any]:
     bundle = Path(arguments.bundle).expanduser().resolve()
     expected, verified = verify_members(bundle)
@@ -1771,6 +1856,35 @@ def run_verify(arguments: argparse.Namespace) -> dict[str, Any]:
     return report
 
 
+def run_members(arguments: argparse.Namespace) -> dict[str, Any]:
+    """List the exact member paths a publication must attach, in sorted order."""
+
+    bundle = Path(arguments.bundle).expanduser().resolve()
+    members = qualified_members(bundle)
+    return {
+        "schema": REPORT_SCHEMA,
+        "mode": "members",
+        "bundle": str(bundle),
+        "members": {
+            name: {"path": str(bundle / name), **member} for name, member in members.items()
+        },
+    }
+
+
+def run_verify_published_assets(arguments: argparse.Namespace) -> dict[str, Any]:
+    bundle = Path(arguments.bundle).expanduser().resolve()
+    if arguments.assets == "-":
+        lines = sys.stdin.read().splitlines()
+    else:
+        assets_path = Path(arguments.assets).expanduser()
+        if not assets_path.is_file():
+            raise BundleError(
+                "assets-missing", f"published asset listing {assets_path} does not exist"
+            )
+        lines = assets_path.read_text(encoding="utf-8").splitlines()
+    return verify_published_assets(bundle, tag=arguments.tag, lines=lines)
+
+
 # ------------------------------------------------------------------------------- main
 
 
@@ -1807,6 +1921,25 @@ def _parser() -> argparse.ArgumentParser:
     verify.add_argument("--clean-install", action="store_true")
     verify.add_argument("--pre-integration", action="store_true")
     verify.add_argument("--json", action="store_true")
+
+    members = subparsers.add_parser(
+        "members", help="list the exact member paths a publication must attach"
+    )
+    members.add_argument("--bundle", required=True)
+    members.add_argument("--json", action="store_true")
+
+    published = subparsers.add_parser(
+        "verify-published-assets",
+        help="prove an existing release carries exactly the qualified bytes",
+    )
+    published.add_argument("--bundle", required=True)
+    published.add_argument("--tag", required=True)
+    published.add_argument(
+        "--assets",
+        required=True,
+        help="'<name>\\t<digest>' per published asset, or '-' for stdin",
+    )
+    published.add_argument("--json", action="store_true")
     return parser
 
 
@@ -1816,8 +1949,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         arguments = parser.parse_args(argv)
     except SystemExit as exit_code:  # argparse normalizes usage errors to an exit code
         return int(exit_code.code) if isinstance(exit_code.code, int) else 1
+    runner = {
+        "build": run_build,
+        "verify": run_verify,
+        "members": run_members,
+        "verify-published-assets": run_verify_published_assets,
+    }[arguments.command]
     try:
-        report = run_build(arguments) if arguments.command == "build" else run_verify(arguments)
+        report = runner(arguments)
     except BundleError as error:
         print(f"release bundle refused: {error}", file=sys.stderr)
         return 1
@@ -1827,6 +1966,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"release bundle built: {report['bundle']}")
         for key, member in report["members"].items():
             print(f"  {key}: {member['filename']} ({member['bytes']} bytes)")
+    elif arguments.command == "members":
+        for member in report["members"].values():
+            print(member["path"])
+    elif arguments.command == "verify-published-assets":
+        print(f"published release carries the qualified bytes: {report['tag']}")
+        for name in sorted(report["assets"]):
+            print(f"  {name}")
     else:
         print(f"release bundle verified: {report['bundle']}")
         for name, member in report["members"].items():
