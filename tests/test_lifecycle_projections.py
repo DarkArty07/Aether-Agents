@@ -592,6 +592,49 @@ def test_deactivation_never_removes_foreign_projection_bytes(
 # ------------------------------------------------- interruption, recovery, rollback
 
 
+def test_tree_projection_encoding_is_the_documented_canonical_recipe(tmp_path: Path) -> None:
+    """Pin the lock's tree recipe: materialized bytes, DFS row order, exclusions.
+
+    The digest is ``sha256(json.dumps(rows, separators=(",", ":"), ensure_ascii=True))``
+    over ``(posix-relative-path, sha256(file bytes))`` rows in ``os.walk`` DFS order with
+    per-level sorted names, ``__pycache__`` excluded. It is deliberately not a Git blob
+    projection (a ``.gitattributes`` line-ending rewrite changes the materialized bytes)
+    and not a global path sort (the two orders differ for these trees), because the
+    validator re-derives the lock value with exactly this recipe.
+    """
+
+    root = tmp_path / "source"
+    (root / "agent").mkdir(parents=True)
+    (root / "agent" / "z.py").write_bytes(b"subdirectory file\n")
+    (root / "agentic.txt").write_bytes(b"top-level file\n")
+    (root / "alpha.ps1").write_bytes(b"CRLF materialized\r\n")
+    (root / "__pycache__").mkdir()
+    (root / "__pycache__" / "ignored.pyc").write_bytes(b"cache debris\n")
+
+    rows = [
+        ("agentic.txt", hashlib.sha256(b"top-level file\n").hexdigest()),
+        ("alpha.ps1", hashlib.sha256(b"CRLF materialized\r\n").hexdigest()),
+        ("agent/z.py", hashlib.sha256(b"subdirectory file\n").hexdigest()),
+    ]
+    expected = hashlib.sha256(
+        json.dumps(rows, separators=(",", ":"), ensure_ascii=True).encode()
+    ).hexdigest()
+    sorted_variant = hashlib.sha256(
+        json.dumps(sorted(rows), separators=(",", ":"), ensure_ascii=True).encode()
+    ).hexdigest()
+
+    assert lifecycle._tree_sha256(root) == expected
+    assert sorted_variant != expected, "the DFS recipe must differ from a global path sort"
+
+    link = root / "linked.txt"
+    link.symlink_to(root / "agentic.txt")
+    with pytest.raises(IntegrityError, match="non-regular file"):
+        lifecycle._tree_sha256(root)
+    link.unlink()
+
+    assert lifecycle._tree_sha256(root) == expected
+
+
 def _release_manager_python(store: ReleaseStore, record: ReleaseRecord) -> None:
     """Give one synthetic release the bundle and manager interpreter activation needs."""
 
@@ -706,6 +749,43 @@ def test_interrupted_service_projection_restores_and_recovers_the_release(
     assert reopened_active.release_id == prior.release_id
     assert reopened.projection_status(reopened_active)["mismatches"] == []
     assert result.get("projections_reconciled", 0) in {0, 1}
+
+
+def test_local_preparation_interruption_publishes_nothing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An interruption before candidate publication leaves no staging or release state."""
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    manager = _activation_manager(tmp_path, monkeypatch)
+    store = manager.store
+    prior = _record(store, "1.0.0rc1-" + "a" * 16)
+    _publish_record(manager, prior)
+    _release_manager_python(store, prior)
+    manager.project_release(prior, restart_service=False)
+    aether, aether_commit = _aether_candidate(tmp_path)
+    fork, fork_commit = _fork_candidate(tmp_path)
+
+    def _interrupt(*_args, **_kwargs):
+        raise IntegrityError("simulated interruption before candidate publication")
+
+    monkeypatch.setattr(manager, "_build_local_candidate", _interrupt)
+    with pytest.raises(IntegrityError, match="before candidate publication"):
+        manager.update_local(
+            aether_checkout=aether,
+            aether_commit=aether_commit,
+            fork_checkout=fork,
+            fork_commit=fork_commit,
+        )
+
+    active = store.active()
+    assert active is not None
+    assert active.release_id == prior.release_id
+    staging = store.root / "staging"
+    assert not staging.exists() or not list(staging.iterdir())
+    assert sorted(path.name for path in store.releases.iterdir()) == [prior.release_id]
+    assert not manager.projection_status(active)["mismatches"]
 
 
 def test_local_update_preserves_mutable_state_bytes_and_rolls_back_exactly(

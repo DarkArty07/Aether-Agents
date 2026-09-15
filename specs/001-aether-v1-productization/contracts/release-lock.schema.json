@@ -60,7 +60,7 @@
         "python_requires": {"type": "string", "minLength": 1},
         "source_tree_sha256": {
           "$ref": "#/$defs/sha256",
-          "description": "SHA-256 of the deterministic path-and-file-byte projection of the exact Git commit materialized locally; this is distinct from every externally published artifact digest."
+          "description": "SHA-256 of the canonical path-and-file-byte projection of the exact Git commit materialized locally (never a Git blob): rows `(posix-relative-path, sha256(file bytes))` collected in `os.walk` DFS order with per-level sorted names, `__pycache__` excluded, symlinks and non-regular files refused, serialized as `json.dumps(rows, separators=(\",\", \":\"), ensure_ascii=True)` and hashed once. The lifecycle validator re-derives this value from the materialized commit and refuses any mismatch; it is distinct from every externally published artifact digest and from the editable-install projection."
         },
         "artifacts": {
           "type": "array",

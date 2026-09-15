@@ -18,8 +18,8 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-import tomllib
 import threading
+import tomllib
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -3432,9 +3432,9 @@ def test_exact_public_lifecycle_uses_real_plugin_profiles_query_and_recovery(
         return
 
     fork_commit = _git(fork_checkout, "rev-parse", "HEAD")
-    fork_version = tomllib.loads(
-        _git(fork_checkout, "show", f"{fork_commit}:pyproject.toml")
-    )["project"]["version"]
+    fork_version = tomllib.loads(_git(fork_checkout, "show", f"{fork_commit}:pyproject.toml"))[
+        "project"
+    ]["version"]
     checkout = fork_checkout
     evidence = verify_clean_checkout(
         checkout,

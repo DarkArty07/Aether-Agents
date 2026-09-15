@@ -948,7 +948,21 @@ def _wheel_observation_compatibility(source: bytes) -> dict[str, Any]:
 
 
 def _tree_sha256(root: Path) -> str:
-    """Digest a confined regular-file tree by relative path and file bytes."""
+    """Digest a materialized source tree by relative path and file bytes.
+
+    This is the one canonical recipe for the release lock's ``hermes.source_tree_sha256``
+    and it is re-derived by this validator over the *materialized* commit: rows are
+    ``(posix-relative-path, sha256(file bytes))`` collected in ``os.walk`` DFS order with
+    per-level sorted names, ``__pycache__`` excluded, symlinks and non-regular files
+    refused, then ``sha256(json.dumps(rows, separators=(",", ":"), ensure_ascii=True))``.
+
+    Two traps this encoding rules out: it hashes the bytes a consumer actually receives
+    (a Git *blob* digest differs wherever ``.gitattributes`` rewrites line endings, e.g.
+    the fork's ``*.ps1`` files are LF in the blob and CRLF when materialized), and its DFS
+    order differs from a global path sort for these trees. ``aether_agents.hermes_editable``
+    computes a different projection with a different exclusion set for the editable path;
+    it is never this lock recipe.
+    """
 
     rows: list[tuple[str, str]] = []
     for directory, names, files in os.walk(root, followlinks=False):
