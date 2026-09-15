@@ -53,11 +53,36 @@ These commands have tested local candidate behavior, but their registry status i
 | Command | Parser surface |
 | --- | --- |
 | `aether setup` | `--wheel PATH` (required), `--hermes-checkout PATH` (required), `--release-lock PATH` (required), `--dry-run`, `--yes`, `--json` |
-| `aether update` | `[VERSION]`, `--prerelease`, `--wheel PATH`, `--hermes-checkout PATH`, `--release-lock PATH`, `--dry-run`, `--yes`, `--json` |
+| `aether update` | `[VERSION]`, `--prerelease`, `--wheel PATH`, `--hermes-checkout PATH`, `--release-lock PATH`, `--dry-run`, `--yes`, `--json`; local-candidate route: `--local`, `--aether-checkout PATH`, `--aether-commit SHA`, `--fork-checkout PATH`, `--fork-commit SHA` |
 | `aether rollback` | `[VERSION]`, `--dry-run`, `--yes`, `--json` |
 | `aether uninstall` | `--purge`, `--export PATH`, `--dry-run`, `--yes`, `--json` |
 
 `setup` accepts only locally supplied wheel/check-out/lock inputs. `update` and `rollback` can plan or select staged candidates. `uninstall --export` reports `EXPORT_NOT_IMPLEMENTED`; `--purge` requires `--yes`. See [Policy and recovery](../guides/policy-and-recovery.md).
+
+### `update` local-candidate route
+
+`aether update` is the only supported promotion and activation boundary. Its `--local` route
+takes explicit identities — an Aether checkout with its exact commit and a maintained-fork
+checkout with its exact commit — and is mutually exclusive with `[VERSION]`, `--prerelease`,
+`--wheel`, `--hermes-checkout` and `--release-lock`. Identity never comes from the current
+directory, checkout recency or a mutable branch tip.
+
+Without `--yes` (or with `--dry-run`) the command prints a non-mutating preview: exact Aether
+and fork revisions, target version and release ID, active HLP coverage, artifacts and hashes,
+expected service interruption, preserved state and any blockers. It refuses dirty trees,
+ambiguous or missing checkouts, a wrong repository or branch, unknown or mismatched commits,
+bad hashes and incompatible Python, and it stages or activates nothing.
+
+Activation is explicit (`--yes`) and may interrupt Aether-owned TUI, gateway and worker
+processes immediately; there is no drain or wait-for-idle semantics, unrelated services are
+never stopped, and a partial transition is detected and recoverable. `aether rollback`
+restores product code, runtime and service without rolling user state backward.
+
+Release-lock `schema_version` 4 declares the maintained-fork source mode
+(`hermes.source_mode = maintained_fork`, `hermes.repository =
+https://github.com/DarkArty07/aether-hermes`); the retired `transitional_fork` mode is refused
+for new preparation. This page documents tested local candidate behavior — it is not a claim
+of a published, installed or released channel.
 
 ## Optional project knowledge
 

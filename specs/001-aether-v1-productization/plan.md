@@ -13,7 +13,7 @@
 Build Aether 1.0 as one product with two independently versioned but release-locked components:
 
 1. **Aether Manager** — the minimal `aether-agents` Python package on PyPI, exposing `aether` and managing setup, projects, service lifecycle, diagnosis, update, rollback, and uninstall.
-2. **Managed Hermes runtime** — the original `hermes-agent` distribution from a locked stable upstream source by default, or from the public `DarkArty07/hermes-agent` fork only in declared `transitional_fork` mode while indispensable patches remain.
+2. **Managed Hermes runtime** — the original `hermes-agent` distribution built from the maintained fork `DarkArty07/aether-hermes` branch `aether-main` selected by the lock's `maintained_fork` source mode, or from an exact public upstream source when `upstream` is deliberately selected. Hermes keeps its own distribution identity.
 
 The manager includes a release lock and a sanitized three-profile resource bundle. It installs the selected locked Hermes source into an Aether-owned versioned runtime, keeps user state in stable XDG locations, and maps each project identity to one local board/workspace boundary. The manager never vendors Hermes, embeds private runtime state, or replaces another Hermes installation.
 
@@ -27,7 +27,7 @@ The stable release is produced only after an RC installed from PyPI consumes the
 
 **Manager dependency policy**: standard-library first. Runtime download, hashing, atomic filesystem operations, subprocess execution, TOML reading, JSON output, and service inspection are available in Python 3.11. Add a manager dependency only when it removes a demonstrated reliability/security risk; exact-pin and lock it. The managed Hermes dependency tree is not imported by the manager.
 
-**Runtime**: qualified original `hermes-agent` distribution built or consumed from the lock's `upstream` or `transitional_fork` public source and installed into a versioned virtual environment.
+**Runtime**: qualified original `hermes-agent` distribution built from the lock's `maintained_fork` fork revision (or from a deliberately selected `upstream` public source) and installed into a versioned virtual environment.
 
 **Service**: systemd user service on supported Linux/WSL2, wrapping only the Aether-managed Hermes gateway/dispatcher.
 
@@ -45,7 +45,7 @@ The stable release is produced only after an RC installed from PyPI consumes the
 | Specification owns intent | Pass. `spec.md` is normative; this plan and future tasks may not weaken it. |
 | Autonomous, bounded design | Pass. Technical defaults are chosen only where the owner delegated them and assumptions are recorded in `research.md`. |
 | Evidence and traceable convergence | Pass. Existing local tests are distinguished from missing public-path qualification. Every release claim has an evidence path. |
-| Simplicity over ceremony | Pass. One manager package and one source-mode-aware managed runtime are used. The transitional fork is retained only while indispensable. No control plane, installer daemon, container layer, renamed runtime package, or fourth agent is introduced. |
+| Simplicity over ceremony | Pass. One manager package and one source-mode-aware managed runtime are used. The maintained fork is the accepted runtime source, carries behavior as source rather than replayed patches, and retires per accepted change when an upstream artifact passes its behavior gate. No control plane, installer daemon, container layer, renamed runtime package, or fourth agent is introduced. |
 | Separate design, build, and activation | Pass. Build may prepare local artifacts. Remote publication, live model calls, and migration of Christopher's installation remain gated. |
 
 No constitutional exception is authorized.
@@ -66,10 +66,10 @@ PyPI
 
 Hermes public source selected by release-lock mode
 ├── upstream: NousResearch/hermes-agent stable tag + commit + source digest
-└── transitional_fork: DarkArty07/hermes-agent release
+└── maintained_fork: DarkArty07/aether-hermes revision (upstream when deliberately selected)
     ├── original hermes-agent wheel/source distribution
     ├── SHA-256 checksums + provenance
-    └── residual patch ledger + retirement evidence
+    └── accepted-change ledger + retirement evidence
 
 User machine
 ├── uv-managed aether CLI environment (aether-agents wheel)
@@ -89,7 +89,7 @@ The manager MUST NOT import Hermes modules. It operates on Hermes as a versioned
 
 One immutable `aether-agents` wheel is installed into two isolated environments. The `uv tool` environment owns the public `aether` command. The staged runtime installs that same wheel with `--no-deps` only so Hermes can discover `aether-contract-observer = "aether_agents.observation.capture.hermes_plugin"` through the public `hermes_agent.plugins` entry-point group and reuse Hermes-independent observation contracts/reducer code. Runtime-local console scripts are never put on the public manager path.
 
-The import boundary is structural: manager commands/transitions/release/service/auth never import Hermes; the Hermes adapter never imports those manager modules; shared observation modules import neither. The schema-3 release lock binds the pre-build tuple `distribution + package_version + git_tag + git_commit + python_requires + observer entry point`, observation event/summary/segment-manifest read/write versions, and projection schema version. Doctor and every transition verify that each write version belongs to its read set and matches packaged schemas/upcasters/projection code. External provenance and the local transition record bind the staged wheel filename/SHA-256; activation verifies installed-file fingerprint and profile enablement. A second observer package, copied per-profile implementation, or independent observer version is not permitted.
+The import boundary is structural: manager commands/transitions/release/service/auth never import Hermes; the Hermes adapter never imports those manager modules; shared observation modules import neither. The schema-4 release lock binds the maintained-fork source identity (repository, branch, commit, source-tree digest, artifact closure), the pre-build tuple `distribution + package_version + git_tag + git_commit + python_requires + observer entry point`, observation event/summary/segment-manifest read/write versions, and projection schema version. Doctor and every transition verify that each write version belongs to its read set and matches packaged schemas/upcasters/projection code. External provenance and the local transition record bind the staged wheel filename/SHA-256; activation verifies installed-file fingerprint and profile enablement. A second observer package, copied per-profile implementation, or independent observer version is not permitted.
 
 The runtime MUST NOT update the manager or fetch mutable Aether product policy. Aether product updates originate in the manager and require a verified Aether release lock.
 
@@ -100,8 +100,8 @@ Each manager release packages one `release-lock.json` conforming to `release-loc
 - SemVer and PEP 440 Aether versions;
 - Aether Git tag and commit;
 - Aether distribution name, normalized package version, Git tag/commit, Python requirement, and observer entry-point identity; together these form the pre-build identity tuple. External release provenance and each local transition record, rather than the self-contained lock, bind the staged wheel filename/SHA-256 used for runtime installation;
-- source mode, repository, tag, and commit;
-- stable upstream base and residual patch IDs when mode is `transitional_fork`;
+- source mode, repository, branch, tag and commit (`maintained_fork` for the maintained fork; `upstream` for a deliberately selected public source);
+- the exact fork repository `https://github.com/DarkArty07/aether-hermes`, branch `aether-main`, commit and source-tree digest under `maintained_fork`, plus the accepted-fork behavior ledger whose upstream retirement gates remain open. The retired `transitional_fork` shape — fixed public base plus replayed residual patch IDs — is refused for new preparation and no `.patch` replay path stays reachable from the RC route;
 - Python compatibility and the SHA-256 of the packaged, hash-bound observer
   dependency closure used to sync the manager and reconcile the runtime;
 - the deterministic path-and-file-byte digest of the exact Hermes Git tree
@@ -116,58 +116,47 @@ re-proved by doctor and before every activation.
 
 ### 4.4 XDG and version layout
 
-Target logical layout:
+Accepted installed layout (reconciled 2026-09-15 under `oc_3397f9f05d780f8e@v1`): the immutable side is
+release code and components under the Aether XDG data root, the mutable side is every operational Hermes home and
+all product state under the Aether XDG state root. Exact leaf names inside each root are implementation-local.
 
 ```text
-~/.config/aether/
-├── config.toml                 # non-secret user/product choices
-└── systemd/                    # source/records for generated user-service integration
+$XDG_CONFIG_HOME/aether/          # non-secret user/product choices
+                                  # generated user-service integration records
 
-~/.local/share/aether/
-├── active.json                 # atomic pointer/record for active coherent release
-├── releases/
-│   └── <aether-semver>/
-│       ├── release-lock.json
-│       ├── runtime/            # isolated venv with locked Hermes + same Aether wheel
-│       └── product-resources/  # immutable profile-policy bundle
-├── profiles/                   # persistent per-role Hermes user state
-│   ├── morfeo/
-│   ├── supervisor/
-│   └── implementer/
-└── projects/
-    └── <project-uuid>/
-        ├── board/
-        ├── workspaces/
-        └── mapping.json
+$XDG_DATA_HOME/aether/            # immutable side
+├── runtime/
+│   ├── current                   # active-release selector; must agree with the active record
+│   └── releases/<release-id>/    # immutable release: release lock, locked Hermes source,
+│                                 #   isolated venv with the same Aether wheel, manifests
+└── components/                   # immutable hash-locked components (optional Graphify)
 
-~/.local/state/aether/
-├── transitions/                # update/rollback journals
-├── backups/                    # metadata + safe state backups
-├── observations/
-│   ├── health/                 # content-free unresolved/IO counters only
-│   └── <project-uuid>/
-│       ├── journal/
-│       │   ├── active/         # one append-only JSONL segment per producer epoch
-│       │   ├── closed/         # immutable verified JSONL awaiting/without compaction
-│       │   ├── archive/        # deterministic gzip + canonical manifests
-│       │   └── quarantine/     # preserved corrupt/unknown segments
-│       ├── keys/               # private 0600 HMAC fingerprint epochs
-│       ├── projections/        # versioned deterministic rebuildable SQLite models
-│       ├── projection.current.json # derived active-projection pointer
-│       ├── summaries/          # durable schema-valid final summaries
-│       └── locks/              # bounded reducer/compaction coordination
-└── logs/                       # local redacted manager/service logs
+$XDG_STATE_HOME/aether/           # mutable side, never moved by update/rollback
+├── hermes/                       # operational Hermes homes for Morfeo, Supervisor and Implementer
+│                                 #   sessions, memories, credentials and provider choices
+├── projects/                     # per-project boards, workspaces and local mappings
+├── observations/                 # journals, private fingerprint keys, versioned projections,
+│                                 #   summaries and coordination locks
+├── knowledge/                    # project graph snapshots and role/project experiences
+├── monitor/                      # Telegram Monitor state
+├── migrations/                   # transition/migration journals and safe state backups
+└── logs/                         # local redacted manager/service logs
 
-~/.cache/aether/
-└── downloads/                  # replaceable verified-download staging
+$XDG_CACHE_HOME/aether/           # replaceable verified-download staging
 ```
+
+The authoritative active-release record and the pending-transition journal are part of the lifecycle's private
+metadata; their exact file names and locations are implementation-local, provided every invariant below holds.
 
 Implementation may adjust leaf names during Supervisor analysis, but it MUST preserve:
 
-- immutable release-owned artifacts versus persistent user state;
+- immutable release-owned artifacts versus persistent user state, with the immutable side under the Aether data root and every mutable Hermes home and product state under the Aether state root;
+- the lifecycle reconciling to that installed layout rather than moving or copying the operational homes again;
 - no runtime/user state in project Git;
 - no absolute path in portable project identity;
-- atomic active-release selection;
+- exactly one authoritative active-release record, with `runtime/current`, the launcher, the Desktop entry and the Aether-owned service projection agreeing with it after one transition, and a partial transition detected and recoverable;
+- atomic active-release selection through `aether update` as the sole supported promotion/activation boundary, whose local-candidate route previews without mutating;
+- rollback that switches product code, runtime and service only and never rolls user state backward;
 - project UUID isolation;
 - exact project-context resolution before any project journal write;
 - immutable journals, versioned disposable projections, and preserved unknown-newer bytes across rollback;
@@ -286,7 +275,7 @@ Aether-Agents/
 └── VERSION
 ```
 
-When `transitional_fork` is selected, the downstream repository separately owns:
+The maintained-fork repository separately owns:
 
 ```text
 hermes-agent/
@@ -332,23 +321,32 @@ No command-specific shortcut may skip integrity or recovery checks that the shar
 ### 7.1 Update
 
 1. Resolve one immutable target `aether-agents` wheel from canonical package/release metadata and record its filename/SHA-256 in the pending local transition.
-2. Fetch its schema-3 release lock and verify the Aether distribution/package/tag/commit/Python/observer tuple, observation compatibility declaration, and external wheel provenance. Each declared write schema MUST belong to its corresponding read set and match packaged schemas/upcasters/projection code; never expect the wheel-contained lock to hash its containing wheel.
+2. Fetch its release lock (schema `4`) and verify the Aether distribution/package/tag/commit/Python/observer tuple, the `maintained_fork` source identity (repository, branch, exact commit, source-tree digest, artifact closure and provenance), observation compatibility declaration, and external wheel provenance. Each declared write schema MUST belong to its corresponding read set and match packaged schemas/upcasters/projection code; never expect the wheel-contained lock to hash its containing wheel. A refused `transitional_fork` lock fails here with an actionable message and no staging.
 3. Preview version, storage, service interruption, and user-state treatment.
-4. Download the locked upstream source or transitional-fork artifacts into cache staging.
-5. Verify SHA-256, provenance, Python/platform compatibility, source mode, and package metadata.
+4. Resolve the locked maintained-fork source (repository, branch and exact commit) — or the locked public upstream source in `upstream` mode — into cache staging; a `.patch` replay path is not reachable.
+5. Verify SHA-256, provenance, source-tree digest, Python/platform compatibility, source mode, and package metadata.
 6. Install the exact staged Aether wheel into the manager candidate and with `--no-deps` into the new immutable Hermes runtime; verify installed-file fingerprints, official entry-point discovery, per-profile enablement, and public-CLI non-shadowing.
 7. Snapshot product-owned profile files and transition metadata. Preserve observation journals, versioned projections, summaries, and project fingerprint keys as persistent forward state; private local recovery backups MAY include the keys under `0600`, but release/publication artifacts, logs, summaries, and ordinary exports MUST NOT.
 8. Apply product-owned profile/config changes to staging or through reversible atomic file operations.
 9. Run doctor against the candidate while inactive.
-10. Stop only the Aether service if required, switch the active record atomically, and start/verify it when previously active.
-11. Mark transition complete only after runtime/profile/service verification.
-12. On any failure, restore the prior active record and product-owned files, then verify the old release.
+10. Stop only the Aether service if required, switch the active record atomically, and start/verify it when previously active. Activation is explicit and may interrupt Aether-owned TUI, gateway and worker processes immediately: there is no drain or wait-for-idle semantics, unrelated services are never stopped, and durable state must remain recoverable when the owner reopens instances.
+11. Mark transition complete only after runtime/profile/service verification, including that `runtime/current`, the launcher, the Desktop entry and the Aether-owned service projection agree with the active record.
+12. On any failure, restore the prior active record and product-owned files, then verify the old release; a partial transition stays detected and recoverable rather than silently degraded.
+
+### 7.1a Local-candidate route (`aether update --local`)
+
+The pinned surface is `aether update --local --aether-checkout PATH --aether-commit SHA --fork-checkout PATH --fork-commit SHA [--dry-run] [--yes] [--json]`, with `--local` mutually exclusive with `[VERSION]`, `--prerelease`, `--wheel`, `--hermes-checkout` and `--release-lock`.
+
+1. Resolve both explicit identities: the Aether checkout with its exact commit and the maintained-fork checkout with its exact commit. Identity is never taken from the current directory, checkout recency or a mutable branch tip.
+2. Without `--yes` (or with `--dry-run`), report the non-mutating preview: exact Aether and fork revisions, target version and release ID, active HLP coverage, artifacts and hashes, expected service interruption, preserved state and any blockers. No staging and no activation occur.
+3. Refuse dirty trees, ambiguous or missing checkouts, a wrong repository or branch, unknown or mismatched commits, bad hashes, changed inputs and incompatible Python, without staging or activation.
+4. With `--yes`, prepare one immutable candidate from those exact clean commits and continue through the ordinary staging, verification and activation sequence above; every refusal and every partial-transition rule above applies unchanged.
 
 ### 7.2 External manager mismatch
 
 `uv tool upgrade` can change the manager outside Aether's transition. On every stateful launch:
 
-- compare manager version with `active.json` and the active lock;
+- compare manager version with the authoritative active-release record and the active lock;
 - permit read-only help/version/doctor;
 - refuse incompatible runtime activation or mutation;
 - offer `reconcile --to installed` or `--to active`;
@@ -356,42 +354,50 @@ No command-specific shortcut may skip integrity or recovery checks that the shar
 
 ### 7.3 Rollback
 
-Rollback selects a previously verified release directory and restores only product-owned policy/config versions. Persistent user-owned state continues forward. Observation journals are never migrated or rewritten: the rollback reducer uses its own versioned projection, preserves/indexes unknown newer bytes, and forward re-update reingests them. Any other data migration introduced after 1.0 must declare backward compatibility or make rollback block before mutation; no such migration is authorized in this contract.
+Rollback selects a previously verified release and restores only product-owned policy/config versions and the
+runtime/service selector. Rollback is state-preserving: it never switches user state backward, and every mutable
+Hermes home, session, board, credential, memory, knowledge and monitor artifact stays as it is. Persistent
+user-owned state continues forward. Observation journals are never migrated or rewritten: the rollback reducer uses
+its own versioned projection, preserves/indexes unknown newer bytes, and forward re-update reingests them. Any other
+data migration introduced after 1.0 must declare backward compatibility or make rollback block before mutation; no
+such migration is authorized in this contract.
+
+A failed activation leaves either the previous complete release or the new complete release active — never a mixed
+set — and a partial transition remains detectable and recoverable instead of reported as success.
 
 ## 8. Downstream Hermes maintenance plan
 
-### 8.1 Select the baseline
+### 8.1 Select the source
 
 - Refresh upstream evidence.
-- Choose a stable upstream release tag, not `main`.
-- Record upstream tag, commit, package version, Python range, and release notes.
-- Freeze that baseline for the RC unless a security/correctness blocker requires a documented restart.
+- Record the fork repository, branch, commit, package version, Python range and release notes.
+- Choose a stable upstream release tag — not `main` — only when upstream is deliberately selected.
+- Freeze the selected source for the RC unless a security/correctness blocker requires a documented restart.
 
-### 8.2 Reconcile patches and select the source mode
+### 8.2 Reconcile accepted changes and record the source mode
 
 For every entry in `HERMES_LOCAL_PATCHES.md`:
 
-- inspect whether upstream merged an equivalent;
+- reconcile the accepted behavior against the selected maintained-fork candidate;
 - test semantic parity before removing local code;
-- prefer a stable upstream release with every accepted guarantee;
-- select `transitional_fork` only if an indispensable residual patch remains;
-- port only still-required behavior onto the stable baseline when that transition is necessary;
-- keep one auditable logical patch commit per concern where practical;
-- update the downstream ledger with upstream PR, Aether requirement, tests, and retirement condition;
+- carry accepted behavior as fork source — never as a replayed patch file on an active release;
+- select `maintained_fork` with the exact fork repository, branch, commit, source-tree digest, artifact closure and provenance; `upstream` remains available for a deliberately selected public source, and `transitional_fork` is refused for new preparation;
+- keep one auditable logical commit per concern where practical;
+- update the ledger with the upstream issue/PR (where applicable), the Aether requirement it serves, its tests and its retirement condition;
 - exclude unrelated local package-lock or generated drift.
 
 No force-push or shared-history rewrite is authorized. Upstream updates enter through reviewable commits/merges according to the fork's protected branch policy.
 
 ### 8.3 Qualify the selected runtime source
 
-- run the applicable complete upstream test suite plus Aether-specific regressions;
+- run the applicable complete source test suite plus Aether-specific regressions;
 - in `upstream` mode, verify the locked source archive and build the original wheel/sdist in the controlled qualification environment;
-- in `transitional_fork` mode, build wheel and sdist in CI from the downstream tag commit;
+- in `maintained_fork` mode, resolve the exact accepted fork commit and source-tree digest, and build or consume the original `hermes-agent` distribution from that revision under its own identity;
 - inspect metadata and contents;
 - produce SHA-256 checksums and provenance;
-- test installing the wheel into a clean isolated environment;
-- publish fork artifacts only when `transitional_fork` is selected and after its publication gate;
-- record URLs/digests in the Aether lock; never point to mutable workflow artifacts.
+- test installing the distribution into a clean isolated environment;
+- attach fork artifacts to the release bundle only through the normal reviewed publication path; never point to mutable workflow artifacts;
+- record repository/branch/commit, source-tree digest and artifact digests in the Aether release lock.
 
 ## 9. Profile and policy productization
 
@@ -454,7 +460,7 @@ Update description, topics, README, roadmap, changelog, contribution/security do
 
 - three roles and two routing paths;
 - public CLI installation;
-- upstream-first runtime boundary and transitional-fork retirement policy;
+- maintained-fork runtime boundary and per-change upstream retirement policy;
 - Linux/WSL2 support;
 - flexible descending model methodology;
 - privacy/no remote telemetry and bounded local contract observation;
@@ -497,10 +503,10 @@ These are dependency phases, not implementation cards. Supervisor derives and li
 - reconcile R4/R8/R9/R10/R11/R12/R13 and derived public docs with PD-48–PD-67;
 - preserve historical rationale;
 - freeze current repository diff and avoid swallowing unrelated local changes;
-- refresh upstream Hermes evidence, select a stable baseline, and determine whether any indispensable patch requires `transitional_fork`;
+- refresh upstream Hermes evidence, record the maintained-fork candidate (`aether-main`) with its exact revision, and keep the retired `transitional_fork` mode refused for new preparation;
 - establish package/version/schema ownership.
 
-**Exit**: no canonical artifact treats the fork as permanent or unconditional, and the exact upstream baseline plus any justified transitional source are recorded.
+**Exit**: no canonical artifact treats the maintained fork as a temporary transition or treats upstream unmodified as the mandatory default, and the exact fork revision plus the deliberate upstream alternative are recorded.
 
 ### Phase 1 — Manager/package skeleton and public contracts
 
@@ -515,7 +521,7 @@ These are dependency phases, not implementation cards. Supervisor derives and li
 - build/install/inspect candidate wheel and sdist;
 - prepare release workflow, checksums, and provenance.
 
-**External gate**: publishing downstream GitHub Release assets, only if `transitional_fork` is selected.
+**External gate**: publishing the release bundle (including the locked fork runtime closure) only after review; never from a mutable workflow artifact.
 
 **Exit**: local candidate artifacts are verified and their future immutable release coordinates can populate the Aether lock.
 

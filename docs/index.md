@@ -4,6 +4,14 @@ Aether is a multi-agent software-engineering product built on [Hermes Agent](htt
 
 This index is navigation only and routes reader questions to the appropriate guide, reference, or authority artifact. For the complete reader-facing placement and conflict-resolution map across all artifact classes, see [Authority and artifact ownership](authority.md).
 
+The executable Hermes source for the authorized `1.0.0rc1` milestone is Aether's maintained
+fork `DarkArty07/aether-hermes` branch `aether-main`, bound by release-lock `schema_version` 4
+source mode `maintained_fork` and installed through `aether update`. That milestone is a
+bounded pre-stable release candidate: it is not stable `1.0.0`, not a package-index
+publication and not a WSL2-qualified result, and issue #261 stays open with those gates
+outstanding. See [Lifecycle](guides/lifecycle.md), [Policy and recovery](guides/policy-and-recovery.md)
+and [CLI reference](reference/cli.md).
+
 ## Navigate by question
 
 ### Architectural authority and product boundaries

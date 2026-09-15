@@ -62,7 +62,7 @@ The CLI diagnoses lifecycle coherence without importing Hermes, but it does not 
 
 ### Notes / current limits
 
-A clean environment with no active Aether release truthfully reports an integrity error; project-specific diagnostics remain unfinished.
+A clean environment with no active Aether release truthfully reports an integrity error; project-specific diagnostics remain unfinished. A mismatch between the authoritative active-release record, `runtime/current`, the launcher, the Desktop entry and the Aether-owned service projection is reported as an actionable fail-closed diagnostic rather than a silent degradation.
 
 ## `cli.init`
 
@@ -192,7 +192,7 @@ Selects a previously coherent staged release with planning and confirmation path
 
 ### Notes / current limits
 
-The lifecycle candidate is locally tested, but public install/runtime qualification is still pending.
+The lifecycle candidate is locally tested, but public install/runtime qualification is still pending. Rollback is state-preserving: it switches product code, runtime and service, and never rolls user state backward or restores an older copy of credentials, sessions, boards, memories, knowledge, observations or monitor data.
 
 ## `cli.service-lifecycle`
 
@@ -298,16 +298,21 @@ State export is explicitly unavailable; complete installed-product uninstall qua
 
 ## `cli.update`
 
-**Status:** `transitional`
+**Status:** `partial`
 
-Plans or activates one fully staged, verified local release candidate.
+The sole supported promotion/activation boundary: plans or activates one fully staged, verified local release candidate, or previews an explicit clean local candidate without mutating anything.
 
 ### Surfaces
 - `cli.argument.aether.update.version`
 - `cli.command.aether.update`
+- `cli.option.aether.update.--aether-checkout`
+- `cli.option.aether.update.--aether-commit`
 - `cli.option.aether.update.--dry-run`
+- `cli.option.aether.update.--fork-checkout`
+- `cli.option.aether.update.--fork-commit`
 - `cli.option.aether.update.--hermes-checkout`
 - `cli.option.aether.update.--json`
+- `cli.option.aether.update.--local`
 - `cli.option.aether.update.--prerelease`
 - `cli.option.aether.update.--release-lock`
 - `cli.option.aether.update.--wheel`
@@ -316,9 +321,11 @@ Plans or activates one fully staged, verified local release candidate.
 ### Current documentation
 - [docs/guides/policy-and-recovery.md](../guides/policy-and-recovery.md)
 - [docs/reference/cli.md](cli.md)
+- [docs/reference/limitations-and-troubleshooting.md](limitations-and-troubleshooting.md)
 
 ### Owning specifications
 - [specs/001-aether-v1-productization/contracts/cli.md](../../specs/001-aether-v1-productization/contracts/cli.md)
+- [specs/001-aether-v1-productization/spec.md](../../specs/001-aether-v1-productization/spec.md)
 - [specs/r9-state-and-recovery/spec.md](../../specs/r9-state-and-recovery/spec.md)
 
 ### Implementation
@@ -330,7 +337,7 @@ Plans or activates one fully staged, verified local release candidate.
 
 ### Notes / current limits
 
-Candidate update logic is not evidence of a released update channel or public artifact qualification.
+No update runs on startup or a timer and no other surface stages or activates a release. The local-candidate route takes explicit Aether and maintained-fork checkouts with exact commits, is mutually exclusive with [VERSION], --prerelease, --wheel, --hermes-checkout and --release-lock, and refuses dirty trees, ambiguous or missing bindings, wrong repository/branch, unknown or mismatched commits, bad hashes and incompatible Python without staging or activation. Activation is explicit and may interrupt Aether-owned instances immediately; a partial transition is detected and recoverable, and rollback never rolls user state backward. Candidate update logic is not evidence of a published update channel, release-candidate publication, stable 1.0.0 or public artifact qualification.
 
 ## `cli.version`
 
@@ -647,6 +654,44 @@ Canonical procedure and current guides describe autonomous Git/GitHub terminal c
 ### Notes / current limits
 
 Packaged prompt/skill guidance is present, and the merged PR #299 is historical repository evidence for the predecessor objective only, not evidence of this objective's terminal closeout. This unit records no current-objective PR/check/Issue/cleanup evidence before terminal integration; private live-profile activation is runtime evidence only, the public installed lifecycle remains unqualified, and no runtime enforcement is claimed.
+
+## `lifecycle.immutable-release-and-update-boundary`
+
+**Status:** `partial`
+
+One validated maintained-fork release lock, one authoritative active-release record selecting an immutable release tree, and `aether update` as the sole promotion/activation boundary with a non-mutating local-candidate preview and state-preserving rollback.
+
+### Surfaces
+- `lifecycle.active-release-selector`
+- `lifecycle.immutable-release-layout`
+- `lifecycle.maintained-fork-release-identity`
+- `lifecycle.state-preserving-rollback`
+
+### Current documentation
+- [docs/guides/policy-and-recovery.md](../guides/policy-and-recovery.md)
+- [docs/reference/cli.md](cli.md)
+- [docs/reference/limitations-and-troubleshooting.md](limitations-and-troubleshooting.md)
+
+### Owning specifications
+- [specs/001-aether-v1-productization/contracts/cli.md](../../specs/001-aether-v1-productization/contracts/cli.md)
+- [specs/001-aether-v1-productization/contracts/release-lock.schema.json](../../specs/001-aether-v1-productization/contracts/release-lock.schema.json)
+- [specs/001-aether-v1-productization/plan.md](../../specs/001-aether-v1-productization/plan.md)
+- [specs/001-aether-v1-productization/spec.md](../../specs/001-aether-v1-productization/spec.md)
+
+### Implementation
+- [src/aether_agents/cli.py](../../src/aether_agents/cli.py)
+- [src/aether_agents/hermes_baseline.py](../../src/aether_agents/hermes_baseline.py)
+- [src/aether_agents/lifecycle.py](../../src/aether_agents/lifecycle.py)
+- [src/aether_agents/paths.py](../../src/aether_agents/paths.py)
+
+### Verification
+- [tests/test_a1_contracts.py](../../tests/test_a1_contracts.py)
+- [tests/test_hermes_baseline.py](../../tests/test_hermes_baseline.py)
+- [tests/test_observation_lifecycle.py](../../tests/test_observation_lifecycle.py)
+
+### Notes / current limits
+
+The release lock declares the maintained-fork source identity (`schema_version` 4, `hermes.source_mode` `maintained_fork`, repository `https://github.com/DarkArty07/aether-hermes`, exact commit, source-tree digest, artifact closure and provenance); the retired `transitional_fork` mode is refused for new preparation and no `.patch` file is replayed. Immutable release code and Graphify components live under the Aether XDG data root while every mutable Hermes home and product-state artifact stays under the Aether XDG state root. Disposable-home lifecycle, interruption, mismatch, fault-injection and rollback tests are the current evidence; the bounded real activation/rollback lane on published bytes and public installed qualification remain pending, and the authorized `1.0.0rc1` / `v1.0.0-rc.1` milestone is pre-stable - not stable `1.0.0`, not a package-index publication and not WSL2-qualified.
 
 ## `lifecycle.qualification-laboratory`
 

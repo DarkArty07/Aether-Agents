@@ -13,6 +13,8 @@ This page records current limits plainly. It does not turn a candidate interface
 | Service lifecycle | `start`, `stop`, `restart`, and `status` return explicit unsupported results. | Do not expect this build to activate or control a service. |
 | Reconciliation | `reconcile` returns explicit unsupported. | Do not use it to repair an external package-manager mismatch. |
 | Guided/declarative setup | Only a local wheel/check-out/release-lock candidate interface exists. | Do not treat it as a clean public installation wizard. |
+| Managed Hermes source | The executable source is the maintained fork under release-lock `schema_version` 4 source mode `maintained_fork`; the retired `transitional_fork` mode is refused and `.patch` files are never replayed. | Read the release lock for the exact repository, commit, source-tree digest and artifacts; never repair a runtime by applying a patch file. |
+| Release-candidate scope | The authorized `1.0.0rc1` / `v1.0.0-rc.1` milestone is pre-stable and unpublished here. It is not stable `1.0.0`, not a package-index publication and not WSL2-qualified. | Treat `release_channel = prerelease` as a bounded milestone only; issue #261 remains open with the stable, PyPI/OIDC and WSL2 gates outstanding. |
 | State export | `uninstall --export` returns `EXPORT_NOT_IMPLEMENTED`. | Preserve state; do not claim an export occurred. |
 | Portable profiles | Resources are versioned candidate bytes, not proof of live profile activation. | Avoid copying private profile state into project artifacts. |
 | Optional Graphify | Structural graphs are committed-revision snapshots; configured semantic maintenance is opt-in (`semantic.enabled` plus a bound auxiliary task), bounded to one 300-second update, and dirty files are not indexed. Its semantics are an additive `origin=llm` overlay, and a snapshot without the current integrity identity is reported as untrusted structural state rather than a trusted semantic result. | Check revision/coverage and read changed sources directly; read pending/partial/unavailable/legacy warnings as structural state, never as `extraction is disabled`; see [project knowledge](../guides/project-knowledge.md). |
@@ -31,6 +33,14 @@ aether knowledge doctor --json
 ```
 
 A missing active release may make `doctor` return an integrity error. That is an honest diagnostic in a clean environment. `observe` needs a resolvable initialized project/observation state; no trace is reported as an explicit empty state, while ambiguous inputs are errors rather than guesses.
+
+`aether update --local --aether-checkout PATH --aether-commit SHA --fork-checkout PATH
+--fork-commit SHA` without `--yes` is a safe, non-mutating preview of a local candidate; only
+an explicit `--yes` may stage and activate one, and that activation interrupts Aether-owned
+instances. A mismatch between the authoritative active-release record, `runtime/current`, the
+launcher, the Desktop entry and the Aether-owned service projection is reported as a
+fail-closed doctor diagnostic rather than repaired silently; `aether rollback` returns to the
+prior coherent release without rolling user state backward.
 
 ## Policy denials
 

@@ -4,8 +4,9 @@
 **Current conceptual baseline**: `DESIGN.md` through PD-76
 **Current product contracts**: `specs/001-aether-v1-productization/`, `specs/002-aether-contract-observation/`, and the stabilization plan `specs/004-operational-simplification-and-e2e-reliability/plan.md`
 **Current synthesis/entry**: `specs/r13-synthesis-and-release/`, reopened until the PD-74 reliability gate passes
-**Selected Hermes base**: `NousResearch/hermes-agent` `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, `hermes-agent` `0.20.4`, Python `>=3.11,<3.14`
-**Initial A1 release mode**: `transitional_fork` under PD-65
+**Selected Hermes base**: `NousResearch/hermes-agent` `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, `hermes-agent` `0.20.4`, Python `>=3.11,<3.14` — retained as the public reference baseline for upstream-compatible behavior and historical evidence, not as the executable release input
+**Executable Hermes source**: maintained fork `DarkArty07/aether-hermes` branch `aether-main`, bound by release-lock `schema_version` 4 source mode `maintained_fork` (repository, exact commit, source-tree digest, artifact closure and provenance); Hermes keeps its own distribution identity `hermes-agent`
+**A1 release mode**: `maintained_fork`; the retired `transitional_fork` mode (fixed public baseline plus replayed residual patches) is refused for new preparation
 
 **Current behavior and implementation status**: [`docs/`](docs/index.md) and its sole status/traceability registry, [`docs/capabilities.toml`](docs/capabilities.toml). This roadmap records future work, accepted phase history, and release-visible limitations; it is not a live capability-status tracker.
 
@@ -68,7 +69,16 @@ Historical EC1/private-profile build evidence remains in R13 research and Git hi
 Aether 1.0 is a public stable product, not a documentation tag. It has two release-locked components:
 
 1. `aether-agents` on PyPI, exposing `aether` and owning setup, project mapping, service lifecycle, diagnosis, update, rollback, uninstall, schemas, release lock, and sanitized product resources; and
-2. the original `hermes-agent` distribution from the exact public `upstream` or `transitional_fork` source/artifact selected by that lock.
+2. the original `hermes-agent` distribution built from the maintained-fork source selected by that lock (`maintained_fork`, release-lock `schema_version` 4) — or from the exact public upstream source when upstream is deliberately selected. Hermes keeps its own distribution/version identity, and the retired `transitional_fork` mode (fixed public baseline plus replayed residual patches) is refused for new preparation.
+
+### Release-candidate scope (2026-09-15)
+
+The authorized `1.0.0rc1` objective is a bounded pre-stable milestone, not the stable release:
+
+- package version `1.0.0rc1`; annotated tag and GitHub prerelease `v1.0.0-rc.1`; `release_impact = major`, `release_action = publish`, `release_channel = prerelease`;
+- explicitly **not** stable `1.0.0`, **not** a PyPI or other package-index publication, and **not** a WSL2 qualification result;
+- immutable release code and Graphify components live under the Aether XDG data root while every mutable Hermes home, session, board, credential, memory, observation, monitor and knowledge artifact stays under the Aether XDG state root, with `aether update` as the sole supported promotion/activation boundary (non-mutating local-candidate preview, explicit interrupting activation, transition recovery and state-preserving rollback that never rolls user state backward); and
+- issue `#261` remains open with the stable-1.0.0, PyPI/OIDC and WSL2 gates outstanding.
 
 The public path supports Linux native and WSL2 only for 1.0. It installs into Aether-owned XDG roots, keeps persistent user/profile/project state outside immutable releases, reuses Hermes profiles/Projects/boards/worktrees/review/lifecycle, and never replaces an unrelated personal Hermes installation.
 
@@ -78,7 +88,7 @@ Public artifacts exclude private profiles, credentials/authentication, sessions,
 
 The selected upstream tag is annotated: the tag object and commit are separate identities. A previously supplied `9f13bb131670169467d9b2453ae2e8848814ff6e` does not resolve and is not a release coordinate. The source archive observed during reconciliation had SHA-256 `1e3d39d3638ec15fa9d31af262568a953e9272090deb1c50c44cd401175f5b80`.
 
-A1 starts in `transitional_fork` mode because the selected upstream artifact does not yet qualify six indispensable existing guarantees:
+The former `transitional_fork` mode is retired. The six indispensable guarantees below were its historical reason, and they remain preserved as rationale:
 
 - sticky initial blocking;
 - agent-facing retry override;
@@ -87,7 +97,7 @@ A1 starts in `transitional_fork` mode because the selected upstream artifact doe
 - first-spawn branch propagation; and
 - asymmetric per-profile concurrency.
 
-R4 research §13 owns the exact source evidence, upstream issue/PR state, and retirement gates. No new product capability may require a downstream-only Hermes change. Each patch retires only when an exact released upstream artifact passes its behavior gate. If all six retire before the candidate lock is frozen, A1 switches to `upstream`; the fork is not published unnecessarily.
+Under PD-49/61/64/65 and the `1.0.0rc1` reconciliation, the accepted changes are carried as maintained-fork source on `aether-main` and bound by the release lock (`maintained_fork`, `schema_version` 4) through repository, exact commit, source-tree digest, artifact closure and provenance. `.patch` files and HLP records are audit/reconstruction evidence and are never replayed onto the active runtime. Retiring the fork is no longer a mandatory goal: upstream adoption happens only when deliberately selected, with the Aether changes reconciled and verified. No new product capability may require a downstream-only Hermes change, and R4 research §13 owns the exact source evidence, upstream issue/PR state, and the behavior gates for any individual accepted change.
 
 ## 5. A1 dependency phases
 
@@ -98,8 +108,8 @@ These are dependency phases and release-evidence gates, not a claim that code mu
 | 0 | Canonical reconciliation and baseline freeze | in progress; reopened by PD-71–PD-74 | DESIGN/R7/R8/R10/A1/R13/role resources agree on reversibility-first local work and the minimal edge boundary |
 | S | 004 operational simplification + E2E reliability | in progress; **feature freeze active** | `aether_agents.lab` is the formal Hermes-free qualification API; `scripts/e2e` remains wrappers, with schema-validated full/observation preparation, isolated `--parallel 2` roots, and serialized E2E-15. Minimal guard + aligned roles + disposable E2E canary; then >=19/20 representative live passes with latest 10 consecutive, zero guard-caused manual recovery and zero protected-edge violations |
 | 1 | Manager/package skeleton and public contracts | frozen behind phase S | Built wheel installs with `uv`; help/version/no-runtime doctor run outside source tree |
-| 2 | Transitional downstream reconciliation/artifacts | pending | Six-patch candidate passes exact gates; local wheel/sdist/source/provenance ready. **External gate** before public fork/tag/release |
-| 3 | Runtime lifecycle and recovery | pending | Fault-injected install/update/rollback/reconcile/uninstall preserves coherent active release and unrelated state |
+| 2 | Maintained-fork source reconciliation and artifacts | in progress under the `1.0.0rc1` objective | The `aether-main` candidate carries every accepted active behavior as source — never as replayed `.patch` files — and passes its own focused gates; local wheel/sdist/runtime-source/provenance ready. **External gate** before public fork/tag/release |
+| 3 | Runtime lifecycle and recovery | in progress under the `1.0.0rc1` objective | Validated maintained-fork release lock, `aether update` local-candidate route with a non-mutating preview and explicit interrupting activation, one authoritative active-release record with matching `runtime/current`, launcher, Desktop and Aether-owned service projections, transition recovery and state-preserving rollback; fault-injected disposable lanes plus one bounded real activation/rollback lane preserve the coherent active release and unrelated state |
 | 4 | Profiles, setup, policy, Aether-only service | pending | Clean setup reaches doctor-ready without credentials/model call; precise guard controls and unrelated-service refusal pass |
 | 5 | Project initialization and isolation | pending | Empty/brownfield init, native Project/board mapping, moved clone/collision, two-project and WSL path controls pass |
 | 6 | Contract observation | implementation candidate under validation; deterministic and external gates pending | The candidate must pass a clean-baseline spike for native callback/append/async-flush/reducer/ENOSPC budgets. Qualification must install one staged immutable `aether-agents` wheel in the isolated manager and versioned Hermes runtime, prove matching build/file fingerprints, and bind its filename/SHA-256 through external provenance plus the transition record without a circular self-digest. The official `hermes_agent.plugins` entry point must supply the observer without a second package or per-profile source copy. Deterministic fixtures must prove exact project resolution, bounded owner-message candidates, restart-safe identities, immutable journals, pure upcasters, per-reader projections, preserved unknown-newer bytes, private project HMAC key epochs, out-of-callback durability, verified closed-segment compaction, and a pipeline with zero observation declarations. At the separate owner-approved external gate, one Morfeo-oriented `aether observe` brief must reconcile the owner-message-to-terminal contract, causal steps, waves, rounds, deployed agents/units, critical path, dispatch-tick-sampled acceleration evidence, field-covered configuration/tool/model evidence, provenance-bearing attribution, the bound task/run/review/acceptance graph, duration, separated lifecycle state, flow, and coverage against native sources. Configured/effective tool surfaces must remain distinct, unavailable signals explicit, retention indefinite/indexed, and cross-trace comparison/query tools/dashboard deferred. These phase-gate conditions remain release-visible; they do not reopen the accepted `#195` closure evidence retained in §7 or imply Aether 1.0 or PD-74 completion. |
@@ -158,7 +168,7 @@ The following release-visible limitations remain open:
 - the PD-74 rolling live reliability gate;
 - `#256` — an open flow can stall in triage without waking its originating Morfeo flow;
 - `#220` — protected remote CI qualification for Contract Observation; and
-- `#242` — an immutable Hermes/Aether runtime set.
+- `#242` — an immutable Hermes/Aether runtime set: the `1.0.0rc1` lifecycle (validated release lock, versioned releases, `runtime/current`, state-preserving rollback) is the objective's answer for the Aether side; the item stays open until that published release candidate is activated and re-verified.
 
 The selected public Hermes tag's first-spawn branch behavior remains a transitional-patch retirement gate. An issue or upstream merge is not qualification by itself. Aether 1.0 is not complete, release-ready, or production-ready while these limitations remain open.
 
@@ -189,3 +199,5 @@ This roadmap and the reconciled contracts authorize no public or destructive eff
 - force-push, history rewrite, or discard of unknown local work.
 
 The current operational route is **004 stabilization**: finish canonical alignment, replace the overbroad guard, align portable role behavior, build the disposable E2E canary, then execute the real reliability matrix only after its existing credential/spend gate is explicitly opened. Feature expansion, Hermes upgrades, observation expansion, RC qualification, publication and stable release remain frozen/separate until PD-74 passes; deterministic candidate code does not authorize those external effects.
+
+An explicit owner instruction captured in a finalized Objective Contract can authorize a bounded objective beyond this roadmap's own boundary, including its scoped pushes, pull requests, required checks, green merges, annotated tag and GitHub prerelease — as `oc_3397f9f05d780f8e@v1` does for the `1.0.0rc1` release candidate. This roadmap still authorizes nothing by itself, and no such authorization extends to stable `v1.0.0`, PyPI publication, WSL2 qualification or another objective.

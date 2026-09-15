@@ -33,4 +33,10 @@ The two package-owned canonical skills teach use of `project_knowledge` and `wor
 
 Aether does not implement its own queue, retry engine, board store, worktree manager, generic plugin system, generic provider manager, or generic Hermes manual. A role having local tool capability does not grant authority to change product intent, acquire credentials, activate services, deploy, publish, or make a protected external effect.
 
-Aether's current source also is not evidence of a stable release, public installation, active service, live profile, configured provider, or qualified model-backed execution. Those distinctions are intentional and visible in [limitations and troubleshooting](reference/limitations-and-troubleshooting.md).
+Aether's current source also is not evidence of a stable release, public installation, active service, live profile, configured provider, or qualified model-backed execution. Those distinctions are intentional and visible in [limitations and troubleshooting](reference/limitations-and-troubleshooting.md). The authorized `1.0.0rc1` milestone is a pre-stable release candidate: it is not stable `1.0.0`, not a package-index publication and not a WSL2 qualification.
+
+## Executable Hermes source
+
+Aether distributes the original `hermes-agent` distribution built from its maintained fork, `DarkArty07/aether-hermes` branch `aether-main`. A release binds that source by repository, branch, exact commit, source-tree digest, artifact closure and provenance through the release lock's `schema_version` 4 `maintained_fork` source mode, and `aether update` is the supported way to install, promote, roll back or re-activate it. A fixed public upstream tag remains the deliberate alternative and the reference for upstream-compatible behavior; the retired `transitional_fork` mode, which replayed residual patch files onto a fixed public baseline, is refused for new preparation and `.patch` records are never applied to an active release.
+
+Aether therefore does not vendor Hermes into the `aether-agents` package, does not rename the Hermes distribution, and does not modify another Hermes installation. This boundary is a source-identity statement, not an authority claim: publishing a release still requires its own authorized closeout.
