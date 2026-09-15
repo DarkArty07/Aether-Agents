@@ -290,6 +290,11 @@ The reviewed commit was pushed on its own branch and the run list read back befo
 Re-read after a further 150 s: still `total_count = 19`, still 0 runs for the commit, newest run
 still `34979146475`. Scheduling lag is therefore excluded rather than assumed away.
 
+A second push on the same branch (`ae7e2a5c6…`, this addendum's own commit) replicated the result
+independently: `total_count` remained 19, and runs for that commit were 0. Two separate pushes
+carrying the fixed file therefore produced no `release.yml` run at all, which also shows the first
+reading was not a one-off timing artifact.
+
 The pair is discriminating because both sides are the **same event type on the same workflow**: a
 push to a non-default branch carrying the invalid file produced a zero-job run (two independent
 observations, `34976208051` at 13:37:36Z and `34976915020` at 13:44:01Z), while the same push
