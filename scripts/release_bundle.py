@@ -595,7 +595,10 @@ def _operator_path_matches(lifecycle: Any, payload: bytes) -> list[str]:
 def _path_shape(literal: str) -> str:
     """Report one operator-path match as a portable shape instead of the literal itself."""
 
-    return _HOME_SEGMENT.sub(lambda match: f"{match.group(1)}<name>", literal)
+    shaped = _HOME_SEGMENT.sub(lambda match: f"{match.group(1)}<name>", literal)
+    # The Windows pattern tolerates any non-separator segment, so drop the trailing
+    # separator to keep the reported shape free of a matchable operator-path literal.
+    return shaped.replace("<name>\\", "<name>")
 
 
 def scan_report_bytes(lifecycle: Any, files: Sequence[Path]) -> dict[str, Any]:
