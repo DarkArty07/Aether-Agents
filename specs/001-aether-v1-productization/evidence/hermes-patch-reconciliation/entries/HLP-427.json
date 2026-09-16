@@ -1,0 +1,90 @@
+{
+  "id": "HLP-427",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-427--routed-recovery-must-preserve-the-last-explicit-review-phase-maintained-fork-2026-09-16",
+  "components": [
+    "HLP-427",
+    "hermes_cli/kanban_db.py",
+    "tests/hermes_cli/test_kanban_review_lifecycle_complete.py"
+  ],
+  "required_behavior": "A phase-less routed recovery event must not mask the last explicit same-card review retry phase during unblock; a genuine ready retry must remain ready, and the next independent reviewer claim must carry source_status=review.",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/461"
+      },
+      {
+        "kind": "pull_request",
+        "url": "https://github.com/DarkArty07/aether-hermes/pull/15"
+      }
+    ],
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+        "result": "The common inspected baseline resolves the latest blocked/retry lifecycle event but has no Aether origin_signal routing interaction in that resolver."
+      },
+      {
+        "kind": "source",
+        "reference": "latest released artifact v2026.9.14 (tag object 7a963716b81be13ba513d4f127633b7da493aff2, commit 345cd2b057a452236de401d3534b8502a7465e8d) and refreshed upstream main 287c56e95afe5c528beacb7ca8f7ef0ad6216f2a",
+        "result": "Both omit origin_signal from _resume_status_from_events, so neither supplies an equivalent fix for the Aether-specific phase-less routed-recovery event."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Retire only when an adopted exact Hermes release restores review after a phase-less routed recovery event, preserves a genuine ready retry, claims the recovered review with source_status=review, and passes the neighboring review/session-affinity surface without this patch.",
+    "status": "not_executed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "maintained-fork PR #15 candidate dd6755f033",
+        "result": "The regression failed RED as ready instead of review; routed review/ready controls passed 2/2 after the fix."
+      },
+      {
+        "kind": "test",
+        "reference": "maintained-fork PR #15 review surface",
+        "result": "Review/session-affinity modules passed 114/114, neighboring block/reclaim/review modules passed 64/64, and tests/hermes_cli/test_kanban*.py passed 421 with one Windows-only skip."
+      },
+      {
+        "kind": "test",
+        "reference": "source-first runtime bootstrap canary",
+        "result": "Focused runtime tests passed 75/75; a copied-board recovery restored a valid review claim, and the original blocked REGATE card then received a real independent review verdict before releasing BUNDLE."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "unavailable",
+    "artifacts": [
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-427-routed-recovery-review-phase.patch",
+        "result": "passed",
+        "ledger_sha256": "508dbdf45328084e0ccfdd586f28d3d025f1d92364dd64d90c7192e8c8679367",
+        "computed_sha256": "508dbdf45328084e0ccfdd586f28d3d025f1d92364dd64d90c7192e8c8679367",
+        "checksum_status": "passed",
+        "parse_status": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "maintained fork base 7a4fdcd083409c31c09cfa3bfa345354e8576a7e",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "git apply --check and apply on exact base 7a4fdcd083409c31c09cfa3bfa345354e8576a7e; the two changed paths reconstruct tree 2258311f9aa52c58fda9bdbd03183ba50ac85df0, equal to reviewed candidate dd6755f03312cbcc18522a6dc7da181884bbd90b and aether-main merge aed6591a69f453a1867b73628603e7b53ba40ffc",
+        "result": "passed"
+      }
+    ],
+    "blocker": "The patch reconstructs exactly in the maintained fork and has a verified temporary runtime bootstrap, but no public upstream equivalent or immutable Aether rc.2 artifact carrying it exists yet."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "The temporary runtime bootstrap proves the behavior in the pre-RC runtime but is not a substitute for immutable rc.2 publication and activation.",
+    "The fix intentionally skips only phase-less origin_signal records; every other legacy event without phase metadata keeps the historical ready fallback."
+  ],
+  "summary": "Retain HLP-427. The maintained fork preserves the latest explicit review/ready retry phase across a phase-less Aether recovery signal, with exact source, runtime bootstrap and live same-card review evidence; no equivalent public upstream interaction exists."
+}
