@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
 import AxeBuilder from '@axe-core/playwright';
 
 test('Spanish page, artwork, sections and no horizontal overflow',async ({page},testInfo)=>{
@@ -80,6 +81,16 @@ test('language switch preserves section; mobile menu works',async({page},testInf
   await expect(page.locator('#origen h2')).toHaveText('From aether to software.');
 });
 
+// The documentation index renders every tracked canonical document (see src/lib/docs.ts),
+// so this oracle derives its expectation from that corpus through Git -- the same
+// derivation as tests/content.test.mjs -- instead of a fixed count that silently drifts
+// when a document enters or leaves docs/.
+const repository = execFileSync('git',['rev-parse','--show-toplevel'],{encoding:'utf8'}).trim();
+const canonicalDocSlugs = execFileSync('git',['ls-files','--','docs'],{cwd:repository,encoding:'utf8'})
+  .trim().split('\n').filter(file=>file.endsWith('.md'))
+  .map(file=>file.replace(/^docs\//,'').replace(/\.md$/,''))
+  .sort();
+
 test('documentation search, navigation and safe rendering',async({page})=>{
   const errors:string[]=[]; page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/docs/');
@@ -88,7 +99,7 @@ test('documentation search, navigation and safe rendering',async({page})=>{
   await page.locator('#docs-search').fill('zzznomatchzzz');
   await expect(page.locator('#no-results')).toBeVisible();
   await page.locator('#docs-search').fill('');
-  await expect(page.locator('.docs-index-list article:visible')).toHaveCount(16);
+  await expect(page.locator('.docs-index-list article:visible')).toHaveCount(canonicalDocSlugs.length);
   await page.locator('.docs-index-list [href="/docs/guides/project-knowledge/"]').click();
   await expect(page.locator('.prose h1')).toContainText('Project knowledge');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBeTruthy();
