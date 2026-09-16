@@ -35,7 +35,7 @@ UPSTREAM_REPOSITORY = "https://github.com/NousResearch/hermes-agent"
 UPSTREAM_REVISION = "a" * 40
 INSPECTED_UPSTREAM_REVISION = "4f22543509d1b91dc45bcb369447126c5eb14fb7"
 #: The maintained-fork revision every generated aggregate must be current at.
-SELECTED_REVISION = "54eeb56dabefc98821d696656ed58c55dd777346"
+SELECTED_REVISION = "aed6591a69f453a1867b73628603e7b53ba40ffc"
 OBSERVED_AT = "2026-08-30T20:00:00Z"
 EXPECTED_ACTIVE_IDS = (
     "HLP-188",
@@ -68,6 +68,7 @@ EXPECTED_ACTIVE_IDS = (
     "HLP-420",
     "HLP-425",
     "HLP-426",
+    "HLP-427",
 )
 HLP226_PATCH_REFERENCES = (
     "patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch",
@@ -95,6 +96,7 @@ PATCH_DIGESTS = {
     "HLP-420": ("e0caa198c9c61e1235cedbc021c6e1a4d35b114c9c155df3fe1515040c420fa6",),
     "HLP-425": ("2b302ca52209e41d5354b8c9ce06deade0742d105534fdf2113eadce1ba322fa",),
     "HLP-426": ("97dc0294b9909e9648bce9d6dbdde4ce7dd379d6cf2114b8c1713b8ee07b2e81",),
+    "HLP-427": ("508dbdf45328084e0ccfdd586f28d3d025f1d92364dd64d90c7192e8c8679367",),
 }
 
 

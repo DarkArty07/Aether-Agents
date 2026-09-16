@@ -21,7 +21,7 @@ executed the rejected `oc_3397f9f05d780f8e@v1` lane and remains its historical r
 | --- | --- |
 | Portable project | Repository `DarkArty07/Aether-Agents`; contract `project_id` matches the provisioned project binding; contract bytes hash to the envelope digest, `status: final`, `version: 1`, `change_reason: null` |
 | Base | Worktree HEAD equals the declared base commit; `origin/main` is `5758b89dfb19a71719faa8d1821849f8d66acacb` and the local `main` carries the contract-landing commit on top of it |
-| Maintained fork | `https://github.com/DarkArty07/aether-hermes` `aether-main` tip is the accepted pin `7a4fdcd083409c31c09cfa3bfa345354e8576a7e` (fork PR #14 merge, `MERGED`); a clean checkout of that revision exists locally and the commit is present in the fork repository |
+| Maintained fork | `https://github.com/DarkArty07/aether-hermes` `aether-main` tip is the revised accepted pin `aed6591a69f453a1867b73628603e7b53ba40ffc` (fork PR #15 merge, `MERGED`), superseding `7a4fdcd…` after the source-first #461 blocker repair; a clean checkout of that revision exists locally and the commit is present in the fork repository |
 | Reused outcomes | The `v1` implementation outcomes the contract reuses are all merged: `#239`/PR #449, `#445`/PR #448, `#446`/PR #452, `#450`/fork PR #14 + PR #455; annotated tag `v1.0.0-rc.1` (object `cda1ecca…` → commit `748aa24…`) and its eight-asset prerelease exist, published-but-rejected |
 | Design sufficiency | Owner intent, decisions, in-scope 1–9, out-of-scope, authority, D1–D10, AC-01–AC-10, testing standard and stop conditions settle outcome, interfaces, oracles and authority for the remaining work. No missing material product decision was found; one authority reading is recorded below and raised with the design steward |
 | Measured base defect | `tests/test_public_artifacts.py::test_canonical_base_manifest_matches_tracked_non_specs_files` is red at the base for exactly one reason: the contract-landing file `.aether/objective-contracts/oc_742f9f4797494bf9/v1.md` is tracked but not declared in the `.github/workflows/policy.yml` literal manifest (measured: 407 declared vs 408 tracked non-`specs/` paths, one missing name) |
@@ -111,7 +111,8 @@ terminal cards consume reviewed units and never replace unit review.
    backups. Implementer units make no remote or live effect.
 4. Maintained-fork identity: executable Hermes source is `DarkArty07/aether-hermes`
    branch `aether-main`; this objective's accepted revision is
-   `7a4fdcd083409c31c09cfa3bfa345354e8576a7e`. Hermes keeps its own distribution
+   `aed6591a69f453a1867b73628603e7b53ba40ffc`. This supersedes `7a4fdcd…`
+   after the reviewed #461 recovery fix; Hermes keeps its own distribution
    identity (`hermes-agent`). `.patch` files and HLP records are audit/reconstruction
    evidence and are never replayed onto the active runtime.
 5. Deployment boundary: no unit may change `docs/**`, `website/**` or
