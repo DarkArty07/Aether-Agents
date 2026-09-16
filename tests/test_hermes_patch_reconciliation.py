@@ -35,7 +35,7 @@ UPSTREAM_REPOSITORY = "https://github.com/NousResearch/hermes-agent"
 UPSTREAM_REVISION = "a" * 40
 INSPECTED_UPSTREAM_REVISION = "4f22543509d1b91dc45bcb369447126c5eb14fb7"
 #: The maintained-fork revision every generated aggregate must be current at.
-SELECTED_REVISION = "54eeb56dabefc98821d696656ed58c55dd777346"
+SELECTED_REVISION = "aed6591a69f453a1867b73628603e7b53ba40ffc"
 OBSERVED_AT = "2026-08-30T20:00:00Z"
 EXPECTED_ACTIVE_IDS = (
     "HLP-188",
