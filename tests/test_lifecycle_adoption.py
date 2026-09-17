@@ -248,3 +248,49 @@ def test_profile_bundle_sha256_matches_materialized_manifest(tmp_path: Path) -> 
     stage = tmp_path / "stage"
     stage.mkdir()
     assert manager.profile_bundle_sha256() == manager._materialize_profile_bundle(stage)
+
+
+def test_service_projection_accepts_hermes_refreshed_unit(tmp_path: Path) -> None:
+    """Hermes may refresh description/PATH while keeping the Aether runtime selector."""
+
+    from aether_agents.lifecycle import ProjectionSpec
+
+    store = ReleaseStore(tmp_path / "data" / "aether", state_root=tmp_path / "state" / "aether")
+    record = store.register(_prepared_release(tmp_path / "r1", "1.0.0", b"wheel-one"))
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    release = store.release_path(record.release_id)
+    release.mkdir(parents=True, exist_ok=True)
+    runtime_current = tmp_path / "runtime" / "current"
+    runtime_current.parent.mkdir(parents=True, exist_ok=True)
+    runtime_current.symlink_to(release)
+    profile_home = store.profile_home("morfeo")
+    profile_home.mkdir(parents=True, exist_ok=True)
+    expected = (
+        f"ExecStart={runtime_current}/venv/bin/python -m hermes_cli.main --profile morfeo gateway run\n"
+        f"WorkingDirectory={profile_home}\n"
+        f'Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
+        f'Environment="HERMES_HOME={profile_home}"\n'
+    ).encode()
+    hermes_refreshed = (
+        "[Unit]\n"
+        "Description=Hermes Agent Gateway - Messaging Platform Integration\n"
+        "[Service]\n"
+        f"ExecStart={runtime_current}/venv/bin/python -m hermes_cli.main --profile morfeo gateway run\n"
+        f"WorkingDirectory={profile_home}\n"
+        f'Environment="PATH={runtime_current}/venv/bin:/usr/bin"\n'
+        f'Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
+        f'Environment="HERMES_HOME={profile_home}"\n'
+        f"ExecStopPost=-{runtime_current}/venv/bin/python -m gateway.cgroup_cleanup\n"
+    ).encode()
+    spec = ProjectionSpec(
+        release=release,
+        runtime_current=runtime_current,
+        launcher_path=tmp_path / "launcher",
+        desktop_path=tmp_path / "desktop",
+        service_path=tmp_path / "unit.service",
+        launcher_bytes=b"launcher",
+        desktop_bytes=b"desktop",
+        service_bytes=expected,
+    )
+    assert manager._service_unit_selects_release(hermes_refreshed, spec) is True
+    assert manager._service_unit_selects_release(b"ExecStart=/elsewhere/python\n", spec) is False

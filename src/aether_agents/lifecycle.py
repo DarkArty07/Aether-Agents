@@ -6182,6 +6182,33 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             return self.disabled_service_reason or "unavailable"
         return self.service_controller.restart(spec.service_path.name)
 
+    @staticmethod
+    def _service_unit_selects_release(observed: bytes, spec: ProjectionSpec) -> bool:
+        """Return True when a Hermes-refreshed unit still selects this release."""
+
+        try:
+            text = observed.decode("utf-8")
+            expected_text = spec.service_bytes.decode("utf-8")
+        except UnicodeError:
+            return False
+        runtime = str(spec.runtime_current)
+        working = None
+        hermes_home = None
+        for line in expected_text.splitlines():
+            if line.startswith("WorkingDirectory="):
+                working = line.split("=", 1)[1]
+            if line.startswith('Environment="HERMES_HOME='):
+                hermes_home = line.removeprefix('Environment="HERMES_HOME=').rstrip('"')
+        if not working or not hermes_home:
+            return False
+        required = (
+            f"ExecStart={runtime}/venv/bin/python",
+            f"WorkingDirectory={working}",
+            f'Environment="VIRTUAL_ENV={runtime}/venv"',
+            f'Environment="HERMES_HOME={hermes_home}"',
+        )
+        return all(item in text for item in required)
+
     def projection_status(self, record: ReleaseRecord) -> dict[str, Any]:
         """Report the exact selector/projection coherence for one release record."""
 
@@ -6206,8 +6233,15 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
                 if path.is_symlink() or not path.is_file():
                     status["mismatches"].append(f"{label}_projection_missing")
                     continue
-                if path.read_bytes() != expected:
-                    status["mismatches"].append(f"{label}_projection_mismatch")
+                observed = path.read_bytes()
+                if observed == expected:
+                    continue
+                if label == "service" and self._service_unit_selects_release(observed, spec):
+                    # Hermes refreshes the unit on gateway start and may rewrite
+                    # description/PATH/ExecStopPost while preserving the Aether
+                    # runtime selector.  That remains a coherent projection.
+                    continue
+                status["mismatches"].append(f"{label}_projection_mismatch")
             except OSError:
                 status["mismatches"].append(f"{label}_projection_unreadable")
         status["projection_digests"] = spec.digests()
