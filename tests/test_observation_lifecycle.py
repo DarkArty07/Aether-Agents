@@ -992,7 +992,11 @@ def test_first_install_adopts_same_name_unmarked_skill_with_backup(
     learned_bytes = b"same-name learned profile skill\n"
     learned_skill.write_bytes(learned_bytes)
     package_bytes = (
-        Path(lifecycle.__file__).parent / "resources" / "skills" / "git-github-closeout" / "SKILL.md"
+        Path(lifecycle.__file__).parent
+        / "resources"
+        / "skills"
+        / "git-github-closeout"
+        / "SKILL.md"
     ).read_bytes()
 
     selected = manager.activate_existing(
