@@ -1,11 +1,21 @@
 # Execution breakdown: Aether 1.0.0-rc.2 prerelease, activation and rollback successor
 
 **Status:** Supervisor-owned execution breakdown for Objective Contract
-`oc_742f9f4797494bf9@v1`. It does not widen the contract, redefine material design, or
+`oc_742f9f4797494bf9@v3`. It does not widen the contract, redefine material design, or
 record acceptance. Unit and card identities, board values and live-state values are held
-on the owning execution board and are not published here.
+on the owning execution board and are not published here. The receipt, cross-artifact
+table, unit map and graph below remain the historical `@v1`-shaped breakdown (receipt
+evidence). Current remaining work is owned by the **Current @v3 execution (addendum)**
+section.
 
-**Source contract:** `.aether/objective-contracts/oc_742f9f4797494bf9/v1.md`
+**Source contract:** `.aether/objective-contracts/oc_742f9f4797494bf9/v3.md`
+(SHA-256 `2d7b4ff21cca41db14cc09623728a858d851542e54c687a2ff03d55d79009cbc`) on Aether tip
+`e1af59c0d0f2684cc149fd362d6933dadb964c2c`, superseding the historical `@v1` breakdown
+base documented below as receipt evidence. The `@v1` receipt rows and unit map remain
+historical; current authority and remaining sequence are `@v3`.
+
+**Historical @v1 landing note (superseded):** the original breakdown targeted
+`.aether/objective-contracts/oc_742f9f4797494bf9/v1.md`
 (SHA-256 `f084eca7e703201c620408069df8f06b89cade82514ceb934c792f71bdda04fc`) on base
 `acb89ca85c02c41dca10009b2806428850a0f0bc` (the contract-landing commit on top of the
 contract's clean pre-contract base `5758b89dfb19a71719faa8d1821849f8d66acacb`).
@@ -14,6 +24,13 @@ contract's clean pre-contract base `5758b89dfb19a71719faa8d1821849f8d66acacb`).
 
 **Supersedes:** the breakdown in `specs/001-aether-v1-productization/tasks.md`, which
 executed the rejected `oc_3397f9f05d780f8e@v1` lane and remains its historical record.
+
+## Historical @v1 receipt and unit map (superseded as current plan)
+
+The sections through **Verification of this historical `@v1` decomposition** preserve the
+`@v1` breakdown shape used when the objective landed. They are receipt and
+traceability evidence. They are **not** the current `@v3` remaining-work plan; see the
+addendum.
 
 ## Receipt
 
@@ -33,19 +50,23 @@ executed the rejected `oc_3397f9f05d780f8e@v1` lane and remains its historical r
 
 | Concern | Settled conclusion | Execution consequence |
 | --- | --- | --- |
-| What is actually left | The contract's in-scope 1–3 and D1–D4 are already merged into the clean base and are reused, not redone. The live work is in-scope 4–9: rc.2 identity, deterministic bundle, publication, local activation with rollback/forward proof, issue truth and residue | Units below cover the remaining scope only; reuse is verified from primary sources rather than re-executed |
+| What is actually left (historical `@v1` reading) | Under the superseded `@v1` contract, in-scope 1–3 and D1–D4 were already merged into the clean base and reused; the then-live work was in-scope 4–9: rc.2 identity, deterministic bundle, publication, local activation with rollback/forward proof, issue truth and residue | Historical units below cover that `@v1` remaining scope only. Current remaining work follows `@v3` in-scope 1–10 in the addendum |
 | Publication ownership | Implementer units never push, open a PR, merge, tag, publish, activate or mutate issues. Publication steps belong to Supervisor after independent review | Two Supervisor integration cards own push/PR/checks/merge and tag/prerelease/verification |
 | Release source identity | The published bundle is built by the repository's own release workflow at the tag commit, and the tag commit must equal `origin/main`. The rc.2 source, `VERSION` and the `FORK_COMMIT` pin must therefore land on `main` before the tag is pushed | Identity lands first, gates run at the merged tip, publication follows the gates |
 | Rc.1 immutability | Rc.1's tag, commit, eight asset bytes and rejection warning are read-only evidence; no asset replacement, `--clobber`, tag move or `--force` is permitted at any point | Verification is read-only; the rc.1 defect is remedied only by the successor artifact |
 | Promotion order | Source → independent review → green merge to `main` → tagged release → local runtime activation → canary. No runtime-only edit, live-tree patch or pre-release activation may substitute for a source change, and the graph below enforces the order through its parent edges | Each stage consumes only its predecessor's accepted output; the published bytes are the only activation input |
 | `aether update` local route | The candidate's own CLI provides the pinned local-candidate route (`--local`, `--aether-checkout`, `--aether-commit`, `--fork-checkout`, `--fork-commit`, `--dry-run`, `--yes`, `--json`); it requires a clean Aether checkout whose HEAD is the exact commit carrying **exactly one** annotated release tag equal to `v` + the display version, a clean fork checkout at the exact commit reachable from `aether-main`, compatible Python, and current HLP coverage. Identity never comes from cwd, recency or a mutable branch tip | Activation can only run after the tag exists, from a clean checkout of the tagged commit and a clean checkout of the accepted fork commit; the preview is non-mutating and must be recorded before activation |
 | Activation interruption | Activation rewrites the Aether-owned service/launcher/Desktop projections and restarts the Aether-owned gateway, which owns the dispatcher and every running worker, including this objective's controller session. The unrelated gateway service is never touched | The activation lane is the terminal card's work, sequenced so all evidence is durable first, with an explicit resume checkpoint |
-| Deployment boundary | The repository's own Pages workflow triggers on pushes to `main` touching `docs/**`, `website/**` or the Pages workflow itself, and it deploys to the existing public site. The contract authorizes exactly one automatic existing-site deployment (the one caused by the reviewed #446 merge) and forbids manual dispatch, another target or any deployment beyond it. All programmatically required rc.2 changes live in root files (`.aether/**`, `VERSION`, `CHANGELOG.md`, `README.md`, `AGENTS.md`, `.github/workflows/{release,policy}.yml`, `tests/**`), which do **not** trigger that workflow | **No unit may modify `docs/**`, `website/**` or `.github/workflows/pages.yml`.** The public-capability registry's "activation lane pending" clause is falsified once rc.2 is activated; that coherence gap is recorded as an explicit residual and raised with the design steward instead of being fixed by an unauthorized deployment |
+| Deployment boundary | The repository's own Pages workflow triggers on pushes to `main` touching `docs/**`, `website/**` or the Pages workflow itself, and it deploys to the existing public site. Under `@v3`, automatic deployments to that existing site caused by reviewed green merges required by this objective remain authorized; manual Pages dispatch, another target or unrelated deployment is not. All programmatically required rc.2 changes live in root files (`.aether/**`, `VERSION`, `CHANGELOG.md`, `README.md`, `AGENTS.md`, `.github/workflows/{release,policy}.yml`, `tests/**`), which do **not** trigger that workflow | **No unit may modify `docs/**`, `website/**` or `.github/workflows/pages.yml`.** The public-capability registry's "activation lane pending" clause is falsified once rc.2 is activated; that coherence gap is recorded as an explicit residual and raised with the design steward instead of being fixed by an unauthorized deployment |
 | Patch/ledger corpus | `.patch` files and HLP records are audit/reconstruction evidence and are never replayed onto the active runtime; the reconciliation corpus must nevertheless validate in check mode against the accepted fork revision, because the candidate's own local route consumes it | The bundle/release-input unit runs the validator in check mode with the fork checkout at the accepted revision |
 | Publication mechanics | `gh release edit` accepts no file arguments, so a reconcile re-run verifies the published assets and attaches nothing; the create path attaches exactly the tool's qualified member set. Release notes carry the release's own truth statement | Publication verification is download-and-rehash against `SHA256SUMS` plus lock identity, exactly as the workflow's own verifier does |
 | Test standard | `CONTRIBUTING.md` bootstrap plus the contract's testing standard; no gate weakening, no new skip, no fabricated platform evidence. WSL2/macOS/Windows remain explicitly unverified | Gate evidence is taken at the merged revision; a local run under concurrent load is not reported as a gate number |
 
-## Unit map
+## Unit map (historical `@v1` shape)
+
+These units and edges describe the superseded `@v1` decomposition. They are not a claim
+that `@v3` in-scope items 2–5 or 10 are covered by this map. Live `@v3` remaining work
+is sequenced in the addendum.
 
 | Source | Unit | Outcome |
 | --- | --- | --- |
@@ -57,7 +78,7 @@ executed the rejected `oc_3397f9f05d780f8e@v1` lane and remains its historical r
 | In-scope 6 (qualification acceptance), 7 (release); D6 (final bytes), D7; AC-06 (final), AC-07 | **RC2-PUBLISH** (Supervisor, same flow, non-terminal) | Annotated tag `v1.0.0-rc.2` on accepted main, pushed; the repository's own release workflow builds and attaches the qualified member set; prerelease properties, tag target, release notes truth and every downloaded asset verified against the qualified bundle and the lock identity |
 | In-scope 4, 8, 9; D5, D7 (retention), D8, D9, D10; AC-05 (retention), AC-08, AC-09, AC-10 | **RC2-ACTIVATE-CLOSEOUT** (Supervisor, same flow, `terminal=true`) | Local preview and refusals, activation of the published bytes, post-restart runtime/state/projection battery, rollback rehearsal, forward reactivation, rc.1 non-mutation witness, issue truth for #261/#239/#440/#445/#446/#439/#450, objective-owned residue cleanup with preserved items reported, and the terminal report with its three release conclusions stated separately from their evidence |
 
-## Execution graph
+## Execution graph (historical `@v1` shape)
 
 ```text
 decomposition root (Supervisor)
@@ -95,8 +116,8 @@ terminal cards consume reviewed units and never replace unit review.
 
 ## Shared decisions stamped into every unit card
 
-1. Authority is Objective Contract `oc_742f9f4797494bf9@v1` (SHA-256
-   `f084eca7e703201c620408069df8f06b89cade82514ceb934c792f71bdda04fc`) plus this
+1. Authority is Objective Contract `oc_742f9f4797494bf9@v3` (SHA-256
+   `2d7b4ff21cca41db14cc09623728a858d851542e54c687a2ff03d55d79009cbc`) plus this
    breakdown. Skills are reusable procedure only. Never create, edit, stage or copy the
    canonical contract.
 2. Release identity: package version `1.0.0rc2`; annotated tag and GitHub prerelease
@@ -117,8 +138,10 @@ terminal cards consume reviewed units and never replace unit review.
    evidence and are never replayed onto the active runtime.
 5. Deployment boundary: no unit may change `docs/**`, `website/**` or
    `.github/workflows/pages.yml`, because a push to `main` touching them deploys the
-   existing public site and only the #446-caused automatic deployment is authorized.
-   Any status statement living in those paths is reported as a residual instead.
+   existing public site. Automatic deployments caused by reviewed green merges required
+   by this objective remain authorized; manual Pages dispatch, another target or
+   unrelated deployment is not. Any status statement living in those paths is reported
+   as a residual instead.
 6. Environment identity: the installed runtime is still the pre-RC live-tree-patched
    release; the candidate CLI is the one in the source tree. Activation is the only step
    that may change the active release, and it must run from the candidate's own CLI with
@@ -149,18 +172,94 @@ evidence) recorded a post-canary docs-coherence lane and described it as
 owner-authorized. That description was **withdrawn by the design steward**: neither the
 Objective Contract nor the current owner instruction authorizes it, no such work was
 performed, and the two board cards created for it were reconciled as not applicable. The
-deployment boundary recorded in the receipt table therefore stands unchanged for this
-objective — no `docs/**`, `website/**` or Pages-configuration change and no deployment.
-The capability-registry staleness that rc.2 activation produces is reported as the
-contract-defined out-of-scope residual rather than fixed within this objective.
+deployment boundary recorded in the receipt table therefore stands unchanged for unit
+scope: no unit may change `docs/**`, `website/**` or `.github/workflows/pages.yml`.
+Under `@v3`, automatic deployments to the existing Aether GitHub Pages site caused by
+reviewed green merges required by this objective remain authorized; manual Pages
+dispatch, another target or unrelated deployment is not. The capability-registry
+staleness that rc.2 activation produces is reported as the contract-defined out-of-scope
+residual rather than fixed by an unauthorized docs-coherence lane within this objective.
 
-## Verification of this decomposition
+## Verification of this historical `@v1` decomposition
 
-Traceability: every contract in-scope item 4–9, deliverable D5–D10 and acceptance
-criterion AC-01–AC-10 maps to exactly one unit above; in-scope 1–3 and D1–D4 are the
-reused, already-merged v1 outcomes that `RC2-VERIFY-PRE` re-derives from primary sources.
-Independence: the two root-gated units write disjoint files; the gate and bundle units
-run at a common revision with a declared resource serialization; publication and
-activation are serialized by authority and by the interruption they cause. No unit is
-created merely to fill capacity, and no acceptance criterion is waived to make the graph
-look parallel.
+Traceability (historical `@v1` contract numbering): every then-current in-scope item
+4–9, deliverable D5–D10 and acceptance criterion AC-01–AC-10 mapped to exactly one unit
+above; in-scope 1–3 and D1–D4 were the reused, already-merged v1 outcomes that
+`RC2-VERIFY-PRE` re-derives from primary sources. That map does **not** cover `@v3`
+in-scope items 2–5 (board materialization, immutable local recovery, `#450`/`#461`
+canaries, fresh REGATE review) or item 10 (issue + authorized Pages closeout) as current
+remaining work. Independence: the two root-gated units write disjoint files; the gate
+and bundle units run at a common revision with a declared resource serialization;
+publication and activation are serialized by authority and by the interruption they
+cause. No unit is created merely to fill capacity, and no acceptance criterion is waived
+to make the graph look parallel.
+
+## Current @v3 execution (addendum)
+
+**Authority.** Objective Contract `oc_742f9f4797494bf9@v3` (SHA-256
+`2d7b4ff21cca41db14cc09623728a858d851542e54c687a2ff03d55d79009cbc`). This addendum does
+not invent acceptance, widen scope, edit contract bytes, or replace board-owned unit or
+card identities.
+
+**Relationship to the historical map.** The `@v1`-shaped receipt, unit map and graph
+above remain evidence of the landing decomposition. Current remaining work follows `@v3`
+in-scope 1–10. Board cards and live state stay on the canonical `@v3` board; this
+section only states the truthful remaining sequence.
+
+### Already performed (evidence only; not acceptance)
+
+| `@v3` item | Status | Evidence / identity |
+| --- | --- | --- |
+| 1 (preserve reusable evidence) | Ongoing rule, not a completion claim | Reuse only when revision impact supports it; heavy suites are not repeated for ceremony |
+| 2 (materialize `@v3` + own board) / pin reconciliation half of 6 | Materialization and fork-pin reconciliation recorded in-worktree | `RC2-V3-MATERIALIZE`: `v2.md`/`v3.md` materialized; `FORK_COMMIT` → `aed6591a69f453a1867b73628603e7b53ba40ffc`; `AGENTS.md`/`CHANGELOG.md`/`policy.yml` reconciled. Not publication, not activation, not REGATE acceptance |
+| Historical `@v1` identity/verification lanes | Historical records exist | `RC2-VERIFY-PRE`, `RC2-IDENTITY` and related evidence remain historical under the `@v1` numbering |
+
+### Remaining sequence (current)
+
+Execute in order. Stop conditions and recovery policy remain those of `@v3`. This list
+is not an acceptance verdict for any step.
+
+1. **Immutable local recovery** (`@v3` in-scope 3; D2; AC-02): from clean Aether
+   `e1af59c0d0f2684cc149fd362d6933dadb964c2c` and fork
+   `aed6591a69f453a1867b73628603e7b53ba40ffc`, preview then activate one versioned
+   immutable local recovery candidate through supported `aether update --local`,
+   replacing the temporary patched runtime without `.patch` replay or mutable-state
+   rollback. Record the measured local-candidate prerequisites (including any required
+   annotated-tag surface) rather than bypassing them.
+2. **`#450` / `#461` canaries** (`@v3` in-scope 4; D3; AC-03): on that promoted runtime,
+   verify installed source/lock identity, clean `aether doctor` and Aether-owned service
+   health; run the positive and negative `#450`/`#461` canaries, including a real
+   same-card review lifecycle claimed from `source_status=review` and a successor
+   boundary with no terminal predecessor alive.
+3. **Fresh REGATE review** (`@v3` in-scope 5; D3; AC-04): reuse the unchanged REGATE
+   candidate/evidence only as content; obtain a fresh independent content review after
+   steps 1–2. REGATE run 173 remains non-accepting history. Rerun the website gate only
+   if revision or change-impact inspection shows a material reason.
+4. **Final release tip gates** (`@v3` in-scope 6; D4; testing standard): reconcile any
+   remaining release-facing source to fork `aed6591…`, land by normal reviewed green PR,
+   and run the canonical Aether, website, HLP and release-input gates at the exact merged
+   release tip.
+5. **Bundle qualification** (`@v3` in-scope 7; D6; AC-08): build and qualify two clean
+   deterministic eight-member bundles, including schema-4 lock identity,
+   privacy/member/normal-resolver checks and both fork defect matrices. Pre-integration
+   scratch builds are not this qualification.
+6. **Publish** (`@v3` in-scope 8; D7; AC-09): publish and download-verify annotated
+   GitHub prerelease `v1.0.0-rc.2` without mutating rc.1.
+7. **Activate published bytes** (`@v3` in-scope 9; D8; AC-10 half): activate the
+   published rc.2 bytes, prove state/projection and product surfaces, replacing the local
+   recovery candidate.
+8. **Rollback and forward reactivation** (`@v3` in-scope 9; D9; AC-10 half): prove
+   rollback and forward reactivation without mutable-state rollback.
+9. **Issue + authorized Pages closeout** (`@v3` in-scope 10; D10; AC-06/AC-10): after
+   observed activation, update only capability claims disproven by evidence, land by
+   normal reviewed green merge, verify the authorized automatic existing-site Pages
+   deployment/live content when that merge touches paths that trigger it, reconcile
+   Issues `#261`/`#239`/`#439`/`#440`/`#445`/`#446`/`#450`/`#461` truthfully, keep
+   `#460` open absent its own fix, and audit objective-owned residue. Manual Pages
+   dispatch, another target or unrelated deployment remains unauthorized. No unit may
+   modify `docs/**`, `website/**` or `.github/workflows/pages.yml` merely to force
+   coherence.
+
+Shared decisions 1–11 above continue to apply. The historical `@v1` unit names may be
+reused or remapped on the `@v3` board only by Supervisor; this addendum does not invent
+new published unit IDs or claim any remaining step is done.
