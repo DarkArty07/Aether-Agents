@@ -25,6 +25,7 @@ import sys
 import tarfile
 import tempfile
 import threading
+import time
 import tomllib
 import zipfile
 from contextlib import contextmanager
@@ -3260,16 +3261,20 @@ class LifecycleManager:
         hermes_checkout: Path | str,
         release_lock: Path | str,
     ) -> dict[str, str]:
-        """Return content-free identity only after verifying both local inputs."""
+        """Return content-free identity only after verifying both local inputs.
+
+        Preview shares the prepare path's candidate authority: the release lock is
+        loaded first and the checkout is verified against its declared Hermes source
+        identity.  The retired public baseline is never used to qualify a schema-4
+        maintained-fork lock.
+        """
 
         source_wheel = self._resolve_wheel(wheel)
-        evidence = verify_clean_checkout(
-            hermes_checkout,
-            expected_tag=HERMES_BASELINE.tag,
-            expected_commit=HERMES_BASELINE.commit,
-            expected_tag_object=HERMES_BASELINE.tag_object,
-        )
+        # Source identity is resolved from the validated lock first: the checkout is
+        # verified against that identity instead of the retired fixed public baseline.
         validated_lock = load_release_lock(release_lock)
+        hermes_source = validated_lock.effective_hermes_source
+        evidence = verify_clean_checkout(hermes_checkout, source=hermes_source)
         self._validate_aether_wheel_lock(validated_lock, source_wheel)
         metadata = self._inspect_wheel(source_wheel)
         self._validate_aether_identity(validated_lock.aether_identity, metadata)
@@ -3532,6 +3537,50 @@ class LifecycleManager:
         except (OSError, ValueError) as error:
             raise IntegrityError("managed profile release resource is unreadable") from error
 
+    def _begin_profile_adoption_root(self) -> Path:
+        stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+        root = self.store.state_root / "migrations" / f"{stamp}-profile-adoption"
+        ensure_private_dir(self.store.state_root / "migrations")
+        ensure_private_dir(root)
+        ensure_private_dir(root / "files")
+        return root
+
+    @staticmethod
+    def _backup_profile_adoption_bytes(
+        *,
+        adoption_root: Path,
+        role: str,
+        relative: str,
+        payload: bytes,
+    ) -> dict[str, str]:
+        """Persist one pre-adoption package-owned file under state migrations."""
+
+        destination = adoption_root / "files" / role / relative.replace("/", "__")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _atomic_bytes(destination, payload)
+        return {
+            "role": role,
+            "path": f"{role}/{relative}",
+            "backup": str(destination),
+            "sha256": hashlib.sha256(payload).hexdigest(),
+        }
+
+    @staticmethod
+    def _write_profile_adoption_receipt(
+        *,
+        adoption_root: Path,
+        release_id: str,
+        backed_up: list[dict[str, str]],
+        preserved_config: list[dict[str, str]],
+    ) -> None:
+        payload = {
+            "schema": "aether.profile-adoption.v1",
+            "release_id": release_id,
+            "backed_up": backed_up,
+            "preserved_config": preserved_config,
+        }
+        _atomic_json(adoption_root / "receipt.json", payload)
+
     def _preflight_profile_homes(
         self,
         record: ReleaseRecord,
@@ -3618,7 +3667,13 @@ class LifecycleManager:
                 if not target.exists():
                     continue
                 if ownership_record is None:
-                    raise IntegrityError("canonical skill ownership evidence is missing")
+                    # Initial adoption (no active release / no marker): structural safety
+                    # only.  Materialize backs up and replaces package-owned bytes.
+                    if previous is not None:
+                        raise IntegrityError("canonical skill ownership evidence is missing")
+                    if not target.is_file():
+                        raise IntegrityError("managed profile canonical skill is unsafe")
+                    continue
                 self._profile_resource_status(
                     target,
                     directory=False,
@@ -3651,6 +3706,9 @@ class LifecycleManager:
         )
         release = self.store.release_path(record.release_id)
         ensure_private_dir(self.store.profile_homes)
+        adoption_backups: list[dict[str, str]] = []
+        preserved_configs: list[dict[str, str]] = []
+        adoption_root: Path | None = None
         for role in _PROFILE_ROLES:
             home = self.store.profile_home(role)
             if home.is_symlink():
@@ -3664,7 +3722,40 @@ class LifecycleManager:
                     source_bytes = read_private_bytes(source)
                 except (OSError, ValueError) as error:
                     raise IntegrityError("managed profile resource is unreadable") from error
-                _atomic_bytes(home / name, source_bytes)
+                target = home / name
+                if name == "config.yaml" and target.is_file() and not target.is_symlink():
+                    try:
+                        existing = read_private_bytes(target)
+                    except (OSError, ValueError) as error:
+                        raise IntegrityError("managed profile resource is unreadable") from error
+                    if existing != source_bytes:
+                        # Operator-provisioned config is preserved across first adoption
+                        # and later promotions; package templates never overwrite it.
+                        preserved_configs.append(
+                            {
+                                "role": role,
+                                "path": str(target),
+                                "sha256": hashlib.sha256(existing).hexdigest(),
+                            }
+                        )
+                        continue
+                if target.is_file() and not target.is_symlink():
+                    try:
+                        existing = read_private_bytes(target)
+                    except (OSError, ValueError) as error:
+                        raise IntegrityError("managed profile resource is unreadable") from error
+                    if existing != source_bytes:
+                        if adoption_root is None:
+                            adoption_root = self._begin_profile_adoption_root()
+                        adoption_backups.append(
+                            self._backup_profile_adoption_bytes(
+                                adoption_root=adoption_root,
+                                role=role,
+                                relative=name,
+                                payload=existing,
+                            )
+                        )
+                _atomic_bytes(target, source_bytes)
             skills_root = home / "skills"
             if skills_root.is_symlink() or (skills_root.exists() and not skills_root.is_dir()):
                 raise IntegrityError("managed profile skill directory is unsafe")
@@ -3686,8 +3777,35 @@ class LifecycleManager:
                     raise IntegrityError(
                         "managed canonical skill resource is unreadable"
                     ) from error
+                if target.is_file():
+                    try:
+                        existing = read_private_bytes(target)
+                    except (OSError, ValueError) as error:
+                        raise IntegrityError(
+                            "managed canonical skill resource is unreadable"
+                        ) from error
+                    if existing != source_bytes:
+                        if adoption_root is None:
+                            adoption_root = self._begin_profile_adoption_root()
+                        adoption_backups.append(
+                            self._backup_profile_adoption_bytes(
+                                adoption_root=adoption_root,
+                                role=role,
+                                relative=f"skills/{skill_name}/SKILL.md",
+                                payload=existing,
+                            )
+                        )
                 _atomic_bytes(target, source_bytes)
             _atomic_json(home / "aether-observer.json", self._profile_activation(record, role))
+        if adoption_backups or preserved_configs:
+            if adoption_root is None:
+                adoption_root = self._begin_profile_adoption_root()
+            self._write_profile_adoption_receipt(
+                adoption_root=adoption_root,
+                release_id=record.release_id,
+                backed_up=adoption_backups,
+                preserved_config=preserved_configs,
+            )
         _fsync_directory(self.store.profile_homes)
 
     def _validate_profile_homes(self, record: ReleaseRecord) -> None:
@@ -3712,15 +3830,14 @@ class LifecycleManager:
                 raise IntegrityError("managed profile activation is incomplete")
             try:
                 config_bytes = read_private_bytes(config)
-                config_source_bytes = read_private_bytes(
-                    release / "profiles" / role / "config.yaml"
-                )
                 soul_bytes = read_private_bytes(soul)
                 soul_source_bytes = read_private_bytes(release / "profiles" / role / "SOUL.md")
                 activation_bytes = read_private_bytes(activation)
             except (OSError, ValueError) as error:
                 raise IntegrityError("managed profile activation is unreadable") from error
-            if config_bytes != config_source_bytes or soul_bytes != soul_source_bytes:
+            # config.yaml is operator-owned after first provision; only SOUL.md is
+            # required to match the immutable package bundle.
+            if not config_bytes or soul_bytes != soul_source_bytes:
                 raise IntegrityError("managed profile activation resource drift")
             try:
                 payload = json.loads(activation_bytes.decode("utf-8"))
@@ -3786,18 +3903,12 @@ class LifecycleManager:
                 issues.append("profile activation marker is invalid")
                 continue
             if marker is None:
-                managed_targets = [home / name for name in ("config.yaml", "SOUL.md")]
+                # Pre-lifecycle / pre-marker homes are not lifecycle debris.  Recover and
+                # first-install adoption leave them in place; only marker-owned bytes are
+                # eligible for deactivation.
                 skills_root = home / "skills"
-                if skills_root.is_symlink():
+                if skills_root.is_symlink() or (skills_root.exists() and not skills_root.is_dir()):
                     issues.append("profile skill directory is unsafe")
-                elif skills_root.exists() and not skills_root.is_dir():
-                    issues.append("profile skill directory is unsafe")
-                elif skills_root.is_dir():
-                    managed_targets.extend(
-                        skills_root / skill_name / "SKILL.md" for skill_name in _CANONICAL_SKILLS
-                    )
-                if any(path.is_symlink() or path.exists() for path in managed_targets):
-                    issues.append("canonical profile ownership evidence is missing")
                 continue
 
             try:
@@ -4429,7 +4540,8 @@ class LifecycleManager:
             fork_commit=fork_commit,
         )
         with self.store.mutation_lock():
-            self._assert_executing_active_manager_locked()
+            if self.store.active(required=False) is not None:
+                self._assert_executing_active_manager_locked()
             self._recover_locked()
             if expected is _CAS_UNSET:
                 expected = self._assert_expected_active_locked(_CAS_UNSET)
@@ -4449,7 +4561,7 @@ class LifecycleManager:
                 )
                 return self._activate_existing_locked(
                     record.release_id,
-                    transition_kind="update",
+                    transition_kind="install" if expected is None else "update",
                     expected_active_release_id=expected,
                 )
             finally:

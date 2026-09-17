@@ -329,6 +329,7 @@ jobs:
           tests/test_hermes_patch_reconciliation.py
           tests/test_hermes_baseline.py
           tests/test_hermes_editable.py
+          tests/test_lifecycle_adoption.py
           tests/test_lifecycle_projections.py
           tests/test_objective_contracts.py
           tests/test_observation_brief_tool.py

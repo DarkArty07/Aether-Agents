@@ -253,6 +253,10 @@ def _dispatch_stateful_to_active(
     if target is None:
         if command == "setup":
             return None
+        # First local-candidate promotion may bootstrap the active manager the same
+        # way setup does; subsequent update/rollback/uninstall still require it.
+        if command == "update" and "--local" in args_list:
+            return None
         return _manager_authority_error(
             command,
             "no active manager can authorize this mutation; run 'aether setup' or "
@@ -463,7 +467,12 @@ def _run_local_transition(args: argparse.Namespace) -> int:
         aether_checkout, aether_commit, fork_checkout, fork_commit = _local_candidate_arguments(
             args
         )
-        executing_manager = manager.executing_active_manager()
+        try:
+            executing_manager = manager.executing_active_manager()
+        except IntegrityError:
+            if manager.store.active(required=False) is not None:
+                raise
+            executing_manager = None
         candidate = manager.local_candidate(
             aether_checkout=aether_checkout,
             aether_commit=aether_commit,
@@ -471,16 +480,15 @@ def _run_local_transition(args: argparse.Namespace) -> int:
             fork_commit=fork_commit,
         )
         if args.dry_run or not args.yes:
-            current = manager.store.active()
-            assert current is not None
+            current = manager.store.active(required=False)
             envelope = Envelope(
                 command=command,
                 result="planned",
                 manager_version=product_version(),
-                active_version=current.version,
+                active_version=None if current is None else current.version,
                 data={
                     "mode": "local",
-                    "current_release_id": current.release_id,
+                    "current_release_id": None if current is None else current.release_id,
                     "candidate": candidate.to_record(),
                     "service_interruption": manager.service_plan(),
                     "preserved_state": manager.preserved_state_report(),
@@ -496,20 +504,25 @@ def _run_local_transition(args: argparse.Namespace) -> int:
                 envelope,
                 json_mode=args.json,
                 human=(
-                    f"planned local update: {current.version} -> {candidate.display_version} "
-                    f"(aether {candidate.aether_commit[:12]}, fork "
+                    "planned local "
+                    + (
+                        "install"
+                        if current is None
+                        else f"update: {current.version} -> {candidate.display_version}"
+                    )
+                    + (f": {candidate.display_version}" if current is None else "")
+                    + f" (aether {candidate.aether_commit[:12]}, fork "
                     f"{candidate.fork_commit[:12]})"
                 ),
             )
         manager.recover()
-        current = manager.store.active()
-        assert current is not None
+        current = manager.store.active(required=False)
         selected = manager.update_local(
             aether_checkout=aether_checkout,
             aether_commit=aether_commit,
             fork_checkout=fork_checkout,
             fork_commit=fork_commit,
-            expected_active_release_id=current.release_id,
+            expected_active_release_id=None if current is None else current.release_id,
         )
     except IntegrityError as error:
         envelope = Envelope(
@@ -529,7 +542,9 @@ def _run_local_transition(args: argparse.Namespace) -> int:
         data={
             "mode": "local",
             "active_release_id": selected.release_id,
-            "executing_manager_release_id": executing_manager.release_id,
+            "executing_manager_release_id": (
+                None if executing_manager is None else executing_manager.release_id
+            ),
             "wheel_sha256": selected.wheel_sha256,
             "hermes_commit": selected.hermes_commit,
             "observation_state_preserved": True,
