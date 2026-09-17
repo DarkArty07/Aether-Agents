@@ -29,8 +29,9 @@ The release identity is package version `1.0.0rc2`, annotated tag and GitHub pre
   `.aether/objective-contracts/oc_742f9f4797494bf9/v1.md`, `v2.md` and `v3.md` in the
   canonical repository policy manifest so the declared tracked surface matches the
   repository again, and reconciled the root `AGENTS.md` stabilization-authority paragraph
-  with the current `@v3` objective, the rc.1 disposition and the single authorized automatic
-  existing-site Pages deployment.
+  with the current `@v3` objective, the rc.1 disposition and automatic deployments to the
+  existing Aether GitHub Pages site caused by reviewed green merges required by this
+  objective (no manual Pages dispatch, other target or unrelated deployment).
 - This is a pre-stable release candidate. It is not stable `1.0.0`, no PyPI or other
   package-index publication occurs, WSL2 (and any macOS/Windows lane) is unverified and
   recorded as such, and issue #261 remains open with the deferred stable, PyPI/OIDC and

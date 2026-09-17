@@ -1,9 +1,10 @@
 # Execution breakdown: Aether 1.0.0-rc.2 prerelease, activation and rollback successor
 
 **Status:** Supervisor-owned execution breakdown for Objective Contract
-`oc_742f9f4797494bf9@v1`. It does not widen the contract, redefine material design, or
+`oc_742f9f4797494bf9@v3`. It does not widen the contract, redefine material design, or
 record acceptance. Unit and card identities, board values and live-state values are held
-on the owning execution board and are not published here.
+on the owning execution board and are not published here. The `@v1` receipt and landing
+note below remain historical evidence under the superseded breakdown base.
 
 **Source contract:** `.aether/objective-contracts/oc_742f9f4797494bf9/v3.md`
 (SHA-256 `2d7b4ff21cca41db14cc09623728a858d851542e54c687a2ff03d55d79009cbc`) on Aether tip
@@ -47,7 +48,7 @@ executed the rejected `oc_3397f9f05d780f8e@v1` lane and remains its historical r
 | Promotion order | Source → independent review → green merge to `main` → tagged release → local runtime activation → canary. No runtime-only edit, live-tree patch or pre-release activation may substitute for a source change, and the graph below enforces the order through its parent edges | Each stage consumes only its predecessor's accepted output; the published bytes are the only activation input |
 | `aether update` local route | The candidate's own CLI provides the pinned local-candidate route (`--local`, `--aether-checkout`, `--aether-commit`, `--fork-checkout`, `--fork-commit`, `--dry-run`, `--yes`, `--json`); it requires a clean Aether checkout whose HEAD is the exact commit carrying **exactly one** annotated release tag equal to `v` + the display version, a clean fork checkout at the exact commit reachable from `aether-main`, compatible Python, and current HLP coverage. Identity never comes from cwd, recency or a mutable branch tip | Activation can only run after the tag exists, from a clean checkout of the tagged commit and a clean checkout of the accepted fork commit; the preview is non-mutating and must be recorded before activation |
 | Activation interruption | Activation rewrites the Aether-owned service/launcher/Desktop projections and restarts the Aether-owned gateway, which owns the dispatcher and every running worker, including this objective's controller session. The unrelated gateway service is never touched | The activation lane is the terminal card's work, sequenced so all evidence is durable first, with an explicit resume checkpoint |
-| Deployment boundary | The repository's own Pages workflow triggers on pushes to `main` touching `docs/**`, `website/**` or the Pages workflow itself, and it deploys to the existing public site. The contract authorizes exactly one automatic existing-site deployment (the one caused by the reviewed #446 merge) and forbids manual dispatch, another target or any deployment beyond it. All programmatically required rc.2 changes live in root files (`.aether/**`, `VERSION`, `CHANGELOG.md`, `README.md`, `AGENTS.md`, `.github/workflows/{release,policy}.yml`, `tests/**`), which do **not** trigger that workflow | **No unit may modify `docs/**`, `website/**` or `.github/workflows/pages.yml`.** The public-capability registry's "activation lane pending" clause is falsified once rc.2 is activated; that coherence gap is recorded as an explicit residual and raised with the design steward instead of being fixed by an unauthorized deployment |
+| Deployment boundary | The repository's own Pages workflow triggers on pushes to `main` touching `docs/**`, `website/**` or the Pages workflow itself, and it deploys to the existing public site. Under `@v3`, automatic deployments to that existing site caused by reviewed green merges required by this objective remain authorized; manual Pages dispatch, another target or unrelated deployment is not. All programmatically required rc.2 changes live in root files (`.aether/**`, `VERSION`, `CHANGELOG.md`, `README.md`, `AGENTS.md`, `.github/workflows/{release,policy}.yml`, `tests/**`), which do **not** trigger that workflow | **No unit may modify `docs/**`, `website/**` or `.github/workflows/pages.yml`.** The public-capability registry's "activation lane pending" clause is falsified once rc.2 is activated; that coherence gap is recorded as an explicit residual and raised with the design steward instead of being fixed by an unauthorized deployment |
 | Patch/ledger corpus | `.patch` files and HLP records are audit/reconstruction evidence and are never replayed onto the active runtime; the reconciliation corpus must nevertheless validate in check mode against the accepted fork revision, because the candidate's own local route consumes it | The bundle/release-input unit runs the validator in check mode with the fork checkout at the accepted revision |
 | Publication mechanics | `gh release edit` accepts no file arguments, so a reconcile re-run verifies the published assets and attaches nothing; the create path attaches exactly the tool's qualified member set. Release notes carry the release's own truth statement | Publication verification is download-and-rehash against `SHA256SUMS` plus lock identity, exactly as the workflow's own verifier does |
 | Test standard | `CONTRIBUTING.md` bootstrap plus the contract's testing standard; no gate weakening, no new skip, no fabricated platform evidence. WSL2/macOS/Windows remain explicitly unverified | Gate evidence is taken at the merged revision; a local run under concurrent load is not reported as a gate number |
@@ -124,8 +125,10 @@ terminal cards consume reviewed units and never replace unit review.
    evidence and are never replayed onto the active runtime.
 5. Deployment boundary: no unit may change `docs/**`, `website/**` or
    `.github/workflows/pages.yml`, because a push to `main` touching them deploys the
-   existing public site and only the #446-caused automatic deployment is authorized.
-   Any status statement living in those paths is reported as a residual instead.
+   existing public site. Automatic deployments caused by reviewed green merges required
+   by this objective remain authorized; manual Pages dispatch, another target or
+   unrelated deployment is not. Any status statement living in those paths is reported
+   as a residual instead.
 6. Environment identity: the installed runtime is still the pre-RC live-tree-patched
    release; the candidate CLI is the one in the source tree. Activation is the only step
    that may change the active release, and it must run from the candidate's own CLI with
