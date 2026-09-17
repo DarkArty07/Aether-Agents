@@ -31,7 +31,7 @@ worktree"
 | `.github/workflows/release.yml` | `FORK_COMMIT` `7a4fdcd…` → `aed6591…` with comment reconciliation |
 | `CHANGELOG.md` | Rc.2 pin and contract-registration bullets reconciled to `@v3` truth |
 | `AGENTS.md` | Current objective pointer `@v1` → `@v3` with fork pin and recovery gate |
-| `specs/001-aether-v1-productization/tasks-rc2.md` | Status/source pointer and Pages deployment boundary aligned to `@v3` |
+| `specs/001-aether-v1-productization/tasks-rc2.md` | Status/source `@v3`; historical `@v1` receipt/unit map retained; Correction and deployment boundary aligned to `@v3` automatic existing-site Pages authority; **Current @v3 execution (addendum)** states remaining sequence |
 
 ## Measured prerequisites
 
