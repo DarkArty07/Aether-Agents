@@ -208,3 +208,34 @@ def test_first_install_adopts_premarker_profiles_preserving_operator_config(
         item["path"].endswith("skills/project-knowledge/SKILL.md") for item in payload["backed_up"]
     )
     manager._validate_profile_homes(selected)
+
+
+def test_extract_git_archive_preserves_confined_relative_symlinks(tmp_path: Path) -> None:
+    """Tracked in-tree relative symlinks must survive local-candidate materialization."""
+
+    import io
+    import tarfile
+
+    stream = io.BytesIO()
+    with tarfile.open(fileobj=stream, mode="w") as archive_writer:
+        for directory_name in ("lab", "lab/scenarios", "scripts", "scripts/e2e"):
+            directory = tarfile.TarInfo(directory_name)
+            directory.type = tarfile.DIRTYPE
+            directory.mode = 0o755
+            archive_writer.addfile(directory)
+        regular = tarfile.TarInfo("lab/scenarios/README.md")
+        regular.size = 5
+        # git archive umask turns 0644 into 0664
+        regular.mode = 0o664
+        archive_writer.addfile(regular, io.BytesIO(b"hello"))
+        link = tarfile.TarInfo("scripts/e2e/scenarios")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "../../lab/scenarios"
+        link.mode = 0o777
+        archive_writer.addfile(link)
+    destination = tmp_path / "source"
+    lifecycle._extract_git_archive(stream.getvalue(), destination)
+    target = destination / "scripts" / "e2e" / "scenarios"
+    assert target.is_symlink()
+    assert target.readlink().as_posix() == "../../lab/scenarios"
+    assert (destination / "lab" / "scenarios" / "README.md").read_bytes() == b"hello"

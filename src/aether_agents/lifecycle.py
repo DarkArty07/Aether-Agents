@@ -1031,6 +1031,30 @@ def _archive_member_path(name: str) -> PurePosixPath:
     return relative
 
 
+def _validate_confined_archive_symlink(relative: PurePosixPath, linkname: str) -> None:
+    """Refuse absolute or escaping symlink targets in a Git source archive."""
+
+    if (
+        not isinstance(linkname, str)
+        or not linkname
+        or linkname.startswith("/")
+        or "\\" in linkname
+        or any(ord(character) < 0x20 or ord(character) == 0x7F for character in linkname)
+    ):
+        raise IntegrityError("source archive symlink escapes its release root")
+    base = PurePosixPath(*relative.parts[:-1]) if len(relative.parts) > 1 else PurePosixPath(".")
+    parts: list[str] = []
+    for part in (base / linkname).parts:
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            if not parts:
+                raise IntegrityError("source archive symlink escapes its release root")
+            parts.pop()
+            continue
+        parts.append(part)
+
+
 def _extract_git_archive(archive: bytes, destination: Path) -> None:
     """Extract only confined regular files/directories from an authenticated archive."""
 
@@ -1047,12 +1071,14 @@ def _extract_git_archive(archive: bytes, destination: Path) -> None:
                 if canonical in observed:
                     raise IntegrityError("Hermes source archive contains duplicate paths")
                 observed.add(canonical)
-                if not (member.isdir() or member.isreg()):
-                    raise IntegrityError("Hermes source archive contains a non-regular member")
+                if member.issym():
+                    _validate_confined_archive_symlink(relative, member.linkname)
+                elif not (member.isdir() or member.isreg()):
+                    raise IntegrityError("source archive contains a non-regular member")
                 # ``git archive`` applies its conventional 0002 tar umask: Git
                 # 100644/100755 entries appear as 0664/0775 in the archive.
                 if member.isreg() and stat.S_IMODE(member.mode) not in (0o664, 0o775):
-                    raise IntegrityError("Hermes source archive contains an invalid file mode")
+                    raise IntegrityError("source archive contains an invalid file mode")
                 validated.append((member, relative))
 
             _extract_validated_members(source, validated, destination)
@@ -1077,9 +1103,12 @@ def _extract_validated_members(
                 target.mkdir(mode=DIR_MODE, parents=True, exist_ok=True)
                 continue
             target.parent.mkdir(mode=DIR_MODE, parents=True, exist_ok=True)
+            if member.issym():
+                target.symlink_to(member.linkname)
+                continue
             extracted = source.extractfile(member)
             if extracted is None:
-                raise IntegrityError("Hermes source archive file is unreadable")
+                raise IntegrityError("source archive file is unreadable")
             LifecycleManager._write_durable(target, extracted.read())
         return
 
@@ -1102,10 +1131,14 @@ def _extract_validated_members(
                 if member.isdir():
                     os.fsync(current)
                     continue
+                name = _safe_entry_name(relative.parts[-1])
+                if member.issym():
+                    os.symlink(member.linkname, name, dir_fd=current)
+                    os.fsync(current)
+                    continue
                 extracted = source.extractfile(member)
                 if extracted is None:
-                    raise IntegrityError("Hermes source archive file is unreadable")
-                name = _safe_entry_name(relative.parts[-1])
+                    raise IntegrityError("source archive file is unreadable")
                 mode = 0o700 if stat.S_IMODE(member.mode) == 0o775 else FILE_MODE
                 flags = (
                     os.O_WRONLY
