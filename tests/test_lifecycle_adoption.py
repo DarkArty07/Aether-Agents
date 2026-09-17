@@ -107,7 +107,8 @@ def _seed_premarker_profiles(store: ReleaseStore) -> dict[str, bytes]:
         operator_configs[role] = operator
         soul = (resources / "profiles" / role / "SOUL.md").read_bytes()
         (home / "SOUL.md").write_bytes(soul)
-        os.chmod(home / "SOUL.md", 0o600)
+        # Live pre-marker homes may carry 0644 SOUL.md; adoption must still proceed.
+        os.chmod(home / "SOUL.md", 0o644 if role == "supervisor" else 0o600)
         skills_root = home / "skills"
         skills_root.mkdir(parents=True, exist_ok=True)
         for skill_name in lifecycle._CANONICAL_SKILLS:

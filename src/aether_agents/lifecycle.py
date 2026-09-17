@@ -3660,12 +3660,19 @@ class LifecycleManager:
                 target = home / name
                 if target.is_symlink():
                     raise IntegrityError("managed profile product file must not be a symlink")
-                if target.exists():
-                    self._profile_resource_status(
-                        target,
-                        directory=False,
-                        label="managed profile product file",
-                    )
+                if not target.exists():
+                    continue
+                if ownership_record is None and previous is None:
+                    # Initial adoption: tolerate pre-lifecycle modes; materialize
+                    # rewrites package-owned SOUL.md to FILE_MODE and preserves config.
+                    if not target.is_file():
+                        raise IntegrityError("managed profile product file is unsafe")
+                    continue
+                self._profile_resource_status(
+                    target,
+                    directory=False,
+                    label="managed profile product file",
+                )
 
             skills_root = home / "skills"
             if skills_root.is_symlink():
