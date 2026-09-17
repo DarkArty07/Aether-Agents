@@ -48,10 +48,13 @@ worktree"
 - `pytest tests/test_public_artifacts.py tests/test_hermes_patch_reconciliation.py`:
   **32 passed** at tip `38237a5402db0c85b5b83af8ced45b2e7bf9bb96`.
 - Pre-integration release-bundle builds from two clean roots at that tip + fork
-  `aed6591…` produced **byte-identical** `SHA256SUMS` (schema-4 lock pins
-  `hermes.commit=aed6591a69f453a1867b73628603e7b53ba40ffc`,
-  `source_mode=maintained_fork`). Artifacts remain local scratch evidence only; they are
-  not a published release.
+  `aed6591…` locked schema-4 `hermes.commit=aed6591a69f453a1867b73628603e7b53ba40ffc`
+  (`source_mode=maintained_fork`). Byte-identical across roots:
+  wheel, sdist, fork source archive, release-lock and package-members. Differed:
+  `clean-install.json` and `provenance.json` (and therefore the aggregate `SHA256SUMS`).
+  Artifacts remain local scratch evidence only; they are not a published release and are
+  not a final AC-08 claim until a non-`--pre-integration` two-root qualification at the
+  accepted merge tip.
 
 ## Non-claims
 
