@@ -35,7 +35,6 @@ The sections through **Verification of this historical `@v1` decomposition** pre
 traceability evidence. They are **not** the current `@v4` remaining-work plan; see the
 **Current @v4 execution (addendum)** (and the historical `@v3` addendum for the
 superseded tip/tag sequence).
-addendum.
 
 ## Receipt
 
@@ -59,7 +58,7 @@ addendum.
 | Publication ownership | Implementer units never push, open a PR, merge, tag, publish, activate or mutate issues. Publication steps belong to Supervisor after independent review | Two Supervisor integration cards own push/PR/checks/merge and tag/prerelease/verification |
 | Release source identity | The published bundle is built by the repository's own release workflow at the tag commit, and the tag commit must equal `origin/main`. The rc.2 source, `VERSION` and the `FORK_COMMIT` pin must therefore land on `main` before the tag is pushed | Identity lands first, gates run at the merged tip, publication follows the gates |
 | Rc.1 immutability | Rc.1's tag, commit, eight asset bytes and rejection warning are read-only evidence; no asset replacement, `--clobber`, tag move or `--force` is permitted at any point | Verification is read-only; the rc.1 defect is remedied only by the successor artifact |
-| Promotion order | Source → independent review → green merge to `main` → tagged release → local runtime activation → canary. No runtime-only edit, live-tree patch or pre-release activation may substitute for a source change, and the graph below enforces the order through its parent edges | Each stage consumes only its predecessor's accepted output; the published bytes are the only activation input |
+| Promotion order | **Current `@v4` settled conclusion:** reviewed green merge of the `@v4` correction → freeze + local immutable annotated tag → local recovery activation → `#450`/`#461` canaries → fresh REGATE → final gates/bundle → public push/prerelease of that same tag → published-bytes activation/rollback. (Historical `@v1` reading, superseded: tagged release → local runtime activation → canary, with published bytes as the only activation input.) No runtime-only edit, live-tree patch or pre-release activation may substitute for a source change | Each stage consumes only its predecessor's accepted output; local recovery precedes REGATE and publication; published bytes are the activation input only after public push |
 | `aether update` local route | The candidate's own CLI provides the pinned local-candidate route (`--local`, `--aether-checkout`, `--aether-commit`, `--fork-checkout`, `--fork-commit`, `--dry-run`, `--yes`, `--json`); it requires a clean Aether checkout whose HEAD is the exact commit carrying **exactly one** annotated release tag equal to `v` + the display version, a clean fork checkout at the exact commit reachable from `aether-main`, compatible Python, and current HLP coverage. Identity never comes from cwd, recency or a mutable branch tip | Activation can only run after the tag exists, from a clean checkout of the tagged commit and a clean checkout of the accepted fork commit; the preview is non-mutating and must be recorded before activation |
 | Activation interruption | Activation rewrites the Aether-owned service/launcher/Desktop projections and restarts the Aether-owned gateway, which owns the dispatcher and every running worker, including this objective's controller session. The unrelated gateway service is never touched | The activation lane is the terminal card's work, sequenced so all evidence is durable first, with an explicit resume checkpoint |
 | Deployment boundary | The repository's own Pages workflow triggers on pushes to `main` touching `docs/**`, `website/**` or the Pages workflow itself, and it deploys to the existing public site. Under `@v4`, automatic deployments to that existing site caused by reviewed green merges required by this objective remain authorized; manual Pages dispatch, another target or unrelated deployment is not. All programmatically required rc.2 changes live in root files (`.aether/**`, `VERSION`, `CHANGELOG.md`, `README.md`, `AGENTS.md`, `.github/workflows/{release,policy}.yml`, `tests/**`), which do **not** trigger that workflow | **No unit may modify `docs/**`, `website/**` or `.github/workflows/pages.yml`.** The public-capability registry's "activation lane pending" clause is falsified once rc.2 is activated; that coherence gap is recorded as an explicit residual and raised with the design steward instead of being fixed by an unauthorized deployment |
@@ -128,7 +127,9 @@ terminal cards consume reviewed units and never replace unit review.
 2. Release identity: package version `1.0.0rc2`; annotated tag and GitHub prerelease
    `v1.0.0-rc.2`; `release_impact=major`, `release_action=publish`,
    `release_channel=prerelease`. Rc.1 stays byte-immutable, published and rejected.
-   Only the Supervisor integration cards push, merge, tag or publish.
+   Only the Supervisor integration cards push, merge, create the local annotated tag,
+   or publish. Under `@v4`, freeze + local annotated tag is a Supervisor-owned
+   card/remap distinct from public tag push/prerelease publication.
 3. Non-negotiable preservation: never edit the owner's primary checkout or its
    uncommitted paths, the live runtime release under the Aether XDG data root, any
    mutable state under the Aether XDG state root, `home/`, credentials or
@@ -264,10 +265,11 @@ after the `@v4` correction PR merges — do not hardcode it here.
 1. **Land `@v4` correction** (`@v4` in-scope 2): normal reviewed green PR/merge of this
    contract correction onto `origin/main`. No tag, activation, publish or push of release
    refs in the stewardship step that only authors the contract.
-2. **Freeze + local tag** (`@v4` in-scope 3; D2; AC-02): after merge, freeze `main`,
-   record the exact merge SHA in a local/durable preflight receipt, create exactly one
-   local annotated tag `v1.0.0-rc.2` on that frozen commit; never move, delete or
-   retarget it.
+2. **Freeze + local tag** (`@v4` in-scope 3; D2; AC-02): Supervisor-owned card/remap
+   distinct from the later public push/publication card (shared decision 2; role model):
+   after merge, freeze `main`, record the exact merge SHA in a local/durable preflight
+   receipt, create exactly one local annotated tag `v1.0.0-rc.2` on that frozen commit;
+   never move, delete or retarget it. This step does not push the tag or publish.
 3. **Immutable local recovery** (`@v4` in-scope 4; D3; AC-03): from that tagged Aether
    commit and fork `aed6591a69f453a1867b73628603e7b53ba40ffc`, preview then activate one
    versioned immutable local recovery candidate through supported `aether update --local`,
@@ -289,9 +291,10 @@ after the `@v4` correction PR merges — do not hardcode it here.
 7. **Bundle qualification** (`@v4` in-scope 8; D7; AC-09): build and qualify two clean
    deterministic eight-member bundles, including schema-4 lock identity,
    privacy/member/normal-resolver checks and both fork defect matrices.
-8. **Publish** (`@v4` in-scope 9; D8; AC-10): push the same local annotated tag and
-   publish/download-verify GitHub prerelease `v1.0.0-rc.2` without mutating rc.1 and
-   without retargeting the tag.
+8. **Publish** (`@v4` in-scope 9; D8; AC-10): Supervisor-owned publication card,
+   distinct from freeze + local tag (step 2): push the same already-created local
+   annotated tag and publish/download-verify GitHub prerelease `v1.0.0-rc.2` without
+   mutating rc.1 and without retargeting the tag.
 9. **Activate published bytes** (`@v4` in-scope 10; D9; AC-11 half): activate the
    published rc.2 bytes, prove state/projection and product surfaces, replacing the local
    recovery candidate.
