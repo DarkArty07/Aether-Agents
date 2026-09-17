@@ -43,6 +43,16 @@ worktree"
 - GitHub API auth via `gh` returns HTTP 401 (`token invalid`); remote issue/PR/release
   mutation and API reads remain blocked. Git `ls-remote` still works for refs.
 
+## Focused verification
+
+- `pytest tests/test_public_artifacts.py tests/test_hermes_patch_reconciliation.py`:
+  **32 passed** at tip `38237a5402db0c85b5b83af8ced45b2e7bf9bb96`.
+- Pre-integration release-bundle builds from two clean roots at that tip + fork
+  `aed6591…` produced **byte-identical** `SHA256SUMS` (schema-4 lock pins
+  `hermes.commit=aed6591a69f453a1867b73628603e7b53ba40ffc`,
+  `source_mode=maintained_fork`). Artifacts remain local scratch evidence only; they are
+  not a published release.
+
 ## Non-claims
 
 This record does not accept REGATE run 173, activate a runtime, publish rc.2, close #261,
