@@ -26,12 +26,18 @@ The release identity is package version `1.0.0rc2`, annotated tag and GitHub pre
   than a branch tip, and the workflow's fail-closed placeholder discipline, tag/identity
   validation and single release path are unchanged.
 - Registered the rc.2 Objective Contract versions
-  `.aether/objective-contracts/oc_742f9f4797494bf9/v1.md`, `v2.md` and `v3.md` in the
-  canonical repository policy manifest so the declared tracked surface matches the
+  `.aether/objective-contracts/oc_742f9f4797494bf9/v1.md`, `v2.md`, `v3.md` and `v4.md` in
+  the canonical repository policy manifest so the declared tracked surface matches the
   repository again, and reconciled the root `AGENTS.md` stabilization-authority paragraph
-  with the current `@v3` objective, the rc.1 disposition and automatic deployments to the
-  existing Aether GitHub Pages site caused by reviewed green merges required by this
-  objective (no manual Pages dispatch, other target or unrelated deployment).
+  with the current `@v4` objective (superseding `@v3`'s pre-merge tip hardcode), the rc.1
+  disposition and automatic deployments to the existing Aether GitHub Pages site caused by
+  reviewed green merges required by this objective (no manual Pages dispatch, other target
+  or unrelated deployment). `@v4` selects the recovery/publish candidate as the clean
+  `origin/main` merge of its own correction PR, with the exact SHA recorded only after
+  merge in a local/durable preflight receipt, exactly one local annotated `v1.0.0-rc.2`
+  tag on that frozen commit (never moved/retargeted), and public push of that same tag
+  only after recovery canaries/REGATE/final gates; it also records supported immediate
+  interruption/checkpoint semantics instead of false drain wording.
 - This is a pre-stable release candidate. It is not stable `1.0.0`, no PyPI or other
   package-index publication occurs, WSL2 (and any macOS/Windows lane) is unverified and
   recorded as such, and issue #261 remains open with the deferred stable, PyPI/OIDC and
