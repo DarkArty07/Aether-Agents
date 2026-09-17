@@ -4533,21 +4533,36 @@ class LifecycleManager:
     def profile_bundle_sha256(self) -> str:
         """Return the digest of the profile bundle this manager materializes.
 
-        The managed profile bundle is produced by the installed product's packaged
-        resources, so a release lock must declare exactly this digest for the same
-        manager to accept the candidate.
+        The digest must match ``_materialize_profile_bundle`` and the release-bundle
+        lock helper: the SHA-256 of the canonical profile-bundle.json bytes.
         """
 
-        rows: dict[str, dict[str, str]] = {}
+        profiles: dict[str, dict[str, dict[str, dict[str, str]]]] = {}
         for role in _PROFILE_ROLES:
-            resources: dict[str, str] = {}
-            for name, source in self._profile_sources(role).items():
-                resources[name] = _sha256(source)
-            skills: dict[str, str] = {}
-            for skill_name, source in self._skill_sources().items():
-                skills[f"profiles/{role}/skills/{skill_name}/SKILL.md"] = _sha256(source)
-            rows[role] = {"resources": resources, "skills": skills}
-        encoded = json.dumps(rows, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            resources = {
+                name: {
+                    "path": f"profiles/{role}/{name}",
+                    "sha256": _sha256(source),
+                }
+                for name, source in self._profile_sources(role).items()
+            }
+            skills = {
+                skill_name: {
+                    "path": f"profiles/{role}/skills/{skill_name}/SKILL.md",
+                    "sha256": _sha256(source),
+                }
+                for skill_name, source in self._skill_sources().items()
+            }
+            profiles[role] = {"resources": resources, "skills": skills}
+        manifest = {
+            "schema_version": 2,
+            "observer_entry_point": HERMES_BASELINE.observer_entry_point,
+            "roles": list(_PROFILE_ROLES),
+            "profiles": profiles,
+        }
+        encoded = (json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n").encode(
+            "utf-8"
+        )
         return hashlib.sha256(encoded).hexdigest()
 
     def update_local(

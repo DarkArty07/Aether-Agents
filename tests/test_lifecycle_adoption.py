@@ -239,3 +239,11 @@ def test_extract_git_archive_preserves_confined_relative_symlinks(tmp_path: Path
     assert target.is_symlink()
     assert target.readlink().as_posix() == "../../lab/scenarios"
     assert (destination / "lab" / "scenarios" / "README.md").read_bytes() == b"hello"
+
+
+def test_profile_bundle_sha256_matches_materialized_manifest(tmp_path: Path) -> None:
+    store = ReleaseStore(tmp_path / "data" / "aether", state_root=tmp_path / "state" / "aether")
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    assert manager.profile_bundle_sha256() == manager._materialize_profile_bundle(stage)
