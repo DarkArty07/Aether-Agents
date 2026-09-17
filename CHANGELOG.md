@@ -18,14 +18,18 @@ The release identity is package version `1.0.0rc2`, annotated tag and GitHub pre
   instead of denying that a release candidate exists.
 - Pinned the maintained-fork source this release builds from: `FORK_COMMIT` in
   `.github/workflows/release.yml` is the accepted `DarkArty07/aether-hermes` `aether-main`
-  revision `7a4fdcd083409c31c09cfa3bfa345354e8576a7e`, the merge of the reviewed `#450`
-  terminal-worker reap fix through fork PR #14; `scripts/release_bundle.py` still resolves
-  and validates that exact commit rather than a branch tip, and the workflow's fail-closed
-  placeholder discipline, tag/identity validation and single release path are unchanged.
-- Registered the rc.2 contract-landing file `.aether/objective-contracts/oc_742f9f4797494bf9/v1.md`
-  in the canonical repository policy manifest so the declared tracked surface matches the
+  revision `aed6591a69f453a1867b73628603e7b53ba40ffc`, the merge of reviewed `#450`
+  (terminal-worker reap, fork PR #14) and `#461` (routed-recovery review-phase preservation,
+  fork PR #15 / HLP-427). The earlier pin `7a4fdcd083409c31c09cfa3bfa345354e8576a7e`
+  (`#450` only) remains historical evidence and must not be used for an rc.2 bundle;
+  `scripts/release_bundle.py` still resolves and validates the exact pinned commit rather
+  than a branch tip, and the workflow's fail-closed placeholder discipline, tag/identity
+  validation and single release path are unchanged.
+- Registered the rc.2 Objective Contract versions
+  `.aether/objective-contracts/oc_742f9f4797494bf9/v1.md`, `v2.md` and `v3.md` in the
+  canonical repository policy manifest so the declared tracked surface matches the
   repository again, and reconciled the root `AGENTS.md` stabilization-authority paragraph
-  with the rc.2 objective, the rc.1 disposition and the single authorized automatic
+  with the current `@v3` objective, the rc.1 disposition and the single authorized automatic
   existing-site Pages deployment.
 - This is a pre-stable release candidate. It is not stable `1.0.0`, no PyPI or other
   package-index publication occurs, WSL2 (and any macOS/Windows lane) is unverified and

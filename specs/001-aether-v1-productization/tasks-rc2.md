@@ -5,7 +5,14 @@
 record acceptance. Unit and card identities, board values and live-state values are held
 on the owning execution board and are not published here.
 
-**Source contract:** `.aether/objective-contracts/oc_742f9f4797494bf9/v1.md`
+**Source contract:** `.aether/objective-contracts/oc_742f9f4797494bf9/v3.md`
+(SHA-256 `2d7b4ff21cca41db14cc09623728a858d851542e54c687a2ff03d55d79009cbc`) on Aether tip
+`e1af59c0d0f2684cc149fd362d6933dadb964c2c`, superseding the historical `@v1` breakdown
+base documented below as receipt evidence. The `@v1` receipt rows remain historical;
+current authority is `@v3`.
+
+**Historical @v1 landing note (superseded):** the original breakdown targeted
+`.aether/objective-contracts/oc_742f9f4797494bf9/v1.md`
 (SHA-256 `f084eca7e703201c620408069df8f06b89cade82514ceb934c792f71bdda04fc`) on base
 `acb89ca85c02c41dca10009b2806428850a0f0bc` (the contract-landing commit on top of the
 contract's clean pre-contract base `5758b89dfb19a71719faa8d1821849f8d66acacb`).
@@ -95,8 +102,8 @@ terminal cards consume reviewed units and never replace unit review.
 
 ## Shared decisions stamped into every unit card
 
-1. Authority is Objective Contract `oc_742f9f4797494bf9@v1` (SHA-256
-   `f084eca7e703201c620408069df8f06b89cade82514ceb934c792f71bdda04fc`) plus this
+1. Authority is Objective Contract `oc_742f9f4797494bf9@v3` (SHA-256
+   `2d7b4ff21cca41db14cc09623728a858d851542e54c687a2ff03d55d79009cbc`) plus this
    breakdown. Skills are reusable procedure only. Never create, edit, stage or copy the
    canonical contract.
 2. Release identity: package version `1.0.0rc2`; annotated tag and GitHub prerelease

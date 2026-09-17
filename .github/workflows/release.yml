@@ -22,14 +22,15 @@ env:
   # dirty source. It never derives the identity from a branch tip, the working directory or
   # recency, so an unset/incorrect pin fails closed instead of publishing wrong bytes.
   #
-  # Pinned by the Aether 1.0.0-rc.2 release integration: the accepted merge of the reviewed
-  # `#450` terminal-worker reap fix into the maintained fork's `aether-main` (fork PR #14,
-  # tree `0253df7de573ea695206a5f3bf2407cb3e48e320`). The rc.1 pin it replaces
-  # (`9031bae0e8b0ab40c4fd7ba50c644972ff512611`) selected the `fix/425-review-flow-continuity`
-  # (PR #12) and `fix/420-responses-terminal-fidelity` (PR #13) merges and is superseded,
+  # Pinned by the Aether 1.0.0-rc.2 recovery reconciliation (`oc_742f9f4797494bf9@v3`): the
+  # accepted merge of reviewed `#450` and `#461` into the maintained fork's `aether-main`
+  # (fork PR #15 merge `aed6591a69f453a1867b73628603e7b53ba40ffc`, tree
+  # `2258311f9aa52c58fda9bdbd03183ba50ac85df0`). The earlier rc.2 pin
+  # `7a4fdcd083409c31c09cfa3bfa345354e8576a7e` (fork PR #14 / `#450` only) and the rc.1 pin
+  # `9031bae0e8b0ab40c4fd7ba50c644972ff512611` remain historical evidence and are superseded,
   # not rewritten.
   FORK_REPOSITORY: https://github.com/DarkArty07/aether-hermes
-  FORK_COMMIT: "7a4fdcd083409c31c09cfa3bfa345354e8576a7e"
+  FORK_COMMIT: "aed6591a69f453a1867b73628603e7b53ba40ffc"
 
 jobs:
   release:
