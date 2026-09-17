@@ -972,10 +972,12 @@ def test_activation_materializes_canonical_skills_in_each_native_profile_directo
     assert private_skill.read_text(encoding="utf-8") == "private profile skill\n"
 
 
-def test_activation_refuses_same_name_learned_skill_before_overwrite(
+def test_first_install_adopts_same_name_unmarked_skill_with_backup(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """#465: first install adopts pre-marker canonical skill paths with an explicit backup."""
+
     store = ReleaseStore(tmp_path / "state" / "aether")
     prepared = _prepared_release(tmp_path / "r1", "1.0.0", b"wheel-one")
     record = store.register(prepared)
@@ -989,22 +991,41 @@ def test_activation_refuses_same_name_learned_skill_before_overwrite(
     learned_skill.parent.mkdir(parents=True, exist_ok=True)
     learned_bytes = b"same-name learned profile skill\n"
     learned_skill.write_bytes(learned_bytes)
+    package_bytes = (
+        Path(lifecycle.__file__).parent
+        / "resources"
+        / "skills"
+        / "git-github-closeout"
+        / "SKILL.md"
+    ).read_bytes()
 
-    with pytest.raises(IntegrityError, match="canonical skill"):
-        manager.activate_existing(
-            record.release_id,
-            transition_kind="install",
-            expected_active_release_id=None,
-        )
+    selected = manager.activate_existing(
+        record.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
 
-    assert learned_skill.read_bytes() == learned_bytes
-    assert store.active(required=False) is None
+    assert selected.release_id == record.release_id
+    assert learned_skill.read_bytes() == package_bytes
+    receipt = next(
+        (store.state_root / "migrations").glob("*-profile-adoption/receipt.json"),
+        None,
+    )
+    assert receipt is not None
+    payload = json.loads(receipt.read_text(encoding="utf-8"))
+    assert payload["schema"] == "aether.profile-adoption.v1"
+    assert any(
+        item["path"].endswith("skills/git-github-closeout/SKILL.md")
+        for item in payload["backed_up"]
+    )
 
 
-def test_activation_refuses_same_name_skill_even_when_bytes_match_without_marker(
+def test_first_install_adopts_byte_identical_unmarked_canonical_skill(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """#465: byte-identical unmarked canonical skills still receive a lifecycle marker."""
+
     store = ReleaseStore(tmp_path / "state" / "aether")
     prepared = _prepared_release(tmp_path / "r1", "1.0.0", b"wheel-one")
     record = store.register(prepared)
@@ -1016,26 +1037,28 @@ def test_activation_refuses_same_name_skill_even_when_bytes_match_without_marker
     )
     target = store.profile_home("morfeo") / "skills" / "git-github-closeout" / "SKILL.md"
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(
-        (
-            Path(lifecycle.__file__).parent
-            / "resources"
-            / "skills"
-            / "git-github-closeout"
-            / "SKILL.md"
-        ).read_bytes()
+    package_bytes = (
+        Path(lifecycle.__file__).parent
+        / "resources"
+        / "skills"
+        / "git-github-closeout"
+        / "SKILL.md"
+    ).read_bytes()
+    target.write_bytes(package_bytes)
+
+    selected = manager.activate_existing(
+        record.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
     )
-    before = target.read_bytes()
 
-    with pytest.raises(IntegrityError, match="canonical skill"):
-        manager.activate_existing(
-            record.release_id,
-            transition_kind="install",
-            expected_active_release_id=None,
-        )
-
-    assert target.read_bytes() == before
-    assert store.active(required=False) is None
+    assert selected.release_id == record.release_id
+    assert target.read_bytes() == package_bytes
+    marker = json.loads(
+        (store.profile_home("morfeo") / "aether-observer.json").read_text(encoding="utf-8")
+    )
+    assert marker["release_id"] == record.release_id
+    assert marker["role"] == "morfeo"
 
 
 def test_update_allows_only_marker_proven_prior_release_skill_bytes(

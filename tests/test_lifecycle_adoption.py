@@ -1,0 +1,490 @@
+"""Lifecycle adoption and setup-preview parity for maintained-fork first install.
+
+Covers GitHub issues #465 (pre-marker profile adoption) and #466 (setup preview
+validates the lock's maintained-fork identity, not the retired public baseline).
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import sys
+from pathlib import Path
+
+import pytest
+from test_observation_lifecycle import (
+    FIXTURE_HERMES_VERSION,
+    _allow_unit_manager_authority,
+    _build_wheel,
+    _clean_tagged_checkout,
+    _prepared_release,
+    _source_tree_sha256,
+    _write_release_lock,
+)
+
+import aether_agents.lifecycle as lifecycle
+from aether_agents.lifecycle import (
+    HERMES_BASELINE,
+    IntegrityError,
+    LifecycleManager,
+    ReleaseStore,
+)
+
+
+def test_inspect_candidate_uses_maintained_fork_lock_identity_not_baseline(
+    tmp_path: Path,
+) -> None:
+    """#466: preview must accept the same maintained-fork candidate prepare accepts."""
+
+    checkout, commit = _clean_tagged_checkout(tmp_path)
+    assert commit != HERMES_BASELINE.commit
+    wheel = _build_wheel(tmp_path / "build", "1.0.0")
+    release_lock = _write_release_lock(
+        tmp_path,
+        "1.0.0",
+        aether_wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
+        hermes_checkout=checkout,
+        hermes_commit=commit,
+        hermes_version=FIXTURE_HERMES_VERSION,
+        source_tree_sha256=_source_tree_sha256(checkout, commit),
+    )
+    manager = LifecycleManager(
+        store=ReleaseStore(tmp_path / "data" / "aether", state_root=tmp_path / "state" / "aether"),
+        python_executable=Path(sys.executable),
+    )
+
+    identity = manager.inspect_candidate(
+        wheel=wheel,
+        hermes_checkout=checkout,
+        release_lock=release_lock,
+    )
+
+    assert identity["version"] == "1.0.0"
+    assert identity["wheel_sha256"] == hashlib.sha256(wheel.read_bytes()).hexdigest()
+
+
+def test_inspect_candidate_still_refuses_wrong_maintained_fork_commit(
+    tmp_path: Path,
+) -> None:
+    checkout, commit = _clean_tagged_checkout(tmp_path)
+    wheel = _build_wheel(tmp_path / "build", "1.0.0")
+    wrong_commit = "b" * 40
+    release_lock = _write_release_lock(
+        tmp_path,
+        "1.0.0",
+        aether_wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
+        hermes_checkout=checkout,
+        hermes_commit=wrong_commit,
+        hermes_version=FIXTURE_HERMES_VERSION,
+        source_tree_sha256="d" * 64,
+    )
+    manager = LifecycleManager(
+        store=ReleaseStore(tmp_path / "data" / "aether", state_root=tmp_path / "state" / "aether"),
+        python_executable=Path(sys.executable),
+    )
+
+    with pytest.raises(IntegrityError, match="commit mismatch"):
+        manager.inspect_candidate(
+            wheel=wheel,
+            hermes_checkout=checkout,
+            release_lock=release_lock,
+        )
+
+
+def _seed_premarker_profiles(store: ReleaseStore) -> dict[str, bytes]:
+    """Seed realistic pre-lifecycle homes: operator config, package SOUL, mixed skills."""
+
+    resources = Path(lifecycle.__file__).parent / "resources"
+    operator_configs: dict[str, bytes] = {}
+    for role in ("morfeo", "supervisor", "implementer"):
+        home = store.profile_home(role)
+        home.mkdir(parents=True, exist_ok=True)
+        operator = (
+            f"# operator provisioned {role}\nchannels:\n  telegram:\n    enabled: true\n"
+        ).encode()
+        (home / "config.yaml").write_bytes(operator)
+        os.chmod(home / "config.yaml", 0o600)
+        operator_configs[role] = operator
+        soul = (resources / "profiles" / role / "SOUL.md").read_bytes()
+        (home / "SOUL.md").write_bytes(soul)
+        # Live pre-marker homes may carry 0644 SOUL.md; adoption must still proceed.
+        os.chmod(home / "SOUL.md", 0o644 if role == "supervisor" else 0o600)
+        skills_root = home / "skills"
+        skills_root.mkdir(parents=True, exist_ok=True)
+        for skill_name in lifecycle._CANONICAL_SKILLS:
+            skill_dir = skills_root / skill_name
+            skill_dir.mkdir(parents=True, exist_ok=True)
+            package_bytes = (resources / "skills" / skill_name / "SKILL.md").read_bytes()
+            if skill_name == "project-knowledge":
+                payload = b"# older live revision that must be backed up\n"
+            else:
+                payload = package_bytes
+            target = skill_dir / "SKILL.md"
+            target.write_bytes(payload)
+            os.chmod(target, 0o644 if skill_name == "work-memory" else 0o600)
+        learned = skills_root / "private-local" / "SKILL.md"
+        learned.parent.mkdir(parents=True, exist_ok=True)
+        learned.write_bytes(b"learned local procedure\n")
+    return operator_configs
+
+
+def test_recover_leaves_premarker_profiles_untouched(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#465: recover with no active must not treat pre-marker homes as debris."""
+
+    store = ReleaseStore(tmp_path / "data" / "aether", state_root=tmp_path / "state" / "aether")
+    operator_configs = _seed_premarker_profiles(store)
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    monkeypatch.setattr(manager, "_reconcile_projections_locked", lambda _result: None)
+
+    manager.recover()
+
+    assert store.active(required=False) is None
+    for role, expected in operator_configs.items():
+        home = store.profile_home(role)
+        assert (home / "config.yaml").read_bytes() == expected
+        assert not (home / "aether-observer.json").exists()
+        assert (home / "skills" / "private-local" / "SKILL.md").read_bytes() == (
+            b"learned local procedure\n"
+        )
+
+
+def test_first_install_adopts_premarker_profiles_preserving_operator_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#465: first install adopts unmarked homes without discarding operator config."""
+
+    store = ReleaseStore(tmp_path / "data" / "aether", state_root=tmp_path / "state" / "aether")
+    operator_configs = _seed_premarker_profiles(store)
+    record = store.register(_prepared_release(tmp_path / "r1", "1.0.0", b"wheel-one"))
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+    monkeypatch.setattr(
+        manager,
+        "_prepare_release_projections_locked",
+        lambda _record: {"desktop": None, "launcher": None, "service": None},
+    )
+    monkeypatch.setattr(manager, "_select_release_projections_locked", lambda *_a, **_k: None)
+    monkeypatch.setattr(manager, "project_release", lambda *_a, **_k: None)
+    monkeypatch.setattr(manager, "_reconcile_release_projections_locked", lambda *_a, **_k: None)
+
+    selected = manager.activate_existing(
+        record.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+
+    assert selected.release_id == record.release_id
+    resources = Path(lifecycle.__file__).parent / "resources"
+    for role, expected_config in operator_configs.items():
+        home = store.profile_home(role)
+        assert (home / "config.yaml").read_bytes() == expected_config
+        assert (home / "SOUL.md").read_bytes() == (
+            resources / "profiles" / role / "SOUL.md"
+        ).read_bytes()
+        marker = json.loads((home / "aether-observer.json").read_text(encoding="utf-8"))
+        assert marker["release_id"] == record.release_id
+        assert marker["role"] == role
+        for skill_name in lifecycle._CANONICAL_SKILLS:
+            observed = (home / "skills" / skill_name / "SKILL.md").read_bytes()
+            assert observed == (resources / "skills" / skill_name / "SKILL.md").read_bytes()
+        assert (home / "skills" / "private-local" / "SKILL.md").read_bytes() == (
+            b"learned local procedure\n"
+        )
+    receipt = next(
+        (store.state_root / "migrations").glob("*-profile-adoption/receipt.json"),
+        None,
+    )
+    assert receipt is not None
+    payload = json.loads(receipt.read_text(encoding="utf-8"))
+    assert payload["schema"] == "aether.profile-adoption.v1"
+    assert any(
+        item["path"].endswith("skills/project-knowledge/SKILL.md") for item in payload["backed_up"]
+    )
+    manager._validate_profile_homes(selected)
+
+
+def test_first_install_hardens_preserved_operator_config_mode_0644(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#465: preserved divergent config keeps operator bytes but must become FILE_MODE."""
+
+    import stat as stat_module
+
+    store = ReleaseStore(tmp_path / "data" / "aether", state_root=tmp_path / "state" / "aether")
+    operator_configs = _seed_premarker_profiles(store)
+    # Live pre-marker configs may be 0644 while still differing from package templates.
+    for role in operator_configs:
+        config = store.profile_home(role) / "config.yaml"
+        os.chmod(config, 0o644)
+        assert stat_module.S_IMODE(config.stat().st_mode) == 0o644
+    record = store.register(_prepared_release(tmp_path / "r1", "1.0.0", b"wheel-one"))
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+    monkeypatch.setattr(
+        manager,
+        "_prepare_release_projections_locked",
+        lambda _record: {"desktop": None, "launcher": None, "service": None},
+    )
+    monkeypatch.setattr(manager, "_select_release_projections_locked", lambda *_a, **_k: None)
+    monkeypatch.setattr(manager, "project_release", lambda *_a, **_k: None)
+    monkeypatch.setattr(manager, "_reconcile_release_projections_locked", lambda *_a, **_k: None)
+
+    selected = manager.activate_existing(
+        record.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+
+    assert selected.release_id == record.release_id
+    for role, expected_config in operator_configs.items():
+        config = store.profile_home(role) / "config.yaml"
+        assert config.read_bytes() == expected_config
+        assert stat_module.S_IMODE(config.stat().st_mode) == 0o600
+    manager._validate_profile_homes(selected)
+
+
+def _activate_adopted_premarker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[ReleaseStore, LifecycleManager, dict[str, bytes]]:
+    """Install over pre-marker homes, preserving divergent operator config.yaml."""
+
+    store = ReleaseStore(tmp_path / "data" / "aether", state_root=tmp_path / "state" / "aether")
+    operator_configs = _seed_premarker_profiles(store)
+    record = store.register(_prepared_release(tmp_path / "r1", "1.0.0", b"wheel-one"))
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+    monkeypatch.setattr(
+        manager,
+        "_prepare_release_projections_locked",
+        lambda _record: {"desktop": None, "launcher": None, "service": None},
+    )
+    monkeypatch.setattr(manager, "_select_release_projections_locked", lambda *_a, **_k: None)
+    monkeypatch.setattr(manager, "project_release", lambda *_a, **_k: None)
+    monkeypatch.setattr(manager, "_reconcile_release_projections_locked", lambda *_a, **_k: None)
+    monkeypatch.setattr(manager, "_reconcile_projections_locked", lambda _result: None)
+    selected = manager.activate_existing(
+        record.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+    assert selected.release_id == record.release_id
+    return store, manager, operator_configs
+
+
+def test_uninstall_preserve_keeps_divergent_operator_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Divergent config.yaml is operator-owned: uninstall must not refuse or delete it."""
+
+    store, manager, operator_configs = _activate_adopted_premarker(tmp_path, monkeypatch)
+    _allow_unit_manager_authority(manager, monkeypatch)
+
+    result = manager.uninstall(purge=False, confirmed=True)
+
+    assert result.purged is False
+    resources = Path(lifecycle.__file__).parent / "resources"
+    for role, expected_config in operator_configs.items():
+        home = store.profile_home(role)
+        assert (home / "config.yaml").read_bytes() == expected_config
+        assert not (home / "aether-observer.json").exists()
+        assert not (home / "SOUL.md").exists()
+        for skill_name in lifecycle._CANONICAL_SKILLS:
+            assert not (home / "skills" / skill_name / "SKILL.md").exists()
+        assert (home / "skills" / "private-local" / "SKILL.md").read_bytes() == (
+            b"learned local procedure\n"
+        )
+        # Guard against accidental package rewrite of operator config.
+        package = (resources / "profiles" / role / "config.yaml").read_bytes()
+        assert expected_config != package
+
+
+def test_recover_after_crash_materialize_keeps_divergent_operator_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Crash after adopt/materialize with no active must deactivate managed bytes only."""
+
+    store, manager, operator_configs = _activate_adopted_premarker(tmp_path, monkeypatch)
+    # Simulate install crash after profile materialization before/after active switch.
+    store.active_pointer.unlink()
+    assert store.active(required=False) is None
+
+    manager.recover()
+
+    for role, expected_config in operator_configs.items():
+        home = store.profile_home(role)
+        assert (home / "config.yaml").read_bytes() == expected_config
+        assert not (home / "aether-observer.json").exists()
+        assert not (home / "SOUL.md").exists()
+        for skill_name in lifecycle._CANONICAL_SKILLS:
+            assert not (home / "skills" / skill_name / "SKILL.md").exists()
+        assert (home / "skills" / "private-local" / "SKILL.md").read_bytes() == (
+            b"learned local procedure\n"
+        )
+
+
+def test_extract_git_archive_preserves_confined_relative_symlinks(tmp_path: Path) -> None:
+    """Tracked in-tree relative symlinks must survive local-candidate materialization."""
+
+    import io
+    import tarfile
+
+    stream = io.BytesIO()
+    with tarfile.open(fileobj=stream, mode="w") as archive_writer:
+        for directory_name in ("lab", "lab/scenarios", "scripts", "scripts/e2e"):
+            directory = tarfile.TarInfo(directory_name)
+            directory.type = tarfile.DIRTYPE
+            directory.mode = 0o755
+            archive_writer.addfile(directory)
+        regular = tarfile.TarInfo("lab/scenarios/README.md")
+        regular.size = 5
+        # git archive umask turns 0644 into 0664
+        regular.mode = 0o664
+        archive_writer.addfile(regular, io.BytesIO(b"hello"))
+        link = tarfile.TarInfo("scripts/e2e/scenarios")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "../../lab/scenarios"
+        link.mode = 0o777
+        archive_writer.addfile(link)
+    destination = tmp_path / "source"
+    lifecycle._extract_git_archive(stream.getvalue(), destination)
+    target = destination / "scripts" / "e2e" / "scenarios"
+    assert target.is_symlink()
+    assert target.readlink().as_posix() == "../../lab/scenarios"
+    assert (destination / "lab" / "scenarios" / "README.md").read_bytes() == b"hello"
+
+
+def test_profile_bundle_sha256_matches_materialized_manifest(tmp_path: Path) -> None:
+    store = ReleaseStore(tmp_path / "data" / "aether", state_root=tmp_path / "state" / "aether")
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    assert manager.profile_bundle_sha256() == manager._materialize_profile_bundle(stage)
+
+
+def _service_selector_fixture(tmp_path: Path):
+    """Build a ProjectionSpec whose selector lines match the projection writer."""
+
+    from aether_agents.lifecycle import ProjectionSpec
+
+    store = ReleaseStore(tmp_path / "data" / "aether", state_root=tmp_path / "state" / "aether")
+    record = store.register(_prepared_release(tmp_path / "r1", "1.0.0", b"wheel-one"))
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    release = store.release_path(record.release_id)
+    release.mkdir(parents=True, exist_ok=True)
+    runtime_current = tmp_path / "runtime" / "current"
+    runtime_current.parent.mkdir(parents=True, exist_ok=True)
+    runtime_current.symlink_to(release)
+    profile_home = store.profile_home("morfeo")
+    profile_home.mkdir(parents=True, exist_ok=True)
+    python = f"{runtime_current}/venv/bin/python"
+    exec_start = f"ExecStart={python} -m hermes_cli.main --profile morfeo gateway run"
+    expected = (
+        f"{exec_start}\n"
+        f"WorkingDirectory={profile_home}\n"
+        f'Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
+        f'Environment="HERMES_HOME={profile_home}"\n'
+    ).encode()
+    spec = ProjectionSpec(
+        release=release,
+        runtime_current=runtime_current,
+        launcher_path=tmp_path / "launcher",
+        desktop_path=tmp_path / "desktop",
+        service_path=tmp_path / "unit.service",
+        launcher_bytes=b"launcher",
+        desktop_bytes=b"desktop",
+        service_bytes=expected,
+    )
+    return manager, spec, runtime_current, profile_home, python, exec_start
+
+
+def test_service_projection_accepts_hermes_refreshed_unit(tmp_path: Path) -> None:
+    """Hermes may refresh description/PATH while keeping the Aether runtime selector."""
+
+    manager, spec, runtime_current, profile_home, python, exec_start = _service_selector_fixture(
+        tmp_path
+    )
+    hermes_refreshed = (
+        "[Unit]\n"
+        "Description=Hermes Agent Gateway - Messaging Platform Integration\n"
+        "[Service]\n"
+        f"{exec_start}\n"
+        f"WorkingDirectory={profile_home}\n"
+        f'Environment="PATH={runtime_current}/venv/bin:/usr/bin"\n'
+        f'Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
+        f'Environment="HERMES_HOME={profile_home}"\n'
+        f"ExecStopPost=-{python} -m gateway.cgroup_cleanup\n"
+    ).encode()
+    assert manager._service_unit_selects_release(hermes_refreshed, spec) is True
+    assert manager._service_unit_selects_release(b"ExecStart=/elsewhere/python\n", spec) is False
+
+
+def test_service_unit_selects_release_rejects_prefix_decoy_and_wrong_argv(
+    tmp_path: Path,
+) -> None:
+    """Substring presence must not accept incoherent ExecStart / comment decoys."""
+
+    manager, spec, runtime_current, profile_home, python, exec_start = _service_selector_fixture(
+        tmp_path
+    )
+    selector_tail = (
+        f"WorkingDirectory={profile_home}\n"
+        f'Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
+        f'Environment="HERMES_HOME={profile_home}"\n'
+    )
+
+    prefix_evil = (
+        f"ExecStart={python}-evil -m hermes_cli.main --profile morfeo gateway run\n{selector_tail}"
+    ).encode()
+    assert manager._service_unit_selects_release(prefix_evil, spec) is False
+
+    comment_decoy = (
+        f"# {exec_start}\n"
+        f"# WorkingDirectory={profile_home}\n"
+        f'# Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
+        f'# Environment="HERMES_HOME={profile_home}"\n'
+        "ExecStart=/usr/bin/false\n"
+        f"WorkingDirectory={profile_home}\n"
+        f'Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
+        f'Environment="HERMES_HOME={profile_home}"\n'
+    ).encode()
+    # Wrong ExecStart with required strings only in comments must fail closed.
+    comment_only = (
+        f"# {exec_start}\n"
+        f"# WorkingDirectory={profile_home}\n"
+        f'# Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
+        f'# Environment="HERMES_HOME={profile_home}"\n'
+        "ExecStart=/usr/bin/false\n"
+    ).encode()
+    assert manager._service_unit_selects_release(comment_only, spec) is False
+    assert manager._service_unit_selects_release(comment_decoy, spec) is False
+
+    wrong_argv = (
+        f"ExecStart={python} -m evil_module --profile morfeo gateway run\n{selector_tail}"
+    ).encode()
+    assert manager._service_unit_selects_release(wrong_argv, spec) is False
+
+    wrong_profile = (
+        f"ExecStart={python} -m hermes_cli.main --profile other gateway run\n{selector_tail}"
+    ).encode()
+    assert manager._service_unit_selects_release(wrong_profile, spec) is False

@@ -610,6 +610,62 @@ def test_doctor_reports_fail_closed_projection_mismatches(
     assert "runtime_pointer_mismatch" in status["mismatches"]
 
 
+def test_projection_status_rejects_incoherent_hermes_refreshed_units(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Doctor must not treat prefix/decoy/wrong-argv units as coherent selectors."""
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    manager = _manager(tmp_path)
+    record = _record(manager.store)
+    _publish_record(manager, record)
+    manager.project_release(record, restart_service=False)
+    spec = manager.projection_spec(record)
+    runtime = str(spec.runtime_current)
+    profile_home = str(manager.store.profile_home("morfeo"))
+    python = f"{runtime}/venv/bin/python"
+    exec_start = f"ExecStart={python} -m hermes_cli.main --profile morfeo gateway run"
+    selector_tail = (
+        f"WorkingDirectory={profile_home}\n"
+        f'Environment="PATH={runtime}/venv/bin:/usr/bin"\n'
+        f'Environment="VIRTUAL_ENV={runtime}/venv"\n'
+        f'Environment="HERMES_HOME={profile_home}"\n'
+        f"ExecStopPost=-{python} -m gateway.cgroup_cleanup\n"
+    )
+
+    coherent = (
+        "[Unit]\n"
+        "Description=Hermes Agent Gateway - Messaging Platform Integration\n"
+        "[Service]\n"
+        f"{exec_start}\n"
+        f"{selector_tail}"
+    ).encode()
+    spec.service_path.write_bytes(coherent)
+    assert "service_projection_mismatch" not in manager.projection_status(record)["mismatches"]
+
+    for payload in (
+        (
+            f"ExecStart={python}-evil -m hermes_cli.main --profile morfeo gateway run\n"
+            f"{selector_tail}"
+        ).encode(),
+        (
+            f"# {exec_start}\n"
+            f"# WorkingDirectory={profile_home}\n"
+            f'# Environment="VIRTUAL_ENV={runtime}/venv"\n'
+            f'# Environment="HERMES_HOME={profile_home}"\n'
+            "ExecStart=/usr/bin/false\n"
+            f"{selector_tail}"
+        ).encode(),
+        (
+            f"ExecStart={python} -m evil_module --profile morfeo gateway run\n{selector_tail}"
+        ).encode(),
+    ):
+        spec.service_path.write_bytes(payload)
+        status = manager.projection_status(record)
+        assert "service_projection_mismatch" in status["mismatches"], payload
+
+
 def test_recovery_reprojects_a_partial_transition(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -678,6 +734,75 @@ def test_deactivation_never_removes_foreign_projection_bytes(
     manager._deactivate_lifecycle_projections(record)
 
     assert spec.launcher_path.read_text(encoding="utf-8") == "#!/bin/sh\n# owner-managed\n"
+    assert not spec.desktop_path.exists()
+
+
+def test_deactivation_removes_selector_coherent_hermes_refreshed_units(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hermes-refreshed units that still select the release must be removable debris."""
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    manager = _manager(tmp_path)
+    record = _record(manager.store)
+    _publish_record(manager, record)
+    manager.project_release(record, restart_service=False)
+    spec = manager.projection_spec(record)
+    runtime = str(spec.runtime_current)
+    profile_home = str(manager.store.profile_home("morfeo"))
+    python = f"{runtime}/venv/bin/python"
+    exec_start = f"ExecStart={python} -m hermes_cli.main --profile morfeo gateway run"
+    hermes_refreshed = (
+        "[Unit]\n"
+        "Description=Hermes Agent Gateway - Messaging Platform Integration\n"
+        "[Service]\n"
+        f"{exec_start}\n"
+        f"WorkingDirectory={profile_home}\n"
+        f'Environment="PATH={runtime}/venv/bin:/usr/bin"\n'
+        f'Environment="VIRTUAL_ENV={runtime}/venv"\n'
+        f'Environment="HERMES_HOME={profile_home}"\n'
+        f"ExecStopPost=-{python} -m gateway.cgroup_cleanup\n"
+    ).encode()
+    spec.service_path.write_bytes(hermes_refreshed)
+    assert hermes_refreshed != spec.service_bytes
+    assert "service_projection_mismatch" not in manager.projection_status(record)["mismatches"]
+
+    manager._deactivate_lifecycle_projections(record)
+
+    assert not spec.service_path.exists()
+    assert not spec.launcher_path.exists()
+    assert not spec.desktop_path.exists()
+    assert not spec.runtime_current.exists()
+
+
+def test_deactivation_preserves_incoherent_service_units(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Units that no longer select the release stay fail-closed (not deleted)."""
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    manager = _manager(tmp_path)
+    record = _record(manager.store)
+    _publish_record(manager, record)
+    manager.project_release(record, restart_service=False)
+    spec = manager.projection_spec(record)
+    runtime = str(spec.runtime_current)
+    profile_home = str(manager.store.profile_home("morfeo"))
+    incoherent = (
+        f"ExecStart={runtime}/venv/bin/python -m evil_module --profile morfeo gateway run\n"
+        f"WorkingDirectory={profile_home}\n"
+        f'Environment="VIRTUAL_ENV={runtime}/venv"\n'
+        f'Environment="HERMES_HOME={profile_home}"\n'
+    ).encode()
+    spec.service_path.write_bytes(incoherent)
+    assert "service_projection_mismatch" in manager.projection_status(record)["mismatches"]
+
+    manager._deactivate_lifecycle_projections(record)
+
+    assert spec.service_path.read_bytes() == incoherent
+    assert not spec.launcher_path.exists()
     assert not spec.desktop_path.exists()
 
 

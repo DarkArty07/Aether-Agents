@@ -25,6 +25,7 @@ import sys
 import tarfile
 import tempfile
 import threading
+import time
 import tomllib
 import zipfile
 from contextlib import contextmanager
@@ -1030,6 +1031,30 @@ def _archive_member_path(name: str) -> PurePosixPath:
     return relative
 
 
+def _validate_confined_archive_symlink(relative: PurePosixPath, linkname: str) -> None:
+    """Refuse absolute or escaping symlink targets in a Git source archive."""
+
+    if (
+        not isinstance(linkname, str)
+        or not linkname
+        or linkname.startswith("/")
+        or "\\" in linkname
+        or any(ord(character) < 0x20 or ord(character) == 0x7F for character in linkname)
+    ):
+        raise IntegrityError("source archive symlink escapes its release root")
+    base = PurePosixPath(*relative.parts[:-1]) if len(relative.parts) > 1 else PurePosixPath(".")
+    parts: list[str] = []
+    for part in (base / linkname).parts:
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            if not parts:
+                raise IntegrityError("source archive symlink escapes its release root")
+            parts.pop()
+            continue
+        parts.append(part)
+
+
 def _extract_git_archive(archive: bytes, destination: Path) -> None:
     """Extract only confined regular files/directories from an authenticated archive."""
 
@@ -1046,12 +1071,14 @@ def _extract_git_archive(archive: bytes, destination: Path) -> None:
                 if canonical in observed:
                     raise IntegrityError("Hermes source archive contains duplicate paths")
                 observed.add(canonical)
-                if not (member.isdir() or member.isreg()):
-                    raise IntegrityError("Hermes source archive contains a non-regular member")
+                if member.issym():
+                    _validate_confined_archive_symlink(relative, member.linkname)
+                elif not (member.isdir() or member.isreg()):
+                    raise IntegrityError("source archive contains a non-regular member")
                 # ``git archive`` applies its conventional 0002 tar umask: Git
                 # 100644/100755 entries appear as 0664/0775 in the archive.
                 if member.isreg() and stat.S_IMODE(member.mode) not in (0o664, 0o775):
-                    raise IntegrityError("Hermes source archive contains an invalid file mode")
+                    raise IntegrityError("source archive contains an invalid file mode")
                 validated.append((member, relative))
 
             _extract_validated_members(source, validated, destination)
@@ -1076,9 +1103,12 @@ def _extract_validated_members(
                 target.mkdir(mode=DIR_MODE, parents=True, exist_ok=True)
                 continue
             target.parent.mkdir(mode=DIR_MODE, parents=True, exist_ok=True)
+            if member.issym():
+                target.symlink_to(member.linkname)
+                continue
             extracted = source.extractfile(member)
             if extracted is None:
-                raise IntegrityError("Hermes source archive file is unreadable")
+                raise IntegrityError("source archive file is unreadable")
             LifecycleManager._write_durable(target, extracted.read())
         return
 
@@ -1101,10 +1131,14 @@ def _extract_validated_members(
                 if member.isdir():
                     os.fsync(current)
                     continue
+                name = _safe_entry_name(relative.parts[-1])
+                if member.issym():
+                    os.symlink(member.linkname, name, dir_fd=current)
+                    os.fsync(current)
+                    continue
                 extracted = source.extractfile(member)
                 if extracted is None:
-                    raise IntegrityError("Hermes source archive file is unreadable")
-                name = _safe_entry_name(relative.parts[-1])
+                    raise IntegrityError("source archive file is unreadable")
                 mode = 0o700 if stat.S_IMODE(member.mode) == 0o775 else FILE_MODE
                 flags = (
                     os.O_WRONLY
@@ -3260,16 +3294,20 @@ class LifecycleManager:
         hermes_checkout: Path | str,
         release_lock: Path | str,
     ) -> dict[str, str]:
-        """Return content-free identity only after verifying both local inputs."""
+        """Return content-free identity only after verifying both local inputs.
+
+        Preview shares the prepare path's candidate authority: the release lock is
+        loaded first and the checkout is verified against its declared Hermes source
+        identity.  The retired public baseline is never used to qualify a schema-4
+        maintained-fork lock.
+        """
 
         source_wheel = self._resolve_wheel(wheel)
-        evidence = verify_clean_checkout(
-            hermes_checkout,
-            expected_tag=HERMES_BASELINE.tag,
-            expected_commit=HERMES_BASELINE.commit,
-            expected_tag_object=HERMES_BASELINE.tag_object,
-        )
+        # Source identity is resolved from the validated lock first: the checkout is
+        # verified against that identity instead of the retired fixed public baseline.
         validated_lock = load_release_lock(release_lock)
+        hermes_source = validated_lock.effective_hermes_source
+        evidence = verify_clean_checkout(hermes_checkout, source=hermes_source)
         self._validate_aether_wheel_lock(validated_lock, source_wheel)
         metadata = self._inspect_wheel(source_wheel)
         self._validate_aether_identity(validated_lock.aether_identity, metadata)
@@ -3532,6 +3570,50 @@ class LifecycleManager:
         except (OSError, ValueError) as error:
             raise IntegrityError("managed profile release resource is unreadable") from error
 
+    def _begin_profile_adoption_root(self) -> Path:
+        stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+        root = self.store.state_root / "migrations" / f"{stamp}-profile-adoption"
+        ensure_private_dir(self.store.state_root / "migrations")
+        ensure_private_dir(root)
+        ensure_private_dir(root / "files")
+        return root
+
+    @staticmethod
+    def _backup_profile_adoption_bytes(
+        *,
+        adoption_root: Path,
+        role: str,
+        relative: str,
+        payload: bytes,
+    ) -> dict[str, str]:
+        """Persist one pre-adoption package-owned file under state migrations."""
+
+        destination = adoption_root / "files" / role / relative.replace("/", "__")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _atomic_bytes(destination, payload)
+        return {
+            "role": role,
+            "path": f"{role}/{relative}",
+            "backup": str(destination),
+            "sha256": hashlib.sha256(payload).hexdigest(),
+        }
+
+    @staticmethod
+    def _write_profile_adoption_receipt(
+        *,
+        adoption_root: Path,
+        release_id: str,
+        backed_up: list[dict[str, str]],
+        preserved_config: list[dict[str, str]],
+    ) -> None:
+        payload = {
+            "schema": "aether.profile-adoption.v1",
+            "release_id": release_id,
+            "backed_up": backed_up,
+            "preserved_config": preserved_config,
+        }
+        _atomic_json(adoption_root / "receipt.json", payload)
+
     def _preflight_profile_homes(
         self,
         record: ReleaseRecord,
@@ -3578,12 +3660,20 @@ class LifecycleManager:
                 target = home / name
                 if target.is_symlink():
                     raise IntegrityError("managed profile product file must not be a symlink")
-                if target.exists():
-                    self._profile_resource_status(
-                        target,
-                        directory=False,
-                        label="managed profile product file",
-                    )
+                if not target.exists():
+                    continue
+                if ownership_record is None and previous is None:
+                    # Initial adoption: tolerate pre-lifecycle modes; materialize
+                    # rewrites package-owned SOUL.md to FILE_MODE and hardens
+                    # preserved operator config permissions without changing bytes.
+                    if not target.is_file():
+                        raise IntegrityError("managed profile product file is unsafe")
+                    continue
+                self._profile_resource_status(
+                    target,
+                    directory=False,
+                    label="managed profile product file",
+                )
 
             skills_root = home / "skills"
             if skills_root.is_symlink():
@@ -3618,7 +3708,13 @@ class LifecycleManager:
                 if not target.exists():
                     continue
                 if ownership_record is None:
-                    raise IntegrityError("canonical skill ownership evidence is missing")
+                    # Initial adoption (no active release / no marker): structural safety
+                    # only.  Materialize backs up and replaces package-owned bytes.
+                    if previous is not None:
+                        raise IntegrityError("canonical skill ownership evidence is missing")
+                    if not target.is_file():
+                        raise IntegrityError("managed profile canonical skill is unsafe")
+                    continue
                 self._profile_resource_status(
                     target,
                     directory=False,
@@ -3651,6 +3747,9 @@ class LifecycleManager:
         )
         release = self.store.release_path(record.release_id)
         ensure_private_dir(self.store.profile_homes)
+        adoption_backups: list[dict[str, str]] = []
+        preserved_configs: list[dict[str, str]] = []
+        adoption_root: Path | None = None
         for role in _PROFILE_ROLES:
             home = self.store.profile_home(role)
             if home.is_symlink():
@@ -3664,7 +3763,42 @@ class LifecycleManager:
                     source_bytes = read_private_bytes(source)
                 except (OSError, ValueError) as error:
                     raise IntegrityError("managed profile resource is unreadable") from error
-                _atomic_bytes(home / name, source_bytes)
+                target = home / name
+                if name == "config.yaml" and target.is_file() and not target.is_symlink():
+                    try:
+                        existing = read_private_bytes(target)
+                    except (OSError, ValueError) as error:
+                        raise IntegrityError("managed profile resource is unreadable") from error
+                    if existing != source_bytes:
+                        # Operator-provisioned config is preserved across first adoption
+                        # and later promotions; package templates never overwrite it.
+                        # Preflight may tolerate 0644, but activation requires FILE_MODE.
+                        harden_file(target)
+                        preserved_configs.append(
+                            {
+                                "role": role,
+                                "path": str(target),
+                                "sha256": hashlib.sha256(existing).hexdigest(),
+                            }
+                        )
+                        continue
+                if target.is_file() and not target.is_symlink():
+                    try:
+                        existing = read_private_bytes(target)
+                    except (OSError, ValueError) as error:
+                        raise IntegrityError("managed profile resource is unreadable") from error
+                    if existing != source_bytes:
+                        if adoption_root is None:
+                            adoption_root = self._begin_profile_adoption_root()
+                        adoption_backups.append(
+                            self._backup_profile_adoption_bytes(
+                                adoption_root=adoption_root,
+                                role=role,
+                                relative=name,
+                                payload=existing,
+                            )
+                        )
+                _atomic_bytes(target, source_bytes)
             skills_root = home / "skills"
             if skills_root.is_symlink() or (skills_root.exists() and not skills_root.is_dir()):
                 raise IntegrityError("managed profile skill directory is unsafe")
@@ -3686,8 +3820,35 @@ class LifecycleManager:
                     raise IntegrityError(
                         "managed canonical skill resource is unreadable"
                     ) from error
+                if target.is_file():
+                    try:
+                        existing = read_private_bytes(target)
+                    except (OSError, ValueError) as error:
+                        raise IntegrityError(
+                            "managed canonical skill resource is unreadable"
+                        ) from error
+                    if existing != source_bytes:
+                        if adoption_root is None:
+                            adoption_root = self._begin_profile_adoption_root()
+                        adoption_backups.append(
+                            self._backup_profile_adoption_bytes(
+                                adoption_root=adoption_root,
+                                role=role,
+                                relative=f"skills/{skill_name}/SKILL.md",
+                                payload=existing,
+                            )
+                        )
                 _atomic_bytes(target, source_bytes)
             _atomic_json(home / "aether-observer.json", self._profile_activation(record, role))
+        if adoption_backups or preserved_configs:
+            if adoption_root is None:
+                adoption_root = self._begin_profile_adoption_root()
+            self._write_profile_adoption_receipt(
+                adoption_root=adoption_root,
+                release_id=record.release_id,
+                backed_up=adoption_backups,
+                preserved_config=preserved_configs,
+            )
         _fsync_directory(self.store.profile_homes)
 
     def _validate_profile_homes(self, record: ReleaseRecord) -> None:
@@ -3712,15 +3873,14 @@ class LifecycleManager:
                 raise IntegrityError("managed profile activation is incomplete")
             try:
                 config_bytes = read_private_bytes(config)
-                config_source_bytes = read_private_bytes(
-                    release / "profiles" / role / "config.yaml"
-                )
                 soul_bytes = read_private_bytes(soul)
                 soul_source_bytes = read_private_bytes(release / "profiles" / role / "SOUL.md")
                 activation_bytes = read_private_bytes(activation)
             except (OSError, ValueError) as error:
                 raise IntegrityError("managed profile activation is unreadable") from error
-            if config_bytes != config_source_bytes or soul_bytes != soul_source_bytes:
+            # config.yaml is operator-owned after first provision; only SOUL.md is
+            # required to match the immutable package bundle.
+            if not config_bytes or soul_bytes != soul_source_bytes:
                 raise IntegrityError("managed profile activation resource drift")
             try:
                 payload = json.loads(activation_bytes.decode("utf-8"))
@@ -3786,18 +3946,12 @@ class LifecycleManager:
                 issues.append("profile activation marker is invalid")
                 continue
             if marker is None:
-                managed_targets = [home / name for name in ("config.yaml", "SOUL.md")]
+                # Pre-lifecycle / pre-marker homes are not lifecycle debris.  Recover and
+                # first-install adoption leave them in place; only marker-owned bytes are
+                # eligible for deactivation.
                 skills_root = home / "skills"
-                if skills_root.is_symlink():
+                if skills_root.is_symlink() or (skills_root.exists() and not skills_root.is_dir()):
                     issues.append("profile skill directory is unsafe")
-                elif skills_root.exists() and not skills_root.is_dir():
-                    issues.append("profile skill directory is unsafe")
-                elif skills_root.is_dir():
-                    managed_targets.extend(
-                        skills_root / skill_name / "SKILL.md" for skill_name in _CANONICAL_SKILLS
-                    )
-                if any(path.is_symlink() or path.exists() for path in managed_targets):
-                    issues.append("canonical profile ownership evidence is missing")
                 continue
 
             try:
@@ -3835,6 +3989,10 @@ class LifecycleManager:
                     continue
                 if observed == expected:
                     role_removals.append(target)
+                elif name == "config.yaml":
+                    # Operator-owned after first provision / pre-marker adoption:
+                    # leave divergent bytes in place and continue managed cleanup.
+                    continue
                 else:
                     role_issue = True
 
@@ -4389,21 +4547,36 @@ class LifecycleManager:
     def profile_bundle_sha256(self) -> str:
         """Return the digest of the profile bundle this manager materializes.
 
-        The managed profile bundle is produced by the installed product's packaged
-        resources, so a release lock must declare exactly this digest for the same
-        manager to accept the candidate.
+        The digest must match ``_materialize_profile_bundle`` and the release-bundle
+        lock helper: the SHA-256 of the canonical profile-bundle.json bytes.
         """
 
-        rows: dict[str, dict[str, str]] = {}
+        profiles: dict[str, dict[str, dict[str, dict[str, str]]]] = {}
         for role in _PROFILE_ROLES:
-            resources: dict[str, str] = {}
-            for name, source in self._profile_sources(role).items():
-                resources[name] = _sha256(source)
-            skills: dict[str, str] = {}
-            for skill_name, source in self._skill_sources().items():
-                skills[f"profiles/{role}/skills/{skill_name}/SKILL.md"] = _sha256(source)
-            rows[role] = {"resources": resources, "skills": skills}
-        encoded = json.dumps(rows, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            resources = {
+                name: {
+                    "path": f"profiles/{role}/{name}",
+                    "sha256": _sha256(source),
+                }
+                for name, source in self._profile_sources(role).items()
+            }
+            skills = {
+                skill_name: {
+                    "path": f"profiles/{role}/skills/{skill_name}/SKILL.md",
+                    "sha256": _sha256(source),
+                }
+                for skill_name, source in self._skill_sources().items()
+            }
+            profiles[role] = {"resources": resources, "skills": skills}
+        manifest = {
+            "schema_version": 2,
+            "observer_entry_point": HERMES_BASELINE.observer_entry_point,
+            "roles": list(_PROFILE_ROLES),
+            "profiles": profiles,
+        }
+        encoded = (json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n").encode(
+            "utf-8"
+        )
         return hashlib.sha256(encoded).hexdigest()
 
     def update_local(
@@ -4429,7 +4602,8 @@ class LifecycleManager:
             fork_commit=fork_commit,
         )
         with self.store.mutation_lock():
-            self._assert_executing_active_manager_locked()
+            if self.store.active(required=False) is not None:
+                self._assert_executing_active_manager_locked()
             self._recover_locked()
             if expected is _CAS_UNSET:
                 expected = self._assert_expected_active_locked(_CAS_UNSET)
@@ -4449,7 +4623,7 @@ class LifecycleManager:
                 )
                 return self._activate_existing_locked(
                     record.release_id,
-                    transition_kind="update",
+                    transition_kind="install" if expected is None else "update",
                     expected_active_release_id=expected,
                 )
             finally:
@@ -6015,6 +6189,73 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             return self.disabled_service_reason or "unavailable"
         return self.service_controller.restart(spec.service_path.name)
 
+    @staticmethod
+    def _service_unit_active_lines(text: str) -> list[str]:
+        """Return non-empty, non-comment systemd unit lines (stripped)."""
+
+        active: list[str] = []
+        for physical in text.splitlines():
+            stripped = physical.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            active.append(stripped)
+        return active
+
+    @staticmethod
+    def _service_unit_selector_lines(expected_text: str) -> tuple[str, str, str, str] | None:
+        """Extract the Aether-owned selector lines from the projected unit."""
+
+        exec_start = working = virtual_env = hermes_home = None
+        for line in LifecycleManager._service_unit_active_lines(expected_text):
+            if line.startswith("ExecStart="):
+                exec_start = line
+            elif line.startswith("WorkingDirectory="):
+                working = line
+            elif line.startswith('Environment="VIRTUAL_ENV='):
+                virtual_env = line
+            elif line.startswith('Environment="HERMES_HOME='):
+                hermes_home = line
+        if not exec_start or not working or not virtual_env or not hermes_home:
+            return None
+        return exec_start, working, virtual_env, hermes_home
+
+    @staticmethod
+    def _service_unit_selects_release(observed: bytes, spec: ProjectionSpec) -> bool:
+        """Return True when a Hermes-refreshed unit still selects this release.
+
+        Hermes may rewrite Description/PATH/ExecStopPost. Coherence requires exact
+        equality of the Aether-owned selector lines among non-comment unit text:
+        full ExecStart, WorkingDirectory, VIRTUAL_ENV, and HERMES_HOME.
+        """
+
+        try:
+            text = observed.decode("utf-8")
+            expected_text = spec.service_bytes.decode("utf-8")
+        except UnicodeError:
+            return False
+        required = LifecycleManager._service_unit_selector_lines(expected_text)
+        if required is None:
+            return False
+        exec_start, working, virtual_env, hermes_home = required
+        active = LifecycleManager._service_unit_active_lines(text)
+        if exec_start not in active or working not in active:
+            return False
+        if virtual_env not in active or hermes_home not in active:
+            return False
+        if any(line.startswith("ExecStart=") and line != exec_start for line in active):
+            return False
+        if any(line.startswith("WorkingDirectory=") and line != working for line in active):
+            return False
+        if any(
+            line.startswith('Environment="VIRTUAL_ENV=') and line != virtual_env for line in active
+        ):
+            return False
+        if any(
+            line.startswith('Environment="HERMES_HOME=') and line != hermes_home for line in active
+        ):
+            return False
+        return True
+
     def projection_status(self, record: ReleaseRecord) -> dict[str, Any]:
         """Report the exact selector/projection coherence for one release record."""
 
@@ -6039,8 +6280,15 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
                 if path.is_symlink() or not path.is_file():
                     status["mismatches"].append(f"{label}_projection_missing")
                     continue
-                if path.read_bytes() != expected:
-                    status["mismatches"].append(f"{label}_projection_mismatch")
+                observed = path.read_bytes()
+                if observed == expected:
+                    continue
+                if label == "service" and self._service_unit_selects_release(observed, spec):
+                    # Hermes refreshes the unit on gateway start and may rewrite
+                    # description/PATH/ExecStopPost while preserving the Aether
+                    # runtime selector.  That remains a coherent projection.
+                    continue
+                status["mismatches"].append(f"{label}_projection_mismatch")
             except OSError:
                 status["mismatches"].append(f"{label}_projection_unreadable")
         status["projection_digests"] = spec.digests()
@@ -6048,7 +6296,12 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         return status
 
     def _deactivate_lifecycle_projections(self, record: ReleaseRecord) -> None:
-        """Remove only byte-identical Aether-owned projections of this release."""
+        """Remove Aether-owned projections of this release.
+
+        Launcher/desktop require byte identity. Service units may also be Hermes-
+        refreshed while remaining selector-coherent; those are removable debris.
+        Incoherent units stay fail-closed (not deleted).
+        """
 
         spec = self.projection_spec(record)
         for path, expected in (
@@ -6059,8 +6312,13 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             try:
                 if path.is_symlink() or not path.is_file():
                     continue
-                if path.read_bytes() != expected:
-                    continue
+                observed = path.read_bytes()
+                if observed != expected:
+                    if path != spec.service_path or not self._service_unit_selects_release(
+                        observed,
+                        spec,
+                    ):
+                        continue
                 path.unlink()
             except OSError:
                 continue
