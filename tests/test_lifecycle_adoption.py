@@ -211,6 +211,51 @@ def test_first_install_adopts_premarker_profiles_preserving_operator_config(
     manager._validate_profile_homes(selected)
 
 
+def test_first_install_hardens_preserved_operator_config_mode_0644(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#465: preserved divergent config keeps operator bytes but must become FILE_MODE."""
+
+    import stat as stat_module
+
+    store = ReleaseStore(tmp_path / "data" / "aether", state_root=tmp_path / "state" / "aether")
+    operator_configs = _seed_premarker_profiles(store)
+    # Live pre-marker configs may be 0644 while still differing from package templates.
+    for role in operator_configs:
+        config = store.profile_home(role) / "config.yaml"
+        os.chmod(config, 0o644)
+        assert stat_module.S_IMODE(config.stat().st_mode) == 0o644
+    record = store.register(_prepared_release(tmp_path / "r1", "1.0.0", b"wheel-one"))
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+    monkeypatch.setattr(
+        manager,
+        "_prepare_release_projections_locked",
+        lambda _record: {"desktop": None, "launcher": None, "service": None},
+    )
+    monkeypatch.setattr(manager, "_select_release_projections_locked", lambda *_a, **_k: None)
+    monkeypatch.setattr(manager, "project_release", lambda *_a, **_k: None)
+    monkeypatch.setattr(manager, "_reconcile_release_projections_locked", lambda *_a, **_k: None)
+
+    selected = manager.activate_existing(
+        record.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+
+    assert selected.release_id == record.release_id
+    for role, expected_config in operator_configs.items():
+        config = store.profile_home(role) / "config.yaml"
+        assert config.read_bytes() == expected_config
+        assert stat_module.S_IMODE(config.stat().st_mode) == 0o600
+    manager._validate_profile_homes(selected)
+
+
 def test_extract_git_archive_preserves_confined_relative_symlinks(tmp_path: Path) -> None:
     """Tracked in-tree relative symlinks must survive local-candidate materialization."""
 

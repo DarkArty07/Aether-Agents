@@ -3664,7 +3664,8 @@ class LifecycleManager:
                     continue
                 if ownership_record is None and previous is None:
                     # Initial adoption: tolerate pre-lifecycle modes; materialize
-                    # rewrites package-owned SOUL.md to FILE_MODE and preserves config.
+                    # rewrites package-owned SOUL.md to FILE_MODE and hardens
+                    # preserved operator config permissions without changing bytes.
                     if not target.is_file():
                         raise IntegrityError("managed profile product file is unsafe")
                     continue
@@ -3771,6 +3772,8 @@ class LifecycleManager:
                     if existing != source_bytes:
                         # Operator-provisioned config is preserved across first adoption
                         # and later promotions; package templates never overwrite it.
+                        # Preflight may tolerate 0644, but activation requires FILE_MODE.
+                        harden_file(target)
                         preserved_configs.append(
                             {
                                 "role": role,
