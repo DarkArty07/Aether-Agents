@@ -6186,31 +6186,71 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         return self.service_controller.restart(spec.service_path.name)
 
     @staticmethod
+    def _service_unit_active_lines(text: str) -> list[str]:
+        """Return non-empty, non-comment systemd unit lines (stripped)."""
+
+        active: list[str] = []
+        for physical in text.splitlines():
+            stripped = physical.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            active.append(stripped)
+        return active
+
+    @staticmethod
+    def _service_unit_selector_lines(expected_text: str) -> tuple[str, str, str, str] | None:
+        """Extract the Aether-owned selector lines from the projected unit."""
+
+        exec_start = working = virtual_env = hermes_home = None
+        for line in LifecycleManager._service_unit_active_lines(expected_text):
+            if line.startswith("ExecStart="):
+                exec_start = line
+            elif line.startswith("WorkingDirectory="):
+                working = line
+            elif line.startswith('Environment="VIRTUAL_ENV='):
+                virtual_env = line
+            elif line.startswith('Environment="HERMES_HOME='):
+                hermes_home = line
+        if not exec_start or not working or not virtual_env or not hermes_home:
+            return None
+        return exec_start, working, virtual_env, hermes_home
+
+    @staticmethod
     def _service_unit_selects_release(observed: bytes, spec: ProjectionSpec) -> bool:
-        """Return True when a Hermes-refreshed unit still selects this release."""
+        """Return True when a Hermes-refreshed unit still selects this release.
+
+        Hermes may rewrite Description/PATH/ExecStopPost. Coherence requires exact
+        equality of the Aether-owned selector lines among non-comment unit text:
+        full ExecStart, WorkingDirectory, VIRTUAL_ENV, and HERMES_HOME.
+        """
 
         try:
             text = observed.decode("utf-8")
             expected_text = spec.service_bytes.decode("utf-8")
         except UnicodeError:
             return False
-        runtime = str(spec.runtime_current)
-        working = None
-        hermes_home = None
-        for line in expected_text.splitlines():
-            if line.startswith("WorkingDirectory="):
-                working = line.split("=", 1)[1]
-            if line.startswith('Environment="HERMES_HOME='):
-                hermes_home = line.removeprefix('Environment="HERMES_HOME=').rstrip('"')
-        if not working or not hermes_home:
+        required = LifecycleManager._service_unit_selector_lines(expected_text)
+        if required is None:
             return False
-        required = (
-            f"ExecStart={runtime}/venv/bin/python",
-            f"WorkingDirectory={working}",
-            f'Environment="VIRTUAL_ENV={runtime}/venv"',
-            f'Environment="HERMES_HOME={hermes_home}"',
-        )
-        return all(item in text for item in required)
+        exec_start, working, virtual_env, hermes_home = required
+        active = LifecycleManager._service_unit_active_lines(text)
+        if exec_start not in active or working not in active:
+            return False
+        if virtual_env not in active or hermes_home not in active:
+            return False
+        if any(line.startswith("ExecStart=") and line != exec_start for line in active):
+            return False
+        if any(line.startswith("WorkingDirectory=") and line != working for line in active):
+            return False
+        if any(
+            line.startswith('Environment="VIRTUAL_ENV=') and line != virtual_env for line in active
+        ):
+            return False
+        if any(
+            line.startswith('Environment="HERMES_HOME=') and line != hermes_home for line in active
+        ):
+            return False
+        return True
 
     def projection_status(self, record: ReleaseRecord) -> dict[str, Any]:
         """Report the exact selector/projection coherence for one release record."""

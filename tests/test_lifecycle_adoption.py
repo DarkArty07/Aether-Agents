@@ -295,8 +295,8 @@ def test_profile_bundle_sha256_matches_materialized_manifest(tmp_path: Path) -> 
     assert manager.profile_bundle_sha256() == manager._materialize_profile_bundle(stage)
 
 
-def test_service_projection_accepts_hermes_refreshed_unit(tmp_path: Path) -> None:
-    """Hermes may refresh description/PATH while keeping the Aether runtime selector."""
+def _service_selector_fixture(tmp_path: Path):
+    """Build a ProjectionSpec whose selector lines match the projection writer."""
 
     from aether_agents.lifecycle import ProjectionSpec
 
@@ -310,22 +310,13 @@ def test_service_projection_accepts_hermes_refreshed_unit(tmp_path: Path) -> Non
     runtime_current.symlink_to(release)
     profile_home = store.profile_home("morfeo")
     profile_home.mkdir(parents=True, exist_ok=True)
+    python = f"{runtime_current}/venv/bin/python"
+    exec_start = f"ExecStart={python} -m hermes_cli.main --profile morfeo gateway run"
     expected = (
-        f"ExecStart={runtime_current}/venv/bin/python -m hermes_cli.main --profile morfeo gateway run\n"
+        f"{exec_start}\n"
         f"WorkingDirectory={profile_home}\n"
         f'Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
         f'Environment="HERMES_HOME={profile_home}"\n'
-    ).encode()
-    hermes_refreshed = (
-        "[Unit]\n"
-        "Description=Hermes Agent Gateway - Messaging Platform Integration\n"
-        "[Service]\n"
-        f"ExecStart={runtime_current}/venv/bin/python -m hermes_cli.main --profile morfeo gateway run\n"
-        f"WorkingDirectory={profile_home}\n"
-        f'Environment="PATH={runtime_current}/venv/bin:/usr/bin"\n'
-        f'Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
-        f'Environment="HERMES_HOME={profile_home}"\n'
-        f"ExecStopPost=-{runtime_current}/venv/bin/python -m gateway.cgroup_cleanup\n"
     ).encode()
     spec = ProjectionSpec(
         release=release,
@@ -337,5 +328,76 @@ def test_service_projection_accepts_hermes_refreshed_unit(tmp_path: Path) -> Non
         desktop_bytes=b"desktop",
         service_bytes=expected,
     )
+    return manager, spec, runtime_current, profile_home, python, exec_start
+
+
+def test_service_projection_accepts_hermes_refreshed_unit(tmp_path: Path) -> None:
+    """Hermes may refresh description/PATH while keeping the Aether runtime selector."""
+
+    manager, spec, runtime_current, profile_home, python, exec_start = _service_selector_fixture(
+        tmp_path
+    )
+    hermes_refreshed = (
+        "[Unit]\n"
+        "Description=Hermes Agent Gateway - Messaging Platform Integration\n"
+        "[Service]\n"
+        f"{exec_start}\n"
+        f"WorkingDirectory={profile_home}\n"
+        f'Environment="PATH={runtime_current}/venv/bin:/usr/bin"\n'
+        f'Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
+        f'Environment="HERMES_HOME={profile_home}"\n'
+        f"ExecStopPost=-{python} -m gateway.cgroup_cleanup\n"
+    ).encode()
     assert manager._service_unit_selects_release(hermes_refreshed, spec) is True
     assert manager._service_unit_selects_release(b"ExecStart=/elsewhere/python\n", spec) is False
+
+
+def test_service_unit_selects_release_rejects_prefix_decoy_and_wrong_argv(
+    tmp_path: Path,
+) -> None:
+    """Substring presence must not accept incoherent ExecStart / comment decoys."""
+
+    manager, spec, runtime_current, profile_home, python, exec_start = _service_selector_fixture(
+        tmp_path
+    )
+    selector_tail = (
+        f"WorkingDirectory={profile_home}\n"
+        f'Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
+        f'Environment="HERMES_HOME={profile_home}"\n'
+    )
+
+    prefix_evil = (
+        f"ExecStart={python}-evil -m hermes_cli.main --profile morfeo gateway run\n{selector_tail}"
+    ).encode()
+    assert manager._service_unit_selects_release(prefix_evil, spec) is False
+
+    comment_decoy = (
+        f"# {exec_start}\n"
+        f"# WorkingDirectory={profile_home}\n"
+        f'# Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
+        f'# Environment="HERMES_HOME={profile_home}"\n'
+        "ExecStart=/usr/bin/false\n"
+        f"WorkingDirectory={profile_home}\n"
+        f'Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
+        f'Environment="HERMES_HOME={profile_home}"\n'
+    ).encode()
+    # Wrong ExecStart with required strings only in comments must fail closed.
+    comment_only = (
+        f"# {exec_start}\n"
+        f"# WorkingDirectory={profile_home}\n"
+        f'# Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
+        f'# Environment="HERMES_HOME={profile_home}"\n'
+        "ExecStart=/usr/bin/false\n"
+    ).encode()
+    assert manager._service_unit_selects_release(comment_only, spec) is False
+    assert manager._service_unit_selects_release(comment_decoy, spec) is False
+
+    wrong_argv = (
+        f"ExecStart={python} -m evil_module --profile morfeo gateway run\n{selector_tail}"
+    ).encode()
+    assert manager._service_unit_selects_release(wrong_argv, spec) is False
+
+    wrong_profile = (
+        f"ExecStart={python} -m hermes_cli.main --profile other gateway run\n{selector_tail}"
+    ).encode()
+    assert manager._service_unit_selects_release(wrong_profile, spec) is False

@@ -610,6 +610,62 @@ def test_doctor_reports_fail_closed_projection_mismatches(
     assert "runtime_pointer_mismatch" in status["mismatches"]
 
 
+def test_projection_status_rejects_incoherent_hermes_refreshed_units(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Doctor must not treat prefix/decoy/wrong-argv units as coherent selectors."""
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    manager = _manager(tmp_path)
+    record = _record(manager.store)
+    _publish_record(manager, record)
+    manager.project_release(record, restart_service=False)
+    spec = manager.projection_spec(record)
+    runtime = str(spec.runtime_current)
+    profile_home = str(manager.store.profile_home("morfeo"))
+    python = f"{runtime}/venv/bin/python"
+    exec_start = f"ExecStart={python} -m hermes_cli.main --profile morfeo gateway run"
+    selector_tail = (
+        f"WorkingDirectory={profile_home}\n"
+        f'Environment="PATH={runtime}/venv/bin:/usr/bin"\n'
+        f'Environment="VIRTUAL_ENV={runtime}/venv"\n'
+        f'Environment="HERMES_HOME={profile_home}"\n'
+        f"ExecStopPost=-{python} -m gateway.cgroup_cleanup\n"
+    )
+
+    coherent = (
+        "[Unit]\n"
+        "Description=Hermes Agent Gateway - Messaging Platform Integration\n"
+        "[Service]\n"
+        f"{exec_start}\n"
+        f"{selector_tail}"
+    ).encode()
+    spec.service_path.write_bytes(coherent)
+    assert "service_projection_mismatch" not in manager.projection_status(record)["mismatches"]
+
+    for payload in (
+        (
+            f"ExecStart={python}-evil -m hermes_cli.main --profile morfeo gateway run\n"
+            f"{selector_tail}"
+        ).encode(),
+        (
+            f"# {exec_start}\n"
+            f"# WorkingDirectory={profile_home}\n"
+            f'# Environment="VIRTUAL_ENV={runtime}/venv"\n'
+            f'# Environment="HERMES_HOME={profile_home}"\n'
+            "ExecStart=/usr/bin/false\n"
+            f"{selector_tail}"
+        ).encode(),
+        (
+            f"ExecStart={python} -m evil_module --profile morfeo gateway run\n{selector_tail}"
+        ).encode(),
+    ):
+        spec.service_path.write_bytes(payload)
+        status = manager.projection_status(record)
+        assert "service_projection_mismatch" in status["mismatches"], payload
+
+
 def test_recovery_reprojects_a_partial_transition(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
