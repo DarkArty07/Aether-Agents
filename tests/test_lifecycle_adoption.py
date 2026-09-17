@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 from test_observation_lifecycle import (
     FIXTURE_HERMES_VERSION,
+    _allow_unit_manager_authority,
     _build_wheel,
     _clean_tagged_checkout,
     _prepared_release,
@@ -254,6 +255,92 @@ def test_first_install_hardens_preserved_operator_config_mode_0644(
         assert config.read_bytes() == expected_config
         assert stat_module.S_IMODE(config.stat().st_mode) == 0o600
     manager._validate_profile_homes(selected)
+
+
+def _activate_adopted_premarker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[ReleaseStore, LifecycleManager, dict[str, bytes]]:
+    """Install over pre-marker homes, preserving divergent operator config.yaml."""
+
+    store = ReleaseStore(tmp_path / "data" / "aether", state_root=tmp_path / "state" / "aether")
+    operator_configs = _seed_premarker_profiles(store)
+    record = store.register(_prepared_release(tmp_path / "r1", "1.0.0", b"wheel-one"))
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+    monkeypatch.setattr(
+        manager,
+        "_prepare_release_projections_locked",
+        lambda _record: {"desktop": None, "launcher": None, "service": None},
+    )
+    monkeypatch.setattr(manager, "_select_release_projections_locked", lambda *_a, **_k: None)
+    monkeypatch.setattr(manager, "project_release", lambda *_a, **_k: None)
+    monkeypatch.setattr(manager, "_reconcile_release_projections_locked", lambda *_a, **_k: None)
+    monkeypatch.setattr(manager, "_reconcile_projections_locked", lambda _result: None)
+    selected = manager.activate_existing(
+        record.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+    assert selected.release_id == record.release_id
+    return store, manager, operator_configs
+
+
+def test_uninstall_preserve_keeps_divergent_operator_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Divergent config.yaml is operator-owned: uninstall must not refuse or delete it."""
+
+    store, manager, operator_configs = _activate_adopted_premarker(tmp_path, monkeypatch)
+    _allow_unit_manager_authority(manager, monkeypatch)
+
+    result = manager.uninstall(purge=False, confirmed=True)
+
+    assert result.purged is False
+    resources = Path(lifecycle.__file__).parent / "resources"
+    for role, expected_config in operator_configs.items():
+        home = store.profile_home(role)
+        assert (home / "config.yaml").read_bytes() == expected_config
+        assert not (home / "aether-observer.json").exists()
+        assert not (home / "SOUL.md").exists()
+        for skill_name in lifecycle._CANONICAL_SKILLS:
+            assert not (home / "skills" / skill_name / "SKILL.md").exists()
+        assert (home / "skills" / "private-local" / "SKILL.md").read_bytes() == (
+            b"learned local procedure\n"
+        )
+        # Guard against accidental package rewrite of operator config.
+        package = (resources / "profiles" / role / "config.yaml").read_bytes()
+        assert expected_config != package
+
+
+def test_recover_after_crash_materialize_keeps_divergent_operator_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Crash after adopt/materialize with no active must deactivate managed bytes only."""
+
+    store, manager, operator_configs = _activate_adopted_premarker(tmp_path, monkeypatch)
+    # Simulate install crash after profile materialization before/after active switch.
+    store.active_pointer.unlink()
+    assert store.active(required=False) is None
+
+    manager.recover()
+
+    for role, expected_config in operator_configs.items():
+        home = store.profile_home(role)
+        assert (home / "config.yaml").read_bytes() == expected_config
+        assert not (home / "aether-observer.json").exists()
+        assert not (home / "SOUL.md").exists()
+        for skill_name in lifecycle._CANONICAL_SKILLS:
+            assert not (home / "skills" / skill_name / "SKILL.md").exists()
+        assert (home / "skills" / "private-local" / "SKILL.md").read_bytes() == (
+            b"learned local procedure\n"
+        )
 
 
 def test_extract_git_archive_preserves_confined_relative_symlinks(tmp_path: Path) -> None:

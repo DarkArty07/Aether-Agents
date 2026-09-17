@@ -3989,6 +3989,10 @@ class LifecycleManager:
                     continue
                 if observed == expected:
                     role_removals.append(target)
+                elif name == "config.yaml":
+                    # Operator-owned after first provision / pre-marker adoption:
+                    # leave divergent bytes in place and continue managed cleanup.
+                    continue
                 else:
                     role_issue = True
 
@@ -6292,7 +6296,12 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         return status
 
     def _deactivate_lifecycle_projections(self, record: ReleaseRecord) -> None:
-        """Remove only byte-identical Aether-owned projections of this release."""
+        """Remove Aether-owned projections of this release.
+
+        Launcher/desktop require byte identity. Service units may also be Hermes-
+        refreshed while remaining selector-coherent; those are removable debris.
+        Incoherent units stay fail-closed (not deleted).
+        """
 
         spec = self.projection_spec(record)
         for path, expected in (
@@ -6303,8 +6312,13 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             try:
                 if path.is_symlink() or not path.is_file():
                     continue
-                if path.read_bytes() != expected:
-                    continue
+                observed = path.read_bytes()
+                if observed != expected:
+                    if path != spec.service_path or not self._service_unit_selects_release(
+                        observed,
+                        spec,
+                    ):
+                        continue
                 path.unlink()
             except OSError:
                 continue
