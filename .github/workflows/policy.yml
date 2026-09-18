@@ -649,6 +649,10 @@ jobs:
           coverage_version="$(uv run --frozen python -c 'import importlib.metadata; print(importlib.metadata.version("coverage"))')"
           uv pip install --python "$component/bin/python" \
             "pytest==$pytest_version" "coverage==$coverage_version"
+      - name: Enforce non-instrumented ingestion latency gate
+        run: >-
+          uv run --frozen pytest -q
+          tests/test_observation_performance.py::test_realistic_ingest_batch_beats_per_event_commit_baseline
       - name: Enforce integrated coverage floor
         shell: bash
         run: |

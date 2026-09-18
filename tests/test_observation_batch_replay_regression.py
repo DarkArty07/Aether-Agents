@@ -8,7 +8,7 @@ from observation_helpers import PROJECT_ID, TRACE_ID, EventFactory
 
 from aether_agents.observation import query
 from aether_agents.observation.capture.journal import JournalWriter
-from aether_agents.observation.contracts import READ_MODEL_SCHEMA
+from aether_agents.observation.contracts import READ_MODEL_SCHEMA, validate_event
 from aether_agents.observation.reduce import ingest as ingest_module
 from aether_agents.observation.reduce.ingest import ingest_pending
 from aether_agents.observation.storage import ReadModel
@@ -107,6 +107,45 @@ def test_duplicate_status_arrival_order_preserves_causal_latest_state(tmp_path) 
                 "SELECT task_status, last_event_id FROM bound_work_unit"
             ).fetchone()
             assert row == ("done", events[-1]["event_id"])
+
+
+@pytest.mark.parametrize("source_kind", ["hermes_hook", "native_reconciliation"])
+def test_advancing_status_timestamps_match_full_replay_without_rescanning(
+    tmp_path, monkeypatch, source_kind
+) -> None:
+    factory = EventFactory()
+    events = [factory.opened(0)]
+    for index in range(1, 41):
+        event = factory.unit(
+            "work_unit.status", "started", index, task_ref="t_aaaaaaaa", task_status="running"
+        )
+        event["source_kind"] = source_kind
+        if source_kind == "native_reconciliation":
+            event["source_hook"] = "kanban_read"
+        validate_event(event)
+        events.append(event)
+
+    expected_paths = ObservationPaths.for_project(PROJECT_ID, root=tmp_path / "full")
+    with ReadModel.open(expected_paths) as model:
+        monkeypatch.setattr(model, "_derive_bound_work_unit_status", model._derive_bound_work_unit)
+        assert model.upsert_events(events) == len(events)
+        expected = model._conn.execute("SELECT * FROM bound_work_unit").fetchall()
+
+    candidate_paths = ObservationPaths.for_project(PROJECT_ID, root=tmp_path / "incremental")
+    with ReadModel.open(candidate_paths) as model:
+        full_replay = model._derive_bound_work_unit
+        replay_count = 0
+
+        def counted_replay(event):
+            nonlocal replay_count
+            replay_count += 1
+            return full_replay(event)
+
+        monkeypatch.setattr(model, "_derive_bound_work_unit", counted_replay)
+        assert model.upsert_events(events) == len(events)
+        assert model._conn.execute("SELECT * FROM bound_work_unit").fetchall() == expected
+        assert replay_count == 1
+        assert model._conn.execute("SELECT COUNT(*) FROM event_derivation").fetchone()[0] == 41
 
 
 @pytest.mark.parametrize("lock_busy", [False, True])

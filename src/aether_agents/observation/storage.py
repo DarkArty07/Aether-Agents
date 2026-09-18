@@ -1566,12 +1566,17 @@ class ReadModel:
         """
 
         if event["event_type"] == "work_unit.status":
-            self._derive_bound_work_unit_status_duplicate(event)
+            self._derive_bound_work_unit_status(event)
         elif event["event_type"] in ("work_unit.bound", "work_unit.unbound"):
             self._derive_bound_work_unit(event)
 
-    def _derive_bound_work_unit_status_duplicate(self, event: Mapping[str, Any]) -> None:
-        """Update an existing binding from a semantically-duplicate status event."""
+    def _derive_bound_work_unit_status(self, event: Mapping[str, Any]) -> None:
+        """Append an unchanged native status without replaying its entire binding.
+
+        Repeated snapshots normally have new timestamps and native identities, so
+        this path must also serve non-duplicate events. Their trace/participant
+        counters still flow through ``_derive``; only binding replay is avoided.
+        """
         work_unit = event.get("work_unit") or {}
         binding_ref = work_unit.get("binding_ref")
         if not isinstance(binding_ref, str) or not binding_ref:
@@ -1592,6 +1597,8 @@ class ReadModel:
         # and a newly resolved parent may change classification or causal order.
         if (
             previous.get("event_type") != "work_unit.status"
+            or event.get("source_kind") not in {"hermes_hook", "native_reconciliation"}
+            or previous.get("source_kind") not in {"hermes_hook", "native_reconciliation"}
             or previous.get("producer_epoch") != event.get("producer_epoch")
             or previous.get("producer_seq", -1) >= event.get("producer_seq", -1)
             or previous.get("work_unit") != work_unit
@@ -1726,7 +1733,9 @@ class ReadModel:
             self._derive_contract_decision(event)
         elif event_type == "contract.revision":
             self._derive_contract_revision(event)
-        elif event_type in ("work_unit.bound", "work_unit.unbound", "work_unit.status"):
+        elif event_type == "work_unit.status":
+            self._derive_bound_work_unit_status(event)
+        elif event_type in ("work_unit.bound", "work_unit.unbound"):
             self._derive_bound_work_unit(event)
         elif event_type in ("run.started", "run.finished"):
             self._derive_work_unit_run(event)
