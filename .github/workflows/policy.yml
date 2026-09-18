@@ -332,9 +332,11 @@ jobs:
           tests/test_lifecycle_adoption.py
           tests/test_lifecycle_projections.py
           tests/test_objective_contracts.py
+          tests/test_observation_batch_replay_regression.py
           tests/test_observation_brief_tool.py
           tests/test_observation_cli_plugin.py
           tests/test_observation_contracts.py
+          tests/test_observation_ingest_scale.py
           tests/test_observation_journal_storage.py
           tests/test_observation_lifecycle.py
           tests/test_observation_packaging.py

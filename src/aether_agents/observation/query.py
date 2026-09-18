@@ -37,6 +37,28 @@ __all__ = [
     "watch",
 ]
 
+#: Leave headroom under the Hermes native-tool 420s deadline (#417).
+_QUERY_INGEST_BUDGET_S = 60.0
+#: Prefer incomplete coverage over blocking forever on maintenance ingest.
+_QUERY_LOCK_WAIT_S = 2.0
+
+
+def _ingest_for_query(paths: ObservationPaths) -> None:
+    """Bounded catch-up for observe/resolve; never holds the project lock unbounded."""
+    from aether_agents.observation.reduce.ingest import ingest_pending
+
+    report = ingest_pending(
+        paths,
+        deadline_monotonic=time.monotonic() + _QUERY_INGEST_BUDGET_S,
+        lock_timeout_s=_QUERY_LOCK_WAIT_S,
+    )
+    if report.incomplete:
+        if report.lock_timed_out:
+            raise StateUnreadableError("observation catch-up unavailable: maintenance lock busy")
+        raise StateUnreadableError(
+            "observation catch-up incomplete; committed progress retained for the next query"
+        )
+
 
 # ------------------------------------------------------------------------------------
 # Bounded errors. Messages never echo captured observation content or a raw filesystem
@@ -207,9 +229,9 @@ def resolve_trace(paths: ObservationPaths, ref: str | None) -> str:
         raise NoOpenTraceError("no observation state recorded for this project yet")
 
     try:
-        from aether_agents.observation.reduce.ingest import ingest_pending
-
-        ingest_pending(paths)
+        _ingest_for_query(paths)
+    except StateUnreadableError:
+        raise
     except Exception as exc:
         raise StateUnreadableError(
             f"observation state could not be ingested ({safe_error_class(type(exc)) or 'error'})"
@@ -262,15 +284,17 @@ def load_summary(paths: ObservationPaths, trace_id: str) -> dict[str, Any]:
     (OBS-FR-025).
     """
     try:
-        from aether_agents.observation.reduce.ingest import ingest_pending, reduce_trace
+        from aether_agents.observation.reduce.ingest import reduce_trace
     except ImportError as exc:
         raise StateUnreadableError(
             "observation reduction modules are not available in this build"
         ) from exc
 
     try:
-        ingest_pending(paths)
+        _ingest_for_query(paths)
         return reduce_trace(paths, trace_id)
+    except StateUnreadableError:
+        raise
     except Exception as exc:
         raise StateUnreadableError(
             f"observation state could not be reduced ({safe_error_class(type(exc)) or 'error'})"

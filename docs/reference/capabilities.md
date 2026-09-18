@@ -103,7 +103,7 @@ None.
 
 **Status:** `implemented`
 
-Reads one deterministic contract-observation review brief or JSON envelope without mutating state or calling a provider.
+Reads a deterministic contract-observation brief without mutating authoritative state or calling a provider; its derived projection is updated locally.
 
 ### Surfaces
 - `cli.argument.aether.observe.ref`
@@ -127,12 +127,14 @@ Reads one deterministic contract-observation review brief or JSON envelope witho
 - [src/aether_agents/observation/report.py](../../src/aether_agents/observation/report.py)
 
 ### Verification
+- [tests/test_observation_batch_replay_regression.py](../../tests/test_observation_batch_replay_regression.py)
 - [tests/test_observation_cli_plugin.py](../../tests/test_observation_cli_plugin.py)
+- [tests/test_observation_ingest_scale.py](../../tests/test_observation_ingest_scale.py)
 - [tests/test_observation_reducer.py](../../tests/test_observation_reducer.py)
 
 ### Notes / current limits
 
-None.
+Catch-up commits resumable event batches and bounds ingestion/maintenance-lock waiting. Incomplete catch-up is unavailable, never a complete summary. Source tests do not establish deployed-runtime qualification.
 
 ## `cli.reconcile`
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import stat
 import threading
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -29,12 +30,16 @@ try:  # The accepted observation durability protocol is POSIX-lock based.
 except ImportError:  # pragma: no cover - non-POSIX fallback is thread-local only
     fcntl = None  # type: ignore[assignment]
 
-__all__ = ["project_lock"]
+__all__ = ["ProjectLockTimeout", "project_lock"]
 
 
 _LOCKS_GUARD = threading.Lock()
 _THREAD_LOCKS: dict[str, threading.RLock] = {}
 _HELD = threading.local()
+
+
+class ProjectLockTimeout(TimeoutError):
+    """A bounded project-lock wait expired before exclusive ownership was acquired."""
 
 
 def _thread_lock(path: Path) -> threading.RLock:
@@ -43,9 +48,39 @@ def _thread_lock(path: Path) -> threading.RLock:
         return _THREAD_LOCKS.setdefault(key, threading.RLock())
 
 
+def _acquire_exclusive(descriptor: int, *, timeout_s: float | None) -> None:
+    """Acquire ``LOCK_EX``, optionally failing fast when ``timeout_s`` elapses."""
+    if fcntl is None:  # pragma: no cover - non-POSIX fallback
+        return
+    if timeout_s is None:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        return
+    if timeout_s < 0:
+        raise ValueError("lock timeout must be non-negative")
+    deadline = time.monotonic() + timeout_s
+    while True:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return
+        except BlockingIOError:
+            if time.monotonic() >= deadline:
+                raise ProjectLockTimeout("observation project lock wait timed out") from None
+            time.sleep(min(0.01, max(0.0, deadline - time.monotonic())))
+
+
 @contextmanager
-def project_lock(paths: ObservationPaths, name: str) -> Iterator[None]:
-    """Hold one bounded-name project lock across threads and processes."""
+def project_lock(
+    paths: ObservationPaths,
+    name: str,
+    *,
+    timeout_s: float | None = None,
+) -> Iterator[None]:
+    """Hold one bounded-name project lock across threads and processes.
+
+    ``timeout_s`` bounds how long a caller may wait for exclusive ownership.  Query
+    paths use a short timeout so ``aether observe`` can return incomplete coverage
+    instead of blocking past the host tool deadline.
+    """
     if not name or any(
         character not in "abcdefghijklmnopqrstuvwxyz0123456789-" for character in name
     ):
@@ -55,7 +90,14 @@ def project_lock(paths: ObservationPaths, name: str) -> Iterator[None]:
     key = os.fspath(lock_path)
     lock = _thread_lock(lock_path)
 
-    with lock:
+    if timeout_s is None:
+        acquired_thread = True
+        lock.acquire()
+    else:
+        acquired_thread = lock.acquire(timeout=timeout_s)
+        if not acquired_thread:
+            raise ProjectLockTimeout("observation project lock wait timed out")
+    try:
         held = getattr(_HELD, "paths", None)
         if held is None:
             held = set()
@@ -67,6 +109,8 @@ def project_lock(paths: ObservationPaths, name: str) -> Iterator[None]:
         parent_descriptor: int | None = None
         descriptor: int | None = None
         acquired = False
+        # After waiting for the in-process lock, fail fast on the filesystem lock.
+        fs_timeout = None if timeout_s is None else 0.0
         try:
             flags = (
                 os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
@@ -112,7 +156,7 @@ def project_lock(paths: ObservationPaths, name: str) -> Iterator[None]:
                 finally:
                     os.close(verification_descriptor)
             if fcntl is not None:
-                fcntl.flock(descriptor, fcntl.LOCK_EX)
+                _acquire_exclusive(descriptor, timeout_s=fs_timeout)
                 acquired = True
             held.add(key)
             try:
@@ -133,3 +177,5 @@ def project_lock(paths: ObservationPaths, name: str) -> Iterator[None]:
                 finally:
                     if parent_descriptor is not None:
                         os.close(parent_descriptor)
+    finally:
+        lock.release()
