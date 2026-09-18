@@ -379,9 +379,9 @@ def test_qualification_runner_and_ci_execute_instead_of_trusting_a_fixture() -> 
         "version": HERMES_BASELINE.version,
     }
     assert contract["minimum_observation_tests"] == 119
-    assert contract["expected_core_tests"] == 471
+    assert contract["expected_core_tests"] == 472
     assert contract["expected_core_node_manifest_sha256"] == (
-        "9a9fe9e963f5574ef54b8250acff1f910b372e5ee2f008231f2f103b49040df1"
+        "c1b1215945754612bb768e513fbeefb4974ce6bba7b44fec39ab9a43ccc0ae0a"
     )
     assert contract["core_test_files"] == [
         "tests/test_observation_contracts.py",

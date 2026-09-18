@@ -204,6 +204,65 @@ def test_standalone_load_summary_still_ingests_on_every_call(
         assert ingested == [PROJECT_ID] * request_count
 
 
+def test_observe_watch_reuses_trace_resolution_catchup_and_refreshes_on_later_change(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    project, paths = _install_project(monkeypatch, tmp_path)
+    _write_fixture_journal(paths)
+    real_ingest = query._ingest_for_query
+    ingested: list[str] = []
+
+    def counted_ingest(selected: ObservationPaths) -> None:
+        ingested.append(selected.project_id)
+        real_ingest(selected)
+
+    monkeypatch.setattr(query, "_ingest_for_query", counted_ingest)
+
+    emissions_catchup_counts: list[int] = []
+    real_render = report.render_brief
+
+    def counted_render(summary: dict[str, Any], since: dict[str, Any] | None = None) -> str:
+        emissions_catchup_counts.append(len(ingested))
+        return real_render(summary, since=since)
+
+    monkeypatch.setattr(report, "render_brief", counted_render)
+    monkeypatch.setattr(query, "_WATCH_MIN_INTERVAL_S", 0.0)
+    monkeypatch.setattr(query, "_WATCH_MAX_INTERVAL_S", 0.0)
+    monkeypatch.setattr(time, "sleep", lambda _s: None)
+
+    real_fs_signature = query._fs_signature
+    appended = False
+
+    def instrumented_fs_signature(selected_paths: ObservationPaths) -> tuple:
+        nonlocal appended
+        if len(emissions_catchup_counts) == 1 and not appended:
+            f2 = EventFactory(epoch="prd_" + "b" * 32)
+            f2.contract("invariant.failed", "failed", 20, invariant_key="OBS-INV-001")
+            _write_events(selected_paths, f2)
+            appended = True
+        elif len(emissions_catchup_counts) >= 2:
+            raise KeyboardInterrupt
+        return real_fs_signature(selected_paths)
+
+    monkeypatch.setattr(query, "_fs_signature", instrumented_fs_signature)
+
+    stdout, stderr = StringIO(), StringIO()
+    code = run_observe(
+        Namespace(project=str(project), ref=TRACE_ID, since=None, watch=True, json=False),
+        stdout=stdout,
+        stderr=stderr,
+    )
+    assert code == 0, stderr.getvalue()
+    assert not stderr.getvalue()
+    assert len(emissions_catchup_counts) == 2
+    assert emissions_catchup_counts[0] == 1, (
+        f"Expected exactly 1 catch-up before first emission, got {emissions_catchup_counts[0]}"
+    )
+    assert emissions_catchup_counts[1] >= 2, (
+        f"Expected at least 2 catch-ups before second emission, got {emissions_catchup_counts[1]}"
+    )
+
+
 def test_objective_contract_finalize_materializes_trace_and_root_create_binds(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -562,7 +621,7 @@ def test_watch_backs_off_skips_full_reduction_and_suppresses_count_only_change(
     sleeps: list[float] = []
     monkeypatch.setattr(query, "_fs_signature", lambda _paths: next(signatures))
 
-    def load(_paths: ObservationPaths, trace_id: str) -> dict[str, Any]:
+    def load(_paths: ObservationPaths, trace_id: str, *, ingest: bool = True) -> dict[str, Any]:
         reductions.append(trace_id)
         return next(summaries)
 

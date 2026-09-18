@@ -402,6 +402,7 @@ def watch(
     *,
     stop: Callable[[], bool] | None = None,
     sleep: Callable[[float], None] = time.sleep,
+    initial_ingest: bool = True,
 ) -> Iterator[dict[str, Any]]:
     """Yield a fresh summary only when an OBS-FR-070-watched facet changes.
 
@@ -414,11 +415,16 @@ def watch(
     change in summary ID, verdict, priority findings, coverage state, or next gate is
     emitted. A transient unreadable tick is swallowed rather than raised, since a watch
     loop must survive a moment of collector-writer churn.
+
+    Set ``initial_ingest=False`` only when a successful :func:`resolve_trace` already
+    completed bounded catch-up in the same request. Standalone callers retain
+    incremental ingestion on every tick.
     """
     interval = _WATCH_MIN_INTERVAL_S
     last_signature: tuple | None = None
     last_priority: tuple | None = None
     first = True
+    skip_ingest = not initial_ingest
 
     while True:
         if stop is not None and stop():
@@ -436,8 +442,10 @@ def watch(
         last_signature = signature
         interval = _WATCH_MIN_INTERVAL_S
 
+        should_ingest = not skip_ingest
+        skip_ingest = False
         try:
-            summary = load_summary(paths, trace_id)
+            summary = load_summary(paths, trace_id, ingest=should_ingest)
         except ObservationQueryError:
             continue
 

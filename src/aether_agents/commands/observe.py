@@ -272,7 +272,7 @@ def _run_watch(
 ) -> int:
     """``--watch``: stream a rendering each time OBS-FR-070's watched facets change."""
     try:
-        for index, summary in enumerate(query.watch(paths, trace_id)):
+        for index, summary in enumerate(query.watch(paths, trace_id, initial_ingest=False)):
             if json_mode:
                 envelope = Envelope(
                     command="observe",
