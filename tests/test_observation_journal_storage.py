@@ -2669,6 +2669,7 @@ def test_trace_close_is_not_success_until_reducer_settles_graph_and_acceptance(t
 )
 def test_raw_terminal_event_cannot_hide_trace_before_authoritative_reduction(
     tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
     event_type: str,
     status: str,
     authority_available: bool,
@@ -2676,6 +2677,7 @@ def test_raw_terminal_event_cannot_hide_trace_before_authoritative_reduction(
     profile: str,
     role: str,
 ) -> None:
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
     state_root = tmp_path / "aether"
     if authority_available:
         _activate_test_release(state_root, tmp_path)

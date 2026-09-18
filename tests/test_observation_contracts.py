@@ -1602,8 +1602,10 @@ def test_checkpoint_constructor_rejects_caller_selected_authority(tmp_path: Path
 
 
 def test_checkpoint_without_active_product_authority_rejects_forged_role(
-    tmp_path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
     paths = ObservationPaths.for_project(PROJECT_ID, root=tmp_path)
     collector = Collector(paths=paths, runtime_fingerprint="3" * 64)
     collector.start()

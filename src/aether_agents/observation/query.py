@@ -123,10 +123,10 @@ def _read_project_toml(candidate: Path) -> ProjectResolution | None:
     except (OSError, tomllib.TOMLDecodeError):
         return None
     try:
-        marker = validate_project_marker(data)
+        validated_marker = validate_project_marker(data)
     except ProjectMarkerValidationError:
         return None
-    project_id = marker["project_id"]
+    project_id = validated_marker["project_id"]
     assert isinstance(project_id, str)
     return ProjectResolution(project_id=project_id, project_root=candidate)
 
@@ -200,11 +200,12 @@ def _list_traces(paths: ObservationPaths) -> list[_TraceRow]:
 
     result: list[_TraceRow] = []
     for row in rows:
-        get: Callable[[str, Any], Any]
-        if isinstance(row, dict):
-            get = row.get
-        else:
-            get = lambda key, default=None, _row=row: getattr(_row, key, default)  # noqa: E731
+
+        def get(key: str, default: Any = None, *, _row: Any = row) -> Any:
+            if isinstance(_row, dict):
+                return _row.get(key, default)
+            return getattr(_row, key, default)
+
         result.append(
             _TraceRow(
                 trace_id=get("trace_id", None),

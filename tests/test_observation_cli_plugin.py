@@ -66,6 +66,9 @@ def _install_project(
     marker.parent.mkdir(parents=True)
     marker.write_text(project_marker(PROJECT_ID), encoding="utf-8")
     monkeypatch.setenv("XDG_STATE_HOME", str(xdg))
+    # Authority resolves from XDG data, not only the observation state root.
+    # Never let a developer's active installation govern these fixture events.
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
     registry = ProjectRegistry()
     assert registry.register(PROJECT_ID, project, "fixture")
     return project, ObservationPaths.for_project(PROJECT_ID)
