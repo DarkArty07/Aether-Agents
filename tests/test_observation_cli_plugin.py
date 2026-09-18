@@ -146,6 +146,61 @@ def test_observe_human_and_json_share_the_same_canonical_summary(
     assert "NEXT DECISION REQUIRED" in human_out.getvalue()
 
 
+@pytest.mark.parametrize("surface", ["cli", "status", "diagnose", "changes"])
+def test_observe_ingests_once_per_request_after_resolving_trace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, surface: str
+) -> None:
+    project, paths = _install_project(monkeypatch, tmp_path)
+    _write_fixture_journal(paths)
+    previous = query.load_summary(paths, TRACE_ID)
+    real_ingest = query._ingest_for_query
+    ingested: list[str] = []
+
+    def counted_ingest(selected: ObservationPaths) -> None:
+        ingested.append(selected.project_id)
+        real_ingest(selected)
+
+    monkeypatch.setattr(query, "_ingest_for_query", counted_ingest)
+    # A later request must still catch up; this is not a persistent freshness cache.
+    for request_count in (1, 2):
+        if surface == "cli":
+            stdout, stderr = StringIO(), StringIO()
+            code = run_observe(
+                Namespace(project=str(project), ref=TRACE_ID, since=None, watch=False, json=True),
+                stdout=stdout,
+                stderr=stderr,
+            )
+            assert code == 0, stdout.getvalue()
+            assert not stderr.getvalue()
+            assert json.loads(stdout.getvalue())["data"]["state"] == "summary"
+        else:
+            args = {"action": surface, "project": str(project), "ref": TRACE_ID}
+            if surface == "changes":
+                args["since_summary_id"] = previous["summary_id"]
+            value = observe_brief(args, profile_name="morfeo")
+            assert value["trace_id"] == TRACE_ID
+        assert ingested == [PROJECT_ID] * request_count
+
+
+def test_standalone_load_summary_still_ingests_on_every_call(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _, paths = _install_project(monkeypatch, tmp_path)
+    _write_fixture_journal(paths)
+    real_ingest = query._ingest_for_query
+    ingested: list[str] = []
+
+    def counted_ingest(selected: ObservationPaths) -> None:
+        ingested.append(selected.project_id)
+        real_ingest(selected)
+
+    monkeypatch.setattr(query, "_ingest_for_query", counted_ingest)
+    for request_count in (1, 2):
+        summary = query.load_summary(paths, TRACE_ID)
+        assert summary["trace_id"] == TRACE_ID
+        assert ingested == [PROJECT_ID] * request_count
+
+
 def test_objective_contract_finalize_materializes_trace_and_root_create_binds(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

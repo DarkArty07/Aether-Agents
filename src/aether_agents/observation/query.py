@@ -274,7 +274,7 @@ def resolve_trace(paths: ObservationPaths, ref: str | None) -> str:
 _SUMMARY_ID_RE = re.compile(r"^sum_[a-f0-9]{64}$")
 
 
-def load_summary(paths: ObservationPaths, trace_id: str) -> dict[str, Any]:
+def load_summary(paths: ObservationPaths, trace_id: str, *, ingest: bool = True) -> dict[str, Any]:
     """Produce the current deterministic summary for ``trace_id``.
 
     Performs local incremental ingest then pure reduction — the same local
@@ -282,6 +282,11 @@ def load_summary(paths: ObservationPaths, trace_id: str) -> dict[str, Any]:
     Aether-owned observation state, never a Kanban/SessionDB/artifact record, so
     ``aether observe`` remains read-only with respect to every authoritative system
     (OBS-FR-025).
+
+    Set ``ingest=False`` only immediately after a successful :func:`resolve_trace`
+    in the same request: that operation already completed bounded catch-up. This
+    avoids scanning the entire project twice, without caching freshness across
+    requests. Standalone callers and watch refreshes retain incremental ingestion.
     """
     try:
         from aether_agents.observation.reduce.ingest import reduce_trace
@@ -291,7 +296,8 @@ def load_summary(paths: ObservationPaths, trace_id: str) -> dict[str, Any]:
         ) from exc
 
     try:
-        _ingest_for_query(paths)
+        if ingest:
+            _ingest_for_query(paths)
         return reduce_trace(paths, trace_id)
     except StateUnreadableError:
         raise
