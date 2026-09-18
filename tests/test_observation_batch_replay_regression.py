@@ -51,7 +51,10 @@ def test_same_batch_successful_replay_does_not_restore_failure_diagnostic(
         )
 
 
-def test_interruption_inside_derivation_never_commits_partial_event(tmp_path, monkeypatch) -> None:
+@pytest.mark.parametrize("method", ["_derive", "_clear_event_failure"])
+def test_interruption_inside_projection_never_commits_partial_event(
+    tmp_path, monkeypatch, method
+) -> None:
     paths = ObservationPaths.for_project(PROJECT_ID, root=tmp_path)
     factory = EventFactory()
     first = factory.opened(0)
@@ -63,20 +66,23 @@ def test_interruption_inside_derivation_never_commits_partial_event(tmp_path, mo
     for event in (first, second):
         assert writer.append(event).accepted
     writer.close()
-    derive = ReadModel._derive
+    derive = getattr(ReadModel, method)
 
     def interrupt_second(self, event):
         if event["event_id"] == second["event_id"]:
             raise KeyboardInterrupt("interrupted before derivation completed")
         return derive(self, event)
 
-    monkeypatch.setattr(ReadModel, "_derive", interrupt_second)
+    monkeypatch.setattr(ReadModel, method, interrupt_second)
     with pytest.raises(KeyboardInterrupt):
         ingest_pending(paths)
 
     # Inspect without ReadModel.open(), whose recovery must not hide an atomicity
     # violation already made durable by the interrupted transaction.
     with sqlite3.connect(paths.projection_db(READ_MODEL_SCHEMA)) as connection:
+        assert connection.execute("SELECT event_id FROM observation_event").fetchall() == [
+            (first["event_id"],)
+        ]
         assert (
             connection.execute(
                 "SELECT COUNT(*) FROM observation_event e "
@@ -86,10 +92,40 @@ def test_interruption_inside_derivation_never_commits_partial_event(tmp_path, mo
             == 0
         )
 
-    monkeypatch.setattr(ReadModel, "_derive", derive)
+    monkeypatch.setattr(ReadModel, method, derive)
     ingest_pending(paths)
     with ReadModel.open(paths) as model:
         assert model._conn.execute("SELECT COUNT(*) FROM event_derivation").fetchone()[0] == 2
+
+
+def test_bulk_failure_diagnostic_survives_a_later_batch_interruption(tmp_path, monkeypatch):
+    paths = ObservationPaths.for_project(PROJECT_ID, root=tmp_path)
+    factory = EventFactory()
+    events = [factory.opened(0)] + [
+        factory.unit("work_unit.status", "started", index, task_ref="root", task_status="running")
+        for index in (1, 2)
+    ]
+    with ReadModel.open(paths) as model:
+        derive = model._derive
+
+        def fail_then_interrupt(event):
+            if event["event_id"] == events[1]["event_id"]:
+                raise RuntimeError("synthetic derivation failure")
+            if event["event_id"] == events[2]["event_id"]:
+                raise KeyboardInterrupt("later event interrupted")
+            return derive(event)
+
+        monkeypatch.setattr(model, "_derive", fail_then_interrupt)
+        with pytest.raises(KeyboardInterrupt):
+            model.upsert_events(events)
+
+    with sqlite3.connect(paths.projection_db(READ_MODEL_SCHEMA)) as connection:
+        assert connection.execute("SELECT event_id FROM observation_event").fetchall() == [
+            (events[0]["event_id"],)
+        ]
+        assert connection.execute(
+            "SELECT event_ref, reason_code FROM derived_diagnostic"
+        ).fetchall() == [(events[1]["event_id"], "EVENT_DERIVATION_FAILED")]
 
 
 def test_duplicate_status_arrival_order_preserves_causal_latest_state(tmp_path) -> None:

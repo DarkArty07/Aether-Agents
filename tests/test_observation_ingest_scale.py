@@ -8,6 +8,8 @@ tests use disposable directories only.
 
 from __future__ import annotations
 
+import subprocess
+import sys
 import threading
 import time
 from copy import deepcopy
@@ -17,7 +19,7 @@ import pytest
 from observation_helpers import EPOCH, PROJECT_ID, EventFactory
 
 from aether_agents.observation.capture.journal import JournalWriter
-from aether_agents.observation.locking import project_lock
+from aether_agents.observation.locking import ProjectLockTimeout, project_lock
 from aether_agents.observation.reduce.ingest import ingest_pending
 from aether_agents.observation.storage import ReadModel
 from aether_agents.paths import ObservationPaths
@@ -40,6 +42,9 @@ def _status_stream(count: int) -> list[dict]:
         event["event_id"] = f"evt_{sequence + 1:032x}"
         event["producer_seq"] = sequence
         event["monotonic_ns"] = sequence + 1
+        timestamp = factory.at(sequence / 1000).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        event["occurred_at"] = timestamp
+        event["recorded_at"] = timestamp
         events.append(event)
     return events
 
@@ -156,6 +161,41 @@ def test_query_lock_wait_is_bounded_and_reports_incomplete(tmp_path) -> None:
     assert report.incomplete is True
     assert report.lock_timed_out is True
     assert elapsed < 1.0
+
+
+def test_query_lock_wait_honors_timeout_against_another_process(tmp_path) -> None:
+    pytest.importorskip("fcntl")
+    paths = ObservationPaths.for_project(PROJECT_ID, root=tmp_path)
+    with project_lock(paths, "storage-transition"):
+        pass
+    child = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "import fcntl,sys; "
+            "f=open(sys.argv[1], 'r+'); fcntl.flock(f, fcntl.LOCK_EX); "
+            "print('held', flush=True); sys.stdin.readline()",
+            str(paths.locks / "storage-transition.lock"),
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert child.stdout is not None
+        assert child.stdout.readline() == "held\n"
+        started = time.monotonic()
+        with pytest.raises(ProjectLockTimeout):
+            with project_lock(paths, "storage-transition", timeout_s=0.2):
+                pytest.fail("another process still owns the lock")
+        elapsed = time.monotonic() - started
+        assert 0.15 <= elapsed < 1.0
+    finally:
+        try:
+            child.communicate(input="\n", timeout=5)
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.communicate()
 
 
 def test_two_thousand_event_ingest_preserves_every_event(tmp_path) -> None:

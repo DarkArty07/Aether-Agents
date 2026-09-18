@@ -1398,9 +1398,7 @@ class ReadModel:
         an open batch from :meth:`begin_event_batch` (or an equivalent ``BEGIN``)
         so ``RELEASE`` does not implicitly commit each event.
         """
-        inserted = self._upsert_event_savepoint(event)
-        self._clear_event_failure(event)
-        return inserted
+        return self._upsert_event_savepoint(event)
 
     def upsert_event(self, event: Mapping[str, Any]) -> bool:
         """Ingest one canonical event. Returns ``True`` only for a new event_id."""
@@ -1424,12 +1422,23 @@ class ReadModel:
                 try:
                     if self.project_event(event):
                         count += 1
-                except EventDerivationFailed:
-                    self._record_bulk_event_failure(event, "EVENT_DERIVATION_FAILED")
-                except EventIdentityCollision:
-                    self._record_bulk_event_failure(event, "EVENT_IDENTITY_COLLISION")
-                except EventValidationFailed:
-                    self._record_bulk_event_failure(event, "EVENT_VALIDATION_FAILED")
+                except (
+                    EventDerivationFailed,
+                    EventIdentityCollision,
+                    EventValidationFailed,
+                ) as exc:
+                    if isinstance(exc, EventDerivationFailed):
+                        reason_code = "EVENT_DERIVATION_FAILED"
+                    elif isinstance(exc, EventIdentityCollision):
+                        reason_code = "EVENT_IDENTITY_COLLISION"
+                    else:
+                        reason_code = "EVENT_VALIDATION_FAILED"
+                    # The failed event's savepoint has already rolled back. Make
+                    # the valid prefix durable, then record the diagnostic in its
+                    # own transaction before opening the next successful batch.
+                    self.commit_event_batch()
+                    self._record_bulk_event_failure(event, reason_code)
+                    self.begin_event_batch()
             self.commit_event_batch()
         except BaseException:
             self.rollback_event_batch()
@@ -1474,24 +1483,30 @@ class ReadModel:
             return
         if not isinstance(trace_id, str) or _TRACE_REF_RE.fullmatch(trace_id) is None:
             return
-        self._conn.execute(
-            "INSERT INTO derived_diagnostic ("
-            "diagnostic_id, trace_id, project_id, coverage_class, reason_code, "
-            "event_ref, segment_name, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
-            "ON CONFLICT(diagnostic_id) DO UPDATE SET "
-            "coverage_class=excluded.coverage_class, reason_code=excluded.reason_code, "
-            "recorded_at=excluded.recorded_at",
-            (
-                self._bulk_diagnostic_id(event),
-                trace_id,
-                self._paths.project_id,
-                CoverageClass.CORRUPT_SEGMENT,
-                reason_code,
-                event_ref,
-                None,
-                _now_iso(),
-            ),
-        )
+        self.begin_event_batch()
+        try:
+            self._conn.execute(
+                "INSERT INTO derived_diagnostic ("
+                "diagnostic_id, trace_id, project_id, coverage_class, reason_code, "
+                "event_ref, segment_name, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(diagnostic_id) DO UPDATE SET "
+                "coverage_class=excluded.coverage_class, reason_code=excluded.reason_code, "
+                "recorded_at=excluded.recorded_at",
+                (
+                    self._bulk_diagnostic_id(event),
+                    trace_id,
+                    self._paths.project_id,
+                    CoverageClass.CORRUPT_SEGMENT,
+                    reason_code,
+                    event_ref,
+                    None,
+                    _now_iso(),
+                ),
+            )
+            self.commit_event_batch()
+        except BaseException:
+            self.rollback_event_batch()
+            raise
 
     def _clear_event_failure(self, event: Mapping[str, Any]) -> None:
         """Clear only transient diagnostics proven repaired by this exact replay."""
@@ -1528,6 +1543,7 @@ class ReadModel:
                 )
             elif not self._has_derivation_proof(event):
                 raise ProjectionRebuildRequired("projection derivation proof is missing")
+            self._clear_event_failure(event)
         except BaseException:
             # Cancellation is also an event failure: a surrounding batch may
             # commit earlier completed events, never this partially derived one.

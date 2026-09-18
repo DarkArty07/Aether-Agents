@@ -9,6 +9,7 @@ the same thread safe.
 
 from __future__ import annotations
 
+import math
 import os
 import stat
 import threading
@@ -85,6 +86,9 @@ def project_lock(
         character not in "abcdefghijklmnopqrstuvwxyz0123456789-" for character in name
     ):
         raise ValueError("invalid observation lock name")
+    if timeout_s is not None and (not math.isfinite(timeout_s) or timeout_s < 0):
+        raise ValueError("lock timeout must be finite and non-negative")
+    deadline = None if timeout_s is None else time.monotonic() + timeout_s
     ensure_private_dir(paths.locks)
     lock_path = paths.locks / f"{name}.lock"
     key = os.fspath(lock_path)
@@ -94,7 +98,8 @@ def project_lock(
         acquired_thread = True
         lock.acquire()
     else:
-        acquired_thread = lock.acquire(timeout=timeout_s)
+        assert deadline is not None
+        acquired_thread = lock.acquire(timeout=max(0.0, deadline - time.monotonic()))
         if not acquired_thread:
             raise ProjectLockTimeout("observation project lock wait timed out")
     try:
@@ -109,8 +114,6 @@ def project_lock(
         parent_descriptor: int | None = None
         descriptor: int | None = None
         acquired = False
-        # After waiting for the in-process lock, fail fast on the filesystem lock.
-        fs_timeout = None if timeout_s is None else 0.0
         try:
             flags = (
                 os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
@@ -156,6 +159,9 @@ def project_lock(
                 finally:
                     os.close(verification_descriptor)
             if fcntl is not None:
+                # Both layers share the caller's budget; contention in another
+                # process must not silently turn a bounded wait into fail-fast.
+                fs_timeout = None if deadline is None else max(0.0, deadline - time.monotonic())
                 _acquire_exclusive(descriptor, timeout_s=fs_timeout)
                 acquired = True
             held.add(key)
