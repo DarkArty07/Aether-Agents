@@ -184,7 +184,7 @@ def observe(args: dict[str, Any], *, profile_name: str) -> dict[str, Any]:
             "AETHER-OBSERVE-STATE-UNREADABLE", "observation state is unreadable"
         ) from None
     try:
-        summary = query.load_summary(paths, trace_id)
+        summary = query.load_summary(paths, trace_id, ingest=False)
         validate_summary(summary)
         if action == "status":
             value = _status(summary)

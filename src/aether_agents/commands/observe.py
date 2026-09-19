@@ -3,8 +3,8 @@
 Normative source: ``specs/002-aether-contract-observation/spec.md`` section 13.1 and
 OBS-FR-067..070; the stable JSON envelope and exit codes are
 ``specs/001-aether-v1-productization/contracts/cli.md`` sections 3-4. The command is
-read-only: it never mutates Kanban, SessionDB, canonical artifacts, or observation
-state, and it makes no network or model call (OBS-FR-025/028).
+read-only with respect to Kanban, SessionDB and canonical artifacts. It may update
+its own derived observation state, and makes no network or model call (OBS-FR-025/028).
 """
 
 from __future__ import annotations
@@ -170,7 +170,7 @@ def run_observe(
         return _run_watch(paths, trace_id, json_mode=args.json, stdout=stdout, stderr=stderr)
 
     try:
-        summary = query.load_summary(paths, trace_id)
+        summary = query.load_summary(paths, trace_id, ingest=False)
     except query.StateUnreadableError as exc:
         _fail(
             envelope,
@@ -272,7 +272,7 @@ def _run_watch(
 ) -> int:
     """``--watch``: stream a rendering each time OBS-FR-070's watched facets change."""
     try:
-        for index, summary in enumerate(query.watch(paths, trace_id)):
+        for index, summary in enumerate(query.watch(paths, trace_id, initial_ingest=False)):
             if json_mode:
                 envelope = Envelope(
                     command="observe",

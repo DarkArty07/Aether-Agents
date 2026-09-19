@@ -123,10 +123,10 @@ def _read_project_toml(candidate: Path) -> ProjectResolution | None:
     except (OSError, tomllib.TOMLDecodeError):
         return None
     try:
-        marker = validate_project_marker(data)
+        validated_marker = validate_project_marker(data)
     except ProjectMarkerValidationError:
         return None
-    project_id = marker["project_id"]
+    project_id = validated_marker["project_id"]
     assert isinstance(project_id, str)
     return ProjectResolution(project_id=project_id, project_root=candidate)
 
@@ -200,11 +200,12 @@ def _list_traces(paths: ObservationPaths) -> list[_TraceRow]:
 
     result: list[_TraceRow] = []
     for row in rows:
-        get: Callable[[str, Any], Any]
-        if isinstance(row, dict):
-            get = row.get
-        else:
-            get = lambda key, default=None, _row=row: getattr(_row, key, default)  # noqa: E731
+
+        def get(key: str, default: Any = None, *, _row: Any = row) -> Any:
+            if isinstance(_row, dict):
+                return _row.get(key, default)
+            return getattr(_row, key, default)
+
         result.append(
             _TraceRow(
                 trace_id=get("trace_id", None),
@@ -274,7 +275,7 @@ def resolve_trace(paths: ObservationPaths, ref: str | None) -> str:
 _SUMMARY_ID_RE = re.compile(r"^sum_[a-f0-9]{64}$")
 
 
-def load_summary(paths: ObservationPaths, trace_id: str) -> dict[str, Any]:
+def load_summary(paths: ObservationPaths, trace_id: str, *, ingest: bool = True) -> dict[str, Any]:
     """Produce the current deterministic summary for ``trace_id``.
 
     Performs local incremental ingest then pure reduction — the same local
@@ -282,6 +283,11 @@ def load_summary(paths: ObservationPaths, trace_id: str) -> dict[str, Any]:
     Aether-owned observation state, never a Kanban/SessionDB/artifact record, so
     ``aether observe`` remains read-only with respect to every authoritative system
     (OBS-FR-025).
+
+    Set ``ingest=False`` only immediately after a successful :func:`resolve_trace`
+    in the same request: that operation already completed bounded catch-up. This
+    avoids scanning the entire project twice, without caching freshness across
+    requests. Standalone callers and watch refreshes retain incremental ingestion.
     """
     try:
         from aether_agents.observation.reduce.ingest import reduce_trace
@@ -291,7 +297,8 @@ def load_summary(paths: ObservationPaths, trace_id: str) -> dict[str, Any]:
         ) from exc
 
     try:
-        _ingest_for_query(paths)
+        if ingest:
+            _ingest_for_query(paths)
         return reduce_trace(paths, trace_id)
     except StateUnreadableError:
         raise
@@ -395,6 +402,7 @@ def watch(
     *,
     stop: Callable[[], bool] | None = None,
     sleep: Callable[[float], None] = time.sleep,
+    initial_ingest: bool = True,
 ) -> Iterator[dict[str, Any]]:
     """Yield a fresh summary only when an OBS-FR-070-watched facet changes.
 
@@ -407,11 +415,16 @@ def watch(
     change in summary ID, verdict, priority findings, coverage state, or next gate is
     emitted. A transient unreadable tick is swallowed rather than raised, since a watch
     loop must survive a moment of collector-writer churn.
+
+    Set ``initial_ingest=False`` only when a successful :func:`resolve_trace` already
+    completed bounded catch-up in the same request. Standalone callers retain
+    incremental ingestion on every tick.
     """
     interval = _WATCH_MIN_INTERVAL_S
     last_signature: tuple | None = None
     last_priority: tuple | None = None
     first = True
+    skip_ingest = not initial_ingest
 
     while True:
         if stop is not None and stop():
@@ -429,8 +442,10 @@ def watch(
         last_signature = signature
         interval = _WATCH_MIN_INTERVAL_S
 
+        should_ingest = not skip_ingest
+        skip_ingest = False
         try:
-            summary = load_summary(paths, trace_id)
+            summary = load_summary(paths, trace_id, ingest=should_ingest)
         except ObservationQueryError:
             continue
 
