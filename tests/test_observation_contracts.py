@@ -1633,6 +1633,13 @@ def test_product_checkpoint_can_classify_a_required_unit_without_native_inferenc
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # This test proves checkpoint authority/classification, not flusher
+    # scheduling. Keep the collector's supervised flusher isolated so it
+    # cannot hold the shared writer lock across fsync and cause JOURNAL_BUSY.
+    monkeypatch.setattr(
+        "aether_agents.observation.capture.collector.Flusher.start",
+        lambda _self, _spawn_task=None: None,
+    )
     paths = ObservationPaths.for_project(PROJECT_ID, root=tmp_path)
     native = EventFactory().unit(
         "work_unit.bound",
