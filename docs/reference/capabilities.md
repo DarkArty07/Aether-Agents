@@ -134,7 +134,7 @@ Reads a deterministic contract-observation brief without mutating authoritative 
 
 ### Notes / current limits
 
-Catch-up commits resumable event batches and bounds ingestion/maintenance-lock waiting. Incomplete catch-up is unavailable, never a complete summary. Source tests do not establish deployed-runtime qualification.
+Catch-up commits resumable event batches and bounds ingestion/maintenance-lock waiting. Incomplete catch-up is unavailable, never a complete summary. Active release 1.0.0rc3-8987f650c027ad09 qualified the original large #417 trace: status completed in 19.266s then 15.598s, changes in 15.576s, post-reactivation status in 34.655s then 23.495s, watch emitted its baseline, and native status/changes/diagnose tool responses remained within configured bounds. This is installation-local evidence, not public release or cross-platform qualification.
 
 ## `cli.reconcile`
 
@@ -166,9 +166,9 @@ Manager/product mismatch reconciliation is not implemented in the current CLI bu
 
 ## `cli.rollback`
 
-**Status:** `transitional`
+**Status:** `partial`
 
-Selects a previously coherent staged release with planning and confirmation paths in the local lifecycle candidate.
+Selects a previously coherent staged release with planning and confirmation paths while preserving mutable user state.
 
 ### Surfaces
 - `cli.argument.aether.rollback.version`
@@ -194,7 +194,7 @@ Selects a previously coherent staged release with planning and confirmation path
 
 ### Notes / current limits
 
-The lifecycle candidate is locally tested, but public install/runtime qualification is still pending. Rollback is state-preserving: it switches product code, runtime and service, and never rolls user state backward or restores an older copy of credentials, sessions, boards, memories, knowledge, observations or monitor data.
+Active release 1.0.0rc3-8987f650c027ad09 completed one state-preserving rollback to recorded pre-state 1.0.0rc2-b3ad4dd42eb0e1da and an explicit forward reactivation while observations, projects, boards, sessions and credential presence remained intact; doctor returned ready after reactivation. Public artifact, package-index and cross-platform qualification remain pending.
 
 ## `cli.service-lifecycle`
 
@@ -339,7 +339,7 @@ The sole supported promotion/activation boundary: plans or activates one fully s
 
 ### Notes / current limits
 
-No update runs on startup or a timer and no other surface stages or activates a release. The local-candidate route takes explicit Aether and maintained-fork checkouts with exact commits, is mutually exclusive with [VERSION], --prerelease, --wheel, --hermes-checkout and --release-lock, and refuses dirty trees, ambiguous or missing bindings, wrong repository/branch, unknown or mismatched commits, bad hashes and incompatible Python without staging or activation. Activation is explicit and may interrupt Aether-owned instances immediately; a partial transition is detected and recoverable, and rollback never rolls user state backward. Candidate update logic is not evidence of a published update channel, release-candidate publication, stable 1.0.0 or public artifact qualification.
+No update runs on startup or a timer and no other surface stages or activates a release. The local-candidate route takes explicit Aether and maintained-fork checkouts with exact commits, is mutually exclusive with [VERSION], --prerelease, --wheel, --hermes-checkout and --release-lock, and refuses dirty trees, ambiguous or missing bindings, wrong repository/branch, unknown or mismatched commits, bad hashes and incompatible Python without staging or activation. Explicit local activation selected release 1.0.0rc3-8987f650c027ad09 from reviewed tagged Aether merge d8ff984c67bfc147ac9c83cf8a34a72edc27c8df and maintained-fork commit aed6591a69f453a1867b73628603e7b53ba40ffc; doctor returned ready, and the supported existing-release update restored it after rollback. This is not evidence of a published update channel, stable 1.0.0, package-index publication or cross-platform qualification.
 
 ## `cli.version`
 
@@ -693,7 +693,7 @@ One validated maintained-fork release lock, one authoritative active-release rec
 
 ### Notes / current limits
 
-The release lock declares the maintained-fork source identity (`schema_version` 4, `hermes.source_mode` `maintained_fork`, repository `https://github.com/DarkArty07/aether-hermes`, exact commit, source-tree digest, artifact closure and provenance); the retired `transitional_fork` mode is refused for new preparation and no `.patch` file is replayed. Immutable release code and Graphify components live under the Aether XDG data root while every mutable Hermes home and product-state artifact stays under the Aether XDG state root. Disposable-home lifecycle, interruption, mismatch, fault-injection and rollback tests are the current evidence; the bounded real activation/rollback lane on published bytes and public installed qualification remain pending, and the authorized `1.0.0rc1` / `v1.0.0-rc.1` milestone is pre-stable - not stable `1.0.0`, not a package-index publication and not WSL2-qualified.
+The release lock declares the maintained-fork source identity (`schema_version` 4, `hermes.source_mode` `maintained_fork`, repository `https://github.com/DarkArty07/aether-hermes`, exact commit, source-tree digest, artifact closure and provenance); the retired `transitional_fork` mode is refused for new preparation and no `.patch` file is replayed. Immutable release code and Graphify components live under the Aether XDG data root while every mutable Hermes home and product-state artifact stays under the Aether XDG state root. Active release 1.0.0rc3-8987f650c027ad09 binds Aether merge d8ff984c67bfc147ac9c83cf8a34a72edc27c8df and maintained-fork commit aed6591a69f453a1867b73628603e7b53ba40ffc; it was rolled back once without user-state loss and explicitly reactivated with doctor ready. Public artifact, stable 1.0.0, package-index and cross-platform qualification remain pending.
 
 ## `lifecycle.qualification-laboratory`
 
@@ -871,7 +871,7 @@ None.
 
 ## `observation.contract-observer`
 
-**Status:** `partial`
+**Status:** `implemented`
 
 The observer plugin records bounded metadata and offers a curated Morfeo read tool without exposing logs, prompts, or raw events.
 
@@ -903,7 +903,7 @@ The observer plugin records bounded metadata and offers a curated Morfeo read to
 
 ### Notes / current limits
 
-The entry point and provider-free behavior are tested, but managed-profile activation and the full live observation lifecycle are not release-qualified.
+The entry point and provider-free behavior are tested. Active release 1.0.0rc3-8987f650c027ad09 qualified the managed-profile plugin on the original large #417 trace: status completed in 19.266s then 15.598s, changes in 15.576s, post-reactivation status in 34.655s then 23.495s, watch emitted its baseline, and native status/changes/diagnose tool envelopes remained within configured bounds. This remains installation-local evidence rather than public release or cross-platform qualification.
 
 ## `policy.edge-effect-guard`
 
