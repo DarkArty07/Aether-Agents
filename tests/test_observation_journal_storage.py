@@ -2309,6 +2309,10 @@ def test_rebuild_waits_for_open_reader_before_publishing_candidate(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
 ) -> None:
+    # One generous 30-second deadline as a deadlock safety cap only;
+    # elapsed time must never be the semantic evidence.
+    DEADLINE = 30.0
+
     paths = ObservationPaths.for_project(PROJECT_ID, root=tmp_path)
     owner = ReadModel.open(paths)
     reader = ReadModel.open(paths)
@@ -2317,9 +2321,24 @@ def test_rebuild_waits_for_open_reader_before_publishing_candidate(
     finished = threading.Event()
     failures: list[BaseException] = []
     original_upgrade = storage_module._ProjectionReaderLease.upgrade
+    assert storage_module.fcntl is not None
+    original_flock = storage_module.fcntl.flock
+    worker: threading.Thread | None = None
+
+    def wrapped_flock(fd: int, operation: int) -> None:
+        if (
+            worker is not None
+            and threading.current_thread() is worker
+            and (operation & storage_module.fcntl.LOCK_EX)
+            and not (operation & storage_module.fcntl.LOCK_NB)
+            and not reader._reader_lease._closed
+        ):
+            upgrade_entered.set()
+        original_flock(fd, operation)
+
+    monkeypatch.setattr(storage_module.fcntl, "flock", wrapped_flock)
 
     def gated_upgrade(lease: storage_module._ProjectionReaderLease) -> None:
-        upgrade_entered.set()
         original_upgrade(lease)
 
         # A non-blocking shared-lock probe is a post-call oracle for the
@@ -2360,15 +2379,17 @@ def test_rebuild_waits_for_open_reader_before_publishing_candidate(
 
     worker = threading.Thread(target=rebuild_after_signal, daemon=True)
     worker.start()
-    assert upgrade_entered.wait(timeout=1.0), "rebuild never reached the reader fence"
+    assert upgrade_entered.wait(timeout=DEADLINE), "rebuild never reached the reader fence"
     assert not finished.is_set(), "rebuild published while a reader lease was open"
     assert not exclusive_verified.is_set(), (
         "exclusive reader lease acquired before the open reader was released"
     )
     reader.close()
-    assert exclusive_verified.wait(timeout=2.0), "rebuild never acquired the exclusive reader lease"
-    assert finished.wait(timeout=2.0)
-    worker.join(timeout=1.0)
+    assert exclusive_verified.wait(timeout=DEADLINE), (
+        "rebuild never acquired the exclusive reader lease"
+    )
+    assert finished.wait(timeout=DEADLINE)
+    worker.join(timeout=DEADLINE)
     assert failures == [], f"reader-fence violations: {failures}"
     owner.close()
 
