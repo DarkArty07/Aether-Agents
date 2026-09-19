@@ -468,6 +468,7 @@ CREATE INDEX IF NOT EXISTS idx_event_contract ON observation_event(contract_id);
 CREATE INDEX IF NOT EXISTS idx_event_time ON observation_event(occurred_at);
 CREATE INDEX IF NOT EXISTS idx_event_participant ON observation_event(actor_id);
 CREATE INDEX IF NOT EXISTS idx_event_type ON observation_event(event_type);
+CREATE INDEX IF NOT EXISTS idx_event_causal_parent ON observation_event(trace_id, parent_event_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_event_producer_sequence
     ON observation_event(producer_epoch, producer_seq);
 DROP INDEX IF EXISTS idx_event_native_identity;
@@ -1375,16 +1376,75 @@ class ReadModel:
         self._conn.execute(sql, tuple(row[c] for c in columns))
 
     # -- event ingestion ----------------------------------------------------------
+    #: Events projected per SQLite transaction during bulk/journal ingest (#417).
+    EVENT_UPSERT_BATCH_SIZE = 64
+
+    def begin_event_batch(self) -> None:
+        """Open one exclusive transaction for a batch of per-event savepoints."""
+        self._conn.execute("BEGIN IMMEDIATE")
+
+    def commit_event_batch(self) -> None:
+        """Commit the open event-projection batch."""
+        self._conn.commit()
+
+    def rollback_event_batch(self) -> None:
+        """Abort the open event-projection batch."""
+        self._conn.rollback()
+
+    def project_event(self, event: Mapping[str, Any]) -> bool:
+        """Project one event inside an already-open transaction via a savepoint.
+
+        Returns ``True`` only for a newly inserted ``event_id``.  Callers must hold
+        an open batch from :meth:`begin_event_batch` (or an equivalent ``BEGIN``)
+        so ``RELEASE`` does not implicitly commit each event.
+        """
+        return self._upsert_event_savepoint(event)
+
     def upsert_event(self, event: Mapping[str, Any]) -> bool:
         """Ingest one canonical event. Returns ``True`` only for a new event_id."""
+        self.begin_event_batch()
         try:
-            inserted = self._upsert_event_savepoint(event)
-            self._clear_event_failure(event)
-            self._conn.commit()
+            inserted = self.project_event(event)
+            self.commit_event_batch()
             return inserted
-        except Exception:
-            self._conn.rollback()
+        except BaseException:
+            self.rollback_event_batch()
             raise
+
+    def _upsert_event_batch(self, events: list[Mapping[str, Any]]) -> int:
+        """Project ``events`` in one transaction with per-event savepoint isolation."""
+        if not events:
+            return 0
+        count = 0
+        self.begin_event_batch()
+        try:
+            for event in events:
+                try:
+                    if self.project_event(event):
+                        count += 1
+                except (
+                    EventDerivationFailed,
+                    EventIdentityCollision,
+                    EventValidationFailed,
+                ) as exc:
+                    if isinstance(exc, EventDerivationFailed):
+                        reason_code = "EVENT_DERIVATION_FAILED"
+                    elif isinstance(exc, EventIdentityCollision):
+                        reason_code = "EVENT_IDENTITY_COLLISION"
+                    else:
+                        reason_code = "EVENT_VALIDATION_FAILED"
+                    # The failed event's savepoint has already rolled back. Make
+                    # the valid prefix durable, then record the diagnostic in its
+                    # own transaction before opening the next successful batch.
+                    self.commit_event_batch()
+                    self._record_bulk_event_failure(event, reason_code)
+                    self.begin_event_batch()
+            self.commit_event_batch()
+        except BaseException:
+            self.rollback_event_batch()
+            raise
+
+        return count
 
     def upsert_events(self, events: Iterable[Mapping[str, Any]]) -> int:
         """Bulk-ingest while isolating one event-level projection failure.
@@ -1393,40 +1453,20 @@ class ReadModel:
         identity failure records only a stable, content-free diagnostic and permits
         later valid events to commit; replay removes that diagnostic when the event
         projects successfully.  Database/transaction failures still abort the batch.
+        Successful events share a transaction of up to
+        :attr:`EVENT_UPSERT_BATCH_SIZE` so journal catch-up does not pay one fsync
+        commit per event (#417).
         """
         count = 0
+        batch: list[Mapping[str, Any]] = []
+        batch_size = self.EVENT_UPSERT_BATCH_SIZE
         for event in events:
-            reason_code: str | None = None
-            self._conn.execute("BEGIN IMMEDIATE")
-            try:
-                inserted = self._upsert_event_savepoint(event)
-                self._clear_event_failure(event)
-            except EventDerivationFailed:
-                reason_code = "EVENT_DERIVATION_FAILED"
-                self._conn.rollback()
-            except EventIdentityCollision:
-                reason_code = "EVENT_IDENTITY_COLLISION"
-                self._conn.rollback()
-            except EventValidationFailed:
-                reason_code = "EVENT_VALIDATION_FAILED"
-                self._conn.rollback()
-            except Exception:
-                self._conn.rollback()
-                raise
-            else:
-                self._conn.commit()
-                if inserted:
-                    count += 1
-
-            if reason_code is not None:
-                # The raw/derived event transaction is already gone.  The bounded
-                # diagnostic has its own commit and can never make partial rows durable.
-                try:
-                    self._record_bulk_event_failure(event, reason_code)
-                    self._conn.commit()
-                except Exception:
-                    self._conn.rollback()
-                    raise
+            batch.append(event)
+            if len(batch) >= batch_size:
+                count += self._upsert_event_batch(batch)
+                batch = []
+        if batch:
+            count += self._upsert_event_batch(batch)
         return count
 
     @staticmethod
@@ -1443,24 +1483,30 @@ class ReadModel:
             return
         if not isinstance(trace_id, str) or _TRACE_REF_RE.fullmatch(trace_id) is None:
             return
-        self._conn.execute(
-            "INSERT INTO derived_diagnostic ("
-            "diagnostic_id, trace_id, project_id, coverage_class, reason_code, "
-            "event_ref, segment_name, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
-            "ON CONFLICT(diagnostic_id) DO UPDATE SET "
-            "coverage_class=excluded.coverage_class, reason_code=excluded.reason_code, "
-            "recorded_at=excluded.recorded_at",
-            (
-                self._bulk_diagnostic_id(event),
-                trace_id,
-                self._paths.project_id,
-                CoverageClass.CORRUPT_SEGMENT,
-                reason_code,
-                event_ref,
-                None,
-                _now_iso(),
-            ),
-        )
+        self.begin_event_batch()
+        try:
+            self._conn.execute(
+                "INSERT INTO derived_diagnostic ("
+                "diagnostic_id, trace_id, project_id, coverage_class, reason_code, "
+                "event_ref, segment_name, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(diagnostic_id) DO UPDATE SET "
+                "coverage_class=excluded.coverage_class, reason_code=excluded.reason_code, "
+                "recorded_at=excluded.recorded_at",
+                (
+                    self._bulk_diagnostic_id(event),
+                    trace_id,
+                    self._paths.project_id,
+                    CoverageClass.CORRUPT_SEGMENT,
+                    reason_code,
+                    event_ref,
+                    None,
+                    _now_iso(),
+                ),
+            )
+            self.commit_event_batch()
+        except BaseException:
+            self.rollback_event_batch()
+            raise
 
     def _clear_event_failure(self, event: Mapping[str, Any]) -> None:
         """Clear only transient diagnostics proven repaired by this exact replay."""
@@ -1497,7 +1543,10 @@ class ReadModel:
                 )
             elif not self._has_derivation_proof(event):
                 raise ProjectionRebuildRequired("projection derivation proof is missing")
-        except Exception:
+            self._clear_event_failure(event)
+        except BaseException:
+            # Cancellation is also an event failure: a surrounding batch may
+            # commit earlier completed events, never this partially derived one.
             self._conn.execute(f"ROLLBACK TO {savepoint}")
             self._conn.execute(f"RELEASE {savepoint}")
             raise
@@ -1511,15 +1560,15 @@ class ReadModel:
         reconciliation_key = _projection_native_key(event)
         if reconciliation_key is None:
             return False
-        rows = self._conn.execute(
+        disposition = native_disposition(dict(event))
+        for (payload_json,) in self._conn.execute(
             "SELECT payload_json FROM observation_event "
             "WHERE trace_id=? AND native_identity_key=? AND event_id<>?",
             (event["trace_id"], reconciliation_key, event["event_id"]),
-        ).fetchall()
-        disposition = native_disposition(dict(event))
-        return any(
-            native_disposition(json.loads(payload_json)) == disposition for (payload_json,) in rows
-        )
+        ):
+            if native_disposition(json.loads(payload_json)) == disposition:
+                return True
+        return False
 
     def _derive_native_semantic_duplicate(self, event: Mapping[str, Any]) -> None:
         """Keep raw/proof rows without incrementing semantic aggregate counters.
@@ -1527,10 +1576,69 @@ class ReadModel:
         Bound-unit projection is recomputed because a later explicit product parent may
         name this particular envelope. Other native derived rows already have an
         equivalent semantic owner and are intentionally left unchanged.
+
+        ``work_unit.status`` spam with an equivalent semantic owner must not rescan
+        every prior work-unit payload for the trace (#417); only status fields move.
         """
 
-        if event["event_type"] in ("work_unit.bound", "work_unit.unbound", "work_unit.status"):
+        if event["event_type"] == "work_unit.status":
+            self._derive_bound_work_unit_status(event)
+        elif event["event_type"] in ("work_unit.bound", "work_unit.unbound"):
             self._derive_bound_work_unit(event)
+
+    def _derive_bound_work_unit_status(self, event: Mapping[str, Any]) -> None:
+        """Append an unchanged native status without replaying its entire binding.
+
+        Repeated snapshots normally have new timestamps and native identities, so
+        this path must also serve non-duplicate events. Their trace/participant
+        counters still flow through ``_derive``; only binding replay is avoided.
+        """
+        work_unit = event.get("work_unit") or {}
+        binding_ref = work_unit.get("binding_ref")
+        if not isinstance(binding_ref, str) or not binding_ref:
+            return
+        existing = self._conn.execute(
+            "SELECT e.payload_json FROM bound_work_unit b "
+            "JOIN observation_event e ON e.event_id=b.last_event_id "
+            "WHERE b.binding_ref=? AND b.trace_id=?",
+            (binding_ref, event["trace_id"]),
+        ).fetchone()
+        if existing is None:
+            # First projected owner for this binding still needs the full reduction.
+            self._derive_bound_work_unit(event)
+            return
+        previous = json.loads(existing[0])
+        # Only append an otherwise identical, producer-ordered status after the
+        # current causal tail. A late duplicate must not resurrect an older state,
+        # and a newly resolved parent may change classification or causal order.
+        if (
+            previous.get("event_type") != "work_unit.status"
+            or event.get("source_kind") not in {"hermes_hook", "native_reconciliation"}
+            or previous.get("source_kind") not in {"hermes_hook", "native_reconciliation"}
+            or previous.get("producer_epoch") != event.get("producer_epoch")
+            or previous.get("producer_seq", -1) >= event.get("producer_seq", -1)
+            or previous.get("work_unit") != work_unit
+            or event.get("parent_event_id") is not None
+            or self._conn.execute(
+                "SELECT 1 FROM observation_event WHERE trace_id=? AND parent_event_id=? LIMIT 1",
+                (event["trace_id"], event["event_id"]),
+            ).fetchone()
+            is not None
+        ):
+            self._derive_bound_work_unit(event)
+            return
+        self._conn.execute(
+            "UPDATE bound_work_unit SET task_status=?, run_status=?, run_outcome=?, "
+            "last_event_id=?, last_event_at=? WHERE binding_ref=?",
+            (
+                work_unit.get("task_status"),
+                work_unit.get("run_status"),
+                work_unit.get("run_outcome"),
+                event["event_id"],
+                event["occurred_at"],
+                binding_ref,
+            ),
+        )
 
     def _has_derivation_proof(self, event: Mapping[str, Any]) -> bool:
         row = self._conn.execute(
@@ -1641,7 +1749,9 @@ class ReadModel:
             self._derive_contract_decision(event)
         elif event_type == "contract.revision":
             self._derive_contract_revision(event)
-        elif event_type in ("work_unit.bound", "work_unit.unbound", "work_unit.status"):
+        elif event_type == "work_unit.status":
+            self._derive_bound_work_unit_status(event)
+        elif event_type in ("work_unit.bound", "work_unit.unbound"):
             self._derive_bound_work_unit(event)
         elif event_type in ("run.started", "run.finished"):
             self._derive_work_unit_run(event)
@@ -1961,16 +2071,12 @@ class ReadModel:
         rows = self._conn.execute(
             "SELECT payload_json FROM observation_event WHERE trace_id=? "
             "AND event_type IN ('work_unit.bound', 'work_unit.unbound', 'work_unit.status') "
-            "AND source_kind IN ('hermes_hook', 'native_reconciliation')",
-            (trace_id,),
+            "AND source_kind IN ('hermes_hook', 'native_reconciliation') "
+            "AND json_extract(payload_json, '$.work_unit.task_ref') IS ? "
+            "AND json_extract(payload_json, '$.work_unit.binding_ref') = ?",
+            (trace_id, task_ref, binding_ref),
         ).fetchall()
-        events = []
-        for (payload_json,) in rows:
-            candidate = json.loads(payload_json)
-            unit = candidate.get("work_unit") or {}
-            if unit.get("task_ref") == task_ref and unit.get("binding_ref") == binding_ref:
-                events.append(candidate)
-        return causal_order(events)
+        return causal_order([json.loads(payload_json) for (payload_json,) in rows])
 
     def _derive_bound_work_unit(self, event: Mapping[str, Any]) -> None:
         work_unit = event.get("work_unit") or {}

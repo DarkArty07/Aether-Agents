@@ -1,0 +1,208 @@
+"""Regression and scale gates for observation ingest (#417).
+
+``aether observe`` was timing out at the host 420s deadline because journal
+ingestion committed once per event, advanced the segment cursor only after the
+whole segment finished, and held the project lock for unbounded catch-up. These
+tests use disposable directories only.
+"""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+import threading
+import time
+from copy import deepcopy
+from pathlib import Path
+
+import pytest
+from observation_helpers import EPOCH, PROJECT_ID, EventFactory
+
+from aether_agents.observation.capture.journal import JournalWriter
+from aether_agents.observation.locking import ProjectLockTimeout, project_lock
+from aether_agents.observation.reduce.ingest import ingest_pending
+from aether_agents.observation.storage import ReadModel
+from aether_agents.paths import ObservationPaths
+
+
+def _status_stream(count: int) -> list[dict]:
+    factory = EventFactory(epoch=EPOCH)
+    opened = factory.opened(0)
+    state = factory.unit(
+        "work_unit.status",
+        "started",
+        1,
+        task_ref="root",
+        relation="root",
+        task_status="running",
+    )
+    events = [opened]
+    for sequence in range(1, count):
+        event = deepcopy(state)
+        event["event_id"] = f"evt_{sequence + 1:032x}"
+        event["producer_seq"] = sequence
+        event["monotonic_ns"] = sequence + 1
+        timestamp = factory.at(sequence / 1000).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        event["occurred_at"] = timestamp
+        event["recorded_at"] = timestamp
+        events.append(event)
+    return events
+
+
+def _write_closed(tmp_path: Path, events: list[dict]):
+    paths = ObservationPaths.for_project(PROJECT_ID, root=tmp_path)
+    writer = JournalWriter(paths=paths, producer_epoch=EPOCH)
+    writer.open()
+    for event in events:
+        assert writer.append(event).accepted
+    closed = writer.close()
+    assert closed is not None
+    return paths
+
+
+def test_ingest_checkpoints_cursor_when_segment_ingest_is_interrupted(
+    tmp_path, monkeypatch
+) -> None:
+    """Progress must survive interruption; a killed observe must not restart from zero."""
+    paths = _write_closed(tmp_path, _status_stream(40))
+    segment_key = next(
+        path.relative_to(paths.journal).as_posix() for path in paths.closed.iterdir()
+    )
+
+    seen = {"n": 0}
+    original = ReadModel.project_event
+
+    def interrupt_after_progress(self, event):
+        seen["n"] += 1
+        if seen["n"] > 12:
+            raise KeyboardInterrupt("simulated observe deadline")
+        return original(self, event)
+
+    monkeypatch.setattr(ReadModel, "project_event", interrupt_after_progress)
+
+    with pytest.raises(KeyboardInterrupt):
+        ingest_pending(paths)
+
+    with ReadModel.open(paths) as model:
+        cursor = model.read_cursor(segment_key)
+        assert cursor is not None
+        assert cursor.last_seq >= 11
+        assert cursor.byte_length > 0
+        retained = model._conn.execute("SELECT COUNT(*) FROM observation_event").fetchone()[0]
+        assert retained >= 12
+
+    monkeypatch.setattr(ReadModel, "project_event", original)
+    report = ingest_pending(paths)
+    with ReadModel.open(paths) as model:
+        total = model._conn.execute("SELECT COUNT(*) FROM observation_event").fetchone()[0]
+    assert total == 40
+    assert report.events_inserted == 40 - retained
+
+
+def test_bulk_upsert_commits_far_fewer_transactions_than_events(tmp_path) -> None:
+    paths = ObservationPaths.for_project(PROJECT_ID, root=tmp_path)
+    events = _status_stream(128)
+    with ReadModel.open(paths) as model:
+        batches = {"n": 0}
+        original = model._upsert_event_batch
+
+        def wrapped(batch):
+            batches["n"] += 1
+            return original(batch)
+
+        model._upsert_event_batch = wrapped  # type: ignore[method-assign]
+        inserted = model.upsert_events(events)
+        assert inserted == 128
+        assert batches["n"] < 128
+        assert batches["n"] <= (128 // 16) + 1
+
+
+def test_query_ingest_budget_stops_with_incomplete_progress_and_resumes(tmp_path) -> None:
+    paths = _write_closed(tmp_path, _status_stream(80))
+
+    first = ingest_pending(paths, max_events=25)
+    assert first.incomplete is True
+    assert first.events_inserted == 25
+    with ReadModel.open(paths) as model:
+        assert model._conn.execute("SELECT COUNT(*) FROM observation_event").fetchone()[0] == 25
+
+    second = ingest_pending(paths, max_events=25)
+    assert second.events_inserted == 25
+    assert second.incomplete is True
+
+    final = ingest_pending(paths)
+    assert final.events_inserted == 30
+    assert final.incomplete is False
+    with ReadModel.open(paths) as model:
+        assert model._conn.execute("SELECT COUNT(*) FROM observation_event").fetchone()[0] == 80
+
+
+def test_query_lock_wait_is_bounded_and_reports_incomplete(tmp_path) -> None:
+    paths = ObservationPaths.for_project(PROJECT_ID, root=tmp_path)
+    paths.ensure()
+    hold = threading.Event()
+    ready = threading.Event()
+
+    def holder() -> None:
+        with project_lock(paths, "storage-transition"):
+            ready.set()
+            hold.wait(timeout=5.0)
+
+    thread = threading.Thread(target=holder, daemon=True)
+    thread.start()
+    assert ready.wait(timeout=2.0)
+
+    started = time.perf_counter()
+    report = ingest_pending(paths, lock_timeout_s=0.05)
+    elapsed = time.perf_counter() - started
+    hold.set()
+    thread.join(timeout=2.0)
+
+    assert report.incomplete is True
+    assert report.lock_timed_out is True
+    assert elapsed < 1.0
+
+
+def test_query_lock_wait_honors_timeout_against_another_process(tmp_path) -> None:
+    pytest.importorskip("fcntl")
+    paths = ObservationPaths.for_project(PROJECT_ID, root=tmp_path)
+    with project_lock(paths, "storage-transition"):
+        pass
+    child = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "import fcntl,sys; "
+            "f=open(sys.argv[1], 'r+'); fcntl.flock(f, fcntl.LOCK_EX); "
+            "print('held', flush=True); sys.stdin.readline()",
+            str(paths.locks / "storage-transition.lock"),
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert child.stdout is not None
+        assert child.stdout.readline() == "held\n"
+        started = time.monotonic()
+        with pytest.raises(ProjectLockTimeout):
+            with project_lock(paths, "storage-transition", timeout_s=0.2):
+                pytest.fail("another process still owns the lock")
+        elapsed = time.monotonic() - started
+        assert 0.15 <= elapsed < 1.0
+    finally:
+        try:
+            child.communicate(input="\n", timeout=5)
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.communicate()
+
+
+def test_two_thousand_event_ingest_preserves_every_event(tmp_path) -> None:
+    """Keep the full scale correctness gate under coverage as well as ordinary tests."""
+    paths = _write_closed(tmp_path, _status_stream(2000))
+    report = ingest_pending(paths)
+    assert report.events_inserted == 2000
+    assert report.incomplete is False
+    with ReadModel.open(paths) as model:
+        assert model._conn.execute("SELECT COUNT(*) FROM observation_event").fetchone()[0] == 2000

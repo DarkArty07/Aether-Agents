@@ -40,6 +40,12 @@ jobs:
           .aether/objective-contracts/oc_3879332591e50500/v1.md
           .aether/objective-contracts/oc_43012cf8a80820a4/v1.md
           .aether/objective-contracts/oc_43012cf8a80820a4/v2.md
+          .aether/objective-contracts/oc_42aa0438fefb4143/v1.md
+          .aether/objective-contracts/oc_42aa0438fefb4143/v2.md
+          .aether/objective-contracts/oc_42aa0438fefb4143/v3.md
+          .aether/objective-contracts/oc_42aa0438fefb4143/v4.md
+          .aether/objective-contracts/oc_42aa0438fefb4143/v5.md
+          .aether/objective-contracts/oc_42aa0438fefb4143/v6.md
           .aether/objective-contracts/oc_537e9a8701b4aac7/v1.md
           .aether/objective-contracts/oc_537e9a8701b4aac7/v2.md
           .aether/objective-contracts/oc_59cd48430a56d93c/v1.md
@@ -332,9 +338,11 @@ jobs:
           tests/test_lifecycle_adoption.py
           tests/test_lifecycle_projections.py
           tests/test_objective_contracts.py
+          tests/test_observation_batch_replay_regression.py
           tests/test_observation_brief_tool.py
           tests/test_observation_cli_plugin.py
           tests/test_observation_contracts.py
+          tests/test_observation_ingest_scale.py
           tests/test_observation_journal_storage.py
           tests/test_observation_lifecycle.py
           tests/test_observation_packaging.py
@@ -647,6 +655,10 @@ jobs:
           coverage_version="$(uv run --frozen python -c 'import importlib.metadata; print(importlib.metadata.version("coverage"))')"
           uv pip install --python "$component/bin/python" \
             "pytest==$pytest_version" "coverage==$coverage_version"
+      - name: Enforce non-instrumented ingestion latency gate
+        run: >-
+          uv run --frozen pytest -q
+          tests/test_observation_performance.py::test_realistic_ingest_batch_beats_per_event_commit_baseline
       - name: Enforce integrated coverage floor
         shell: bash
         run: |

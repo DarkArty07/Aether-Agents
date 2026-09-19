@@ -66,6 +66,9 @@ def _install_project(
     marker.parent.mkdir(parents=True)
     marker.write_text(project_marker(PROJECT_ID), encoding="utf-8")
     monkeypatch.setenv("XDG_STATE_HOME", str(xdg))
+    # Authority resolves from XDG data, not only the observation state root.
+    # Never let a developer's active installation govern these fixture events.
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
     registry = ProjectRegistry()
     assert registry.register(PROJECT_ID, project, "fixture")
     return project, ObservationPaths.for_project(PROJECT_ID)
@@ -144,6 +147,120 @@ def test_observe_human_and_json_share_the_same_canonical_summary(
     assert envelope["data"]["summary"]["summary_id"] in human_out.getvalue()
     assert "CONCLUSION" in human_out.getvalue()
     assert "NEXT DECISION REQUIRED" in human_out.getvalue()
+
+
+@pytest.mark.parametrize("surface", ["cli", "status", "diagnose", "changes"])
+def test_observe_ingests_once_per_request_after_resolving_trace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, surface: str
+) -> None:
+    project, paths = _install_project(monkeypatch, tmp_path)
+    _write_fixture_journal(paths)
+    previous = query.load_summary(paths, TRACE_ID)
+    real_ingest = query._ingest_for_query
+    ingested: list[str] = []
+
+    def counted_ingest(selected: ObservationPaths) -> None:
+        ingested.append(selected.project_id)
+        real_ingest(selected)
+
+    monkeypatch.setattr(query, "_ingest_for_query", counted_ingest)
+    # A later request must still catch up; this is not a persistent freshness cache.
+    for request_count in (1, 2):
+        if surface == "cli":
+            stdout, stderr = StringIO(), StringIO()
+            code = run_observe(
+                Namespace(project=str(project), ref=TRACE_ID, since=None, watch=False, json=True),
+                stdout=stdout,
+                stderr=stderr,
+            )
+            assert code == 0, stdout.getvalue()
+            assert not stderr.getvalue()
+            assert json.loads(stdout.getvalue())["data"]["state"] == "summary"
+        else:
+            args = {"action": surface, "project": str(project), "ref": TRACE_ID}
+            if surface == "changes":
+                args["since_summary_id"] = previous["summary_id"]
+            value = observe_brief(args, profile_name="morfeo")
+            assert value["trace_id"] == TRACE_ID
+        assert ingested == [PROJECT_ID] * request_count
+
+
+def test_standalone_load_summary_still_ingests_on_every_call(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _, paths = _install_project(monkeypatch, tmp_path)
+    _write_fixture_journal(paths)
+    real_ingest = query._ingest_for_query
+    ingested: list[str] = []
+
+    def counted_ingest(selected: ObservationPaths) -> None:
+        ingested.append(selected.project_id)
+        real_ingest(selected)
+
+    monkeypatch.setattr(query, "_ingest_for_query", counted_ingest)
+    for request_count in (1, 2):
+        summary = query.load_summary(paths, TRACE_ID)
+        assert summary["trace_id"] == TRACE_ID
+        assert ingested == [PROJECT_ID] * request_count
+
+
+def test_observe_watch_reuses_trace_resolution_catchup_and_refreshes_on_later_change(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    project, paths = _install_project(monkeypatch, tmp_path)
+    _write_fixture_journal(paths)
+    real_ingest = query._ingest_for_query
+    ingested: list[str] = []
+
+    def counted_ingest(selected: ObservationPaths) -> None:
+        ingested.append(selected.project_id)
+        real_ingest(selected)
+
+    monkeypatch.setattr(query, "_ingest_for_query", counted_ingest)
+
+    emissions_catchup_counts: list[int] = []
+    real_render = report.render_brief
+
+    def counted_render(summary: dict[str, Any], since: dict[str, Any] | None = None) -> str:
+        emissions_catchup_counts.append(len(ingested))
+        return real_render(summary, since=since)
+
+    monkeypatch.setattr(report, "render_brief", counted_render)
+    monkeypatch.setattr(query, "_WATCH_MIN_INTERVAL_S", 0.0)
+    monkeypatch.setattr(query, "_WATCH_MAX_INTERVAL_S", 0.0)
+    monkeypatch.setattr(time, "sleep", lambda _s: None)
+
+    real_fs_signature = query._fs_signature
+    appended = False
+
+    def instrumented_fs_signature(selected_paths: ObservationPaths) -> tuple:
+        nonlocal appended
+        if len(emissions_catchup_counts) == 1 and not appended:
+            f2 = EventFactory(epoch="prd_" + "b" * 32)
+            f2.contract("invariant.failed", "failed", 20, invariant_key="OBS-INV-001")
+            _write_events(selected_paths, f2)
+            appended = True
+        elif len(emissions_catchup_counts) >= 2:
+            raise KeyboardInterrupt
+        return real_fs_signature(selected_paths)
+
+    monkeypatch.setattr(query, "_fs_signature", instrumented_fs_signature)
+
+    stdout, stderr = StringIO(), StringIO()
+    code = run_observe(
+        Namespace(project=str(project), ref=TRACE_ID, since=None, watch=True, json=False),
+        stdout=stdout,
+        stderr=stderr,
+    )
+    assert code == 0, stderr.getvalue()
+    assert not stderr.getvalue()
+    assert len(emissions_catchup_counts) == 2
+    assert emissions_catchup_counts[0] == 1, (
+        f"Expected exactly 1 catch-up before first emission, got {emissions_catchup_counts[0]}"
+    )
+    assert emissions_catchup_counts[1] >= 2, (
+        f"Expected at least 2 catch-ups before second emission, got {emissions_catchup_counts[1]}"
+    )
 
 
 def test_objective_contract_finalize_materializes_trace_and_root_create_binds(
@@ -504,7 +621,7 @@ def test_watch_backs_off_skips_full_reduction_and_suppresses_count_only_change(
     sleeps: list[float] = []
     monkeypatch.setattr(query, "_fs_signature", lambda _paths: next(signatures))
 
-    def load(_paths: ObservationPaths, trace_id: str) -> dict[str, Any]:
+    def load(_paths: ObservationPaths, trace_id: str, *, ingest: bool = True) -> dict[str, Any]:
         reductions.append(trace_id)
         return next(summaries)
 

@@ -14,12 +14,15 @@ from pathlib import Path
 from time import perf_counter, perf_counter_ns
 from typing import Any
 
-from observation_helpers import PROJECT_ID, TRACE_ID, EventFactory, project_marker
+from observation_helpers import EPOCH, PROJECT_ID, TRACE_ID, EventFactory, project_marker
 
 from aether_agents.observation.capture import hermes_plugin
+from aether_agents.observation.capture.journal import JournalWriter
 from aether_agents.observation.context import ProjectRegistry
 from aether_agents.observation.identity import correlation_token
+from aether_agents.observation.reduce.ingest import ingest_pending
 from aether_agents.observation.reduce.reducer import ReductionInput, reduce_events
+from aether_agents.paths import ObservationPaths
 
 BASELINE = Path(__file__).parent / "fixtures" / "observation" / "performance-baseline.json"
 
@@ -68,6 +71,26 @@ def _stress_events(count: int) -> list[dict[str, Any]]:
 def _percentile(samples: list[float], fraction: float) -> float:
     ordered = sorted(samples)
     return ordered[math.ceil(fraction * len(ordered)) - 1]
+
+
+def test_realistic_ingest_batch_beats_per_event_commit_baseline(tmp_path) -> None:
+    """Measure the unchanged 2k-event latency gate without coverage instrumentation."""
+    paths = ObservationPaths.for_project(PROJECT_ID, root=tmp_path)
+    writer = JournalWriter(paths=paths, producer_epoch=EPOCH)
+    writer.open()
+    for event in _stress_events(2000):
+        assert writer.append(event).accepted
+    assert writer.close() is not None
+
+    started = perf_counter()
+    report = ingest_pending(paths)
+    elapsed = perf_counter() - started
+    assert report.events_inserted == 2000
+    assert report.incomplete is False
+    # Coverage measures executed lines, not production latency. The scale suite
+    # separately checks all 2k retained events under coverage; CI executes this
+    # unchanged performance threshold in its non-instrumented lane on every Python.
+    assert elapsed < 8.0, f"ingest of 2000 events took {elapsed:.3f}s"
 
 
 def test_ten_thousand_event_reduction_stays_inside_two_second_budget() -> None:

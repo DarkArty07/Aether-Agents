@@ -39,13 +39,13 @@ notes = ""
 [[capabilities]]
 id = "cli.observe"
 status = "implemented"
-summary = "Reads one deterministic contract-observation review brief or JSON envelope without mutating state or calling a provider."
+summary = "Reads a deterministic contract-observation brief without mutating authoritative state or calling a provider; its derived projection is updated locally."
 surfaces = ["cli.argument.aether.observe.ref", "cli.command.aether.observe", "cli.option.aether.observe.--json", "cli.option.aether.observe.--project", "cli.option.aether.observe.--since", "cli.option.aether.observe.--watch"]
 documents = ["docs/guides/observation.md", "docs/reference/cli.md"]
 specifications = ["specs/001-aether-v1-productization/contracts/cli.md", "specs/002-aether-contract-observation/spec.md"]
 implementation = ["src/aether_agents/commands/observe.py", "src/aether_agents/observation/query.py", "src/aether_agents/observation/report.py"]
-verification = ["tests/test_observation_cli_plugin.py", "tests/test_observation_reducer.py"]
-notes = ""
+verification = ["tests/test_observation_cli_plugin.py", "tests/test_observation_reducer.py", "tests/test_observation_ingest_scale.py", "tests/test_observation_batch_replay_regression.py"]
+notes = "Catch-up commits resumable event batches and bounds ingestion/maintenance-lock waiting. Incomplete catch-up is unavailable, never a complete summary. Source tests do not establish deployed-runtime qualification."
 
 [[capabilities]]
 id = "cli.reconcile"

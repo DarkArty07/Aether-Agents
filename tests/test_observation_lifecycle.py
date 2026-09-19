@@ -2183,7 +2183,10 @@ def test_update_rollback_reupdate_preserves_unknown_observation_bytes(tmp_path: 
     assert unknown.read_bytes() == unknown_bytes
 
 
-def test_active_release_is_the_only_default_authority_source(tmp_path: Path) -> None:
+def test_active_release_is_the_only_default_authority_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
     state = tmp_path / "state" / "aether"
     store = ReleaseStore(state)
 
@@ -3149,7 +3152,9 @@ def test_doctor_reports_only_content_free_observer_state_and_permission_health(
 
 def test_doctor_inspects_projection_integrity_and_summary_coverage_without_content(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
     data = tmp_path / "data" / "aether"
     state = tmp_path / "state" / "aether"
     store = ReleaseStore(data, state_root=state)
