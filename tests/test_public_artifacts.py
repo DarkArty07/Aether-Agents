@@ -23,7 +23,14 @@ _VERSION_GUARD_RE = re.compile(r"^\s*grep -Eq '(?P<pattern>[^']+)' VERSION$", re
 # pre-existing development form `X.Y.Z.devN`.  The tag/display identity `1.0.0-rc.1` is not a
 # package identity, and the release workflow's own grammar (no leading zeros, RC number >= 1)
 # bounds the numeric components here too.
-ACCEPTED_PACKAGE_IDENTITIES = ("1.0.0", "1.0.0rc1", "1.0.0rc2", "2.30.4", "1.0.0.dev3")
+ACCEPTED_PACKAGE_IDENTITIES = (
+    "1.0.0",
+    "1.0.0rc1",
+    "1.0.0rc2",
+    "1.0.0rc3",
+    "2.30.4",
+    "1.0.0.dev3",
+)
 REFUSED_PACKAGE_IDENTITIES = (
     "1.0.0-rc.1",
     "1.0.0rc",
@@ -136,16 +143,23 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     assert "sole current implementation-status and traceability registry" in readme
     assert "documented transitional downstream" in readme
     # The portal must state the current release identity and the disposition of the
-    # rejected predecessor.  It replaces the rc.1-era "**has been published**" sentence
+    # predecessor candidates. It replaces the rc.2 published-link assertions with the
+    # truthful local-only rc.3 identity and a truthfulness guard (no published rc.3 link),
     # because the status has to stay true of the artifact this README is embedded into
     # (the wheel's `METADATA` long description) and must not carry a time-bound promise.
-    assert "releases/tag/v1.0.0-rc.2" in readme
-    assert "package version `1.0.0rc2`" in readme
-    assert "Rc.2 is the candidate eligible for activation" in readme
+    assert "releases/tag/v1.0.0-rc.3" not in readme
+    assert "package version `1.0.0rc3`" in readme
+    assert "annotated tag `v1.0.0-rc.3`" in readme
+    assert "local-only candidate that is not pushed and not published" in readme
+    assert "local rc.2 tag and activation history remain immutable" in readme
     assert "releases/tag/v1.0.0-rc.1" in readme
     assert "remains published and byte-immutable but rejected, and must not be activated" in readme
     status = [line for line in readme.splitlines() if line.startswith("**Status:**")]
     assert len(status) == 1, f"expected exactly one status paragraph, found {len(status)}"
+    assert "releases/tag/v1.0.0-rc.3" not in status[0]
+    assert "release_impact = major" in status[0]
+    assert "release_action = prepare" in status[0]
+    assert "release_channel = prerelease" in status[0]
     for time_bound in ("will be published", "not yet", "pending", "to be superseded"):
         assert time_bound not in status[0], f"status paragraph carries {time_bound!r}"
     assert "beta stabilization build, not a release candidate" not in readme

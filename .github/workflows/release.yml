@@ -23,9 +23,9 @@ env:
   # recency, so an unset/incorrect pin fails closed instead of publishing wrong bytes.
   #
   # Fork pin originated in the `@v3` recovery reconciliation
-  # (`oc_742f9f4797494bf9@v3`); current objective authority is `@v4`
-  # (`oc_742f9f4797494bf9@v4`), which retains the same accepted merge of reviewed `#450`
-  # and `#461` into the maintained fork's `aether-main` (fork PR #15 merge
+  # (`oc_742f9f4797494bf9@v3`); current objective authority is `oc_a179da8d654aec8b@v1`,
+  # which retains the same accepted merge of reviewed `#450` and `#461` into the
+  # maintained fork's `aether-main` (fork PR #15 merge
   # `aed6591a69f453a1867b73628603e7b53ba40ffc`, tree
   # `2258311f9aa52c58fda9bdbd03183ba50ac85df0`). The earlier rc.2 pin
   # `7a4fdcd083409c31c09cfa3bfa345354e8576a7e` (fork PR #14 / `#450` only) and the rc.1 pin
