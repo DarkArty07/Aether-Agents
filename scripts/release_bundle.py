@@ -1076,7 +1076,6 @@ def _tui_checkout(
         contracts / "project.schema.json",
     )
     shutil.copy2(aether_checkout / "AGENTS.md", repo / "AGENTS.md")
-    shutil.copy2(aether_checkout / "scripts" / "aether_tui.py", repo / "scripts" / "aether_tui.py")
     shutil.copy2(aether_checkout / ".aether" / "project.toml", repo / ".aether" / "project.toml")
     sources = lifecycle.LifecycleManager._profile_sources("morfeo")
     for name, source in sources.items():
@@ -1209,6 +1208,13 @@ def clean_install(
     )
     record("runtime-check", uv("pip", "check", "--python", str(runtime_python)), "install-failed")
 
+    tui_dir = roots / "tui"
+    lifecycle.build_tui_in_disposable_workspace(
+        fork_repo=closure_root,
+        commit=identity["hermes_commit"],
+        destination=tui_dir,
+    )
+
     manager_root = roots / "manager-root"
     runtime_root = roots / "runtime-root"
     path = os.environ.get("PATH", "")
@@ -1216,7 +1222,11 @@ def clean_install(
         manager_root, {"PATH": f"{manager / 'bin'}{os.pathsep}{path}"}
     )
     runtime_environment = _disposable_environment(
-        runtime_root, {"PATH": f"{runtime / 'bin'}{os.pathsep}{path}"}
+        runtime_root,
+        {
+            "PATH": f"{runtime / 'bin'}{os.pathsep}{path}",
+            "HERMES_TUI_DIR": str(tui_dir),
+        },
     )
     aether = manager / "bin" / "aether"
     probes: list[dict[str, Any]] = [
@@ -1331,15 +1341,18 @@ def clean_install(
     )
     probes.append(
         probe(
-            "tui --check",
-            [sys.executable, str(tui_repo / "scripts" / "aether_tui.py"), "--check"],
+            "aether --project --json",
+            [str(aether), "--project", str(tui_repo), "--json"],
             root=tui_repo,
             environment=_disposable_environment(
-                roots / "tui-root", {"PATH": f"{runtime / 'bin'}{os.pathsep}{path}"}
+                roots / "tui-root",
+                {
+                    "PATH": f"{manager / 'bin'}{os.pathsep}{runtime / 'bin'}{os.pathsep}{path}",
+                    "HERMES_TUI_DIR": str(tui_dir),
+                },
             ),
             required=True,
-            expectation="exit-zero",
-            stdout_contains='"result": "ready"',
+            expectation="json-envelope",
         )
     )
     present_options = [
@@ -1377,6 +1390,7 @@ def clean_install(
             "manager": "<work>/install-roots/manager",
             "runtime": "<work>/install-roots/runtime",
             "hermes_source": "<work>/install-roots/hermes-source",
+            "tui": "<work>/install-roots/tui",
         },
         "install_steps": steps,
         "python_version": "%d.%d.%d" % sys.version_info[:3],

@@ -183,11 +183,21 @@ def _operator_destination_witnesses() -> dict[str, tuple[int, int, str | None]]:
     """Hash/mtime witnesses for the operator's real launcher, Desktop entry and unit."""
 
     witnessed: dict[str, tuple[int, int, str | None]] = {}
-    for path in (
+    candidate_paths = [
         Path(user_bin_dir()) / "aether",
         Path(applications_dir()) / "hermes.desktop",
+        Path(applications_dir()) / "aether.desktop",
         Path(systemd_user_dir()) / AETHER_GATEWAY_UNIT,
-    ):
+    ]
+    operator_wsl = lifecycle.detect_wsl_shortcuts_dir()
+    if operator_wsl is not None:
+        candidate_paths.extend(
+            [
+                operator_wsl / "Aether.cmd",
+                operator_wsl / "Continue-Aether.cmd",
+            ]
+        )
+    for path in candidate_paths:
         if not path.is_file():
             witnessed[str(path)] = (0, 0, None)
             continue
@@ -218,6 +228,8 @@ def _aether_identity(version: str) -> dict[str, object]:
 def _record(store: ReleaseStore, release_id: str = "1.0.0rc1-" + "a" * 16) -> ReleaseRecord:
     from aether_agents.lifecycle import AetherPrebuildIdentity
 
+    tui_bytes = b"console.log('mock-tui');\n"
+    tui_hash = hashlib.sha256(tui_bytes).hexdigest()
     identity = _aether_identity("1.0.0rc1")
     record = ReleaseRecord(
         schema_version=3,
@@ -238,11 +250,15 @@ def _record(store: ReleaseStore, release_id: str = "1.0.0rc1-" + "a" * 16) -> Re
         hermes_repository=MAINTAINED_FORK_REPOSITORY,
         hermes_branch=MAINTAINED_FORK_BRANCH,
         hermes_source_tree_sha256="c" * 64,
+        tui_sha256=tui_hash,
     )
     record.validate()
     release = store.release_path(release_id)
     release.mkdir(parents=True, exist_ok=True)
     (release / "venv").symlink_to("runtime")
+    tui_entry = release / "tui" / "dist" / "entry.js"
+    tui_entry.parent.mkdir(parents=True, exist_ok=True)
+    tui_entry.write_bytes(tui_bytes)
     return record
 
 
@@ -631,6 +647,7 @@ def test_projection_status_rejects_incoherent_hermes_refreshed_units(
         f'Environment="PATH={runtime}/venv/bin:/usr/bin"\n'
         f'Environment="VIRTUAL_ENV={runtime}/venv"\n'
         f'Environment="HERMES_HOME={profile_home}"\n'
+        f'Environment="HERMES_TUI_DIR={runtime}/tui"\n'
         f"ExecStopPost=-{python} -m gateway.cgroup_cleanup\n"
     )
 
@@ -762,6 +779,7 @@ def test_deactivation_removes_selector_coherent_hermes_refreshed_units(
         f'Environment="PATH={runtime}/venv/bin:/usr/bin"\n'
         f'Environment="VIRTUAL_ENV={runtime}/venv"\n'
         f'Environment="HERMES_HOME={profile_home}"\n'
+        f'Environment="HERMES_TUI_DIR={runtime}/tui"\n'
         f"ExecStopPost=-{python} -m gateway.cgroup_cleanup\n"
     ).encode()
     spec.service_path.write_bytes(hermes_refreshed)

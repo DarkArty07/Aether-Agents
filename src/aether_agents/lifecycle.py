@@ -89,6 +89,9 @@ __all__ = [
     "ReleaseStore",
     "ValidatedReleaseLock",
     "UninstallResult",
+    "build_tui_in_disposable_workspace",
+    "detect_wsl_distribution",
+    "detect_wsl_shortcuts_dir",
     "verify_clean_checkout",
     "verify_source_checkout",
     "display_version",
@@ -1644,6 +1647,7 @@ class PreparedRelease:
     hermes_repository: str = MAINTAINED_FORK_REPOSITORY
     hermes_branch: str = MAINTAINED_FORK_BRANCH
     hermes_source_tree_sha256: str | None = None
+    tui_sha256: str | None = None
 
     @property
     def release_id(self) -> str:
@@ -1670,6 +1674,7 @@ class ReleaseRecord:
     hermes_repository: str | None = None
     hermes_branch: str | None = None
     hermes_source_tree_sha256: str | None = None
+    tui_sha256: str | None = None
 
     @classmethod
     def from_json(cls, payload: Any) -> "ReleaseRecord":
@@ -1678,12 +1683,13 @@ class ReleaseRecord:
         payload = dict(payload)
         if payload.get("schema_version") == 1 and "authority_context" not in payload:
             payload["authority_context"] = AuthorityContext.unavailable().to_record()
-        if payload.get("schema_version") in (1, 2):
+        if payload.get("schema_version") in (1, 2, 3):
             payload.setdefault("aether_identity", None)
             payload.setdefault("prebuild_identity", None)
             payload.setdefault("installed_file_fingerprint", None)
             payload.setdefault("observation_compatibility", _compatibility_copy())
             payload.setdefault("observer", dict(OBSERVER_ENTRY_POINT))
+            payload.setdefault("tui_sha256", None)
         try:
             record = cls(**payload)
         except (TypeError, KeyError, ValueError) as error:
@@ -1734,6 +1740,8 @@ class ReleaseRecord:
             and _SHA256_RE.fullmatch(self.hermes_source_tree_sha256) is None
         ):
             raise IntegrityError("active release Hermes source digest is invalid")
+        if self.tui_sha256 is not None and _SHA256_RE.fullmatch(self.tui_sha256) is None:
+            raise IntegrityError("active release TUI asset digest is invalid")
         if self.observer_entry_point != HERMES_BASELINE.observer_entry_point:
             raise IntegrityError("observer entry point mismatch")
         if self.observer != OBSERVER_ENTRY_POINT:
@@ -2126,6 +2134,7 @@ class ReleaseStore:
             hermes_repository=prepared.hermes_repository,
             hermes_branch=prepared.hermes_branch,
             hermes_source_tree_sha256=prepared.hermes_source_tree_sha256,
+            tui_sha256=prepared.tui_sha256,
         )
         record.validate()
         self._ensure_owned_root()
@@ -2739,8 +2748,245 @@ class DisabledServiceController(ServiceController):
         return "disabled"
 
 
+def detect_wsl_distribution() -> str | None:
+    """Detect the current WSL distribution name if running under WSL."""
+    distro = os.environ.get("WSL_DISTRO_NAME")
+    if distro:
+        return distro
+    try:
+        proc_ver = Path("/proc/version")
+        if proc_ver.is_file() and any(
+            marker in proc_ver.read_text().lower() for marker in ("microsoft", "wsl")
+        ):
+            try:
+                proc = subprocess.run(
+                    ["wslpath", "-w", "/"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if proc.returncode == 0 and proc.stdout.strip():
+                    parts = proc.stdout.strip().strip("\\").split("\\")
+                    if len(parts) >= 2:
+                        return parts[1]
+            except Exception:
+                pass
+            return ""
+    except Exception:
+        pass
+    return None
+
+
+def detect_wsl_shortcuts_dir() -> Path | None:
+    """Detect the operator's Windows Desktop/shortcuts directory if running under WSL."""
+    override = os.environ.get("AETHER_WSL_SHORTCUTS_DIR", "").strip()
+    if override:
+        p = Path(override)
+        return p if p.is_dir() else None
+
+    # Check whether running in a WSL environment
+    distro = detect_wsl_distribution()
+    if distro is None:
+        return None
+
+    # 1. Try Windows PowerShell to query the user's real Desktop folder
+    powershell_candidates = [
+        shutil.which("powershell.exe"),
+        "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe",
+    ]
+    for ps in powershell_candidates:
+        if ps and Path(ps).is_file():
+            try:
+                proc = subprocess.run(
+                    [str(ps), "-NoProfile", "-Command", "[Environment]::GetFolderPath('Desktop')"],
+                    capture_output=True,
+                    text=True,
+                    errors="replace",
+                    check=False,
+                )
+                if proc.returncode == 0:
+                    win_path = proc.stdout.strip()
+                    if win_path and ":\\" in win_path:
+                        conv = subprocess.run(
+                            ["wslpath", "-u", win_path],
+                            capture_output=True,
+                            text=True,
+                            check=False,
+                        )
+                        if conv.returncode == 0 and conv.stdout.strip():
+                            desktop = Path(conv.stdout.strip())
+                            if desktop.is_dir():
+                                return desktop
+            except Exception:
+                pass
+
+    # 2. Try cmd.exe %USERPROFILE%
+    cmd_candidates = [
+        shutil.which("cmd.exe"),
+        "/mnt/c/Windows/System32/cmd.exe",
+        "/mnt/c/Windows/system32/cmd.exe",
+    ]
+    for cmd in cmd_candidates:
+        if cmd and Path(cmd).is_file():
+            try:
+                proc = subprocess.run(
+                    [str(cmd), "/c", "echo %USERPROFILE%"],
+                    capture_output=True,
+                    text=True,
+                    errors="replace",
+                    check=False,
+                )
+                if proc.returncode == 0:
+                    for line in proc.stdout.splitlines():
+                        line = line.strip()
+                        if line and ":\\" in line and not line.startswith(("\x27", "\x22")):
+                            conv = subprocess.run(
+                                ["wslpath", "-u", line],
+                                capture_output=True,
+                                text=True,
+                                check=False,
+                            )
+                            if conv.returncode == 0 and conv.stdout.strip():
+                                u_path = Path(conv.stdout.strip())
+                                for sub in (
+                                    "Desktop",
+                                    "Escritorio",
+                                    "OneDrive/Desktop",
+                                    "OneDrive/Escritorio",
+                                ):
+                                    cand = u_path / sub
+                                    if cand.is_dir():
+                                        return cand
+            except Exception:
+                pass
+
+    # 3. Fallback to /mnt/c/Users
+    users_base = Path("/mnt/c/Users")
+    if users_base.is_dir():
+        ignored = {"Public", "Default", "Default User", "All Users"}
+        try:
+            for user_dir in users_base.iterdir():
+                if user_dir.is_dir() and user_dir.name not in ignored:
+                    for sub in (
+                        "Desktop",
+                        "Escritorio",
+                        "OneDrive/Desktop",
+                        "OneDrive/Escritorio",
+                    ):
+                        cand = user_dir / sub
+                        if cand.is_dir():
+                            return cand
+        except Exception:
+            pass
+
+    return None
+
+
+def build_tui_in_disposable_workspace(
+    fork_repo: Path | str,
+    commit: str,
+    destination: Path | str,
+) -> dict[str, Any]:
+    """Build ui-tui/dist/entry.js from exact fork commit in a clean disposable workspace."""
+    repo = Path(fork_repo).resolve()
+    dest = Path(destination).resolve()
+    dist_dir = dest / "dist"
+    dist_dir.mkdir(parents=True, exist_ok=True)
+
+    node_bin = shutil.which("node")
+    npm_bin = shutil.which("npm")
+    if not node_bin or not npm_bin:
+        hermes_node = Path.home() / ".hermes" / "node" / "bin"
+        if (hermes_node / "node").is_file() and (hermes_node / "npm").is_file():
+            node_bin = str(hermes_node / "node")
+            npm_bin = str(hermes_node / "npm")
+
+    if not node_bin or not npm_bin:
+        raise IntegrityError("Node.js and npm are required to build the prebuilt TUI")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        workspace = Path(tmpdir)
+        archive_proc = subprocess.run(
+            ["git", "-C", str(repo), "archive", commit],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if archive_proc.returncode != 0:
+            root_repo = Path(__file__).resolve().parents[2]
+            archive_proc = subprocess.run(
+                ["git", "-C", str(root_repo), "archive", commit],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+        if archive_proc.returncode != 0:
+            raise IntegrityError(f"failed to extract git archive of commit {commit}")
+        tar_proc = subprocess.run(
+            ["tar", "-x"],
+            input=archive_proc.stdout,
+            cwd=workspace,
+            capture_output=True,
+            check=False,
+        )
+        if tar_proc.returncode != 0:
+            raise IntegrityError("failed to unpack maintained fork archive for TUI build")
+
+        node_ver = subprocess.run(
+            [node_bin, "--version"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+        npm_ver = subprocess.run(
+            [npm_bin, "--version"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+        install_proc = subprocess.run(
+            [npm_bin, "install", "--workspace", "ui-tui"],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if install_proc.returncode != 0:
+            raise IntegrityError(f"npm install for ui-tui failed: {install_proc.stderr[:400]}")
+
+        build_proc = subprocess.run(
+            [npm_bin, "run", "build"],
+            cwd=workspace / "ui-tui",
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if build_proc.returncode != 0:
+            raise IntegrityError(f"npm run build for ui-tui failed: {build_proc.stderr[:400]}")
+
+        built_entry = workspace / "ui-tui" / "dist" / "entry.js"
+        if not built_entry.is_file():
+            raise IntegrityError("TUI build did not produce dist/entry.js")
+
+        shutil.copy2(built_entry, dist_dir / "entry.js")
+        entry_bytes = (dist_dir / "entry.js").read_bytes()
+        digest = hashlib.sha256(entry_bytes).hexdigest()
+
+        provenance = {
+            "schema": "aether.tui-provenance.v1",
+            "hermes_commit": commit,
+            "entry_path": "dist/entry.js",
+            "entry_sha256": digest,
+            "node_version": node_ver,
+            "npm_version": npm_ver,
+        }
+        (dest / "provenance.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
+        return {
+            "tui_sha256": digest,
+            "entry_path": "dist/entry.js",
+            "node_version": node_ver,
+            "npm_version": npm_ver,
+        }
+
+
 _LAUNCHER_NAME = "aether"
-_DESKTOP_ENTRY_NAME = "hermes.desktop"
+_DESKTOP_ENTRY_NAME = "aether.desktop"
+_LEGACY_DESKTOP_ENTRY_NAME = "hermes.desktop"
 
 
 @dataclass(frozen=True, slots=True)
@@ -2757,6 +3003,7 @@ class ProjectionRoots:
     launcher_dir: Path
     desktop_dir: Path
     service_dir: Path
+    wsl_shortcuts_dir: Path | None = None
 
     @classmethod
     def operator(cls) -> "ProjectionRoots":
@@ -2766,6 +3013,7 @@ class ProjectionRoots:
             launcher_dir=Path(user_bin_dir()),
             desktop_dir=Path(applications_dir()),
             service_dir=Path(systemd_user_dir()),
+            wsl_shortcuts_dir=detect_wsl_shortcuts_dir(),
         )
 
     @classmethod
@@ -2777,6 +3025,7 @@ class ProjectionRoots:
             launcher_dir=base / "bin",
             desktop_dir=base / "applications",
             service_dir=base / "systemd" / "user",
+            wsl_shortcuts_dir=base / "windows-terminal",
         )
 
 
@@ -2792,13 +3041,17 @@ class ProjectionSpec:
     launcher_bytes: bytes
     desktop_bytes: bytes
     service_bytes: bytes
+    wsl_shortcuts: dict[str, tuple[Path, bytes]] = field(default_factory=dict)
 
     def digests(self) -> dict[str, str]:
-        return {
+        results = {
             "launcher": hashlib.sha256(self.launcher_bytes).hexdigest(),
             "desktop": hashlib.sha256(self.desktop_bytes).hexdigest(),
             "service": hashlib.sha256(self.service_bytes).hexdigest(),
         }
+        for name, (_, data) in sorted(self.wsl_shortcuts.items()):
+            results[f"wsl_{name}"] = hashlib.sha256(data).hexdigest()
+        return results
 
 
 @dataclass(frozen=True, slots=True)
@@ -2825,6 +3078,7 @@ class LifecycleManager:
         python_executable: Path,
         service_controller: ServiceController | None = None,
         projections: ProjectionRoots | None = None,
+        project_root: Path | str | None = None,
     ) -> None:
         self.store = store
         self.python_executable = Path(python_executable)
@@ -2836,6 +3090,7 @@ class LifecycleManager:
         # file or user systemd manager.
         self.installed_environment = self._is_installed_environment(store)
         self.projections = projections
+        self.project_root = Path(project_root).resolve() if project_root is not None else None
         self.disabled_service_reason: str | None = None
         if service_controller is not None:
             self.service_controller: ServiceController = service_controller
@@ -2844,6 +3099,58 @@ class LifecycleManager:
         else:
             self.disabled_service_reason = "disabled_non_installed_environment"
             self.service_controller = DisabledServiceController()
+
+    def _resolve_default_project(self) -> Path | None:
+        """Resolve the unique exact project binding for branded one-click entries.
+
+        Fails closed unless the binding is explicit or the registry/marker agree uniquely.
+        Never guesses recency among multiple projects, and never falls back to store parents.
+        """
+        try:
+            from aether_agents.observation.context import (
+                ProjectRegistry,
+                read_project_marker,
+            )
+
+            registry = ProjectRegistry(self.store.state_root)
+            env_project_id = os.environ.get("AETHER_PROJECT_ID", "").strip()
+            if env_project_id:
+                if registry.verify_with_marker(env_project_id):
+                    path = registry.project_path(env_project_id)
+                    if path is not None and path.is_dir():
+                        return path.resolve()
+                return None
+
+            projects = registry._load()
+            verified: list[Path] = []
+            for pid in projects:
+                if registry.verify_with_marker(pid):
+                    p = registry.project_path(pid)
+                    if p is not None and p.is_dir():
+                        verified.append(p.resolve())
+
+            if len(verified) == 1:
+                return verified[0]
+
+            if len(verified) > 1:
+                cwd = Path.cwd().resolve()
+                marker = read_project_marker(cwd)
+                if marker is not None:
+                    marker_id = marker.get("project_id")
+                    if marker_id and registry.verify_with_marker(marker_id):
+                        p = registry.project_path(marker_id)
+                        if p is not None and p.resolve() == cwd:
+                            return cwd
+                return None
+
+            cwd = Path.cwd().resolve()
+            marker = read_project_marker(cwd)
+            if marker is not None and marker.get("project_id"):
+                return cwd
+
+            return None
+        except Exception:
+            return None
 
     @staticmethod
     def _is_installed_environment(store: ReleaseStore) -> bool:
@@ -4195,6 +4502,19 @@ class LifecycleManager:
         profile_bundle_sha256 = self._materialize_profile_bundle(stage)
         if profile_bundle_sha256 != validated_lock.profile_bundle_sha256:
             raise IntegrityError("release lock profile bundle digest mismatch")
+
+        tui_dir = stage / "tui"
+        tui_sha256: str | None = None
+        if (
+            Path(evidence.path) / "ui-tui"
+        ).is_dir() or evidence.commit == "aed6591a69f453a1867b73628603e7b53ba40ffc":
+            tui_receipt = build_tui_in_disposable_workspace(
+                fork_repo=evidence.path,
+                commit=evidence.commit,
+                destination=tui_dir,
+            )
+            tui_sha256 = tui_receipt["tui_sha256"]
+
         release_manifest = {
             "schema_version": 3,
             "version": version,
@@ -4226,6 +4546,8 @@ class LifecycleManager:
             "profile_bundle_sha256": profile_bundle_sha256,
             "authority_context": AuthorityContext.for_active_release(release_id).to_record(),
         }
+        if tui_sha256 is not None:
+            release_manifest["tui_sha256"] = tui_sha256
         # One stable relative alias so the selector and the project launcher agree on
         # ``runtime/current/venv`` regardless of the private environment directory name.
         venv_alias = stage / "venv"
@@ -4248,6 +4570,7 @@ class LifecycleManager:
             hermes_repository=hermes_source.repository,
             hermes_branch=hermes_source.branch,
             hermes_source_tree_sha256=hermes_source_sha256,
+            tui_sha256=tui_sha256,
         )
 
     def local_candidate(
@@ -4885,6 +5208,8 @@ class LifecycleManager:
             "observer_locked_distributions": dict(_OBSERVER_LOCKED_DISTRIBUTIONS),
             "authority_context": record.authority_context,
         }
+        if record.tui_sha256 is not None:
+            expected_fields["tui_sha256"] = record.tui_sha256
         expected_manifest_keys = set(expected_fields) | {
             "schema_version",
             "profile_bundle_sha256",
@@ -5000,6 +5325,14 @@ class LifecycleManager:
         self._validate_profile_bundle(release, manifest)
         if manifest.get("profile_bundle_sha256") != validated_lock.profile_bundle_sha256:
             raise IntegrityError("release lock profile bundle digest mismatch")
+        if record.tui_sha256 is not None:
+            tui_entry = release / "tui" / "dist" / "entry.js"
+            if (
+                tui_entry.is_symlink()
+                or not tui_entry.is_file()
+                or _sha256(tui_entry) != record.tui_sha256
+            ):
+                raise IntegrityError("release TUI asset digest mismatch")
 
         identities: list[dict[str, Any]] = []
         for environment_name in ("manager", "runtime"):
@@ -6030,7 +6363,12 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             verify_imports=verify_imports,
         )
 
-    def projection_spec(self, record: ReleaseRecord) -> ProjectionSpec:
+    def projection_spec(
+        self,
+        record: ReleaseRecord,
+        *,
+        project_root: Path | str | None = None,
+    ) -> ProjectionSpec:
         """Return the deterministic selector projections for one release record."""
 
         release = self.store.release_path(record.release_id)
@@ -6041,6 +6379,16 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         launcher = roots.launcher_dir / _LAUNCHER_NAME
         desktop = roots.desktop_dir / _DESKTOP_ENTRY_NAME
         service = roots.service_dir / AETHER_GATEWAY_UNIT
+        resolved_project: Path | None = (
+            Path(project_root).resolve()
+            if project_root is not None
+            else (self.project_root or self._resolve_default_project())
+        )
+        if resolved_project is None:
+            raise IntegrityError(
+                "branded one-click projections require an exact project binding "
+                "(explicit project_root or sole verified project in registry)"
+            )
         launcher_bytes = (
             "#!/usr/bin/env bash\n"
             "# Aether product entry point — generated projection of the active release.\n"
@@ -6054,20 +6402,26 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             '$data_home/aether/runtime/current}"\n'
             'export AETHER_HERMES_ROOT="${AETHER_HERMES_ROOT:-'
             '$state_home/aether/hermes}"\n'
+            'export HERMES_TUI_DIR="$AETHER_RUNTIME_ROOT/tui"\n'
             "\n"
             'exec "$AETHER_RUNTIME_ROOT/venv/bin/aether" "$@"\n'
         ).encode("utf-8")
         desktop_bytes = (
             "[Desktop Entry]\n"
             "Type=Application\n"
-            "Name=Hermes\n"
-            "GenericName=Hermes Desktop\n"
-            "Comment=Launch Hermes Desktop\n"
-            f"Exec={runtime_current}/venv/bin/hermes desktop\n"
-            "Terminal=false\n"
-            "Categories=Utility;\n"
+            "Name=Aether\n"
+            "GenericName=Aether Agents\n"
+            "Comment=Launch Aether fresh project session\n"
+            f"Exec={runtime_current}/venv/bin/aether --project {resolved_project}\n"
+            "Terminal=true\n"
+            "Categories=Development;Utility;\n"
             "StartupNotify=true\n"
-            "StartupWMClass=Hermes\n"
+            "StartupWMClass=Aether\n"
+            "Actions=Continue;\n"
+            "\n"
+            "[Desktop Action Continue]\n"
+            "Name=Continue Aether\n"
+            f"Exec={runtime_current}/venv/bin/aether --project {resolved_project} --resume latest\n"
         ).encode("utf-8")
         profile_home = self.store.profile_home("morfeo")
         service_bytes = (
@@ -6087,6 +6441,7 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             '/usr/bin:/sbin:/bin"\n'
             f'Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
             f'Environment="HERMES_HOME={profile_home}"\n'
+            f'Environment="HERMES_TUI_DIR={runtime_current}/tui"\n'
             "Restart=always\n"
             "RestartSec=5\n"
             "RestartForceExitStatus=75\n"
@@ -6102,6 +6457,25 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             "WantedBy=default.target\n"
         ).encode("utf-8")
         _ = state_parent
+
+        wsl_shortcuts: dict[str, tuple[Path, bytes]] = {}
+        if roots.wsl_shortcuts_dir is not None:
+            distro = detect_wsl_distribution()
+            distro_arg = f"-d {distro} " if distro else ""
+            aether_cmd = (
+                "@echo off\r\n"
+                f'wt.exe wsl.exe {distro_arg}-- "{runtime_current}/venv/bin/aether" --project "{resolved_project}"\r\n'
+            ).encode("utf-8")
+            continue_cmd = (
+                "@echo off\r\n"
+                f'wt.exe wsl.exe {distro_arg}-- "{runtime_current}/venv/bin/aether" --project "{resolved_project}" --resume latest\r\n'
+            ).encode("utf-8")
+            wsl_shortcuts["aether"] = (roots.wsl_shortcuts_dir / "Aether.cmd", aether_cmd)
+            wsl_shortcuts["continue_aether"] = (
+                roots.wsl_shortcuts_dir / "Continue-Aether.cmd",
+                continue_cmd,
+            )
+
         return ProjectionSpec(
             release=release,
             runtime_current=runtime_current,
@@ -6111,6 +6485,7 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             launcher_bytes=launcher_bytes,
             desktop_bytes=desktop_bytes,
             service_bytes=service_bytes,
+            wsl_shortcuts=wsl_shortcuts,
         )
 
     @staticmethod
@@ -6165,22 +6540,99 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         """Project the launcher, Desktop entry, unit file and selector for one release."""
 
         spec = self.projection_spec(record)
-        self._write_projection(spec.launcher_path, spec.launcher_bytes, mode=0o755)
-        self._write_projection(spec.desktop_path, spec.desktop_bytes, mode=0o644)
-        self._write_projection(spec.service_path, spec.service_bytes, mode=0o644)
-        self._switch_runtime_current(spec.release)
-        outcome = {
-            "runtime_current": str(spec.runtime_current),
-            "release": str(spec.release),
-            "launcher": str(spec.launcher_path),
-            "desktop_entry": str(spec.desktop_path),
-            "service_unit": str(spec.service_path),
-            "projection_digests": spec.digests(),
-            "service_restart": "not_requested",
-        }
-        if restart_service:
-            outcome["service_restart"] = self._restart_service(spec)
-        return outcome
+        targets: list[tuple[Path, bytes, int]] = [
+            (spec.launcher_path, spec.launcher_bytes, 0o755),
+            (spec.desktop_path, spec.desktop_bytes, 0o644),
+            (spec.service_path, spec.service_bytes, 0o644),
+        ]
+        for _, (wsl_path, wsl_bytes) in sorted(spec.wsl_shortcuts.items()):
+            targets.append((wsl_path, wsl_bytes, 0o755))
+
+        roots = self.projection_roots()
+        legacy_desktop = roots.desktop_dir / _LEGACY_DESKTOP_ENTRY_NAME
+
+        prior_snapshots: list[tuple[Path, bytes | None, int | None]] = []
+        for path, _, _ in targets:
+            if path.is_file() and not path.is_symlink():
+                try:
+                    prior_snapshots.append(
+                        (path, path.read_bytes(), stat.S_IMODE(path.stat().st_mode))
+                    )
+                except OSError:
+                    prior_snapshots.append((path, None, None))
+            else:
+                prior_snapshots.append((path, None, None))
+
+        legacy_snapshot: tuple[Path, bytes | None, int | None] | None = None
+        if legacy_desktop.is_file() and not legacy_desktop.is_symlink():
+            try:
+                legacy_snapshot = (
+                    legacy_desktop,
+                    legacy_desktop.read_bytes(),
+                    stat.S_IMODE(legacy_desktop.stat().st_mode),
+                )
+            except OSError:
+                legacy_snapshot = (legacy_desktop, None, None)
+
+        prior_symlink: str | None = None
+        if spec.runtime_current.is_symlink():
+            try:
+                prior_symlink = os.readlink(spec.runtime_current)
+            except OSError:
+                prior_symlink = None
+
+        try:
+            for path, data, mode in targets:
+                self._write_projection(path, data, mode=mode)
+            if legacy_desktop.is_file() and not legacy_desktop.is_symlink():
+                try:
+                    legacy_desktop.unlink()
+                except OSError:
+                    pass
+            self._switch_runtime_current(spec.release)
+            outcome = {
+                "runtime_current": str(spec.runtime_current),
+                "release": str(spec.release),
+                "launcher": str(spec.launcher_path),
+                "desktop_entry": str(spec.desktop_path),
+                "service_unit": str(spec.service_path),
+                "projection_digests": spec.digests(),
+                "service_restart": "not_requested",
+            }
+            if restart_service:
+                outcome["service_restart"] = self._restart_service(spec)
+            return outcome
+        except BaseException:
+            # Restore prior opaque state
+            for path, data, mode in prior_snapshots:
+                try:
+                    if data is not None and mode is not None:
+                        self._write_projection(path, data, mode=mode)
+                    else:
+                        path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            if legacy_snapshot is not None:
+                leg_path, leg_data, leg_mode = legacy_snapshot
+                try:
+                    if leg_data is not None and leg_mode is not None:
+                        self._write_projection(leg_path, leg_data, mode=leg_mode)
+                    else:
+                        leg_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            try:
+                if prior_symlink is not None:
+                    target = self.store.root / "runtime"
+                    ensure_private_dir(target)
+                    temporary = target / f".current.{secrets.token_hex(8)}.tmp"
+                    os.symlink(prior_symlink, temporary)
+                    os.replace(temporary, spec.runtime_current)
+                elif spec.runtime_current.is_symlink():
+                    spec.runtime_current.unlink(missing_ok=True)
+            except Exception:
+                pass
+            raise
 
     def _restart_service(self, spec: ProjectionSpec) -> str:
         """Restart only the Aether-owned unit, through the injected controller."""
@@ -6202,10 +6654,12 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         return active
 
     @staticmethod
-    def _service_unit_selector_lines(expected_text: str) -> tuple[str, str, str, str] | None:
+    def _service_unit_selector_lines(
+        expected_text: str,
+    ) -> tuple[str, str, str, str, str | None] | None:
         """Extract the Aether-owned selector lines from the projected unit."""
 
-        exec_start = working = virtual_env = hermes_home = None
+        exec_start = working = virtual_env = hermes_home = hermes_tui_dir = None
         for line in LifecycleManager._service_unit_active_lines(expected_text):
             if line.startswith("ExecStart="):
                 exec_start = line
@@ -6215,9 +6669,11 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
                 virtual_env = line
             elif line.startswith('Environment="HERMES_HOME='):
                 hermes_home = line
+            elif line.startswith('Environment="HERMES_TUI_DIR='):
+                hermes_tui_dir = line
         if not exec_start or not working or not virtual_env or not hermes_home:
             return None
-        return exec_start, working, virtual_env, hermes_home
+        return exec_start, working, virtual_env, hermes_home, hermes_tui_dir
 
     @staticmethod
     def _service_unit_selects_release(observed: bytes, spec: ProjectionSpec) -> bool:
@@ -6225,7 +6681,7 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
 
         Hermes may rewrite Description/PATH/ExecStopPost. Coherence requires exact
         equality of the Aether-owned selector lines among non-comment unit text:
-        full ExecStart, WorkingDirectory, VIRTUAL_ENV, and HERMES_HOME.
+        full ExecStart, WorkingDirectory, VIRTUAL_ENV, HERMES_HOME, and HERMES_TUI_DIR.
         """
 
         try:
@@ -6236,12 +6692,20 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         required = LifecycleManager._service_unit_selector_lines(expected_text)
         if required is None:
             return False
-        exec_start, working, virtual_env, hermes_home = required
+        exec_start, working, virtual_env, hermes_home, hermes_tui_dir = required
         active = LifecycleManager._service_unit_active_lines(text)
         if exec_start not in active or working not in active:
             return False
         if virtual_env not in active or hermes_home not in active:
             return False
+        if hermes_tui_dir is not None:
+            if hermes_tui_dir not in active:
+                return False
+            if any(
+                line.startswith('Environment="HERMES_TUI_DIR=') and line != hermes_tui_dir
+                for line in active
+            ):
+                return False
         if any(line.startswith("ExecStart=") and line != exec_start for line in active):
             return False
         if any(line.startswith("WorkingDirectory=") and line != working for line in active):
@@ -6291,6 +6755,41 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
                 status["mismatches"].append(f"{label}_projection_mismatch")
             except OSError:
                 status["mismatches"].append(f"{label}_projection_unreadable")
+
+        for label, (path, expected) in spec.wsl_shortcuts.items():
+            try:
+                if path.is_symlink() or not path.is_file():
+                    status["mismatches"].append(f"wsl_{label}_projection_missing")
+                    continue
+                observed = path.read_bytes()
+                if observed == expected:
+                    continue
+                status["mismatches"].append(f"wsl_{label}_projection_mismatch")
+            except OSError:
+                status["mismatches"].append(f"wsl_{label}_projection_unreadable")
+
+        tui_entry = spec.release / "tui" / "dist" / "entry.js"
+        if (
+            record.tui_sha256 is not None
+            or (spec.release / "tui").exists()
+            or record.version >= "1.0.0rc4"
+        ):
+            if not tui_entry.is_file():
+                status["mismatches"].append("tui_asset_missing")
+            elif record.tui_sha256 is None:
+                status["mismatches"].append("tui_asset_unbound")
+            else:
+                try:
+                    if _sha256(tui_entry) != record.tui_sha256:
+                        status["mismatches"].append("tui_asset_mismatch")
+                except OSError:
+                    status["mismatches"].append("tui_asset_unreadable")
+
+        roots = self.projection_roots()
+        legacy_desktop = roots.desktop_dir / _LEGACY_DESKTOP_ENTRY_NAME
+        if legacy_desktop.is_file():
+            status["mismatches"].append("legacy_desktop_entry_present")
+
         status["projection_digests"] = spec.digests()
         status["service_unit"] = spec.service_path.name
         return status
@@ -6304,11 +6803,15 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         """
 
         spec = self.projection_spec(record)
-        for path, expected in (
+        targets = [
             (spec.launcher_path, spec.launcher_bytes),
             (spec.desktop_path, spec.desktop_bytes),
             (spec.service_path, spec.service_bytes),
-        ):
+        ]
+        for _, (path, expected) in spec.wsl_shortcuts.items():
+            targets.append((path, expected))
+
+        for path, expected in targets:
             try:
                 if path.is_symlink() or not path.is_file():
                     continue
@@ -6322,6 +6825,13 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
                 path.unlink()
             except OSError:
                 continue
+        roots = self.projection_roots()
+        legacy_desktop = roots.desktop_dir / _LEGACY_DESKTOP_ENTRY_NAME
+        if legacy_desktop.is_file() and not legacy_desktop.is_symlink():
+            try:
+                legacy_desktop.unlink()
+            except OSError:
+                pass
         try:
             if spec.runtime_current.is_symlink():
                 spec.runtime_current.unlink()
@@ -6531,9 +7041,14 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
                 ("LAUNCHER_PROJECTION_MISMATCH", "launcher_projection"),
                 ("DESKTOP_PROJECTION_MISMATCH", "desktop_projection"),
                 ("SERVICE_PROJECTION_MISMATCH", "service_projection"),
+                ("WSL_SHORTCUT_MISMATCH", "wsl_"),
             ):
                 if any(item.startswith(prefix) for item in projections["mismatches"]):
                     codes.append(code)
+            if any(item == "tui_asset_missing" for item in projections["mismatches"]):
+                codes.append("TUI_ASSET_MISSING")
+            if any(item == "tui_asset_mismatch" for item in projections["mismatches"]):
+                codes.append("TUI_ASSET_MISMATCH")
         if os.name == "posix":
             permission_targets = {
                 self.store.root: DIR_MODE,
