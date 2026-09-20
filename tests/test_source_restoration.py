@@ -233,24 +233,34 @@ def test_restore_refuse_cross_device(
     quarantine.parent.mkdir(parents=True)
 
     real_os_stat = os.stat
+    quarantine_parent_resolved = quarantine.parent.resolve()
+    target_parents = {
+        os.path.abspath(os.fspath(quarantine.parent)),
+        os.path.abspath(os.fspath(quarantine_parent_resolved)),
+    }
 
     def fake_stat(path: Any, *args: Any, **kwargs: Any) -> os.stat_result:
         res = real_os_stat(path, *args, **kwargs)
-        if Path(path).resolve() == quarantine.parent.resolve():
-            return os.stat_result(
-                (
-                    res.st_mode,
-                    res.st_ino,
-                    res.st_dev + 1,
-                    res.st_nlink,
-                    res.st_uid,
-                    res.st_gid,
-                    res.st_size,
-                    res.st_atime,
-                    res.st_mtime,
-                    res.st_ctime,
+        if isinstance(path, (str, bytes, os.PathLike)):
+            try:
+                norm = os.path.abspath(os.fspath(path))
+            except (TypeError, ValueError):
+                norm = None
+            if norm in target_parents:
+                return os.stat_result(
+                    (
+                        res.st_mode,
+                        res.st_ino,
+                        res.st_dev + 1,
+                        res.st_nlink,
+                        res.st_uid,
+                        res.st_gid,
+                        res.st_size,
+                        res.st_atime,
+                        res.st_mtime,
+                        res.st_ctime,
+                    )
                 )
-            )
         return res
 
     with pytest.MonkeyPatch.context() as mp:
