@@ -37,13 +37,73 @@ from aether_agents.observation.checkpoint import AuthorityContext
 FORK_COMMIT = "aed6591a69f453a1867b73628603e7b53ba40ffc"
 
 
-def _resolve_fork_source() -> Path:
-    configured = os.environ.get("AETHER_MAINTAINED_FORK_CHECKOUT", "").strip()
-    if configured:
-        p = Path(configured).expanduser()
-        if p.exists():
-            return p
-    return Path(__file__).resolve().parents[1]
+def _git(root: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(root), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip()
+
+
+def _disposable_fork_source(root: Path) -> tuple[Path, str]:
+    """Create a tiny exact-commit fork fixture for deterministic unit tests."""
+    checkout = root / "maintained-fork"
+    checkout.mkdir()
+    _git(checkout, "init", "-q", "-b", "aether-main")
+    _git(checkout, "config", "user.name", "Aether Test")
+    _git(checkout, "config", "user.email", "aether@example.invalid")
+    (checkout / "package.json").write_text(
+        json.dumps({"name": "hermes-agent", "workspaces": ["ui-tui"]}) + "\n",
+        encoding="utf-8",
+    )
+    tui = checkout / "ui-tui"
+    tui.mkdir()
+    (tui / "package.json").write_text(
+        json.dumps(
+            {
+                "name": "ui-tui",
+                "version": "1.0.0",
+                "scripts": {
+                    "build": (
+                        "node -e \"const fs=require('fs'); "
+                        "fs.mkdirSync('dist',{recursive:true}); "
+                        "fs.writeFileSync('dist/entry.js','console.log(\\\"TUI READY\\\");\\n')\""
+                    )
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    hermes_cli = checkout / "hermes_cli"
+    hermes_cli.mkdir()
+    (hermes_cli / "__init__.py").write_text("", encoding="utf-8")
+    (checkout / "hermes_constants.py").write_text(
+        "import shutil\n"
+        "\n"
+        "def find_node_executable(binary: str = 'node') -> str | None:\n"
+        "    return shutil.which(binary)\n",
+        encoding="utf-8",
+    )
+    (hermes_cli / "main.py").write_text(
+        "import os\n"
+        "from pathlib import Path\n"
+        "from hermes_constants import find_node_executable\n"
+        "\n"
+        "def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:\n"
+        "    external = os.environ.get('HERMES_TUI_DIR')\n"
+        "    if not tui_dev and external:\n"
+        "        entry = Path(external) / 'dist' / 'entry.js'\n"
+        "        if entry.is_file():\n"
+        "            return [find_node_executable('node') or 'node', str(entry)], Path(external)\n"
+        "    return [find_node_executable('node') or 'node', str(tui_dir / 'dist' / 'entry.js')], tui_dir\n",
+        encoding="utf-8",
+    )
+    _git(checkout, "add", ".")
+    _git(checkout, "commit", "-qm", "disposable fork fixture")
+    return checkout, _git(checkout, "rev-parse", "HEAD")
 
 
 class RecordingServiceController(DisabledServiceController):
@@ -69,6 +129,9 @@ def _manager(
         state_root=tmp_path / "state" / "aether",
     )
     projections = ProjectionRoots.disposable(tmp_path / "projections")
+    if project_root is None:
+        project_root = tmp_path / "project"
+        project_root.mkdir(parents=True, exist_ok=True)
     return LifecycleManager(
         store=store,
         python_executable=Path(sys.executable),
@@ -149,11 +212,11 @@ def test_tui_disposable_build_and_staging(tmp_path: Path) -> None:
     """Disposable TUI build records digest/provenance and does not touch fork source."""
     from aether_agents.lifecycle import build_tui_in_disposable_workspace
 
-    fork_source = _resolve_fork_source()
+    fork_source, fork_commit = _disposable_fork_source(tmp_path)
     destination = tmp_path / "tui-output"
     receipt = build_tui_in_disposable_workspace(
         fork_source,
-        FORK_COMMIT,
+        fork_commit,
         destination,
     )
 
@@ -169,7 +232,16 @@ def test_tui_disposable_build_and_staging(tmp_path: Path) -> None:
     assert provenance_file.is_file()
     provenance = json.loads(provenance_file.read_text(encoding="utf-8"))
     assert provenance["entry_sha256"] == digest
-    assert provenance["hermes_commit"] == FORK_COMMIT
+    assert provenance["hermes_commit"] == fork_commit
+
+
+def test_tui_build_refuses_unavailable_commit_without_fallback(tmp_path: Path) -> None:
+    """Preparation fails when the supplied fork cannot archive the requested commit."""
+    from aether_agents.lifecycle import build_tui_in_disposable_workspace
+
+    fork_source, _ = _disposable_fork_source(tmp_path)
+    with pytest.raises(IntegrityError, match="failed to extract git archive"):
+        build_tui_in_disposable_workspace(fork_source, FORK_COMMIT, tmp_path / "tui-output")
 
 
 def test_projection_spec_branded_actions_and_tui_env(tmp_path: Path) -> None:
@@ -323,10 +395,10 @@ def test_projection_failure_restores_prior_opaque_state(
 
 def test_locked_source_inventory_and_hashes_identical_after_tui_launch(tmp_path: Path) -> None:
     """Locked-source inventory and hashes identical before/after a real PTY launch with HERMES_TUI_DIR."""
-    fork_source = _resolve_fork_source()
+    fork_source, fork_commit = _disposable_fork_source(tmp_path)
     source_dir = tmp_path / "hermes-source"
     archive = subprocess.run(
-        ["git", "-C", str(fork_source), "archive", FORK_COMMIT],
+        ["git", "-C", str(fork_source), "archive", fork_commit],
         stdout=subprocess.PIPE,
         check=True,
     )
@@ -504,6 +576,14 @@ def test_doctor_fails_closed_when_tui_is_none_or_missing(tmp_path: Path) -> None
     status = manager.projection_status(record)
     assert "tui_asset_missing" in status["mismatches"]
 
+    # An unbound asset is also a doctor failure, not a clean projection.
+    unbound_entry = manager.store.release_path(record.release_id) / "tui" / "dist" / "entry.js"
+    unbound_entry.parent.mkdir(parents=True, exist_ok=True)
+    unbound_entry.write_bytes(b"unbound-tui")
+    manager.project_release(record, restart_service=False)
+    doctor = manager.doctor()
+    assert "TUI_ASSET_UNBOUND" in doctor.codes
+
 
 def test_exact_project_binding_fails_closed_without_exact_marker_or_registry(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -529,6 +609,16 @@ def test_exact_project_binding_fails_closed_without_exact_marker_or_registry(
     record = _record_with_tui(manager.store, "1.0.0rc4-" + "5" * 16, "a" * 64)
 
     # Must fail closed with IntegrityError (not fall back to store parent or guess)
+    with pytest.raises(IntegrityError, match="exact project binding"):
+        manager.projection_spec(record)
+
+    # A marker without an agreeing registry entry is not an implicit binding.
+    marker_only = tmp_path / "marker-only"
+    (marker_only / ".aether").mkdir(parents=True, exist_ok=True)
+    (marker_only / ".aether" / "project.toml").write_text(
+        'project_id = "marker-without-registry"\n', encoding="utf-8"
+    )
+    monkeypatch.chdir(marker_only)
     with pytest.raises(IntegrityError, match="exact project binding"):
         manager.projection_spec(record)
 

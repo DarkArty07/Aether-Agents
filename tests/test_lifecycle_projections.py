@@ -169,13 +169,26 @@ def _manager(
     root: Path,
     *,
     controller=None,
+    project_root: Path | None = None,
 ) -> LifecycleManager:
     store = ReleaseStore(root / "data" / "aether", state_root=root / "state" / "aether")
+    if project_root is None:
+        project_root = root / "project"
+        marker_dir = project_root / ".aether"
+        marker_dir.mkdir(parents=True, exist_ok=True)
+        (marker_dir / "project.toml").write_text(
+            'project_id = "test-project-id"\n', encoding="utf-8"
+        )
+        from aether_agents.observation.context import ProjectRegistry
+
+        registry = ProjectRegistry(store.state_root)
+        registry.register("test-project-id", project_root, name="test-project")
     return LifecycleManager(
         store=store,
         python_executable=Path(sys.executable),
         service_controller=controller or DisabledServiceController(),
         projections=ProjectionRoots.disposable(root / "operator-projections"),
+        project_root=project_root,
     )
 
 
@@ -1115,7 +1128,17 @@ def test_disposable_lane_cannot_reach_the_operator_unit_or_systemctl(
     )
 
     store = ReleaseStore(tmp_path / "data" / "aether", state_root=tmp_path / "state" / "aether")
-    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    proj = tmp_path / "project"
+    (proj / ".aether").mkdir(parents=True, exist_ok=True)
+    (proj / ".aether" / "project.toml").write_text('project_id = "test-p"\n', encoding="utf-8")
+    from aether_agents.observation.context import ProjectRegistry
+
+    ProjectRegistry(store.state_root).register("test-p", proj, name="test-p")
+    manager = LifecycleManager(
+        store=store,
+        python_executable=Path(sys.executable),
+        project_root=proj,
+    )
     record = _record(store)
     _publish_record(manager, record)
 

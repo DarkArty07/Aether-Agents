@@ -2913,14 +2913,6 @@ def build_tui_in_disposable_workspace(
             check=False,
         )
         if archive_proc.returncode != 0:
-            root_repo = Path(__file__).resolve().parents[2]
-            archive_proc = subprocess.run(
-                ["git", "-C", str(root_repo), "archive", commit],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                check=False,
-            )
-        if archive_proc.returncode != 0:
             raise IntegrityError(f"failed to extract git archive of commit {commit}")
         tar_proc = subprocess.run(
             ["tar", "-x"],
@@ -3129,24 +3121,28 @@ class LifecycleManager:
                     if p is not None and p.is_dir():
                         verified.append(p.resolve())
 
+            cwd = Path.cwd().resolve()
+            cwd_marker = read_project_marker(cwd)
+
             if len(verified) == 1:
+                # If cwd has a marker, it must agree with the unique verified project
+                if cwd_marker is not None:
+                    marker_id = cwd_marker.get("project_id")
+                    if marker_id and registry.verify_with_marker(marker_id):
+                        p = registry.project_path(marker_id)
+                        if p is not None and p.resolve() == verified[0]:
+                            return verified[0]
+                    return None
                 return verified[0]
 
             if len(verified) > 1:
-                cwd = Path.cwd().resolve()
-                marker = read_project_marker(cwd)
-                if marker is not None:
-                    marker_id = marker.get("project_id")
+                if cwd_marker is not None:
+                    marker_id = cwd_marker.get("project_id")
                     if marker_id and registry.verify_with_marker(marker_id):
                         p = registry.project_path(marker_id)
                         if p is not None and p.resolve() == cwd:
                             return cwd
                 return None
-
-            cwd = Path.cwd().resolve()
-            marker = read_project_marker(cwd)
-            if marker is not None and marker.get("project_id"):
-                return cwd
 
             return None
         except Exception:
@@ -6376,53 +6372,91 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         state_parent = self.store.state_root.parent
         runtime_current = self.store.root / "runtime" / "current"
         roots = self.projection_roots()
+        branded = record.version == "1.0.0rc4"
         launcher = roots.launcher_dir / _LAUNCHER_NAME
-        desktop = roots.desktop_dir / _DESKTOP_ENTRY_NAME
+        desktop = roots.desktop_dir / (
+            _DESKTOP_ENTRY_NAME if branded else _LEGACY_DESKTOP_ENTRY_NAME
+        )
         service = roots.service_dir / AETHER_GATEWAY_UNIT
         resolved_project: Path | None = (
-            Path(project_root).resolve()
-            if project_root is not None
-            else (self.project_root or self._resolve_default_project())
+            Path(project_root).resolve() if project_root is not None else self.project_root
         )
-        if resolved_project is None:
+        if branded and resolved_project is None:
+            resolved_project = self._resolve_default_project()
+        if resolved_project is None and branded:
             raise IntegrityError(
                 "branded one-click projections require an exact project binding "
                 "(explicit project_root or sole verified project in registry)"
             )
-        launcher_bytes = (
-            "#!/usr/bin/env bash\n"
-            "# Aether product entry point — generated projection of the active release.\n"
-            "# The selector is runtime/current: this file is never release-specific.\n"
-            "set -euo pipefail\n"
-            "\n"
-            'data_home="${XDG_DATA_HOME:-$HOME/.local/share}"\n'
-            'state_home="${XDG_STATE_HOME:-$HOME/.local/state}"\n'
-            "\n"
-            'export AETHER_RUNTIME_ROOT="${AETHER_RUNTIME_ROOT:-'
-            '$data_home/aether/runtime/current}"\n'
-            'export AETHER_HERMES_ROOT="${AETHER_HERMES_ROOT:-'
-            '$state_home/aether/hermes}"\n'
-            'export HERMES_TUI_DIR="$AETHER_RUNTIME_ROOT/tui"\n'
-            "\n"
-            'exec "$AETHER_RUNTIME_ROOT/venv/bin/aether" "$@"\n'
-        ).encode("utf-8")
-        desktop_bytes = (
-            "[Desktop Entry]\n"
-            "Type=Application\n"
-            "Name=Aether\n"
-            "GenericName=Aether Agents\n"
-            "Comment=Launch Aether fresh project session\n"
-            f"Exec={runtime_current}/venv/bin/aether --project {resolved_project}\n"
-            "Terminal=true\n"
-            "Categories=Development;Utility;\n"
-            "StartupNotify=true\n"
-            "StartupWMClass=Aether\n"
-            "Actions=Continue;\n"
-            "\n"
-            "[Desktop Action Continue]\n"
-            "Name=Continue Aether\n"
-            f"Exec={runtime_current}/venv/bin/aether --project {resolved_project} --resume latest\n"
-        ).encode("utf-8")
+        if branded:
+            assert resolved_project is not None
+            launcher_bytes = (
+                "#!/usr/bin/env bash\n"
+                "# Aether product entry point — generated projection of the active release.\n"
+                "# The selector is runtime/current: this file is never release-specific.\n"
+                "set -euo pipefail\n"
+                "\n"
+                'data_home="${XDG_DATA_HOME:-$HOME/.local/share}"\n'
+                'state_home="${XDG_STATE_HOME:-$HOME/.local/state}"\n'
+                "\n"
+                'export AETHER_RUNTIME_ROOT="${AETHER_RUNTIME_ROOT:-'
+                '$data_home/aether/runtime/current}"\n'
+                'export AETHER_HERMES_ROOT="${AETHER_HERMES_ROOT:-'
+                '$state_home/aether/hermes}"\n'
+                'export HERMES_TUI_DIR="$AETHER_RUNTIME_ROOT/tui"\n'
+                "\n"
+                'exec "$AETHER_RUNTIME_ROOT/venv/bin/aether" "$@"\n'
+            ).encode("utf-8")
+            desktop_bytes = (
+                "[Desktop Entry]\n"
+                "Type=Application\n"
+                "Name=Aether\n"
+                "GenericName=Aether Agents\n"
+                "Comment=Launch Aether fresh project session\n"
+                f"Exec={runtime_current}/venv/bin/aether --project {resolved_project}\n"
+                "Terminal=true\n"
+                "Categories=Development;Utility;\n"
+                "StartupNotify=true\n"
+                "StartupWMClass=Aether\n"
+                "Actions=Continue;\n"
+                "\n"
+                "[Desktop Action Continue]\n"
+                "Name=Continue Aether\n"
+                f"Exec={runtime_current}/venv/bin/aether --project {resolved_project} --resume latest\n"
+            ).encode("utf-8")
+            service_tui_line = f'Environment="HERMES_TUI_DIR={runtime_current}/tui"\n'
+        else:
+            # Pre-rc4 records retain their immutable legacy Hermes projection and
+            # never infer a project path for the branded one-click actions.
+            launcher_bytes = (
+                "#!/usr/bin/env bash\n"
+                "# Aether product entry point — generated projection of the active release.\n"
+                "# The selector is runtime/current: this file is never release-specific.\n"
+                "set -euo pipefail\n"
+                "\n"
+                'data_home="${XDG_DATA_HOME:-$HOME/.local/share}"\n'
+                'state_home="${XDG_STATE_HOME:-$HOME/.local/state}"\n'
+                "\n"
+                'export AETHER_RUNTIME_ROOT="${AETHER_RUNTIME_ROOT:-'
+                '$data_home/aether/runtime/current}"\n'
+                'export AETHER_HERMES_ROOT="${AETHER_HERMES_ROOT:-'
+                '$state_home/aether/hermes}"\n'
+                "\n"
+                'exec "$AETHER_RUNTIME_ROOT/venv/bin/aether" "$@"\n'
+            ).encode("utf-8")
+            desktop_bytes = (
+                "[Desktop Entry]\n"
+                "Type=Application\n"
+                "Name=Hermes\n"
+                "GenericName=Hermes Desktop\n"
+                "Comment=Launch Hermes Desktop\n"
+                f"Exec={runtime_current}/venv/bin/hermes desktop\n"
+                "Terminal=false\n"
+                "Categories=Utility;\n"
+                "StartupNotify=true\n"
+                "StartupWMClass=Hermes\n"
+            ).encode("utf-8")
+            service_tui_line = ""
         profile_home = self.store.profile_home("morfeo")
         service_bytes = (
             "[Unit]\n"
@@ -6440,9 +6474,7 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             f"{data_parent}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:"
             '/usr/bin:/sbin:/bin"\n'
             f'Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
-            f'Environment="HERMES_HOME={profile_home}"\n'
-            f'Environment="HERMES_TUI_DIR={runtime_current}/tui"\n'
-            "Restart=always\n"
+            f'Environment="HERMES_HOME={profile_home}"\n' + service_tui_line + "Restart=always\n"
             "RestartSec=5\n"
             "RestartForceExitStatus=75\n"
             "RestartPreventExitStatus=78\n"
@@ -6459,7 +6491,7 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         _ = state_parent
 
         wsl_shortcuts: dict[str, tuple[Path, bytes]] = {}
-        if roots.wsl_shortcuts_dir is not None:
+        if branded and roots.wsl_shortcuts_dir is not None:
             distro = detect_wsl_distribution()
             distro_arg = f"-d {distro} " if distro else ""
             aether_cmd = (
@@ -6540,6 +6572,7 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         """Project the launcher, Desktop entry, unit file and selector for one release."""
 
         spec = self.projection_spec(record)
+        branded = record.version == "1.0.0rc4"
         targets: list[tuple[Path, bytes, int]] = [
             (spec.launcher_path, spec.launcher_bytes, 0o755),
             (spec.desktop_path, spec.desktop_bytes, 0o644),
@@ -6584,7 +6617,7 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         try:
             for path, data, mode in targets:
                 self._write_projection(path, data, mode=mode)
-            if legacy_desktop.is_file() and not legacy_desktop.is_symlink():
+            if branded and legacy_desktop.is_file() and not legacy_desktop.is_symlink():
                 try:
                     legacy_desktop.unlink()
                 except OSError:
@@ -6787,7 +6820,7 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
 
         roots = self.projection_roots()
         legacy_desktop = roots.desktop_dir / _LEGACY_DESKTOP_ENTRY_NAME
-        if legacy_desktop.is_file():
+        if record.version == "1.0.0rc4" and legacy_desktop.is_file():
             status["mismatches"].append("legacy_desktop_entry_present")
 
         status["projection_digests"] = spec.digests()
@@ -6827,7 +6860,11 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
                 continue
         roots = self.projection_roots()
         legacy_desktop = roots.desktop_dir / _LEGACY_DESKTOP_ENTRY_NAME
-        if legacy_desktop.is_file() and not legacy_desktop.is_symlink():
+        if (
+            record.version == "1.0.0rc4"
+            and legacy_desktop.is_file()
+            and not legacy_desktop.is_symlink()
+        ):
             try:
                 legacy_desktop.unlink()
             except OSError:
@@ -7047,8 +7084,14 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
                     codes.append(code)
             if any(item == "tui_asset_missing" for item in projections["mismatches"]):
                 codes.append("TUI_ASSET_MISSING")
+            if any(item == "tui_asset_unbound" for item in projections["mismatches"]):
+                codes.append("TUI_ASSET_UNBOUND")
             if any(item == "tui_asset_mismatch" for item in projections["mismatches"]):
                 codes.append("TUI_ASSET_MISMATCH")
+            if any(item == "tui_asset_unreadable" for item in projections["mismatches"]):
+                codes.append("TUI_ASSET_UNREADABLE")
+            if any(item == "legacy_desktop_entry_present" for item in projections["mismatches"]):
+                codes.append("LEGACY_DESKTOP_ENTRY_PRESENT")
         if os.name == "posix":
             permission_targets = {
                 self.store.root: DIR_MODE,
