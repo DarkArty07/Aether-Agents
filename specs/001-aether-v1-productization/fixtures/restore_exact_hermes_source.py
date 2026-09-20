@@ -28,6 +28,7 @@ import argparse
 import datetime
 import json
 import os
+import re
 import shutil
 import stat
 import sys
@@ -51,6 +52,7 @@ EXPECTED_FORK_TREE_SHA256 = "cc1ebf94ad167979951e7b956ef3a8c448e96fd3389c93cddf6
 
 ALLOWED_EXTRA_PREFIXES = ("node_modules/", "ui-tui/node_modules/")
 ALLOWED_EXTRA_EXACT = ("ui-tui/dist/entry.js",)
+_RELEASE_ID_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z_.-]{0,95}$")
 
 
 class RestorationError(IntegrityError):
@@ -104,14 +106,39 @@ class RestorationResult:
         return asdict(self)
 
 
-def scan_tree_entries(root: Path) -> dict[str, EntryClassification]:
-    """Scan root tree entries excluding __pycache__, matching _tree_sha256 rules."""
+def scan_tree_entries(root: Path) -> tuple[dict[str, EntryClassification], set[str]]:
+    """Scan root tree entries excluding __pycache__, matching _tree_sha256 rules.
+
+    Returns:
+        (entries, regular_directories)
+        where entries includes regular files, symlink files, and symlink directories.
+    """
     entries: dict[str, EntryClassification] = {}
+    regular_dirs: set[str] = set()
+
     for directory, names, files in os.walk(root, followlinks=False):
         current = Path(directory)
         if current.is_symlink():
             raise RestorationError(f"source tree contains a symlink directory: {current}")
         names[:] = sorted(name for name in names if name != "__pycache__")
+        for name in names:
+            path = current / name
+            st = os.lstat(path)
+            relative = path.relative_to(root).as_posix()
+            if stat.S_ISLNK(st.st_mode):
+                entries[relative] = EntryClassification(
+                    relative_path=relative,
+                    is_symlink=True,
+                    is_regular=False,
+                    sha256=None,
+                )
+            elif stat.S_ISDIR(st.st_mode):
+                regular_dirs.add(relative)
+            else:
+                raise RestorationError(
+                    f"source tree directory entry is neither symlink nor directory: {path}"
+                )
+
         for name in sorted(files):
             path = current / name
             st = os.lstat(path)
@@ -129,14 +156,14 @@ def scan_tree_entries(root: Path) -> dict[str, EntryClassification]:
                 is_regular=is_reg,
                 sha256=file_sha,
             )
-    return entries
+    return entries, regular_dirs
 
 
 def classify_hermes_source(target_source: Path, clean_tree: Path) -> InventoryResult:
     """Classify target hermes-source against clean materialized fork tree."""
     clean_digest = _tree_sha256(clean_tree)
-    clean_entries = scan_tree_entries(clean_tree)
-    target_entries = scan_tree_entries(target_source)
+    clean_entries, clean_dirs = scan_tree_entries(clean_tree)
+    target_entries, target_dirs = scan_tree_entries(target_source)
 
     clean_keys = set(clean_entries)
     target_keys = set(target_entries)
@@ -175,6 +202,19 @@ def classify_hermes_source(target_source: Path, clean_tree: Path) -> InventoryRe
         elif rel in ALLOWED_EXTRA_EXACT:
             entry_js_count += 1
 
+    extra_dirs = target_dirs - clean_dirs
+    for d in sorted(extra_dirs):
+        is_allowed_dir = (
+            d == "node_modules"
+            or d.startswith("node_modules/")
+            or d == "ui-tui"
+            or d == "ui-tui/node_modules"
+            or d.startswith("ui-tui/node_modules/")
+            or d == "ui-tui/dist"
+        )
+        if not is_allowed_dir:
+            disallowed_extras.append(d)
+
     extras_breakdown = {
         "node_modules": nm_count,
         "ui_tui_node_modules": tui_nm_count,
@@ -196,12 +236,16 @@ def classify_hermes_source(target_source: Path, clean_tree: Path) -> InventoryRe
     )
 
 
-def assert_restorable_inventory(inventory: InventoryResult) -> None:
+def assert_restorable_inventory(
+    inventory: InventoryResult,
+    *,
+    expected_digest: str = EXPECTED_FORK_TREE_SHA256,
+) -> None:
     """Assert inventory fulfills AC-1 exact contamination classification rules."""
-    if inventory.clean_digest != EXPECTED_FORK_TREE_SHA256:
+    if inventory.clean_digest != expected_digest:
         raise RestorationError(
             f"clean archive digest mismatch: observed {inventory.clean_digest} != "
-            f"expected {EXPECTED_FORK_TREE_SHA256}"
+            f"expected {expected_digest}"
         )
     if inventory.missing_count > 0:
         sample = inventory.missing_files[:5]
@@ -257,9 +301,17 @@ def restore_exact_hermes_source(
 
     if quarantine_path is None:
         timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S")
-        quarantine_path = release_dir.parent / f"{release_dir.name}-quarantine-{timestamp}"
+        quarantine_path = release_dir.parent / f".quarantine-{release_dir.name}-{timestamp}"
     else:
         quarantine_path = Path(quarantine_path).resolve()
+        if quarantine_path.parent == release_dir.parent and _RELEASE_ID_RE.fullmatch(
+            quarantine_path.name
+        ):
+            raise RestorationError(
+                f"quarantine path name '{quarantine_path.name}' matches release ID pattern and would "
+                "be deleted by ReleaseStore.recover(); choose a name that does not match _RELEASE_ID_RE "
+                "(e.g. prefix with '.')"
+            )
 
     if quarantine_path.exists():
         raise RestorationError(f"quarantine path already exists: {quarantine_path}")
@@ -291,7 +343,7 @@ def restore_exact_hermes_source(
             raise RestorationError("clean archive digest changed after hardening")
 
         inventory = classify_hermes_source(target_source, clean_staging)
-        assert_restorable_inventory(inventory)
+        assert_restorable_inventory(inventory, expected_digest=expected_digest)
 
         if inject_pre_swap_refusal:
             raise RestorationError("injected pre-swap refusal")
