@@ -1094,6 +1094,39 @@ def _tui_checkout(
     return repo, str(runtime_bin)
 
 
+def materialize_fork_closure(hermes_archive: Path, destination: Path) -> Path:
+    """Extract the maintained-fork archive into exactly one closure root."""
+
+    with tarfile.open(hermes_archive, mode="r:gz") as archive:
+        archive.extractall(destination, filter="data")
+    entries = sorted(destination.iterdir())
+    if len(entries) != 1 or not entries[0].is_dir():
+        raise BundleError("archive-layout", "maintained-fork archive must contain one root")
+    return entries[0]
+
+
+def stage_fork_tui(
+    closure_root: Path,
+    *,
+    commit: str,
+    destination: Path,
+    lifecycle: Any,
+) -> dict[str, Any]:
+    """Build the release-owned prebuilt TUI from the bundle's own fork closure.
+
+    The closure is the materialized exact-commit tree extracted from the bundle archive,
+    so it carries no repository of its own: the builder copies that tree into a disposable
+    workspace.  A checkout is never substituted here, and no repository discovered above
+    the closure may supply the bytes.
+    """
+
+    return lifecycle.build_tui_in_disposable_workspace(
+        fork_repo=closure_root,
+        commit=commit,
+        destination=destination,
+    )
+
+
 def clean_install(
     *,
     bundle: Path,
@@ -1150,13 +1183,7 @@ def clean_install(
     record("manager-check", uv("pip", "check", "--python", str(manager_python)), "install-failed")
     record("runtime-venv", uv("venv", "--python", sys.executable, str(runtime)), "install-failed")
 
-    closure = roots / "hermes-source"
-    with tarfile.open(hermes_archive, mode="r:gz") as archive:
-        archive.extractall(closure, filter="data")
-    entries = sorted(closure.iterdir())
-    if len(entries) != 1 or not entries[0].is_dir():
-        raise BundleError("archive-layout", "maintained-fork archive must contain one root")
-    closure_root = entries[0]
+    closure_root = materialize_fork_closure(hermes_archive, roots / "hermes-source")
     requirements = roots / "hermes-requirements.txt"
     record(
         "hermes-export",
@@ -1209,10 +1236,11 @@ def clean_install(
     record("runtime-check", uv("pip", "check", "--python", str(runtime_python)), "install-failed")
 
     tui_dir = roots / "tui"
-    lifecycle.build_tui_in_disposable_workspace(
-        fork_repo=closure_root,
+    tui_receipt = stage_fork_tui(
+        closure_root,
         commit=identity["hermes_commit"],
         destination=tui_dir,
+        lifecycle=lifecycle,
     )
 
     manager_root = roots / "manager-root"
@@ -1393,6 +1421,13 @@ def clean_install(
             "tui": "<work>/install-roots/tui",
         },
         "install_steps": steps,
+        "tui_asset": {
+            "sha256": tui_receipt["tui_sha256"],
+            "entry_path": tui_receipt["entry_path"],
+            "source": tui_receipt["source"],
+            "node_version": tui_receipt["node_version"],
+            "npm_version": tui_receipt["npm_version"],
+        },
         "python_version": "%d.%d.%d" % sys.version_info[:3],
         "hermes_observed": hermes_observed,
         "probes": probes,

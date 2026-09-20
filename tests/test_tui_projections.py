@@ -47,19 +47,17 @@ def _git(root: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def _disposable_fork_source(root: Path) -> tuple[Path, str]:
-    """Create a tiny exact-commit fork fixture for deterministic unit tests."""
-    checkout = root / "maintained-fork"
-    checkout.mkdir()
-    _git(checkout, "init", "-q", "-b", "aether-main")
-    _git(checkout, "config", "user.name", "Aether Test")
-    _git(checkout, "config", "user.email", "aether@example.invalid")
-    (checkout / "package.json").write_text(
+def _write_fork_tree(root: Path, marker: str) -> None:
+    """Write a minimal maintained-fork-shaped tree whose ui-tui build emits ``marker``."""
+
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "package.json").write_text(
         json.dumps({"name": "hermes-agent", "workspaces": ["ui-tui"]}) + "\n",
         encoding="utf-8",
     )
-    tui = checkout / "ui-tui"
-    tui.mkdir()
+    tui = root / "ui-tui"
+    tui.mkdir(parents=True, exist_ok=True)
+    marker_in_shell = marker.replace("\\", "\\\\").replace('"', '\\"')
     (tui / "package.json").write_text(
         json.dumps(
             {
@@ -69,7 +67,7 @@ def _disposable_fork_source(root: Path) -> tuple[Path, str]:
                     "build": (
                         "node -e \"const fs=require('fs'); "
                         "fs.mkdirSync('dist',{recursive:true}); "
-                        "fs.writeFileSync('dist/entry.js','console.log(\\\"TUI READY\\\");\\n')\""
+                        f"fs.writeFileSync('dist/entry.js','{marker_in_shell}\\n')\""
                     )
                 },
             }
@@ -77,10 +75,10 @@ def _disposable_fork_source(root: Path) -> tuple[Path, str]:
         + "\n",
         encoding="utf-8",
     )
-    hermes_cli = checkout / "hermes_cli"
-    hermes_cli.mkdir()
+    hermes_cli = root / "hermes_cli"
+    hermes_cli.mkdir(parents=True, exist_ok=True)
     (hermes_cli / "__init__.py").write_text("", encoding="utf-8")
-    (checkout / "hermes_constants.py").write_text(
+    (root / "hermes_constants.py").write_text(
         "import shutil\n"
         "\n"
         "def find_node_executable(binary: str = 'node') -> str | None:\n"
@@ -101,6 +99,19 @@ def _disposable_fork_source(root: Path) -> tuple[Path, str]:
         "    return [find_node_executable('node') or 'node', str(tui_dir / 'dist' / 'entry.js')], tui_dir\n",
         encoding="utf-8",
     )
+
+
+def _disposable_fork_source(
+    root: Path, marker: str = 'console.log("TUI READY");'
+) -> tuple[Path, str]:
+    """Create a tiny exact-commit fork fixture for deterministic unit tests."""
+
+    checkout = root / "maintained-fork"
+    checkout.mkdir()
+    _git(checkout, "init", "-q", "-b", "aether-main")
+    _git(checkout, "config", "user.name", "Aether Test")
+    _git(checkout, "config", "user.email", "aether@example.invalid")
+    _write_fork_tree(checkout, marker)
     _git(checkout, "add", ".")
     _git(checkout, "commit", "-qm", "disposable fork fixture")
     return checkout, _git(checkout, "rev-parse", "HEAD")
@@ -242,6 +253,110 @@ def test_tui_build_refuses_unavailable_commit_without_fallback(tmp_path: Path) -
     fork_source, _ = _disposable_fork_source(tmp_path)
     with pytest.raises(IntegrityError, match="failed to extract git archive"):
         build_tui_in_disposable_workspace(fork_source, FORK_COMMIT, tmp_path / "tui-output")
+
+
+def test_tui_build_stages_materialized_tree_without_repository(tmp_path: Path) -> None:
+    """An exact-commit tree with no repository of its own is copied and built as supplied."""
+    from aether_agents.lifecycle import build_tui_in_disposable_workspace
+
+    tree = tmp_path / "hermes-source" / "hermes-agent"
+    _write_fork_tree(tree, "MATERIALIZED-TREE-ENTRY")
+
+    destination = tmp_path / "tui-output"
+    receipt = build_tui_in_disposable_workspace(tree, FORK_COMMIT, destination)
+
+    entry = destination / "dist" / "entry.js"
+    assert entry.read_text(encoding="utf-8") == "MATERIALIZED-TREE-ENTRY\n"
+    assert receipt["tui_sha256"] == hashlib.sha256(entry.read_bytes()).hexdigest()
+    assert receipt["source"] == "materialized-tree"
+    provenance = json.loads((destination / "provenance.json").read_text(encoding="utf-8"))
+    assert provenance["hermes_commit"] == FORK_COMMIT
+    assert provenance["source"] == "materialized-tree"
+
+    # The supplied tree is read only: the build happens in the disposable copy.
+    assert not (tree / "node_modules").exists()
+    assert not (tree / "ui-tui" / "node_modules").exists()
+    assert not (tree / "ui-tui" / "dist").exists()
+
+
+def test_tui_build_never_archives_an_enclosing_repository(tmp_path: Path) -> None:
+    """A non-repository tree nested in another repository is built from its own bytes."""
+    from aether_agents.lifecycle import build_tui_in_disposable_workspace
+
+    enclosing = tmp_path / "enclosing-repo"
+    _write_fork_tree(enclosing, "ENCLOSING-REPOSITORY-ENTRY")
+    _git(enclosing, "init", "-q", "-b", "main")
+    _git(enclosing, "config", "user.name", "Aether Test")
+    _git(enclosing, "config", "user.email", "aether@example.invalid")
+    _git(enclosing, "add", ".")
+    _git(enclosing, "commit", "-qm", "enclosing tree")
+    enclosing_commit = _git(enclosing, "rev-parse", "HEAD")
+
+    nested = enclosing / "vendor" / "hermes-agent"
+    _write_fork_tree(nested, "NESTED-TREE-ENTRY")
+
+    destination = tmp_path / "tui-output"
+    receipt = build_tui_in_disposable_workspace(nested, enclosing_commit, destination)
+
+    entry = destination / "dist" / "entry.js"
+    assert entry.read_text(encoding="utf-8") == "NESTED-TREE-ENTRY\n"
+    assert receipt["source"] == "materialized-tree"
+
+
+def test_tui_build_archives_the_requested_commit_from_its_own_git_entry(tmp_path: Path) -> None:
+    """A checkout whose ``.git`` is a worktree pointer archives its own requested commit."""
+    from aether_agents.lifecycle import build_tui_in_disposable_workspace
+
+    checkout, requested = _disposable_fork_source(tmp_path, marker="REQUESTED-COMMIT-ENTRY")
+    linked = tmp_path / "linked-fork"
+    _git(checkout, "worktree", "add", "-q", str(linked), requested)
+    assert (linked / ".git").is_file()
+
+    _write_fork_tree(checkout, "LATER-COMMIT-ENTRY")
+    _git(checkout, "add", ".")
+    _git(checkout, "commit", "-qm", "later tree")
+    assert _git(checkout, "rev-parse", "HEAD") != requested
+
+    destination = tmp_path / "tui-output"
+    receipt = build_tui_in_disposable_workspace(linked, requested, destination)
+
+    entry = destination / "dist" / "entry.js"
+    assert entry.read_text(encoding="utf-8") == "REQUESTED-COMMIT-ENTRY\n"
+    assert receipt["source"] == "git-archive"
+
+
+def test_tui_build_refuses_tree_without_ui_tui(tmp_path: Path) -> None:
+    """A supplied tree that cannot contain the TUI build fails closed, not through npm noise."""
+    from aether_agents.lifecycle import build_tui_in_disposable_workspace
+
+    tree = tmp_path / "hermes-source" / "hermes-agent"
+    tree.mkdir(parents=True)
+    (tree / "package.json").write_text('{"name": "hermes-agent"}\n', encoding="utf-8")
+
+    with pytest.raises(IntegrityError, match="does not contain ui-tui"):
+        build_tui_in_disposable_workspace(tree, FORK_COMMIT, tmp_path / "tui-output")
+
+
+def test_checkout_git_inspection_binds_to_the_supplied_directory(tmp_path: Path) -> None:
+    """Supplied-checkout Git inspection never resolves an enclosing repository."""
+    checkout, commit = _disposable_fork_source(tmp_path)
+    nested = checkout / "vendor" / "extracted-tree"
+    nested.mkdir(parents=True)
+    (nested / "marker.txt").write_text("nested\n", encoding="utf-8")
+
+    assert lifecycle._git(nested, "rev-parse", "--is-inside-work-tree", check=False) != "true"
+    assert lifecycle._git(checkout, "rev-parse", "HEAD") == commit
+
+
+def test_source_materialization_never_archives_an_enclosing_repository(tmp_path: Path) -> None:
+    """Source digest materialization fails closed for a supplied non-repository directory."""
+    checkout, commit = _disposable_fork_source(tmp_path)
+    nested = checkout / "vendor" / "extracted-tree"
+    nested.mkdir(parents=True)
+    (nested / "marker.txt").write_text("nested\n", encoding="utf-8")
+
+    with pytest.raises(IntegrityError, match="archive failed"):
+        lifecycle._materialize_git_archive(nested, commit, tmp_path / "materialized")
 
 
 def test_projection_spec_branded_actions_and_tui_env(tmp_path: Path) -> None:

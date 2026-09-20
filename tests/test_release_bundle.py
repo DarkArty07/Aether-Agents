@@ -475,6 +475,104 @@ def test_archive_is_deterministic_and_rejects_unsafe_members(
     assert unsafe.value.code == "archive-unsafe"
 
 
+# --------------------------------------------------------------- clean-install TUI stage
+
+
+def _write_fork_tree(root: Path, marker: str) -> None:
+    """Write a minimal maintained-fork-shaped tree whose ui-tui build emits ``marker``."""
+
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "package.json").write_text(
+        json.dumps({"name": "hermes-agent", "workspaces": ["ui-tui"]}) + "\n",
+        encoding="utf-8",
+    )
+    tui = root / "ui-tui"
+    tui.mkdir(parents=True, exist_ok=True)
+    marker_in_shell = marker.replace("\\", "\\\\").replace('"', '\\"')
+    (tui / "package.json").write_text(
+        json.dumps(
+            {
+                "name": "ui-tui",
+                "version": "1.0.0",
+                "scripts": {
+                    "build": (
+                        "node -e \"const fs=require('fs'); "
+                        "fs.mkdirSync('dist',{recursive:true}); "
+                        f"fs.writeFileSync('dist/entry.js','{marker_in_shell}\\n')\""
+                    )
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _fork_closure_archive(tmp_path: Path, marker: str) -> Path:
+    """Write the single-root maintained-fork archive shape ``clean_install`` extracts."""
+
+    tree = tmp_path / "archive-source" / "aether-hermes-source"
+    _write_fork_tree(tree, marker)
+    archive_path = tmp_path / "aether-hermes-source.tar.gz"
+    with tarfile.open(archive_path, mode="w:gz") as archive:
+        archive.add(tree, arcname=tree.name)
+    return archive_path
+
+
+def test_fork_closure_extraction_refuses_a_multi_root_archive(
+    tool: types.ModuleType, tmp_path: Path
+) -> None:
+    archive_path = tmp_path / "two-roots.tar.gz"
+    with tarfile.open(archive_path, mode="w:gz") as archive:
+        for name in ("first/README.md", "second/README.md"):
+            payload = b"portable\n"
+            info = tarfile.TarInfo(name)
+            info.size = len(payload)
+            archive.addfile(info, io.BytesIO(payload))
+    with pytest.raises(tool.BundleError) as layout:
+        tool.materialize_fork_closure(archive_path, tmp_path / "closure")
+    assert layout.value.code == "archive-layout"
+
+
+def test_clean_install_stages_tui_from_the_extracted_fork_closure(
+    tool: types.ModuleType, tmp_path: Path
+) -> None:
+    """The bundle TUI step builds the extracted exact-commit closure, not an enclosing repo."""
+
+    lifecycle = tool.load_product(ROOT)
+    enclosing = tmp_path / "enclosing-repository"
+    _write_fork_tree(enclosing, "ENCLOSING-REPOSITORY-ENTRY")
+    _git(enclosing, "init", "--quiet", "--initial-branch", "main")
+    _git(enclosing, "config", "user.email", "release-tool-test@example.invalid")
+    _git(enclosing, "config", "user.name", "Release Tool Test")
+    _git(enclosing, "add", ".")
+    _git(enclosing, "commit", "--quiet", "-m", "enclosing tree")
+    enclosing_commit = _git(enclosing, "rev-parse", "HEAD").strip()
+
+    archive_path = _fork_closure_archive(tmp_path, "BUNDLE-CLOSURE-ENTRY")
+    closure_root = tool.materialize_fork_closure(
+        archive_path, enclosing / "roots" / "hermes-source"
+    )
+    assert closure_root.is_dir()
+    assert not (closure_root / ".git").exists()
+
+    destination = tmp_path / "staged-tui"
+    receipt = tool.stage_fork_tui(
+        closure_root,
+        commit=enclosing_commit,
+        destination=destination,
+        lifecycle=lifecycle,
+    )
+
+    entry = destination / "dist" / "entry.js"
+    assert entry.read_text(encoding="utf-8") == "BUNDLE-CLOSURE-ENTRY\n"
+    assert receipt["source"] == "materialized-tree"
+    assert receipt["tui_sha256"] == _sha256(entry.read_bytes())
+    # The closure is read only: the build happens in the disposable copy.
+    assert not (closure_root / "node_modules").exists()
+    assert not (closure_root / "ui-tui" / "dist").exists()
+
+
 # ----------------------------------------------------------------------------- scans
 
 

@@ -650,12 +650,63 @@ class CheckoutEvidence:
     clean: bool
 
 
+#: Ambient Git environment that would silently re-bind a candidate to a repository the
+#: caller never supplied.  Every inspection, digest and staging step below reads only the
+#: tree it was handed.
+_GIT_ENVIRONMENT_OVERRIDES = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_INDEX_FILE",
+    "GIT_CEILING_DIRECTORIES",
+)
+
+
+def _own_git_directory(checkout: Path) -> Path | None:
+    """The supplied checkout's own ``.git`` entry, or ``None`` for a materialized tree.
+
+    Only ``<checkout>/.git`` counts.  Repository discovery upward is deliberately not
+    used here: it would let a supplied directory archive whatever repository happens to
+    enclose it, including objects that no clean clone of that tree contains.
+    """
+
+    dot_git = Path(checkout) / ".git"
+    if dot_git.is_dir() or dot_git.is_file() or dot_git.is_symlink():
+        return dot_git
+    return None
+
+
+def _git_prefix(checkout: Path) -> list[str]:
+    """Git arguments binding every command to the supplied checkout's own repository."""
+
+    dot_git = _own_git_directory(checkout)
+    if dot_git is not None:
+        return ["git", "-C", str(checkout), f"--git-dir={dot_git}"]
+    return ["git", "-C", str(checkout)]
+
+
+def _git_environment(checkout: Path) -> dict[str, str]:
+    """Environment for one supplied-checkout Git call: no ambient or parent binding."""
+
+    environment = {
+        key: value for key, value in os.environ.items() if key not in _GIT_ENVIRONMENT_OVERRIDES
+    }
+    if _own_git_directory(checkout) is None:
+        # Without the checkout's own ``.git`` there is no repository to bind to, so Git is
+        # fenced at the checkout itself: it answers "not a repository" instead of walking up.
+        environment["GIT_CEILING_DIRECTORIES"] = str(Path(checkout).resolve().parent)
+    return environment
+
+
 def _git(checkout: Path, *arguments: str, check: bool = True) -> str:
     completed = subprocess.run(
-        ["git", "-C", str(checkout), *arguments],
+        [*_git_prefix(checkout), *arguments],
         check=False,
         capture_output=True,
         text=True,
+        env=_git_environment(checkout),
     )
     if check and completed.returncode != 0:
         raise IntegrityError(
@@ -1198,10 +1249,10 @@ def _materialize_git_archive(checkout: Path, commit: str, destination: Path) -> 
 
     try:
         completed = subprocess.run(
-            ["git", "-C", str(checkout), "archive", "--format=tar", commit],
+            [*_git_prefix(checkout), "archive", "--format=tar", commit],
             check=False,
             capture_output=True,
-            env=_isolated_subprocess_environment(),
+            env={**_isolated_subprocess_environment(), **_git_environment(checkout)},
         )
     except OSError as error:
         raise IntegrityError("Hermes source archive tool is unavailable") from error
@@ -2887,8 +2938,19 @@ def build_tui_in_disposable_workspace(
     commit: str,
     destination: Path | str,
 ) -> dict[str, Any]:
-    """Build ui-tui/dist/entry.js from exact fork commit in a clean disposable workspace."""
+    """Build ui-tui/dist/entry.js from the supplied exact-commit tree in a clean workspace.
+
+    The source is exactly what the caller supplied.  A checkout with its own ``.git``
+    archives the requested commit from that repository; an already-materialized
+    exact-commit tree (the release-bundle extraction) is copied into the disposable
+    workspace and built there.  Repository discovery upward is never used, so the build
+    can neither archive an enclosing repository nor produce bytes that no clean clone of
+    the supplied tree contains.
+    """
+
     repo = Path(fork_repo).resolve()
+    if not repo.is_dir():
+        raise IntegrityError("maintained fork source is not a directory")
     dest = Path(destination).resolve()
     dist_dir = dest / "dist"
     dist_dir.mkdir(parents=True, exist_ok=True)
@@ -2906,23 +2968,40 @@ def build_tui_in_disposable_workspace(
 
     with tempfile.TemporaryDirectory() as tmpdir:
         workspace = Path(tmpdir)
-        archive_proc = subprocess.run(
-            ["git", "-C", str(repo), "archive", commit],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=False,
-        )
-        if archive_proc.returncode != 0:
-            raise IntegrityError(f"failed to extract git archive of commit {commit}")
-        tar_proc = subprocess.run(
-            ["tar", "-x"],
-            input=archive_proc.stdout,
-            cwd=workspace,
-            capture_output=True,
-            check=False,
-        )
-        if tar_proc.returncode != 0:
-            raise IntegrityError("failed to unpack maintained fork archive for TUI build")
+        git_dir = _own_git_directory(repo)
+        if git_dir is not None:
+            source = "git-archive"
+            archive_proc = subprocess.run(
+                [*_git_prefix(repo), "archive", commit],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+                env={**_isolated_subprocess_environment(), **_git_environment(repo)},
+            )
+            if archive_proc.returncode != 0:
+                raise IntegrityError(f"failed to extract git archive of commit {commit}")
+            tar_proc = subprocess.run(
+                ["tar", "-x"],
+                input=archive_proc.stdout,
+                cwd=workspace,
+                capture_output=True,
+                check=False,
+            )
+            if tar_proc.returncode != 0:
+                raise IntegrityError("failed to unpack maintained fork archive for TUI build")
+        else:
+            # An already-materialized exact-commit tree has no repository of its own to
+            # archive: copy it into the disposable workspace and build it there.
+            source = "materialized-tree"
+            try:
+                shutil.copytree(repo, workspace, dirs_exist_ok=True, symlinks=True)
+            except OSError as error:
+                raise IntegrityError(
+                    "failed to copy the materialized maintained fork tree"
+                ) from error
+
+        if not (workspace / "ui-tui" / "package.json").is_file():
+            raise IntegrityError("maintained fork source does not contain ui-tui/package.json")
 
         node_ver = subprocess.run(
             [node_bin, "--version"], capture_output=True, text=True, check=True
@@ -2962,6 +3041,7 @@ def build_tui_in_disposable_workspace(
         provenance = {
             "schema": "aether.tui-provenance.v1",
             "hermes_commit": commit,
+            "source": source,
             "entry_path": "dist/entry.js",
             "entry_sha256": digest,
             "node_version": node_ver,
@@ -2971,6 +3051,7 @@ def build_tui_in_disposable_workspace(
         return {
             "tui_sha256": digest,
             "entry_path": "dist/entry.js",
+            "source": source,
             "node_version": node_ver,
             "npm_version": npm_ver,
         }
