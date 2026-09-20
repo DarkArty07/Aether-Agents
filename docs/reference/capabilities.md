@@ -5,9 +5,9 @@ This reference is generated from the [capability registry](../capabilities.toml)
 
 ## `cli.aether-launch`
 
-**Status:** `partial`
+**Status:** `implemented`
 
-The bare command exposes version reporting and a source-tree Morfeo launcher, but the packaged project-aware launch contract is not fully qualified.
+The bare command validates project identity and launches Morfeo into the active release-owned TUI from packaged manager code, or emits a non-mutating launch plan with --json.
 
 ### Surfaces
 - `cli.command.aether`
@@ -25,6 +25,7 @@ The bare command exposes version reporting and a source-tree Morfeo launcher, bu
 ### Implementation
 - [scripts/aether_tui.py](../../scripts/aether_tui.py)
 - [src/aether_agents/cli.py](../../src/aether_agents/cli.py)
+- [src/aether_agents/launcher.py](../../src/aether_agents/launcher.py)
 
 ### Verification
 - [tests/test_aether_tui_launcher.py](../../tests/test_aether_tui_launcher.py)
@@ -32,7 +33,7 @@ The bare command exposes version reporting and a source-tree Morfeo launcher, bu
 
 ### Notes / current limits
 
-The source-tree launcher requires local managed prerequisites; this build does not provide the complete installed project-aware launch path.
+Bare aether validates project identity and launches Morfeo into the active release-owned TUI; --json emits a non-mutating launch plan. Reserved arguments are rejected and --resume latest is passed through.
 
 ## `cli.doctor`
 
@@ -558,7 +559,7 @@ All three roles share a 14-action project-knowledge catalog plus five unchanged 
 
 ### Notes / current limits
 
-The fourteen project actions are status/query/explain/neighbors/community/path/impact/update/stats/god_nodes/list_prs/pr_impact/triage_prs/visualize; work-memory retains save/search/read/correct/reflect. Structural updates are no-model; one configured semantic update is a single 300-second bounded transaction (at most two concurrent auxiliary calls) that composes an additive `origin=llm` overlay onto an immutable structural base, publishes only a structurally preserved candidate and never publishes cancelled work. Semantic warnings describe the immutable snapshot state - complete, partial, pending, unavailable, disabled or unknown/inconsistent - so a pending snapshot never reports extraction as disabled, and a snapshot without the current integrity identity is not served as a trusted semantic result while retained artifacts stay on disk. Only a route-qualified response is cached or applied; unresolved or mismatched routes stay pending with no fallback account. Read-only GitHub and managed HTML exports are optional, and structural query/status stay available when semantic work fails. Missing live access, live-agent adoption, token savings and universal superiority remain unclaimed.
+The fourteen project actions are status/query/explain/neighbors/community/path/impact/update/stats/god_nodes/list_prs/pr_impact/triage_prs/visualize; work-memory retains save/search/read/correct/reflect. Structural updates are no-model; one configured semantic update is a single 300-second bounded transaction (at most two concurrent auxiliary calls) that composes an additive `origin=llm` overlay onto an immutable structural base, publishes only a structurally preserved candidate and never publishes cancelled work. The single 300-second budget is authoritative from `KnowledgeStore.update()` entry through terminal receipt and pointer publication, consumed with shared cancellation by every Graphify phase including prepare, validate, and compose. Semantic warnings describe the immutable snapshot state - complete, partial, pending, unavailable, disabled or unknown/inconsistent - so a pending snapshot never reports extraction as disabled, and a snapshot without the current integrity identity is not served as a trusted semantic result while retained artifacts stay on disk. Only a route-qualified response is cached or applied; unresolved or mismatched routes stay pending with no fallback account. Read-only GitHub and managed HTML exports are optional, and structural query/status stay available when semantic work fails. Missing live access, live-agent adoption, token savings and universal superiority remain unclaimed.
 
 ## `lifecycle.conditional-issue-intake-reconciliation`
 

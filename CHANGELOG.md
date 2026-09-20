@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.0.0rc4 — release candidate (pre-stable, local-only activation candidate)
+
+The release identity is package version `1.0.0rc4`, annotated tag `v1.0.0-rc.4`
+(`release_impact=patch`, `release_action=prepare`, `release_channel=prerelease`);
+`VERSION` remains the single product-version source.
+
+- This candidate is local-only: the annotated tag `v1.0.0-rc.4` is prepared locally on
+  accepted `main` and is not pushed, published, or released to GitHub in this objective.
+- Predecessors: the local rc.2 and rc.3 candidate tags and activation history remain immutable
+  and are not acceptance; `1.0.0rc1` / `v1.0.0-rc.1` remains published, byte-immutable and
+  rejected, and must not be activated.
+- Packaged launcher (`src/aether_agents/launcher.py`): bare `aether [--project PATH] [--json]`
+  validates project identity and launches Morfeo into the release-owned TUI from packaged manager
+  code without importing Hermes or executing checkout scripts; `--json` produces a non-mutating
+  launch plan with exact sorted keys (`command`, `cwd`, `hermes_executable`, `hermes_home`,
+  `project_id`, `repo_root`, `required_toolsets`, `result`, `tui_dir`). Reserved binding flags
+  are rejected and `--resume latest` is preserved (#480).
+- Release-owned prebuilt TUI asset and branded projections: candidate preparation builds and
+  hash-binds `ui-tui` from the exact maintained-fork commit outside locked `hermes-source`,
+  and launcher, service, doctor, update, and rollback agree on `HERMES_TUI_DIR`. Branded
+  `Aether` and `Continue Aether` desktop actions target the stable `aether` selector with explicit
+  project binding, and Windows Terminal WSL projections are supported (#480, #481).
+- Operation-wide Graphify deadline: one monotonic 300-second deadline begins at native
+  `KnowledgeStore.update()` entry and remains authoritative through terminal operation record
+  and pointer publication. Prepare, validate, and compose consume the remaining time with shared
+  cancellation; post-call fences reject late backend completions, and host cancel terminates
+  the Graphify process group (#482).
+- Pinned the maintained-fork runtime source unchanged: `DarkArty07/aether-hermes` `aether-main`
+  revision `aed6591a69f453a1867b73628603e7b53ba40ffc` (merge of `#450` and `#461`).
+- Reconciled root `AGENTS.md` with the current Objective Contract `oc_ff82ba151cdf3861@v2`.
+- Registered tracked contract files `.aether/objective-contracts/oc_ff82ba151cdf3861/v1.md` and `v2.md`,
+  packaged launcher `src/aether_agents/launcher.py`, and projection test suite `tests/test_tui_projections.py`
+  in `.github/workflows/policy.yml`.
+- This is a pre-stable release candidate. It is not stable `1.0.0`, no PyPI or other
+  package-index publication occurs, WSL2 (and any macOS/Windows lane) is unverified and
+  recorded as such, and issue #261 remains open with the deferred stable, PyPI/OIDC and
+  WSL2 obligations explicit. Gate measurements, local activation, live canaries, and issue closeout
+  belong to the same objective's later units; this entry records the release identity, status,
+  guidance, capabilities, and oracle reconciliation performed here.
+
 ## 1.0.0rc3 — release candidate (pre-stable, local-only activation candidate)
 
 The release identity is package version `1.0.0rc3`, annotated tag `v1.0.0-rc.3`

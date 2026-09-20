@@ -4,7 +4,7 @@ Aether is a multi-agent software-engineering product built on [Hermes Agent](htt
 
 This index is navigation only and routes reader questions to the appropriate guide, reference, or authority artifact. For the complete reader-facing placement and conflict-resolution map across all artifact classes, see [Authority and artifact ownership](authority.md).
 
-The executable Hermes source for the current local-only `1.0.0rc3` candidate is Aether's
+The executable Hermes source for the current local-only `1.0.0rc4` candidate is Aether's
 maintained fork `DarkArty07/aether-hermes` branch `aether-main`, bound by release-lock
 `schema_version` 4 source mode `maintained_fork` and installed through `aether update`.
 Active release `1.0.0rc3-8987f650c027ad09` is locally selected from Aether merge

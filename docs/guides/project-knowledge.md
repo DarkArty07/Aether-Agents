@@ -96,7 +96,7 @@ All three roles can request an update after relevant committed changes:
 {"action":"update","reason":"Refresh the map after the interface and tests changed","mode":"configured"}
 ```
 
-Skills and agents are instructed to perform or resume configured updates (`mode="configured"`, default) at coherent committed checkpoints whenever covered code or documentation changed, including on integrated main before closeout. Ordinary queries, status checks, and greetings never call a model, and no background watcher is installed. One configured update is a single bounded transaction — at most two concurrent auxiliary calls inside a 300-second total budget — and it publishes only a fully validated, structurally preserved candidate.
+Skills and agents are instructed to perform or resume configured updates (`mode="configured"`, default) at coherent committed checkpoints whenever covered code or documentation changed, including on integrated main before closeout. Ordinary queries, status checks, and greetings never call a model, and no background watcher is installed. One configured update is a single bounded transaction governed by one monotonic 300-second deadline from `KnowledgeStore.update()` entry through pointer publication — at most two concurrent auxiliary calls inside that budget — and it publishes only a fully validated, structurally preserved candidate.
 
 `changed_paths` may be supplied as a hint, but it is not trusted as a complete change list. Updates capture the selected committed revision from Git objects. Ordinary updates and note writes require no additional per-role approval once the component, task and profile are authorized. If temporary failures occur, at most one bounded retry is allowed; persistent unavailable or deferred work is reported rather than looping to force completion.
 
@@ -172,13 +172,15 @@ the selected `semantic.auxiliary_task` (the qualified activation uses `web_extra
 profile-scoped auxiliary connection. Ordinary queries, status checks, and greetings never call a
 model, and no background watcher is installed.
 
-One configured update is one bounded transaction. It prepares or reuses a private plan for the
-compatible revision, runs at most two auxiliary calls at a time, and completes preparation,
-model calls, validation, composition and pointer publication inside a single 300-second total
-budget; a configured lower deadline is allowed, a higher one is not. Cancellation stops
+One configured update is one bounded transaction governed by a single monotonic 300-second deadline
+that begins at native `KnowledgeStore.update()` entry and remains authoritative through terminal
+operation record and pointer publication; a configured lower deadline is allowed, a higher one is not.
+Every budget-consuming Graphify call (including prepare, validate, and compose) shares this remaining
+budget and cancellation event. Post-call fences reject results returned after cancel or deadline exhaustion.
+Host cancel terminates the Graphify process group and returns `OPERATION_CANCELLED`. Cancellation stops
 scheduling new calls, keeps already validated cache fragments and never publishes the cancelled
-candidate. Natural budget exhaustion returns a partial receipt instead of leaving detached work,
-and no hidden continuation runs after the call returns.
+candidate. Natural budget exhaustion returns a partial receipt with deadline attribution instead of
+leaving detached work, and no hidden continuation runs after the call returns.
 
 Semantic additions are an overlay on an immutable structural base. Accepted nodes, edges and
 hyperedges carry `origin=llm`, bind only to captured sources and anchors, and are never promoted

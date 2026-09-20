@@ -97,6 +97,8 @@ jobs:
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v2.md
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v3.md
           .aether/objective-contracts/oc_3397f9f05d780f8e/v1.md
+          .aether/objective-contracts/oc_ff82ba151cdf3861/v1.md
+          .aether/objective-contracts/oc_ff82ba151cdf3861/v2.md
           .aether/project.toml
           .aether/skills/aether-observe/SKILL.md
           AGENTS.md
@@ -249,6 +251,7 @@ jobs:
           src/aether_agents/lab/runner.py
           src/aether_agents/lab/synthetic_owner.py
           src/aether_agents/lab/validation.py
+          src/aether_agents/launcher.py
           src/aether_agents/lifecycle.py
           src/aether_agents/hermes_baseline.py
           src/aether_agents/hermes_editable.py
@@ -338,6 +341,7 @@ jobs:
           tests/test_hermes_editable.py
           tests/test_lifecycle_adoption.py
           tests/test_lifecycle_projections.py
+          tests/test_tui_projections.py
           tests/test_objective_contracts.py
           tests/test_observation_batch_replay_regression.py
           tests/test_observation_brief_tool.py
@@ -522,7 +526,8 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m unittest discover -s tests -p 'test_policy_hooks.py' -v
-          python3 -m unittest discover -s tests -p 'test_aether_tui_launcher.py' -v
+          # Packaged launcher tests import aether_agents (jsonschema). They run in the
+          # observation-qualification pytest lane, not this stdlib-only hook check.
           python3 -m py_compile \
             policy/hooks/aether_pre_tool_policy.py \
             scripts/aether_tui.py \
