@@ -86,7 +86,9 @@ the gateway service no longer depends on that variable (option B for #487):
 | Clause 3 (Source preservation) | Launch creates no npm/build artefacts and leaves locked `hermes-source` unchanged | `uv run --frozen python scripts/run_tests.py -- tests/test_aether_tui_launcher.py::TuiPreservationTests::test_launch_creates_no_build_artefacts_and_leaves_locked_hermes_source_unchanged` | PASS: pre/post file type and SHA-256 inventories identical; no node_modules or build files | Direct |
 | Clause 4 (Desktop/WSL actions) | Desktop and WSL actions target stable `aether` entry point with `--resume latest` | `uv run --frozen python scripts/run_tests.py -- tests/test_aether_tui_launcher.py::TuiPreservationTests::test_desktop_and_wsl_projections_point_to_stable_aether_entry_point` | PASS: Desktop and WSL shortcut bytes contain stable entry point, resolved project root, and `--resume latest` | Direct |
 | Clause 5 (Gateway boundary) | Gateway service independence owned by GW-SERVICE; do not duplicate oracle | Code inspection of `test_aether_tui_launcher.py` | PASS: no assertions on `service_bytes` or systemd unit files in launcher test module | Direct |
-| Full suite | Integrated launcher and preservation test suite | `uv run --frozen python scripts/run_tests.py -- tests/test_aether_tui_launcher.py -q` | PASS: 28 passed, 9 subtests passed in 4.75s | Direct |
+| Focused suite | Integrated launcher and preservation test suite | `uv run --frozen python scripts/run_tests.py -- tests/test_aether_tui_launcher.py -q` | PASS: 28 passed, 9 subtests passed in 5.71s | Direct |
+| Full test suite | Full repository test suite (exact Hermes lane) | `uv run --frozen python scripts/run_tests.py` | PASS (unit clean): 1857 passed, 70 skipped, 1 failed (pre-existing DOCS-owned `test_canonical_base_manifest_matches_tracked_non_specs_files` due to base `policy.yml` missing contract path) in 318.20s | Direct |
+| Artifact path scan | Reject operator-specific paths in public artifacts | `uv run --frozen pytest -q tests/test_public_artifacts.py::test_tracked_public_surface_contains_no_operator_paths tests/test_release_bundle.py::test_scan_bundle_reviews_upstream_fork_bytes_without_vetoing` | PASS: 2 passed in 3.17s | Direct |
 | Lint & Format | Code style and formatting | `uv run --frozen ruff check src/aether_agents tests scripts && uv run --frozen ruff format --check src/aether_agents tests scripts` | PASS: All checks passed, 174 files formatted | Direct |
 | Type check | Static typing | `uv run --frozen mypy src/aether_agents` | PASS: Success: no issues found in 68 source files | Direct |
 | Docs check | Documentation validation | `uv run --frozen python scripts/check_documentation.py` | PASS: documentation validation passed | Direct |
@@ -110,7 +112,7 @@ Preserved boundaries:
 - `tests/test_lifecycle_projections.py` (untouched; owned by GW-SERVICE)
 - `VERSION`, `CHANGELOG.md`, `README.md`, `docs/**`, `AGENTS.md`, `.github/workflows/policy.yml` (untouched; owned by DOCS)
 - Canonical Objective Contract `.aether/objective-contracts/oc_a7a3cff05e82c148/v1.md` (consumed read-only, untouched)
-- Primary checkout `/home/darkarty/Desktop/agentes/aether` (untouched)
+- Primary repository checkout (outside worktree, untouched)
 - Every live XDG destination (`~/.config/systemd/user/`, etc., untouched)
 
 ---
