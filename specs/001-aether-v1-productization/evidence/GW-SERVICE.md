@@ -22,9 +22,11 @@ orchestration; no change to external CLI command shapes or public schema).
 ### Design and Mechanism
 For releases starting with `1.0.0rc5` and newer (including final stable `1.0.0`, `1.0.1`, `1.1.0`, etc.),
 Aether yields ownership of the systemd user unit `hermes-gateway-morfeo.service` to the Hermes Agent CLI:
-1. `_is_hermes_owned_gateway_version` and `_is_branded_version`: Compare parsed version 5-tuples
+1. `_is_hermes_owned_gateway_version`: Compares parsed version 5-tuples
    via `_parse_version_tuple(version)`. Any version `>= (1, 0, 0, 3, 5)` (i.e. `1.0.0rc5` and subsequent
    pre-releases, as well as final `1.0.0` and later) is classified as Hermes-owned.
+   `_is_branded_version` remains scoped to release candidates (`1.0.0rc4` and newer rc pre-releases);
+   stable `1.0.0` and successors do not match `_is_branded_version`.
 2. `ProjectionSpec`: When `record.version` satisfies `_is_hermes_owned_gateway_version`,
    `ProjectionSpec.service_bytes` is set to `b""`, and `ProjectionSpec.profile_home` carries the
    resolved Morfeo profile home.
@@ -52,7 +54,10 @@ Aether yields ownership of the systemd user unit `hermes-gateway-morfeo.service`
   - Historical versions (`1.0.0rc1`, `1.0.0rc2`, `1.0.0rc3`, `1.0.0rc4`, `1.0.0-rc.4`, `0.9.0`) return `False`.
   - Release candidates (`1.0.0rc5`, `1.0.0-rc.5`, `1.0.0rc6`, `1.0.0-rc.6`) return `True`.
   - Final stable and successors (`1.0.0`, `1.0.1`, `1.1.0`, `2.0.0`) return `True`.
-  - End-to-end `ProjectionSpec` for stable `1.0.0` has empty `service_bytes`, no `"service"` digest, and preserves branded desktop/launcher.
+  - End-to-end `ProjectionSpec` for stable `1.0.0` has empty `service_bytes` and no `"service"` digest;
+    because `_is_branded_version("1.0.0")` is `False`, it yields the legacy `Name=Hermes` desktop entry
+    and does not export `HERMES_TUI_DIR` in the launcher. This launcher/desktop behavior for stable releases
+    is a known limitation owned by the stable productization objective (#261).
 
 ---
 
@@ -220,11 +225,13 @@ temporary interpreter.
      `unit_dest != _OPERATOR_UNIT_PATH`.
 
 ### Reviewer Finding B2 (Version Boundary)
-- **Root Cause**: `_is_hermes_owned_gateway_version` and `_is_branded_version` matched only `1.0.0rcX`
-  patterns, returning `False` for final `1.0.0` and subsequent versions.
+- **Root Cause**: `_is_hermes_owned_gateway_version` matched only `1.0.0rcX` patterns, returning `False`
+  for final `1.0.0` and subsequent versions.
 - **Resolution**: Implemented comparison using `_parse_version_tuple(version) >= (1, 0, 0, 3, 5)` for
-  Hermes ownership, and `>= (1, 0, 0, 3, 4)` for branding. Added dedicated ordering regression test
-  `test_ac1_hermes_owned_version_boundary_ordering`.
+  Hermes ownership, ensuring stable `1.0.0` and successors remain Hermes-owned with empty `service_bytes`
+  and no service digest. `_is_branded_version` remains release-candidate-scoped (`1.0.0rc4`+ pre-releases),
+  with stable launcher/desktop branding semantics left to the stable release objective. Added dedicated
+  ordering regression test `test_ac1_hermes_owned_version_boundary_ordering`.
 
 ### Reviewer Finding B3 (Repeated Refresh Fixture)
 - **Root Cause**: The repeated refresh fixture requirement was missing an explicit test.
