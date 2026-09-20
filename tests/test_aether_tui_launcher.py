@@ -17,10 +17,14 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from aether_agents.cli import main as cli_main
-from aether_agents.observation.context import ProjectRegistry
-
 ROOT = Path(__file__).resolve().parents[1]
+_SRC = ROOT / "src"
+if _SRC.is_dir() and str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from aether_agents.cli import main as cli_main  # noqa: E402
+from aether_agents.observation.context import ProjectRegistry  # noqa: E402
+
 LAUNCHER = ROOT / "scripts" / "aether_tui.py"
 EXPECTED_PLAN_KEYS = [
     "command",
@@ -122,15 +126,24 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
             os.environ.pop("AETHER_RUNTIME_ROOT", None)
         self.tempdir.cleanup()
 
-    def run_check(
-        self, cwd: Path, *, env: dict[str, str] | None = None
-    ) -> subprocess.CompletedProcess[str]:
+    def _shim_env(self, env: dict[str, str] | None = None) -> dict[str, str]:
+        """Bare-python subprocesses need the packaged launcher on sys.path."""
+
         merged = dict(os.environ)
         for k in list(merged.keys()):
             if k.startswith("COV_CORE_") or k.startswith("COVERAGE_"):
                 merged.pop(k, None)
         if env is not None:
             merged.update(env)
+        existing = merged.get("PYTHONPATH", "")
+        src = str(ROOT / "src")
+        merged["PYTHONPATH"] = src if not existing else os.pathsep.join((src, existing))
+        return merged
+
+    def run_check(
+        self, cwd: Path, *, env: dict[str, str] | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        merged = self._shim_env(env)
         return subprocess.run(
             [sys.executable, str(self.launcher), "--check"],
             cwd=cwd,
@@ -360,17 +373,13 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
             "--ignore-rules",
         ):
             with self.subTest(argument=argument):
-                sub_env = dict(os.environ)
-                for k in list(sub_env.keys()):
-                    if k.startswith("COV_CORE_") or k.startswith("COVERAGE_"):
-                        sub_env.pop(k, None)
                 result = subprocess.run(
                     [sys.executable, str(self.launcher), "--check", argument],
                     cwd=self.root,
                     text=True,
                     capture_output=True,
                     check=False,
-                    env=sub_env,
+                    env=self._shim_env(),
                 )
                 self.assertEqual(result.returncode, 2)
                 self.assertIn(
