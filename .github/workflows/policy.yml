@@ -85,6 +85,8 @@ jobs:
           .aether/objective-contracts/oc_ddebf175a40251f7/v1.md
           .aether/objective-contracts/oc_df24bf0cd91490d5/v1.md
           .aether/objective-contracts/oc_e64cc79af0a649a2/v1.md
+          .aether/objective-contracts/oc_f190ae9e878151e6/v1.md
+          .aether/objective-contracts/oc_f190ae9e878151e6/v2.md
           .aether/objective-contracts/oc_f2acfb5effb21f6d/v1.md
           .aether/objective-contracts/oc_f8c9fc9320587cf3/v1.md
           .aether/objective-contracts/oc_f8c9fc9320587cf3/v2.md
@@ -362,6 +364,7 @@ jobs:
           tests/test_public_artifacts.py
           tests/test_release_bundle.py
           tests/test_same_card_phase_predicates.py
+          tests/test_source_restoration.py
           tests/test_telegram_monitor_ambient_isolation.py
           tests/test_telegram_monitor_cli_plugin.py
           tests/test_telegram_monitor_delivery.py
