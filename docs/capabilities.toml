@@ -5,14 +5,14 @@ generated_reference = "docs/reference/capabilities.md"
 
 [[capabilities]]
 id = "cli.aether-launch"
-status = "partial"
-summary = "The bare command exposes version reporting and a source-tree Morfeo launcher, but the packaged project-aware launch contract is not fully qualified."
+status = "implemented"
+summary = "The bare command validates project identity and launches Morfeo into the active release-owned TUI from packaged manager code, or emits a non-mutating launch plan with --json."
 surfaces = ["cli.command.aether", "cli.option.aether.--json", "cli.option.aether.--project", "cli.option.aether.--version"]
 documents = ["docs/getting-started.md", "docs/reference/cli.md"]
 specifications = ["specs/001-aether-v1-productization/contracts/cli.md"]
-implementation = ["src/aether_agents/cli.py", "scripts/aether_tui.py"]
+implementation = ["src/aether_agents/cli.py", "src/aether_agents/launcher.py", "scripts/aether_tui.py"]
 verification = ["tests/test_aether_tui_launcher.py", "tests/test_observation_lifecycle.py"]
-notes = "The source-tree launcher requires local managed prerequisites; this build does not provide the complete installed project-aware launch path."
+notes = "Bare aether validates project identity and launches Morfeo into the active release-owned TUI; --json emits a non-mutating launch plan. Reserved arguments are rejected and --resume latest is passed through."
 
 [[capabilities]]
 id = "cli.doctor"
@@ -241,7 +241,7 @@ documents = ["docs/guides/project-knowledge.md", "docs/reference/plugins-and-too
 specifications = ["specs/005-project-knowledge-graphify/spec.md", "specs/005-project-knowledge-graphify/contracts/tools-and-data.md", "specs/005-project-knowledge-graphify/contracts/expanded-tools-and-semantic.md", "specs/005-project-knowledge-graphify/contracts/soul-and-skills.md"]
 implementation = ["src/aether_agents/knowledge/snapshots.py", "src/aether_agents/knowledge/common.py", "src/aether_agents/knowledge/graph_worker.py", "src/aether_agents/knowledge/graphify.py", "src/aether_agents/knowledge/semantic.py", "src/aether_agents/knowledge/github.py", "src/aether_agents/knowledge/exports.py", "src/aether_agents/knowledge/service.py", "scripts/qualify_knowledge_expansion.py"]
 verification = ["tests/test_project_knowledge_engine.py", "tests/test_knowledge_regressions.py", "tests/test_knowledge_semantic_manager.py", "tests/test_knowledge_schema.py", "tests/test_knowledge_resources.py", "tests/test_documentation.py", "scripts/qualify_knowledge_expansion.py"]
-notes = "The fourteen project actions are status/query/explain/neighbors/community/path/impact/update/stats/god_nodes/list_prs/pr_impact/triage_prs/visualize; work-memory retains save/search/read/correct/reflect. Structural updates are no-model; one configured semantic update is a single 300-second bounded transaction (at most two concurrent auxiliary calls) that composes an additive `origin=llm` overlay onto an immutable structural base, publishes only a structurally preserved candidate and never publishes cancelled work. Semantic warnings describe the immutable snapshot state - complete, partial, pending, unavailable, disabled or unknown/inconsistent - so a pending snapshot never reports extraction as disabled, and a snapshot without the current integrity identity is not served as a trusted semantic result while retained artifacts stay on disk. Only a route-qualified response is cached or applied; unresolved or mismatched routes stay pending with no fallback account. Read-only GitHub and managed HTML exports are optional, and structural query/status stay available when semantic work fails. Missing live access, live-agent adoption, token savings and universal superiority remain unclaimed."
+notes = "The fourteen project actions are status/query/explain/neighbors/community/path/impact/update/stats/god_nodes/list_prs/pr_impact/triage_prs/visualize; work-memory retains save/search/read/correct/reflect. Structural updates are no-model; one configured semantic update is a single 300-second bounded transaction (at most two concurrent auxiliary calls) that composes an additive `origin=llm` overlay onto an immutable structural base, publishes only a structurally preserved candidate and never publishes cancelled work. The single 300-second budget is authoritative from `KnowledgeStore.update()` entry through terminal receipt and pointer publication, consumed with shared cancellation by every Graphify phase including prepare, validate, and compose. Semantic warnings describe the immutable snapshot state - complete, partial, pending, unavailable, disabled or unknown/inconsistent - so a pending snapshot never reports extraction as disabled, and a snapshot without the current integrity identity is not served as a trusted semantic result while retained artifacts stay on disk. Only a route-qualified response is cached or applied; unresolved or mismatched routes stay pending with no fallback account. Read-only GitHub and managed HTML exports are optional, and structural query/status stay available when semantic work fails. Missing live access, live-agent adoption, token savings and universal superiority remain unclaimed."
 
 [[capabilities]]
 id = "knowledge.session-bindings"

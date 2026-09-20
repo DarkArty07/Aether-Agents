@@ -6,6 +6,8 @@ import hashlib
 import json
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -3571,3 +3573,524 @@ def test_read_actions_never_invoke_a_model(tmp_path: Path, monkeypatch: pytest.M
     store.execute(ctx, "status", {})
     assert set(backend.actions) == set(_READ_ACTIONS), "status must not consult the component"
     assert not any(action.startswith(("semantic", "memory")) for action in backend.actions)
+
+
+def test_operation_wide_deadline_starts_at_update_entry_and_bounds_graphify_invocations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC-6: One monotonic deadline starts at KnowledgeStore.update() entry and bounds all Graphify calls."""
+    import aether_agents.knowledge.semantic as sem_mod
+
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+
+    clock = [1000.0]
+    monkeypatch.setattr(sem_mod, "_now", lambda: clock[0])
+
+    calls: list[dict[str, Any]] = []
+
+    class MockTrackingBackend(GraphifyBackend):
+        def __init__(self) -> None:
+            super().__init__(Path("mock-python"))
+
+        def run(
+            self,
+            action: str,
+            *,
+            source_root: Path | None = None,
+            graph_path: Path | None = None,
+            arguments: dict[str, Any] | None = None,
+            timeout: float | None = None,
+            cancel_event: threading.Event | None = None,
+        ) -> dict[str, Any]:
+            calls.append(
+                {
+                    "action": action,
+                    "timeout": timeout,
+                    "cancel_event": cancel_event,
+                    "time_at_call": clock[0],
+                }
+            )
+            # Advance clock during execution to simulate elapsed time
+            clock[0] += 20.0
+            if action == "probe":
+                return {"ok": True, "python": str(self.python), "version": "0.9.54"}
+            if action == "update":
+                assert graph_path is not None
+                graph_path.parent.mkdir(parents=True, exist_ok=True)
+                graph_path.write_text(
+                    json.dumps({"nodes": [{"id": "n1", "source_file": "module.py"}], "edges": []})
+                )
+                return {"ok": True, "graph": str(graph_path)}
+            if action == "semantic_prepare":
+                return {
+                    "ok": True,
+                    "chunks": [
+                        {
+                            "chunk_id": 0,
+                            "files": ["module.py"],
+                            "system_prompt": "sys",
+                            "user_prompt": "user",
+                        }
+                    ],
+                    "total_chunks": 1,
+                    "has_more": False,
+                }
+            if action == "semantic_validate":
+                return {
+                    "ok": True,
+                    "fragment": {"nodes": [{"id": "n1", "source_file": "module.py"}], "edges": []},
+                }
+            if action == "semantic_compose":
+                return {
+                    "ok": True,
+                    "structural_digest": "digest-mock",
+                    "structural_preserved": True,
+                }
+            return {"ok": True}
+
+    backend = MockTrackingBackend()
+    store = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        backend,
+        configuration={
+            "enabled": True,
+            "semantic_enabled": True,
+            "semantic_auxiliary_task": "web_extract",
+            "semantic": dict(DETERMINISTIC_ROUTE),
+        },
+    )
+
+    def mock_aux(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        clock[0] += 10.0
+        return (
+            json.dumps({"nodes": [{"id": "n1", "source_file": "module.py"}], "edges": []}),
+            {"total_tokens": 10},
+        )
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_aux)
+
+    shared_cancel = threading.Event()
+    res = store.update(ctx, {"mode": "configured"}, cancel_event=shared_cancel)
+    assert res["ok"] is True
+
+    # Check calls and timeouts
+    action_names = [c["action"] for c in calls]
+    assert "probe" in action_names
+    assert "update" in action_names
+    assert "semantic_prepare" in action_names
+    assert "semantic_validate" in action_names
+    assert "semantic_compose" in action_names
+
+    # All calls share the same cancel event
+    for c in calls:
+        assert c["cancel_event"] is shared_cancel
+        assert c["timeout"] is not None
+
+    # Probe was first call at t=1000, deadline=1300, reserve=5 -> timeout <= 295
+    probe_call = next(c for c in calls if c["action"] == "probe")
+    assert probe_call["timeout"] == pytest.approx(295.0, abs=0.1)
+
+    # Structural update ran after probe (clock advanced by 20.0 to 1020), remaining=280 -> timeout <= 275
+    update_call = next(c for c in calls if c["action"] == "update")
+    assert update_call["timeout"] == pytest.approx(275.0, abs=0.1)
+
+    # All subsequent semantic calls had strictly decreasing timeouts matching monotonic progression
+    timeouts = [c["timeout"] for c in calls]
+    assert timeouts == sorted(timeouts, reverse=True), (
+        "timeouts must decrease monotonically as time elapses"
+    )
+
+
+def test_post_call_fence_rejects_result_returned_after_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC-6 / AC-7: Post-call fence rejects a Graphify result if deadline expired during execution."""
+    import aether_agents.knowledge.semantic as sem_mod
+
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+
+    clock = [1000.0]
+    monkeypatch.setattr(sem_mod, "_now", lambda: clock[0])
+
+    class LateBackend(GraphifyBackend):
+        def __init__(self) -> None:
+            super().__init__(Path("mock-python"))
+
+        def run(self, action: str, **kwargs: Any) -> dict[str, Any]:
+            if action == "probe":
+                return {"ok": True, "python": str(self.python), "version": "0.9.54"}
+            if action == "update":
+                # Advance clock past the 300s deadline before returning
+                clock[0] += 350.0
+                graph_path = kwargs.get("graph_path")
+                if graph_path:
+                    graph_path.parent.mkdir(parents=True, exist_ok=True)
+                    graph_path.write_text(json.dumps({"nodes": [], "edges": []}))
+                return {"ok": True}
+            return {"ok": True}
+
+    backend = LateBackend()
+    store = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        backend,
+        configuration={"enabled": True, "semantic_enabled": False},
+    )
+
+    view = state / "knowledge" / PROJECT / "views" / ctx.view_id
+    pointer = view / f"{ctx.source_revision}.json"
+
+    result = store.update(ctx, {"mode": "structural"})
+    assert result["outcome"] == "pending"
+    assert result["semantic_pending"] is True
+    assert any("deadline" in warning.lower() for warning in result["warnings"])
+    assert not pointer.exists(), "no candidate pointer may be published when deadline expired"
+    operation = json.loads((view / "operation.json").read_text(encoding="utf-8"))
+    assert operation["terminal_outcome"] == "deadline"
+    assert operation["failure_category"] == "deadline"
+
+    # Lock must be released
+    with stable_lock(view / "update.lock", timeout=1.0):
+        pass
+
+
+def test_post_call_fence_rejects_result_returned_after_host_cancel(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC-6 / AC-7: Post-call fence rejects a Graphify result if cancel was requested before return."""
+
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    cancel_ev = threading.Event()
+
+    class CancellingBackend(GraphifyBackend):
+        def __init__(self) -> None:
+            super().__init__(Path("mock-python"))
+
+        def run(self, action: str, **kwargs: Any) -> dict[str, Any]:
+            if action == "probe":
+                return {"ok": True, "python": str(self.python), "version": "0.9.54"}
+            if action == "update":
+                # Cancel is set right as update finishes
+                cancel_ev.set()
+                graph_path = kwargs.get("graph_path")
+                if graph_path:
+                    graph_path.parent.mkdir(parents=True, exist_ok=True)
+                    graph_path.write_text(json.dumps({"nodes": [], "edges": []}))
+                return {"ok": True}
+            return {"ok": True}
+
+    backend = CancellingBackend()
+    store = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        backend,
+        configuration={"enabled": True, "semantic_enabled": False},
+    )
+
+    view = state / "knowledge" / PROJECT / "views" / ctx.view_id
+    pointer = view / f"{ctx.source_revision}.json"
+
+    with pytest.raises(KnowledgeError) as exc_info:
+        store.update(ctx, {"mode": "structural"}, cancel_event=cancel_ev)
+    assert exc_info.value.code == "OPERATION_CANCELLED"
+    assert not pointer.exists(), (
+        "no candidate pointer may be published when operation was cancelled"
+    )
+
+    with stable_lock(view / "update.lock", timeout=1.0):
+        pass
+
+
+def test_host_cancel_terminates_process_group_releases_lock_and_leaves_no_pointer(
+    tmp_path: Path,
+) -> None:
+    """AC-7: Host cancel terminates Graphify process group, releases lock, and leaves no pointer."""
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+
+    component = tmp_path / "slow-graphify"
+    component.write_text('#!/bin/sh\necho $$ > "$0.pid"\nsleep 30 &\necho $! >> "$0.pid"\nwait\n')
+    component.chmod(0o755)
+    pid_file = tmp_path / "slow-graphify.pid"
+
+    backend = GraphifyBackend(component, timeout=60.0)
+    store = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        backend,
+        configuration={"enabled": True, "semantic_enabled": False},
+    )
+
+    cancel_ev = threading.Event()
+    threading.Timer(0.3, cancel_ev.set).start()
+
+    view = state / "knowledge" / PROJECT / "views" / ctx.view_id
+    pointer = view / f"{ctx.source_revision}.json"
+
+    started = time.monotonic()
+    with pytest.raises(KnowledgeError) as exc_info:
+        store.update(ctx, {"mode": "structural"}, cancel_event=cancel_ev)
+    assert exc_info.value.code == "OPERATION_CANCELLED"
+    assert time.monotonic() - started < 10, "cancellation must terminate without blocking"
+    assert not pointer.exists(), "no pointer may be published on cancel"
+
+    # Verify process group was terminated
+    deadline = time.monotonic() + 5.0
+    while not pid_file.exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    recorded = [int(line) for line in pid_file.read_text().split()] if pid_file.exists() else []
+    assert len(recorded) == 2, "stand-in records parent shell and child sleep"
+    for pid in recorded:
+        assert _wait_for_process_exit(pid), f"detached process survived: {pid}"
+
+    # Verify lock was released
+    with stable_lock(view / "update.lock", timeout=1.0):
+        pass
+
+
+@pytest.mark.parametrize("expiry_point", ["manifest-build", "manifest-record"])
+def test_publication_fence_deadline_returns_deadline_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, expiry_point: str
+) -> None:
+    """AC-7: budget expiry before pointer publication returns the deadline receipt, never a raise.
+
+    The operation clock is injected at the two candidate seams between the last accepted
+    backend result and the pointer write: the manifest build (first publication fence) and
+    the manifest phase record (second publication fence).
+    """
+    import aether_agents.knowledge.semantic as sem_mod
+
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    backend = _LifecycleStandInBackend()
+    store = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        backend,
+        configuration={"enabled": True, "semantic_enabled": False},
+    )
+    first = store.update(ctx, {"mode": "structural"})
+    assert first["outcome"] == "updated"
+    first_pointer = (
+        state / "knowledge" / PROJECT / "views" / ctx.view_id / f"{ctx.source_revision}.json"
+    )
+    assert first_pointer.is_file()
+
+    # A second revision exercises the full candidate pipeline instead of the unchanged fast path.
+    (root / "extra.py").write_text("def extra_helper():\n    return 1\n")
+    git_at(root, "add", ".")
+    git_at(root, "commit", "-qm", "publication fence revision")
+    revised = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    view = state / "knowledge" / PROJECT / "views" / revised.view_id
+    pointer = view / f"{revised.source_revision}.json"
+    assert not pointer.exists()
+
+    clock = [1000.0]
+    monkeypatch.setattr(sem_mod, "_now", lambda: clock[0])
+    armed = {"value": False}
+
+    def expire() -> None:
+        if armed["value"]:
+            clock[0] = 1400.0
+
+    if expiry_point == "manifest-record":
+        recorded_phase = store._operation_phase
+
+        def phase(
+            ctx_: Any, operation_id: str, operation: dict[str, Any], name: str, **kwargs: Any
+        ) -> None:
+            recorded_phase(ctx_, operation_id, operation, name, **kwargs)
+            if name == "manifest":
+                expire()
+
+        monkeypatch.setattr(store, "_operation_phase", phase)
+    else:
+        recorded_versions = store._semantic_versions
+
+        def semantic_versions(meta: dict[str, Any]) -> tuple[str, str]:
+            result = recorded_versions(meta)
+            expire()
+            return result
+
+        monkeypatch.setattr(store, "_semantic_versions", semantic_versions)
+
+    armed["value"] = True
+    result = store.update(revised, {"mode": "structural"})
+
+    assert result["outcome"] in ("pending", "unchanged")
+    assert result["semantic_pending"] is True
+    assert any("deadline" in warning.lower() for warning in result["warnings"])
+    assert not pointer.exists(), "an expired operation must not publish a pointer"
+    operation = json.loads((view / "operation.json").read_text(encoding="utf-8"))
+    assert operation["terminal_outcome"] == "deadline"
+    assert operation["failure_category"] == "deadline"
+    assert operation["outcome"] != "running"
+    assert first_pointer.is_file(), "the previously published revision keeps its pointer"
+    with stable_lock(view / "update.lock", timeout=1.0):
+        pass
+
+
+def test_publication_fence_deadline_retains_the_previous_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC-7: expiry before publication returns an unchanged receipt for the retained snapshot."""
+    import aether_agents.knowledge.semantic as sem_mod
+
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    structural = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        _LifecycleStandInBackend(),
+        configuration={"enabled": True, "semantic_enabled": False},
+    )
+    first = structural.update(ctx, {"mode": "structural"})
+    assert first["outcome"] == "updated"
+
+    view = state / "knowledge" / PROJECT / "views" / ctx.view_id
+    pointer = view / f"{ctx.source_revision}.json"
+    published_pointer = pointer.read_text(encoding="utf-8")
+
+    configured = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        _LifecycleStandInBackend(),
+        configuration={
+            "enabled": True,
+            "semantic_enabled": True,
+            "semantic_auxiliary_task": "web_extract",
+            "semantic": dict(DETERMINISTIC_ROUTE),
+        },
+    )
+    monkeypatch.setattr(
+        sem_mod, "run_semantic_extraction", lambda **_kwargs: _complete_semantic_meta()
+    )
+
+    clock = [1000.0]
+    monkeypatch.setattr(sem_mod, "_now", lambda: clock[0])
+    recorded_versions = configured._semantic_versions
+
+    def semantic_versions(meta: dict[str, Any]) -> tuple[str, str]:
+        result = recorded_versions(meta)
+        clock[0] = 1400.0
+        return result
+
+    monkeypatch.setattr(configured, "_semantic_versions", semantic_versions)
+
+    result = configured.update(ctx, {"mode": "configured"})
+
+    assert result["outcome"] == "unchanged"
+    assert result["snapshot_id"] == first["snapshot_id"], "the retained snapshot is unchanged"
+    assert result["semantic_pending"] is True
+    assert any("deadline" in warning.lower() for warning in result["warnings"])
+    assert pointer.read_text(encoding="utf-8") == published_pointer
+    operation = json.loads((view / "operation.json").read_text(encoding="utf-8"))
+    assert operation["terminal_outcome"] == "deadline"
+    assert operation["failure_category"] == "deadline"
+    with stable_lock(view / "update.lock", timeout=1.0):
+        pass
+
+
+class _TimeoutPrepareBackend(_LifecycleStandInBackend):
+    """Stand-in whose semantic fingerprint preparation reports a component timeout."""
+
+    def __init__(self, *, on_prepare: Any = None) -> None:
+        super().__init__()
+        self.on_prepare = on_prepare
+        self.prepare_calls = 0
+
+    def run(self, action: str, **kwargs: Any) -> dict[str, Any]:
+        if action == "semantic_prepare":
+            self.prepare_calls += 1
+            if self.on_prepare is not None:
+                self.on_prepare()
+            raise KnowledgeError("TIMEOUT", "Graphify exceeded its execution limit.")
+        return super().run(action, **kwargs)
+
+
+def _publish_complete_configured_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, root: Path, state: Path, ctx: Any
+) -> tuple[Path, Path, dict[str, Any], str]:
+    """Publish one complete configured snapshot with a stand-in semantic manager."""
+    import aether_agents.knowledge.semantic as sem_mod
+
+    configuration: dict[str, Any] = {
+        "enabled": True,
+        "semantic_enabled": True,
+        "semantic_auxiliary_task": "web_extract",
+        "semantic": dict(DETERMINISTIC_ROUTE),
+    }
+    store = KnowledgeStore(
+        state, tmp_path / "cache", _LifecycleStandInBackend(), configuration=configuration
+    )
+    monkeypatch.setattr(
+        sem_mod, "run_semantic_extraction", lambda **_kwargs: _complete_semantic_meta()
+    )
+    published = store.update(ctx, {"mode": "configured"})
+    assert published["outcome"] == "updated"
+    assert published["semantic"]["state"] == "complete"
+    view = state / "knowledge" / PROJECT / "views" / ctx.view_id
+    pointer = view / f"{ctx.source_revision}.json"
+    return view, pointer, configuration, pointer.read_text(encoding="utf-8")
+
+
+def test_fingerprint_prepare_timeout_never_rebuilds_or_publishes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC-6/AC-7: a component timeout on the fingerprint path is typed, not a silent rebuild."""
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    view, pointer, configuration, published_pointer = _publish_complete_configured_snapshot(
+        tmp_path, monkeypatch, root, state, ctx
+    )
+
+    backend = _TimeoutPrepareBackend()
+    store = KnowledgeStore(state, tmp_path / "cache", backend, configuration=configuration)
+    with pytest.raises(KnowledgeError) as exc_info:
+        store.update(ctx, {"mode": "configured"})
+
+    assert exc_info.value.code == "TIMEOUT"
+    assert getattr(exc_info.value, "operation_deadline_timeout", False) is False
+    assert backend.prepare_calls == 1, "the fingerprint consults the component once"
+    assert backend.update_calls == 0, "a fenced fingerprint must not rebuild the candidate"
+    assert pointer.read_text(encoding="utf-8") == published_pointer
+    operation = json.loads((view / "operation.json").read_text(encoding="utf-8"))
+    assert operation["terminal_outcome"] == "failed"
+    assert operation["failure_category"] == "TIMEOUT"
+    with stable_lock(view / "update.lock", timeout=1.0):
+        pass
+
+
+def test_fingerprint_prepare_budget_timeout_returns_deadline_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC-6/AC-7: a fingerprint timeout caused by the operation budget returns the deadline receipt."""
+    import aether_agents.knowledge.semantic as sem_mod
+
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    view, pointer, configuration, published_pointer = _publish_complete_configured_snapshot(
+        tmp_path, monkeypatch, root, state, ctx
+    )
+
+    clock = [1000.0]
+    monkeypatch.setattr(sem_mod, "_now", lambda: clock[0])
+    backend = _TimeoutPrepareBackend(on_prepare=lambda: clock.__setitem__(0, 1400.0))
+    store = KnowledgeStore(state, tmp_path / "cache", backend, configuration=configuration)
+
+    result = store.update(ctx, {"mode": "configured"})
+
+    assert result["outcome"] == "unchanged"
+    assert result["semantic_pending"] is True
+    assert any("deadline" in warning.lower() for warning in result["warnings"])
+    assert backend.update_calls == 0, "a fenced fingerprint must not rebuild the candidate"
+    assert pointer.read_text(encoding="utf-8") == published_pointer
+    operation = json.loads((view / "operation.json").read_text(encoding="utf-8"))
+    assert operation["terminal_outcome"] == "deadline"
+    assert operation["failure_category"] == "deadline"
+    with stable_lock(view / "update.lock", timeout=1.0):
+        pass

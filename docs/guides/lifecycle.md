@@ -101,6 +101,14 @@ Implementer makes local commits and evidence but never publishes, pushes, opens
 or merges a pull request, mutates issues, tags, or releases. Morfeo owns the
 same routine closeout only for an authorized direct route.
 
+## Managed runtime projections and release-owned TUI
+
+Active release installation (`aether update`) provisions release-owned runtime projections:
+
+1. **Release-owned TUI asset**: The prebuilt TUI (`ui-tui`) is built once from the exact maintained-fork commit in a disposable workspace, hash-bound outside `hermes-source` under `<release>/tui/`, and exposed at `runtime/current/tui`. `HERMES_TUI_DIR` is set to this release-owned directory across launcher, service, doctor, update, and rollback. Runtime launch never runs `npm` or builds assets in place.
+2. **Branded desktop and terminal projections**: Candidate activation installs branded `Aether` (fresh session) and `Continue Aether` (`--resume latest`) actions. Their `Exec` lines invoke the stable `runtime/current/venv/bin/aether` selector with an explicit `--project <path>` binding, never guessing cwd or targeting version-specific Hermes paths. On WSL hosts, Windows Terminal fragments project the same actions into the host terminal.
+3. **Fail-closed coherence**: `aether doctor` verifies byte-level integrity and agreement across the active-release record, `runtime/current`, the packaged launcher, desktop entries, and service projections, failing closed if any asset is missing, unbound, or altered.
+
 ## Failure evidence and recovery boundaries
 
 The durable unit is the card, not a worker process. A retry or reclaim preserves

@@ -19,7 +19,6 @@ query`, only once ``observe`` is the selected subcommand and its handler runs.
 from __future__ import annotations
 
 import argparse
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -183,20 +182,10 @@ def _run_unsupported(command: str, *, json_mode: bool) -> int:
 
 
 def _run_launch(argv: Sequence[str]) -> int:
-    """Hand a bare ``aether`` invocation to the canonical Morfeo launcher.
+    """Hand a bare ``aether`` invocation to the canonical Morfeo launcher."""
+    from aether_agents.launcher import main as launcher_main
 
-    cli.md section 2 documents the bare command as the project launch, so the installed
-    console script and the source entry point must behave identically here. The launcher
-    replaces this process; a missing launcher is reported, never silently ignored.
-    """
-    launcher = Path(__file__).resolve().parents[2] / "scripts" / "aether_tui.py"
-    if not launcher.is_file():
-        return _run_unsupported("aether", json_mode=False)
-    try:
-        os.execv(sys.executable, [sys.executable, str(launcher), *argv])
-    except OSError:
-        return _run_unsupported("aether", json_mode=False)
-    return 0  # pragma: no cover - execv does not return
+    return launcher_main(argv)
 
 
 def _lifecycle_manager():
@@ -791,6 +780,20 @@ def _run_uninstall(args: argparse.Namespace) -> int:
 def main(argv: Sequence[str] | None = None) -> int:
     """Parse ``argv`` and dispatch. Always returns an exit code; never raises."""
     args_list = list(sys.argv[1:] if argv is None else argv)
+    # Prepare argv for argparse subparsers: an option like `--resume latest` passed
+    # at the top level for bare Morfeo launch has a value token that argparse subparsers
+    # would otherwise misinterpret as a positional command before _run_launch can see it.
+    parser_args: list[str] = []
+    i = 0
+    while i < len(args_list):
+        arg = args_list[i]
+        if arg == "--resume" and i + 1 < len(args_list) and not args_list[i + 1].startswith("-"):
+            parser_args.append(f"--resume={args_list[i + 1]}")
+            i += 2
+            continue
+        parser_args.append(arg)
+        i += 1
+
     parser = _build_parser()
     try:
         # `parse_known_args`, not `parse_args`: an unimplemented command may be
@@ -800,7 +803,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # first and rejected: CPython's own documentation flags it as unreliable when
         # combined with subparsers, and it reproducibly swallowed valid trailing flags
         # here too.
-        args, extras = parser.parse_known_args(args_list)
+        args, extras = parser.parse_known_args(parser_args)
     except SystemExit as exc:
         # argparse's own --help/-h and usage-error paths call parser.exit(); normalize
         # them to a plain return so `main` never raises, matching its `-> int` contract.
@@ -812,7 +815,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Unknown flags are tolerated only for commands whose real A1 parser is not in
     # this telemetry-focused build.  Silently discarding a misspelled observe or
     # version option would turn invalid operator input into a plausible result.
-    if extras and args.command not in _UNSUPPORTED_COMMANDS:
+    if extras and args.command is not None and args.command not in _UNSUPPORTED_COMMANDS:
         parser.print_usage(sys.stderr)
         print(f"aether: error: unrecognized arguments: {' '.join(extras)}", file=sys.stderr)
         return 2
@@ -830,10 +833,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.version:
             print(f"aether {product_version()}")
             return 0
-        if args.json:
-            # cli.md documents `--json` here as a launch *plan*; this build does not
-            # model that plan, so it stays visibly unsupported instead of guessing.
-            return _run_unsupported("aether", json_mode=True)
         return _run_launch(args_list)
 
     if args.command == "init":

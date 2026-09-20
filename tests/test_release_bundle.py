@@ -23,6 +23,7 @@ TOOL_PATH = ROOT / "scripts" / "release_bundle.py"
 WORKFLOW_PATH = ROOT / ".github" / "workflows" / "release.yml"
 AETHER_REMOTE = "https://github.com/DarkArty07/Aether-Agents.git"
 FORK_REMOTE = "https://github.com/DarkArty07/aether-hermes.git"
+FORK_COMMIT = "aed6591a69f453a1867b73628603e7b53ba40ffc"
 _ABSENT_COMMIT = "0" * 40
 
 
@@ -63,14 +64,32 @@ def _restore_product_module_cache() -> Iterator[None]:
 
 
 def _git(repo: Path, *arguments: str) -> str:
+    """Run one fixture Git command with no ambient repository binding inherited."""
+
     completed = subprocess.run(
         ("git", *arguments),
         cwd=repo,
         check=True,
         capture_output=True,
         text=True,
+        env={key: value for key, value in os.environ.items() if not key.startswith("GIT_")},
     )
     return completed.stdout
+
+
+def _this_checkout_git_entry() -> Path:
+    """This checkout's own ``.git`` entry, derived from the test file rather than the cwd."""
+
+    entry = ROOT / ".git"
+    assert entry.exists()
+    return entry
+
+
+def _this_checkout_object_directory() -> Path:
+    """The object store this checkout's Git commands resolve, linked worktree included."""
+
+    common = _git(ROOT, "rev-parse", "--path-format=absolute", "--git-common-dir").strip()
+    return Path(common) / "objects"
 
 
 def _repository(root: Path, *, remote: str, branch: str = "main") -> tuple[Path, str]:
@@ -124,8 +143,8 @@ def test_version_file_carries_the_objective_release_identity(tool: types.ModuleT
 
     package_version = (ROOT / "VERSION").read_text(encoding="ascii").strip()
     identity = tool.release_identity(package_version)
-    assert identity["package_version"] == "1.0.0rc3"
-    assert identity["tag"] == "v1.0.0-rc.3"
+    assert identity["package_version"] == "1.0.0rc4"
+    assert identity["tag"] == "v1.0.0-rc.4"
     assert identity["prerelease"] is True
 
 
@@ -473,6 +492,147 @@ def test_archive_is_deterministic_and_rejects_unsafe_members(
     with pytest.raises(tool.BundleError) as unsafe:
         tool._extract_trusted_archive(buffer.getvalue(), tmp_path / "unsafe")
     assert unsafe.value.code == "archive-unsafe"
+
+
+def test_archive_bytes_ignore_an_ambient_repository_binding(
+    tool: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A fork that lacks the pin cannot archive this checkout through ambient ``GIT_*``.
+
+    ``_isolated_environment`` inherits ``GIT_*`` from the process environment, so the
+    archive step has to delete those names rather than merely omit them from an overlay.
+    """
+
+    fork, _ = _repository(tmp_path / "fork", remote=FORK_REMOTE)
+    (fork / "pyproject.toml").write_text(
+        '[project]\nname = "hermes-agent"\nversion = "0.20.4"\nrequires-python = ">=3.11,<3.14"\n',
+        encoding="utf-8",
+    )
+    _git(fork, "add", "pyproject.toml")
+    _git(fork, "commit", "--quiet", "-m", "fork metadata")
+    fork_head = _git(fork, "rev-parse", "HEAD").strip()
+
+    monkeypatch.setenv("GIT_DIR", str(_this_checkout_git_entry()))
+
+    with pytest.raises(tool.BundleError) as refusal:
+        tool._git_archive_bytes(fork, FORK_COMMIT, "hermes-agent")
+    assert refusal.value.code == "archive-failed"
+
+    assert tool._git(["rev-parse", "HEAD"], fork).strip() == fork_head
+
+    monkeypatch.delenv("GIT_DIR")
+    monkeypatch.setenv("GIT_OBJECT_DIRECTORY", str(_this_checkout_object_directory()))
+    with pytest.raises(tool.BundleError) as object_refusal:
+        tool._git_archive_bytes(fork, FORK_COMMIT, "hermes-agent")
+    assert object_refusal.value.code == "archive-failed"
+
+    metadata = tool._read_project_metadata(fork, fork_head)
+    assert metadata["name"] == "hermes-agent"
+    assert metadata["version"] == "0.20.4"
+
+    data = tool._git_archive_bytes(fork, fork_head, "hermes-agent")
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
+        members = [member.name for member in archive.getmembers()]
+    assert "hermes-agent/README.md" in members
+    assert not any(name.startswith("hermes-agent/ui-tui") for name in members)
+
+
+# --------------------------------------------------------------- clean-install TUI stage
+
+
+def _write_fork_tree(root: Path, marker: str) -> None:
+    """Write a minimal maintained-fork-shaped tree whose ui-tui build emits ``marker``."""
+
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "package.json").write_text(
+        json.dumps({"name": "hermes-agent", "workspaces": ["ui-tui"]}) + "\n",
+        encoding="utf-8",
+    )
+    tui = root / "ui-tui"
+    tui.mkdir(parents=True, exist_ok=True)
+    marker_in_shell = marker.replace("\\", "\\\\").replace('"', '\\"')
+    (tui / "package.json").write_text(
+        json.dumps(
+            {
+                "name": "ui-tui",
+                "version": "1.0.0",
+                "scripts": {
+                    "build": (
+                        "node -e \"const fs=require('fs'); "
+                        "fs.mkdirSync('dist',{recursive:true}); "
+                        f"fs.writeFileSync('dist/entry.js','{marker_in_shell}\\n')\""
+                    )
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _fork_closure_archive(tmp_path: Path, marker: str) -> Path:
+    """Write the single-root maintained-fork archive shape ``clean_install`` extracts."""
+
+    tree = tmp_path / "archive-source" / "aether-hermes-source"
+    _write_fork_tree(tree, marker)
+    archive_path = tmp_path / "aether-hermes-source.tar.gz"
+    with tarfile.open(archive_path, mode="w:gz") as archive:
+        archive.add(tree, arcname=tree.name)
+    return archive_path
+
+
+def test_fork_closure_extraction_refuses_a_multi_root_archive(
+    tool: types.ModuleType, tmp_path: Path
+) -> None:
+    archive_path = tmp_path / "two-roots.tar.gz"
+    with tarfile.open(archive_path, mode="w:gz") as archive:
+        for name in ("first/README.md", "second/README.md"):
+            payload = b"portable\n"
+            info = tarfile.TarInfo(name)
+            info.size = len(payload)
+            archive.addfile(info, io.BytesIO(payload))
+    with pytest.raises(tool.BundleError) as layout:
+        tool.materialize_fork_closure(archive_path, tmp_path / "closure")
+    assert layout.value.code == "archive-layout"
+
+
+def test_clean_install_stages_tui_from_the_extracted_fork_closure(
+    tool: types.ModuleType, tmp_path: Path
+) -> None:
+    """The bundle TUI step builds the extracted exact-commit closure, not an enclosing repo."""
+
+    lifecycle = tool.load_product(ROOT)
+    enclosing = tmp_path / "enclosing-repository"
+    _write_fork_tree(enclosing, "ENCLOSING-REPOSITORY-ENTRY")
+    _git(enclosing, "init", "--quiet", "--initial-branch", "main")
+    _git(enclosing, "config", "user.email", "release-tool-test@example.invalid")
+    _git(enclosing, "config", "user.name", "Release Tool Test")
+    _git(enclosing, "add", ".")
+    _git(enclosing, "commit", "--quiet", "-m", "enclosing tree")
+    enclosing_commit = _git(enclosing, "rev-parse", "HEAD").strip()
+
+    archive_path = _fork_closure_archive(tmp_path, "BUNDLE-CLOSURE-ENTRY")
+    closure_root = tool.materialize_fork_closure(
+        archive_path, enclosing / "roots" / "hermes-source"
+    )
+    assert closure_root.is_dir()
+    assert not (closure_root / ".git").exists()
+
+    destination = tmp_path / "staged-tui"
+    receipt = tool.stage_fork_tui(
+        closure_root,
+        commit=enclosing_commit,
+        destination=destination,
+        lifecycle=lifecycle,
+    )
+
+    entry = destination / "dist" / "entry.js"
+    assert entry.read_text(encoding="utf-8") == "BUNDLE-CLOSURE-ENTRY\n"
+    assert receipt["source"] == "materialized-tree"
+    assert receipt["tui_sha256"] == _sha256(entry.read_bytes())
+    # The closure is read only: the build happens in the disposable copy.
+    assert not (closure_root / "node_modules").exists()
+    assert not (closure_root / "ui-tui" / "dist").exists()
 
 
 # ----------------------------------------------------------------------------- scans

@@ -115,18 +115,74 @@ def _sha256_file(path: Path) -> str:
     return hasher.hexdigest()
 
 
+#: Ambient Git environment that would silently re-bind a bundle step to a repository the
+#: caller never supplied.  ``_git_environment`` deletes these names from the isolated copy
+#: itself: an overlay that merely omits a key cannot remove it from the mapping it is
+#: merged into, so an inherited ``GIT_DIR`` would otherwise beat the supplied repository.
+_GIT_ENVIRONMENT_OVERRIDES = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_INDEX_FILE",
+    "GIT_CEILING_DIRECTORIES",
+)
+
+
 def _isolated_environment(extra: dict[str, str] | None = None) -> dict[str, str]:
-    """Drop ambient package-manager and interpreter policy from a child process."""
+    """Drop ambient package-manager, interpreter and repository policy from a child."""
 
     environment = {
         key: value
         for key, value in os.environ.items()
         if not key.startswith(("UV_", "PIP_", "PYTHON", "SOURCE_DATE_EPOCH"))
+        and key not in _GIT_ENVIRONMENT_OVERRIDES
     }
-    for name in ("VIRTUAL_ENV", "CONDA_PREFIX", "PYTHONPATH", "PYTHONHOME"):
+    for name in (
+        "VIRTUAL_ENV",
+        "CONDA_PREFIX",
+        "PYTHONPATH",
+        "PYTHONHOME",
+        *_GIT_ENVIRONMENT_OVERRIDES,
+    ):
         environment.pop(name, None)
     if extra:
         environment.update(extra)
+    return environment
+
+
+def _own_git_directory(repo: Path) -> Path | None:
+    """The supplied repository's own ``.git`` entry, never one discovered above it.
+
+    Only ``<repo>/.git`` counts.  Repository discovery upward is deliberately not used
+    here: it would let a supplied directory read whatever repository happens to enclose it.
+    """
+
+    dot_git = Path(repo) / ".git"
+    if dot_git.is_dir() or dot_git.is_file() or dot_git.is_symlink():
+        return dot_git
+    return None
+
+
+def _git_command(repo: Path, arguments: Sequence[str]) -> list[str]:
+    """Bind one Git command to the supplied repository's own ``.git`` entry."""
+
+    command = ["git", "-C", str(repo)]
+    dot_git = _own_git_directory(repo)
+    if dot_git is not None:
+        command.append(f"--git-dir={dot_git}")
+    return [*command, *arguments]
+
+
+def _git_environment(repo: Path) -> dict[str, str]:
+    """Environment for one supplied-repository Git call: no ambient or parent binding."""
+
+    environment = _isolated_environment()
+    if _own_git_directory(repo) is None:
+        # There is no repository of its own to bind to, so discovery is fenced at the
+        # supplied path: Git answers "not a repository" instead of walking up.
+        environment["GIT_CEILING_DIRECTORIES"] = str(Path(repo).resolve().parent)
     return environment
 
 
@@ -145,14 +201,14 @@ def _run(
 
 
 def _git(arguments: Sequence[str], cwd: Path) -> str:
-    completed = _run(["git", *arguments], cwd=cwd, env=_isolated_environment())
+    completed = _run(_git_command(cwd, arguments), cwd=cwd, env=_git_environment(cwd))
     if completed.returncode != 0:
         raise BundleError("git-failed", f"git {' '.join(arguments)} failed in {cwd}")
     return completed.stdout
 
 
 def _git_raw(arguments: Sequence[str], cwd: Path) -> subprocess.CompletedProcess[str]:
-    return _run(["git", *arguments], cwd=cwd, env=_isolated_environment())
+    return _run(_git_command(cwd, arguments), cwd=cwd, env=_git_environment(cwd))
 
 
 def _normalize_remote(url: str) -> str:
@@ -469,9 +525,9 @@ def materialize_commit(lifecycle: Any, repo: Path, commit: str, destination: Pat
 def _git_archive_bytes(repo: Path, commit: str, prefix: str) -> bytes:
     try:
         completed = subprocess.run(
-            ["git", "archive", "--format=tar.gz", f"--prefix={prefix}/", commit],
+            _git_command(repo, ["archive", "--format=tar.gz", f"--prefix={prefix}/", commit]),
             cwd=repo,
-            env=_isolated_environment(),
+            env=_git_environment(repo),
             check=False,
             capture_output=True,
         )
@@ -1076,7 +1132,6 @@ def _tui_checkout(
         contracts / "project.schema.json",
     )
     shutil.copy2(aether_checkout / "AGENTS.md", repo / "AGENTS.md")
-    shutil.copy2(aether_checkout / "scripts" / "aether_tui.py", repo / "scripts" / "aether_tui.py")
     shutil.copy2(aether_checkout / ".aether" / "project.toml", repo / ".aether" / "project.toml")
     sources = lifecycle.LifecycleManager._profile_sources("morfeo")
     for name, source in sources.items():
@@ -1093,6 +1148,39 @@ def _tui_checkout(
     )
     hermes.chmod(0o755)
     return repo, str(runtime_bin)
+
+
+def materialize_fork_closure(hermes_archive: Path, destination: Path) -> Path:
+    """Extract the maintained-fork archive into exactly one closure root."""
+
+    with tarfile.open(hermes_archive, mode="r:gz") as archive:
+        archive.extractall(destination, filter="data")
+    entries = sorted(destination.iterdir())
+    if len(entries) != 1 or not entries[0].is_dir():
+        raise BundleError("archive-layout", "maintained-fork archive must contain one root")
+    return entries[0]
+
+
+def stage_fork_tui(
+    closure_root: Path,
+    *,
+    commit: str,
+    destination: Path,
+    lifecycle: Any,
+) -> dict[str, Any]:
+    """Build the release-owned prebuilt TUI from the bundle's own fork closure.
+
+    The closure is the materialized exact-commit tree extracted from the bundle archive,
+    so it carries no repository of its own: the builder copies that tree into a disposable
+    workspace.  A checkout is never substituted here, and no repository discovered above
+    the closure may supply the bytes.
+    """
+
+    return lifecycle.build_tui_in_disposable_workspace(
+        fork_repo=closure_root,
+        commit=commit,
+        destination=destination,
+    )
 
 
 def clean_install(
@@ -1151,13 +1239,7 @@ def clean_install(
     record("manager-check", uv("pip", "check", "--python", str(manager_python)), "install-failed")
     record("runtime-venv", uv("venv", "--python", sys.executable, str(runtime)), "install-failed")
 
-    closure = roots / "hermes-source"
-    with tarfile.open(hermes_archive, mode="r:gz") as archive:
-        archive.extractall(closure, filter="data")
-    entries = sorted(closure.iterdir())
-    if len(entries) != 1 or not entries[0].is_dir():
-        raise BundleError("archive-layout", "maintained-fork archive must contain one root")
-    closure_root = entries[0]
+    closure_root = materialize_fork_closure(hermes_archive, roots / "hermes-source")
     requirements = roots / "hermes-requirements.txt"
     record(
         "hermes-export",
@@ -1209,6 +1291,14 @@ def clean_install(
     )
     record("runtime-check", uv("pip", "check", "--python", str(runtime_python)), "install-failed")
 
+    tui_dir = roots / "tui"
+    tui_receipt = stage_fork_tui(
+        closure_root,
+        commit=identity["hermes_commit"],
+        destination=tui_dir,
+        lifecycle=lifecycle,
+    )
+
     manager_root = roots / "manager-root"
     runtime_root = roots / "runtime-root"
     path = os.environ.get("PATH", "")
@@ -1216,7 +1306,11 @@ def clean_install(
         manager_root, {"PATH": f"{manager / 'bin'}{os.pathsep}{path}"}
     )
     runtime_environment = _disposable_environment(
-        runtime_root, {"PATH": f"{runtime / 'bin'}{os.pathsep}{path}"}
+        runtime_root,
+        {
+            "PATH": f"{runtime / 'bin'}{os.pathsep}{path}",
+            "HERMES_TUI_DIR": str(tui_dir),
+        },
     )
     aether = manager / "bin" / "aether"
     probes: list[dict[str, Any]] = [
@@ -1331,15 +1425,18 @@ def clean_install(
     )
     probes.append(
         probe(
-            "tui --check",
-            [sys.executable, str(tui_repo / "scripts" / "aether_tui.py"), "--check"],
+            "aether --project --json",
+            [str(aether), "--project", str(tui_repo), "--json"],
             root=tui_repo,
             environment=_disposable_environment(
-                roots / "tui-root", {"PATH": f"{runtime / 'bin'}{os.pathsep}{path}"}
+                roots / "tui-root",
+                {
+                    "PATH": f"{manager / 'bin'}{os.pathsep}{runtime / 'bin'}{os.pathsep}{path}",
+                    "HERMES_TUI_DIR": str(tui_dir),
+                },
             ),
             required=True,
-            expectation="exit-zero",
-            stdout_contains='"result": "ready"',
+            expectation="json-envelope",
         )
     )
     present_options = [
@@ -1377,8 +1474,16 @@ def clean_install(
             "manager": "<work>/install-roots/manager",
             "runtime": "<work>/install-roots/runtime",
             "hermes_source": "<work>/install-roots/hermes-source",
+            "tui": "<work>/install-roots/tui",
         },
         "install_steps": steps,
+        "tui_asset": {
+            "sha256": tui_receipt["tui_sha256"],
+            "entry_path": tui_receipt["entry_path"],
+            "source": tui_receipt["source"],
+            "node_version": tui_receipt["node_version"],
+            "npm_version": tui_receipt["npm_version"],
+        },
         "python_version": "%d.%d.%d" % sys.version_info[:3],
         "hermes_observed": hermes_observed,
         "probes": probes,
@@ -1425,7 +1530,9 @@ def _load_fork_metadata(
 
 def _read_project_metadata(repo: Path, commit: str) -> dict[str, str]:
     completed = _run(
-        ["git", "show", f"{commit}:pyproject.toml"], cwd=repo, env=_isolated_environment()
+        _git_command(repo, ["show", f"{commit}:pyproject.toml"]),
+        cwd=repo,
+        env=_git_environment(repo),
     )
     if completed.returncode != 0:
         raise BundleError("fork-metadata", "maintained fork has no pyproject.toml at that commit")
