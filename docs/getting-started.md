@@ -15,6 +15,8 @@ uv run --frozen aether observe --help
 
 `aether --version` and parser help do not import the managed Hermes runtime. `aether doctor --json` is also read-only, but it may report a non-zero integrity result when no active candidate release exists. That result is diagnostic evidence, not an instruction to install, authenticate, or activate anything.
 
+Top-level `aether [--project PATH] --json` emits a non-mutating launch plan from packaged manager code without importing Hermes or changing state; without `--json`, `aether` launches project-bound Morfeo into the active release-owned TUI.
+
 ## Initialize an existing repository
 
 `aether init` currently requires an **existing Git repository root**. It does not initialize Git in an empty directory, create a remote repository, create a native Hermes Project, or select a Project by name or approximate path.
