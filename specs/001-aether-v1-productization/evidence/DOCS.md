@@ -93,6 +93,7 @@ All commands executed in the worktree virtual environment (`uv run --frozen ...`
 - **No public rc5 tag/release link**: Grep for `releases/tag/v1.0.0-rc.5` confirms only negative assertions in `tests/test_public_artifacts.py`.
 - **No Aether unit-byte ownership**: All references to Aether writing or byte-comparing `hermes-gateway-morfeo.service` removed from canonical documentation and capability notes.
 - **No stale rc4 identity outside history**: `VERSION`, `README.md`, `docs/index.md`, `AGENTS.md`, `tests/fixtures/observation/complete-summary.json`, `tests/test_public_artifacts.py`, and `tests/test_release_bundle.py` all reflect `1.0.0rc5` / `1.0.0-rc.5`. rc4 mentions outside historical records exist only in `CHANGELOG.md` history and explicit backward-compatibility tests.
+- **Truthful status documentation (Review Round 1 correction)**: `docs/index.md` lines 10–16 were reframed as an explicitly scoped, past-tense historical record of the rc3-era qualification (the #417 trace timings, rollback to rc2, and 22/22 callbacks) rather than a present-tense claim of active installation state, avoiding contradiction with live rc4 prestate or unreached rc5 activation.
 - **Preserved surfaces**: `src/aether_agents/**` (including `lifecycle.py` and `launcher.py`), `tests/test_lifecycle_projections.py`, `tests/test_tui_projections.py`, `tests/test_aether_tui_launcher.py`, and the canonical contract were untouched by this unit.
 
 ---
