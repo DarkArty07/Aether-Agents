@@ -68,6 +68,17 @@ def _allow_unit_manager_authority(
     )
 
 
+def _bind_disposable_project(store: ReleaseStore, tmp_path: Path) -> Path:
+    """Exact project binding for branded rc4 one-click projections in disposable tests."""
+
+    project_root = tmp_path / "project"
+    marker = project_root / ".aether" / "project.toml"
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(project_marker(PROJECT_ID), encoding="utf-8")
+    ProjectRegistry(store.state_root).register(PROJECT_ID, project_root, "lifecycle-rc4")
+    return project_root
+
+
 def test_cli_lifecycle_separates_immutable_data_from_mutable_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1933,7 +1944,12 @@ def test_prepare_release_installs_one_wheel_in_manager_and_exact_runtime(
         lambda source, _commit, destination: materialize(source, fixture_commit, destination),
     )
     store = ReleaseStore(tmp_path / "state" / "aether")
-    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    project_root = _bind_disposable_project(store, tmp_path)
+    manager = LifecycleManager(
+        store=store,
+        python_executable=Path(sys.executable),
+        project_root=project_root,
+    )
     prepared = manager.prepare_release(
         wheel=wheel,
         hermes_checkout=checkout,
@@ -2128,6 +2144,7 @@ def test_prepare_release_installs_one_wheel_in_manager_and_exact_runtime(
     doctor_manager = LifecycleManager(
         store=store,
         python_executable=manager._environment_python(release / "manager"),
+        project_root=project_root,
     )
     synthetic_runtime = doctor_manager.doctor()
     assert synthetic_runtime.ready is False
