@@ -37,7 +37,7 @@ from aether_agents.paths import atomic_private_write, ensure_private_dir
 
 from .common import KnowledgeError
 from .context import KnowledgeContext
-from .graphify import GraphifyBackend
+from .graphify import GraphifyBackend, run_bounded_graphify
 
 logger = logging.getLogger(__name__)
 
@@ -1089,21 +1089,38 @@ def _fetch_all_prepared_chunks(
     eligible_files: list[str],
     *,
     page_size: int = 25,
+    deadline: float | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch prepared semantic extraction chunks across bounded pages."""
     all_chunks: list[dict[str, Any]] = []
     offset = 0
     while True:
-        prep_res = backend.run(
-            "semantic_prepare",
-            source_root=source_root,
-            graph_path=graph_path,
-            arguments={
-                "files": eligible_files,
-                "offset": offset,
-                "limit": page_size,
-            },
-        )
+        if deadline is not None:
+            prep_res = run_bounded_graphify(
+                backend,
+                "semantic_prepare",
+                deadline=deadline,
+                cancel_event=cancel_event,
+                source_root=source_root,
+                graph_path=graph_path,
+                arguments={
+                    "files": eligible_files,
+                    "offset": offset,
+                    "limit": page_size,
+                },
+            )
+        else:
+            prep_res = backend.run(
+                "semantic_prepare",
+                source_root=source_root,
+                graph_path=graph_path,
+                arguments={
+                    "files": eligible_files,
+                    "offset": offset,
+                    "limit": page_size,
+                },
+            )
         chunks = prep_res.get("chunks", [])
         if not chunks:
             break
@@ -1126,6 +1143,9 @@ def compute_semantic_fingerprint(
     graph_path: Path,
     inputs: dict[str, str],
     configuration: dict[str, Any],
+    *,
+    deadline: float | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> str | None:
     """Deterministic overall fingerprint for configured semantic extraction without calling LLM."""
     aux_task = resolve_auxiliary_task(configuration)
@@ -1173,7 +1193,15 @@ def compute_semantic_fingerprint(
             source_root=source_root,
             graph_path=graph_path,
             eligible_files=eligible_files,
+            deadline=deadline,
+            cancel_event=cancel_event,
         )
+    except KnowledgeError as exc:
+        # A cancelled operation or a Graphify timeout must not be reported as "no fingerprint":
+        # the caller would rebuild and publish a candidate from a rejected result.
+        if exc.code in ("OPERATION_CANCELLED", "TIMEOUT"):
+            raise
+        return None
     except Exception:
         return None
 
@@ -1341,6 +1369,7 @@ def run_semantic_extraction(
     configuration: dict[str, Any],
     *,
     deadline_seconds: float | None = DEFAULT_TOTAL_BUDGET_SECONDS,
+    operation_deadline: float | None = None,
     cancel_event: threading.Event | None = None,
     structured_call_enabled: bool = False,
     legacy_cache_revalidator: Callable[[dict[str, Any]], bool] | None = None,
@@ -1356,8 +1385,22 @@ def run_semantic_extraction(
     the single `semantic_compose` call.
     """
     started = _now()
-    budget = resolve_total_budget(configuration, deadline_seconds)
-    deadline = started + budget
+    cfg_deadline = configuration.get("deadline_seconds")
+    op_budget = 300.0
+    if cfg_deadline is not None:
+        try:
+            op_budget = min(op_budget, float(cfg_deadline))
+        except (TypeError, ValueError):
+            pass
+    if operation_deadline is not None:
+        backend_deadline = operation_deadline
+    else:
+        backend_deadline = started + op_budget
+
+    semantic_budget = resolve_total_budget(configuration, deadline_seconds)
+    deadline = min(backend_deadline, started + semantic_budget)
+    operation_budget_active = operation_deadline is not None and deadline >= backend_deadline
+    budget = max(0.0, deadline - started)
     reserve = finalization_reserve(budget)
 
     shared_cancel = cancel_event if cancel_event is not None else threading.Event()
@@ -1405,14 +1448,17 @@ def run_semantic_extraction(
             "failed_paths": [],
             "validated_chunk_ids": [],
             "observed_usage": _usage_block(usage, started=started, prepare_calls=0, chunk_total=0),
-            "pipeline": _pipeline_block(
-                plan_id=plan_id,
-                plan_reused=plan_reused,
-                plan_persisted=plan_persisted,
-                budget_seconds=budget,
-                structural_base=base,
-                deadline_exhausted=deadline_exhausted,
-            ),
+            "pipeline": {
+                **_pipeline_block(
+                    plan_id=plan_id,
+                    plan_reused=plan_reused,
+                    plan_persisted=plan_persisted,
+                    budget_seconds=budget,
+                    structural_base=base,
+                    deadline_exhausted=deadline_exhausted,
+                ),
+                "operation_wide": operation_budget_active,
+            },
             "compose": _compose_block(),
             "structural_digest": None,
             "structural_preserved": None,
@@ -1533,8 +1579,32 @@ def run_semantic_extraction(
                 source_root=source_root,
                 graph_path=graph_path,
                 eligible_files=eligible_files,
+                deadline=backend_deadline,
+                cancel_event=shared_cancel,
             )
             prepare_calls += 1
+        except KnowledgeError as exc:
+            if exc.code == "OPERATION_CANCELLED":
+                raise
+            if getattr(exc, "operation_deadline_timeout", False) or _budget_expired():
+                deadline_exhausted = True
+                _budget_expired()
+                usage.bump(category="deadline", reason="deadline")
+                return _early_receipt(
+                    "pending",
+                    pending_paths=sorted(eligible_files),
+                    fingerprint=None,
+                    plan_id=plan_id,
+                    base=structural_base,
+                )
+            logger.warning("Semantic preparation failed (%s).", _failure_label(exc))
+            return _early_receipt(
+                "unavailable",
+                pending_paths=sorted(eligible_files),
+                fingerprint=None,
+                plan_id=plan_id,
+                base=structural_base,
+            )
         except Exception as exc:
             logger.warning("Semantic preparation failed (%s).", _failure_label(exc))
             return _early_receipt(
@@ -1608,8 +1678,21 @@ def run_semantic_extraction(
                 source_root=source_root,
                 graph_path=graph_path,
                 eligible_files=eligible_files,
+                deadline=backend_deadline,
+                cancel_event=shared_cancel,
             )
             prepare_calls += 1
+        except KnowledgeError as exc:
+            if exc.code == "OPERATION_CANCELLED":
+                raise
+            if getattr(exc, "operation_deadline_timeout", False) or _budget_expired():
+                deadline_exhausted = True
+                _budget_expired()
+                usage.bump(category="deadline", reason="deadline")
+            fetched = []
+            for record in needed_records:
+                usage.bump(category="incomplete", reason="prepare_failed")
+                unscheduled.append(record)
         except Exception as exc:
             logger.warning("Semantic prompt refetch failed (%s).", _failure_label(exc))
             fetched = []
@@ -1650,6 +1733,7 @@ def run_semantic_extraction(
     overall_fp = _overall_fingerprint(records)
 
     def _process_chunk(record: dict[str, Any], chunk: dict[str, Any]) -> None:
+        nonlocal deadline_exhausted
         chunk_id = int(record["chunk_id"])
         fingerprint = str(record["fingerprint"])
         if _cancel_requested():
@@ -1811,8 +1895,11 @@ def run_semantic_extraction(
             return
 
         try:
-            validation = backend.run(
+            validation = run_bounded_graphify(
+                backend,
                 "semantic_validate",
+                deadline=backend_deadline,
+                cancel_event=shared_cancel,
                 source_root=source_root,
                 graph_path=graph_path,
                 arguments={
@@ -1824,7 +1911,15 @@ def run_semantic_extraction(
             fragment = validation.get("fragment", {}) if isinstance(validation, dict) else {}
             if not isinstance(fragment, dict) or not fragment:
                 raise KnowledgeError("INDEX_CORRUPT", "Semantic validation returned no fragment.")
-        except Exception as exc:
+        except KnowledgeError as exc:
+            if exc.code == "OPERATION_CANCELLED":
+                _mark(chunk_id, pending=True, cancelled=True)
+                return
+            if getattr(exc, "operation_deadline_timeout", False) or _budget_expired():
+                deadline_exhausted = True
+                _budget_expired(abort_in_flight=True)
+                _mark(chunk_id, pending=True, deferred=True, category="deadline", reason="deadline")
+                return
             logger.warning(
                 "Chunk %d failed fragment validation (%s).", chunk_id, _failure_label(exc)
             )
@@ -2028,8 +2123,11 @@ def run_semantic_extraction(
     elif accepted:
         fragments = [accepted[chunk_id] for chunk_id in sorted(accepted)]
         try:
-            raw_receipt = backend.run(
+            raw_receipt = run_bounded_graphify(
+                backend,
                 "semantic_compose",
+                deadline=backend_deadline,
+                cancel_event=shared_cancel,
                 source_root=source_root,
                 graph_path=graph_path,
                 arguments={
@@ -2048,6 +2146,25 @@ def run_semantic_extraction(
                     plan_store.save(plan)
             else:
                 usage.bump(category="apply", reason="structural_not_preserved")
+                for chunk_id in accepted:
+                    _mark(chunk_id, failed=True)
+        except KnowledgeError as exc:
+            if exc.code == "OPERATION_CANCELLED":
+                raise
+            if getattr(exc, "operation_deadline_timeout", False) or _budget_expired():
+                deadline_exhausted = True
+                _budget_expired(abort_in_flight=True)
+                for chunk_id in accepted:
+                    _mark(
+                        chunk_id,
+                        pending=True,
+                        deferred=True,
+                        category="deadline",
+                        reason="deadline",
+                    )
+            else:
+                logger.warning("Semantic composition failed (%s).", _failure_label(exc))
+                usage.bump(category="apply", reason="compose_error")
                 for chunk_id in accepted:
                     _mark(chunk_id, failed=True)
         except Exception as exc:
@@ -2127,14 +2244,17 @@ def run_semantic_extraction(
             deferred=len(deferred_chunks),
             cancelled=len(cancelled_chunks),
         ),
-        "pipeline": _pipeline_block(
-            plan_id=plan_id,
-            plan_reused=plan_reused,
-            plan_persisted=plan_persisted,
-            budget_seconds=budget,
-            structural_base=structural_base,
-            deadline_exhausted=deadline_exhausted,
-        ),
+        "pipeline": {
+            **_pipeline_block(
+                plan_id=plan_id,
+                plan_reused=plan_reused,
+                plan_persisted=plan_persisted,
+                budget_seconds=budget,
+                structural_base=structural_base,
+                deadline_exhausted=deadline_exhausted,
+            ),
+            "operation_wide": operation_budget_active,
+        },
         "compose": compose,
         "structural_digest": compose.get("structural_digest"),
         "structural_preserved": compose.get("structural_preserved"),
