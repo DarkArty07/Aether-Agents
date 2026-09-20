@@ -105,9 +105,9 @@ same routine closeout only for an authorized direct route.
 
 Active release installation (`aether update`) provisions release-owned runtime projections:
 
-1. **Release-owned TUI asset**: The prebuilt TUI (`ui-tui`) is built once from the exact maintained-fork commit in a disposable workspace, hash-bound outside `hermes-source` under `<release>/tui/`, and exposed at `runtime/current/tui`. `HERMES_TUI_DIR` is set to this release-owned directory across launcher, service, doctor, update, and rollback. Runtime launch never runs `npm` or builds assets in place.
+1. **Release-owned TUI asset**: The prebuilt TUI (`ui-tui`) is built once from the exact maintained-fork commit in a disposable workspace, hash-bound outside `hermes-source` under `<release>/tui/`, and exposed at `runtime/current/tui`. `HERMES_TUI_DIR` is set to this release-owned directory across launcher, update, and rollback. Runtime launch never runs `npm` or builds assets in place. Gateway service operation does not depend on `HERMES_TUI_DIR`.
 2. **Branded desktop and terminal projections**: Candidate activation installs branded `Aether` (fresh session) and `Continue Aether` (`--resume latest`) actions. Their `Exec` lines invoke the stable `runtime/current/venv/bin/aether` selector with an explicit `--project <path>` binding, never guessing cwd or targeting version-specific Hermes paths. On WSL hosts, Windows Terminal fragments project the same actions into the host terminal.
-3. **Fail-closed coherence**: `aether doctor` verifies byte-level integrity and agreement across the active-release record, `runtime/current`, the packaged launcher, desktop entries, and service projections, failing closed if any asset is missing, unbound, or altered.
+3. **Hermes-owned gateway service and semantic doctor**: The gateway service (`hermes-gateway-morfeo.service`) is owned and materialized by Hermes Agent via the selected runtime's Hermes CLI (`hermes --profile morfeo gateway install`). Aether neither writes nor byte-compares the service unit. `aether doctor` semantically verifies that the service selects the active `runtime/current` Python, Morfeo profile and home, and active virtualenv, while checking byte-level integrity across the active-release record, `runtime/current`, the packaged launcher, and desktop entries.
 
 ## Failure evidence and recovery boundaries
 

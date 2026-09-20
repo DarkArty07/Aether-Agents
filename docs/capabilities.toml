@@ -22,8 +22,8 @@ surfaces = ["cli.command.aether.doctor", "cli.option.aether.doctor.--json", "cli
 documents = ["docs/reference/cli.md", "docs/reference/limitations-and-troubleshooting.md"]
 specifications = ["specs/001-aether-v1-productization/contracts/cli.md", "specs/r9-state-and-recovery/spec.md"]
 implementation = ["src/aether_agents/cli.py", "src/aether_agents/lifecycle.py"]
-verification = ["tests/test_observation_lifecycle.py"]
-notes = "A clean environment with no active Aether release truthfully reports an integrity error; project-specific diagnostics remain unfinished. A mismatch between the authoritative active-release record, `runtime/current`, the launcher, the Desktop entry and the Aether-owned service projection is reported as an actionable fail-closed diagnostic rather than a silent degradation."
+verification = ["tests/test_observation_lifecycle.py", "tests/test_hermes_gateway_service.py"]
+notes = "A clean environment with no active Aether release truthfully reports an integrity error; project-specific diagnostics remain unfinished. The doctor semantically verifies that the Hermes-owned gateway service selects the active runtime/current Python, Morfeo profile and home, and active virtualenv, without byte comparison or HERMES_TUI_DIR coupling. Mismatches between the authoritative active-release record, `runtime/current`, launcher, Desktop entry, or gateway service are reported as actionable fail-closed diagnostics."
 
 [[capabilities]]
 id = "cli.init"
@@ -78,7 +78,7 @@ documents = ["docs/reference/cli.md", "docs/reference/limitations-and-troublesho
 specifications = ["specs/001-aether-v1-productization/contracts/cli.md", "specs/r9-state-and-recovery/spec.md"]
 implementation = ["src/aether_agents/cli.py"]
 verification = ["tests/test_observation_lifecycle.py"]
-notes = "No Aether-managed user service is activated or controlled by this build."
+notes = "No Aether-managed user service is activated or controlled by this build. The gateway service is owned and materialized directly by Hermes Agent, not by Aether service lifecycle commands."
 
 [[capabilities]]
 id = "cli.setup"

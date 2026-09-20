@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.0.0rc5 — release candidate (pre-stable, local-only activation candidate)
+
+The release identity is package version `1.0.0rc5`, display version `1.0.0-rc.5`, annotated tag `v1.0.0-rc.5`
+(`release_impact=patch`, `release_action=prepare`, `release_channel=prerelease`);
+`VERSION` remains the single product-version source.
+
+- This candidate is local-only: one local annotated tag `v1.0.0-rc.5` is prepared locally on
+  accepted `main` and is never pushed, published, or released to GitHub in this objective.
+- Predecessors: rc1–rc4 remain immutable history; the local rc.2 and rc.3 candidate tags and activation
+  history remain immutable non-accepting history; `1.0.0rc1` / `v1.0.0-rc.1` remains published, byte-immutable
+  and rejected, and must not be activated; rc4's rejected doctor oracle is not repaired and rc4 is not
+  reactivated.
+- Hermes-owned gateway service boundary: Aether no longer writes or byte-owns
+  `hermes-gateway-morfeo.service`, and does not include its exact bytes in projection digests. Fresh setup,
+  update, rollback, and forward reactivation invoke the selected release's Hermes CLI
+  (`hermes --profile morfeo gateway install --force --no-start-now --start-on-login`) to create or refresh the
+  unit before restarting it. Normal uninstall requests removal through Hermes.
+- Semantic doctor: `aether doctor` validates the service exists as a regular user unit and semantically selects
+  the active `runtime/current` Python, Morfeo profile and home, and active virtualenv, without requiring or
+  rejecting `HERMES_TUI_DIR` or comparing incidental Hermes-owned unit bytes.
+- Preserved launcher, Desktop, and WSL release-TUI delivery: the packaged `aether` launcher continues to
+  export `HERMES_TUI_DIR=<runtime/current>/tui` to the launched Hermes process, and Desktop and WSL actions
+  keep targeting the stable `runtime/current/venv/bin/aether` entry point with the exact initialized project
+  root and hash-bound release TUI asset. Gateway service operation does not depend on `HERMES_TUI_DIR`.
+- Rollback qualification: explicit rollback targets restored coherent `1.0.0rc3` rather than known-defective
+  `1.0.0rc4`, followed by forward reactivation of `1.0.0rc5`.
+- Pinned maintained-fork runtime source unchanged: `DarkArty07/aether-hermes` `aether-main`
+  revision `aed6591a69f453a1867b73628603e7b53ba40ffc` (merge of `#450` and `#461`).
+- Reconciled root `AGENTS.md` and release workflow authority comments with the current
+  Objective Contract `oc_a7a3cff05e82c148@v1` (reconciling issues #487, #480, #481, #482, and #485).
+- Registered tracked contract file `.aether/objective-contracts/oc_a7a3cff05e82c148/v1.md` and
+  focused test suite `tests/test_hermes_gateway_service.py` in `.github/workflows/policy.yml`.
+- This is a pre-stable release candidate. It is not stable `1.0.0`, no PyPI or other
+  package-index publication occurs, WSL2 (and any macOS/Windows lane) is unverified and
+  recorded as such, and issue #261 remains open with the deferred stable, PyPI/OIDC and
+  WSL2 obligations explicit. Gate measurements, local activation, live canaries, and issue closeout
+  belong to the same objective's later units; this entry records the release identity, status,
+  guidance, capabilities, and oracle reconciliation performed here.
+
 ## 1.0.0rc4 — release candidate (pre-stable, local-only activation candidate)
 
 The release identity is package version `1.0.0rc4`, annotated tag `v1.0.0-rc.4`

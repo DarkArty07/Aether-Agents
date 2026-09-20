@@ -29,6 +29,7 @@ ACCEPTED_PACKAGE_IDENTITIES = (
     "1.0.0rc2",
     "1.0.0rc3",
     "1.0.0rc4",
+    "1.0.0rc5",
     "2.30.4",
     "1.0.0.dev3",
 )
@@ -144,20 +145,20 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     assert "sole current implementation-status and traceability registry" in readme
     assert "documented transitional downstream" in readme
     # The portal must state the current release identity and the disposition of the
-    # predecessor candidates. It replaces the rc.3 assertions with the
-    # truthful local-only rc.4 identity and a truthfulness guard (no published rc.4 link),
+    # predecessor candidates. It replaces the rc.4 assertions with the
+    # truthful local-only rc.5 identity and a truthfulness guard (no published rc.5 link),
     # because the status has to stay true of the artifact this README is embedded into
     # (the wheel's `METADATA` long description) and must not carry a time-bound promise.
-    assert "releases/tag/v1.0.0-rc.4" not in readme
-    assert "package version `1.0.0rc4`" in readme
-    assert "annotated tag `v1.0.0-rc.4`" in readme
+    assert "releases/tag/v1.0.0-rc.5" not in readme
+    assert "package version `1.0.0rc5`" in readme
+    assert "annotated tag `v1.0.0-rc.5`" in readme
     assert "local-only candidate that is not pushed and not published" in readme
-    assert "local rc.2 and rc.3 tags and activation history remain immutable" in readme
+    assert "local rc.2, rc.3 and rc.4 tags and activation history remain immutable" in readme
     assert "releases/tag/v1.0.0-rc.1" in readme
     assert "remains published and byte-immutable but rejected, and must not be activated" in readme
     status = [line for line in readme.splitlines() if line.startswith("**Status:**")]
     assert len(status) == 1, f"expected exactly one status paragraph, found {len(status)}"
-    assert "releases/tag/v1.0.0-rc.4" not in status[0]
+    assert "releases/tag/v1.0.0-rc.5" not in status[0]
     assert "release_impact = patch" in status[0]
     assert "release_action = prepare" in status[0]
     assert "release_channel = prerelease" in status[0]
