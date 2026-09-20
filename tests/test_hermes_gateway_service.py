@@ -1,13 +1,14 @@
 """Comprehensive regressions for Hermes-owned gateway service boundary (rc5).
 
 Covers:
-- AC-1: Ownership boundary (no service bytes in ProjectionSpec/digests for rc5, no HERMES_TUI_DIR required).
-- AC-2: Hermes materialization seam (exact CLI invocation, isolated env/cwd, no rewrite loop).
+- AC-1: Ownership boundary (no service bytes in ProjectionSpec/digests for rc5+, no HERMES_TUI_DIR required).
+- AC-2: Hermes materialization seam (exact CLI invocation, isolated env/cwd, no rewrite loop, repeated refresh).
 - AC-3: Semantic doctor (regular file, exact ExecStart, WorkingDirectory, HERMES_HOME, VIRTUAL_ENV,
         no duplicate/conflicting selectors, incidental tolerance, attributed invalid classes, service probe).
 - AC-4: Transition atomicity and recovery (refresh failure restore, restart failure restore, 0 pending,
         uninstall via Hermes CLI, rc4->rc5 update, rc3 rollback, forward rc5 reactivation).
 - Exact Hermes generator integration lane using authentic generator functions.
+- Strict isolation guarantees: autouse live-unit guard, unconditional HOME redirection.
 """
 
 from __future__ import annotations
@@ -38,7 +39,53 @@ from aether_agents.lifecycle import (
     ReleaseStore,
     ServiceController,
     _atomic_json,
+    _is_branded_version,
+    _is_hermes_owned_gateway_version,
 )
+
+_OPERATOR_HOME = Path(os.path.expanduser("~")).resolve()
+_OPERATOR_UNIT_PATH = _OPERATOR_HOME / ".config" / "systemd" / "user" / AETHER_GATEWAY_UNIT
+
+
+@pytest.fixture(autouse=True)
+def _guard_operator_live_unit() -> Any:
+    """Fail loudly if any test mutates or writes to the operator's live systemd unit."""
+    pre_exists = _OPERATOR_UNIT_PATH.exists()
+    pre_stat = _OPERATOR_UNIT_PATH.stat() if pre_exists else None
+    pre_bytes = (
+        _OPERATOR_UNIT_PATH.read_bytes()
+        if pre_exists and not _OPERATOR_UNIT_PATH.is_symlink() and _OPERATOR_UNIT_PATH.is_file()
+        else None
+    )
+    pre_sha = hashlib.sha256(pre_bytes).hexdigest() if pre_bytes is not None else None
+
+    yield
+
+    post_exists = _OPERATOR_UNIT_PATH.exists()
+    assert post_exists == pre_exists, (
+        f"CRITICAL: Operator live unit existence changed during test! "
+        f"Before: {pre_exists}, After: {post_exists}"
+    )
+    if pre_exists and pre_stat is not None:
+        post_stat = _OPERATOR_UNIT_PATH.stat()
+        post_bytes = (
+            _OPERATOR_UNIT_PATH.read_bytes()
+            if not _OPERATOR_UNIT_PATH.is_symlink() and _OPERATOR_UNIT_PATH.is_file()
+            else None
+        )
+        post_sha = hashlib.sha256(post_bytes).hexdigest() if post_bytes is not None else None
+        assert post_sha == pre_sha, (
+            f"CRITICAL: Operator live unit was modified during test!\n"
+            f"Path: {_OPERATOR_UNIT_PATH}\n"
+            f"Pre SHA: {pre_sha}\n"
+            f"Post SHA: {post_sha}"
+        )
+        assert post_stat.st_mtime == pre_stat.st_mtime, (
+            f"CRITICAL: Operator live unit mtime changed during test!\n"
+            f"Path: {_OPERATOR_UNIT_PATH}\n"
+            f"Pre mtime: {pre_stat.st_mtime}\n"
+            f"Post mtime: {post_stat.st_mtime}"
+        )
 
 
 class RecordingServiceController(ServiceController):
@@ -62,14 +109,24 @@ class RecordingServiceController(ServiceController):
 
 def _setup_isolated_manager(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     *,
     controller: ServiceController | None = None,
     hermes_runner: Any = None,
-    monkeypatch: pytest.MonkeyPatch | None = None,
 ) -> tuple[LifecycleManager, Path]:
-    if monkeypatch is not None:
-        monkeypatch.setenv("HOME", str(tmp_path / "home"))
-        (tmp_path / "home" / ".config" / "systemd" / "user").mkdir(parents=True, exist_ok=True)
+    isolated_home = (tmp_path / "home").resolve()
+    isolated_config = isolated_home / ".config"
+    isolated_systemd = isolated_config / "systemd" / "user"
+    isolated_systemd.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setenv("HOME", str(isolated_home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(isolated_config))
+    monkeypatch.setenv("XDG_DATA_HOME", str((tmp_path / "data").resolve()))
+    monkeypatch.setenv("XDG_STATE_HOME", str((tmp_path / "state").resolve()))
+
+    # Verify resolution of home does not touch operator's home
+    assert Path.home().resolve() == isolated_home
+
     project_root = tmp_path / "project"
     project_root.mkdir(parents=True, exist_ok=True)
     marker_dir = project_root / ".aether"
@@ -86,7 +143,15 @@ def _setup_isolated_manager(
     registry.register("test-proj", project_root, name="test-proj")
 
     # Confine projections to isolated tmp_path
-    projections = ProjectionRoots.disposable(tmp_path / "projections")
+    projections = ProjectionRoots(
+        launcher_dir=tmp_path / "projections" / "bin",
+        desktop_dir=tmp_path / "projections" / "applications",
+        service_dir=isolated_systemd,
+        wsl_shortcuts_dir=tmp_path / "projections" / "windows-terminal",
+    )
+    assert tmp_path in projections.service_dir.parents
+    assert projections.service_dir != _OPERATOR_UNIT_PATH.parent
+
     store._ensure_owned_root()
     manager = LifecycleManager(
         store=store,
@@ -100,7 +165,6 @@ def _setup_isolated_manager(
 
 
 def _aether_identity(version: str) -> dict[str, Any]:
-    # e.g. 1.0.0rc5 -> v1.0.0-rc.5, 1.0.0 -> v1.0.0
     tag_suffix = ""
     if "rc" in version:
         parts = version.split("rc")
@@ -319,9 +383,11 @@ WantedBy=default.target
 # =========================================================================
 
 
-def test_ac1_ownership_projection_spec_and_digests_rc5(tmp_path: Path) -> None:
+def test_ac1_ownership_projection_spec_and_digests_rc5(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """rc5-and-newer releases omit service_bytes and service digest in ProjectionSpec."""
-    manager, project_root = _setup_isolated_manager(tmp_path)
+    manager, project_root = _setup_isolated_manager(tmp_path, monkeypatch)
     rc5_record = _make_release(manager, "1.0.0rc5")
     spec_rc5 = manager.projection_spec(rc5_record)
 
@@ -356,6 +422,39 @@ def test_ac1_ownership_projection_spec_and_digests_rc5(tmp_path: Path) -> None:
     assert b"HERMES_TUI_DIR" not in spec_rc3.service_bytes
 
 
+def test_ac1_hermes_owned_version_boundary_ordering(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Boundary test asserting rc5-and-newer includes stable 1.0.0 and subsequent releases."""
+    # Historical pre-rc5 versions: Aether owns the service unit
+    for ver in ("1.0.0rc1", "1.0.0rc2", "1.0.0rc3", "1.0.0rc4", "1.0.0-rc.4", "0.9.0"):
+        assert _is_hermes_owned_gateway_version(ver) is False, f"Expected False for {ver}"
+
+    # rc5 and subsequent rc candidates
+    for ver in ("1.0.0rc5", "1.0.0-rc.5", "1.0.0rc6", "1.0.0-rc.6"):
+        assert _is_hermes_owned_gateway_version(ver) is True, f"Expected True for {ver}"
+
+    # Stable 1.0.0 and subsequent releases must remain Hermes-owned
+    for ver in ("1.0.0", "1.0.1", "1.1.0", "2.0.0"):
+        assert _is_hermes_owned_gateway_version(ver) is True, f"Expected True for {ver}"
+
+    # Verify branded versions
+    for ver in ("1.0.0rc1", "1.0.0rc2", "1.0.0rc3", "0.9.0", "1.0.0"):
+        assert _is_branded_version(ver) is False, f"Expected False for {ver}"
+    for ver in ("1.0.0rc4", "1.0.0-rc.4", "1.0.0rc5", "1.0.0-rc.5", "1.0.0rc6"):
+        assert _is_branded_version(ver) is True, f"Expected True for {ver}"
+
+    # End-to-end ProjectionSpec check for stable 1.0.0
+    manager, project_root = _setup_isolated_manager(tmp_path, monkeypatch)
+    record_1_0_0 = _make_release(manager, "1.0.0")
+    spec_1_0_0 = manager.projection_spec(record_1_0_0)
+    assert spec_1_0_0.service_bytes == b""
+    digests_1_0_0 = spec_1_0_0.digests()
+    assert "service" not in digests_1_0_0
+    assert "launcher" in digests_1_0_0
+    assert "desktop" in digests_1_0_0
+
+
 # =========================================================================
 # AC-2: Hermes materialization seam
 # =========================================================================
@@ -363,6 +462,7 @@ def test_ac1_ownership_projection_spec_and_digests_rc5(tmp_path: Path) -> None:
 
 def test_ac2_hermes_materialization_seam_invoked_on_setup_and_transition(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Projecting an rc5 release materializes the unit via the exact Hermes CLI command."""
     commands_run: list[tuple[list[str], dict[str, str], Path]] = []
@@ -382,6 +482,8 @@ def test_ac2_hermes_materialization_seam_invoked_on_setup_and_transition(
             / "user"
             / AETHER_GATEWAY_UNIT
         )
+        assert str(unit_dest).startswith(str(tmp_path)), f"Leaked unit destination: {unit_dest}"
+        assert unit_dest != _OPERATOR_UNIT_PATH, "Must not write operator live unit!"
         unit_dest.parent.mkdir(parents=True, exist_ok=True)
         unit_dest.write_bytes(unit_data)
         return subprocess.CompletedProcess(cmd, 0, "Installed service", "")
@@ -389,6 +491,7 @@ def test_ac2_hermes_materialization_seam_invoked_on_setup_and_transition(
     controller = RecordingServiceController()
     manager, _ = _setup_isolated_manager(
         tmp_path,
+        monkeypatch,
         controller=controller,
         hermes_runner=mock_runner,
     )
@@ -420,9 +523,60 @@ def test_ac2_hermes_materialization_seam_invoked_on_setup_and_transition(
 
     # Verify unit is present and projection_status is clean
     spec = manager.projection_spec(rc5_record)
+    assert tmp_path in spec.service_path.parents
     assert spec.service_path.is_file()
     status = manager.projection_status(rc5_record)
     assert status["mismatches"] == []
+
+
+def test_ac2_repeated_hermes_refresh_leaves_doctor_ready_and_no_rewrite_loop(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repeated Hermes gateway start/restart refreshes leave doctor ready with zero Aether rewrite."""
+    controller = RecordingServiceController()
+    manager, _ = _setup_isolated_manager(
+        tmp_path,
+        monkeypatch,
+        controller=controller,
+    )
+    record = _make_release(manager, "1.0.0rc5")
+    _stub_healthy_runtime(manager, monkeypatch, record)
+    manager.store._commit_active(record, expected_active_release_id=None)
+    manager.project_release(record, restart_service=False)
+    spec = manager.projection_spec(record)
+    manager._switch_runtime_current(spec.release)
+    profile_home = manager.store.profile_home("morfeo")
+
+    # 1. First materialization/refresh by Hermes
+    initial_unit = _generate_valid_hermes_unit(spec.runtime_current, profile_home)
+    spec.service_path.parent.mkdir(parents=True, exist_ok=True)
+    spec.service_path.write_bytes(initial_unit)
+    assert manager.projection_status(record)["mismatches"] == []
+    assert manager.doctor().ready is True
+
+    # 2. Second refresh by Hermes (e.g. gateway start/restart called again)
+    # Hermes rewrites only if content changed or touches with incidental updates
+    refreshed_unit = _generate_valid_hermes_unit(
+        spec.runtime_current,
+        profile_home,
+        extra_incidental="\n# Refresh timestamp comment",
+    )
+    spec.service_path.write_bytes(refreshed_unit)
+
+    # Invariants still hold: doctor remains ready
+    status = manager.projection_status(record)
+    assert status["mismatches"] == []
+    assert manager.doctor().ready is True
+
+    refreshed_bytes = spec.service_path.read_bytes()
+
+    # 3. Aether runs project_release / reconcile - must NOT rewrite or overwrite the Hermes unit
+    manager.project_release(record, restart_service=False)
+    assert spec.service_path.read_bytes() == refreshed_bytes, (
+        "Aether must not overwrite Hermes unit"
+    )
+    assert manager.doctor().ready is True
 
 
 # =========================================================================
@@ -435,7 +589,7 @@ def test_ac3_semantic_doctor_accepts_exact_hermes_unit_and_incidental_difference
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Semantic doctor is ready with Hermes-generated units and ignores incidental differences."""
-    manager, _ = _setup_isolated_manager(tmp_path)
+    manager, _ = _setup_isolated_manager(tmp_path, monkeypatch)
     record = _make_release(manager, "1.0.0rc5")
     _stub_healthy_runtime(manager, monkeypatch, record)
     manager.store._commit_active(record, expected_active_release_id=None)
@@ -473,9 +627,10 @@ def test_ac3_semantic_doctor_accepts_exact_hermes_unit_and_incidental_difference
 
 def test_ac3_semantic_doctor_attributes_each_invalid_selector_class(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Each invalid selector class fails visibly with the attributed diagnostic string."""
-    manager, _ = _setup_isolated_manager(tmp_path)
+    manager, _ = _setup_isolated_manager(tmp_path, monkeypatch)
     record = _make_release(manager, "1.0.0rc5")
     manager.store._commit_active(record, expected_active_release_id=None)
     manager.project_release(record, restart_service=False)
@@ -591,7 +746,7 @@ def test_ac3_semantic_doctor_attributes_each_invalid_selector_class(
 def test_ac3_service_availability_probe(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Doctor separately probes service availability/running status."""
     controller = RecordingServiceController(status_result="inactive", available_result=True)
-    manager, _ = _setup_isolated_manager(tmp_path, controller=controller)
+    manager, _ = _setup_isolated_manager(tmp_path, monkeypatch, controller=controller)
     record = _make_release(manager, "1.0.0rc5")
     _stub_healthy_runtime(manager, monkeypatch, record)
     manager.store._commit_active(record, expected_active_release_id=None)
@@ -629,9 +784,8 @@ def test_ac4_transition_refresh_failure_restores_opaque_state_and_zero_pending(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Failure during Hermes materialization restores previous selector, Aether files, and prior unit."""
-    # Set up prior release
     controller = RecordingServiceController()
-    manager, _ = _setup_isolated_manager(tmp_path, controller=controller, monkeypatch=monkeypatch)
+    manager, _ = _setup_isolated_manager(tmp_path, monkeypatch, controller=controller)
     r1 = _make_release(manager, "1.0.0rc5", "1111111111111111")
     r2 = _make_release(manager, "1.0.0rc5", "2222222222222222")
     _stub_healthy_runtime(manager, monkeypatch, r1)
@@ -669,7 +823,7 @@ def test_ac4_transition_refresh_failure_restores_opaque_state_and_zero_pending(
     assert spec1.runtime_current.resolve() == manager.store.release_path(r1.release_id)
 
     # Verify zero pending transitions in journal
-    reopened, _ = _setup_isolated_manager(tmp_path, controller=controller, monkeypatch=monkeypatch)
+    reopened, _ = _setup_isolated_manager(tmp_path, monkeypatch, controller=controller)
     _stub_healthy_runtime(reopened, monkeypatch, r1)
     recovered = reopened.recover()
     assert recovered.get("projections_reconciled", 0) in (0, 1)
@@ -685,7 +839,7 @@ def test_ac4_transition_restart_failure_restores_opaque_state(
 ) -> None:
     """Failure during service restart restores previous selector, Aether files, and prior unit."""
     controller = RecordingServiceController()
-    manager, _ = _setup_isolated_manager(tmp_path, controller=controller, monkeypatch=monkeypatch)
+    manager, _ = _setup_isolated_manager(tmp_path, monkeypatch, controller=controller)
     r1 = _make_release(manager, "1.0.0rc5", "1111111111111111")
     r2 = _make_release(manager, "1.0.0rc5", "2222222222222222")
     _stub_healthy_runtime(manager, monkeypatch, r1)
@@ -735,9 +889,18 @@ def test_ac4_uninstall_invokes_hermes_gateway_uninstall(
         cmd: list[str], env: dict[str, str], cwd: Path
     ) -> subprocess.CompletedProcess[str]:
         commands_run.append(cmd)
+        if "uninstall" in cmd and "gateway" in cmd:
+            unit = (
+                Path(env.get("HOME", str(Path.home())))
+                / ".config"
+                / "systemd"
+                / "user"
+                / AETHER_GATEWAY_UNIT
+            )
+            unit.unlink(missing_ok=True)
         return subprocess.CompletedProcess(cmd, 0, "Uninstalled", "")
 
-    manager, _ = _setup_isolated_manager(tmp_path, hermes_runner=mock_runner)
+    manager, _ = _setup_isolated_manager(tmp_path, monkeypatch, hermes_runner=mock_runner)
     record = _make_release(manager, "1.0.0rc5")
     _stub_healthy_runtime(manager, monkeypatch, record)
     manager.store._commit_active(record, expected_active_release_id=None)
@@ -745,9 +908,9 @@ def test_ac4_uninstall_invokes_hermes_gateway_uninstall(
     spec = manager.projection_spec(record)
     manager._switch_runtime_current(spec.release)
 
-    # Fake unit file on disk
+    # Unit file exists on disk
     spec.service_path.parent.mkdir(parents=True, exist_ok=True)
-    spec.service_path.write_text("[Unit]\nDescription=Test\n")
+    spec.service_path.write_text("[Unit]\nDescription=Test\n", encoding="utf-8")
 
     result = manager.uninstall(purge=False, confirmed=True)
     assert result.purged is False
@@ -777,6 +940,8 @@ def test_ac4_rc4_update_rc3_rollback_forward_rc5_cycle(
             / "user"
             / AETHER_GATEWAY_UNIT
         )
+        assert str(unit_dest).startswith(str(tmp_path)), f"Leaked unit destination: {unit_dest}"
+        assert unit_dest != _OPERATOR_UNIT_PATH, "Must not write operator live unit!"
         unit_dest.parent.mkdir(parents=True, exist_ok=True)
         unit_dest.write_bytes(unit_data)
         return subprocess.CompletedProcess(cmd, 0, "", "")
@@ -784,9 +949,9 @@ def test_ac4_rc4_update_rc3_rollback_forward_rc5_cycle(
     controller = RecordingServiceController()
     manager, _ = _setup_isolated_manager(
         tmp_path,
+        monkeypatch,
         controller=controller,
         hermes_runner=mock_runner,
-        monkeypatch=monkeypatch,
     )
 
     rc3 = _make_release(manager, "1.0.0rc3", "3333333333333333")
@@ -837,11 +1002,11 @@ def test_ac4_rc4_update_rc3_rollback_forward_rc5_cycle(
 
 def test_real_hermes_generator_integration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Integrate the authentic Hermes generator to prove genuinely generated units pass semantic doctor."""
-    hermes_cache = Path.home() / ".cache" / "aether-agents" / "hermes" / "v2026.8.18"
+    hermes_cache = _OPERATOR_HOME / ".cache" / "aether-agents" / "hermes" / "v2026.8.18"
     if not hermes_cache.is_dir():
         pytest.skip(f"Hermes baseline checkout not found at {hermes_cache}")
 
-    manager, _ = _setup_isolated_manager(tmp_path)
+    manager, _ = _setup_isolated_manager(tmp_path, monkeypatch)
     record = _make_release(manager, "1.0.0rc5")
     _stub_healthy_runtime(manager, monkeypatch, record)
     manager.store._commit_active(record, expected_active_release_id=None)
@@ -880,13 +1045,14 @@ def test_isolation_guarantee_no_operator_state_touched(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Proves that isolated fixtures never touch live operator files or live XDG destinations."""
-    live_unit = Path.home() / ".config" / "systemd" / "user" / AETHER_GATEWAY_UNIT
     live_unit_before = (
-        live_unit.read_bytes() if live_unit.is_file() and not live_unit.is_symlink() else None
+        _OPERATOR_UNIT_PATH.read_bytes()
+        if _OPERATOR_UNIT_PATH.is_file() and not _OPERATOR_UNIT_PATH.is_symlink()
+        else None
     )
 
     controller = RecordingServiceController()
-    manager, _ = _setup_isolated_manager(tmp_path, controller=controller, monkeypatch=monkeypatch)
+    manager, _ = _setup_isolated_manager(tmp_path, monkeypatch, controller=controller)
     record = _make_release(manager, "1.0.0rc5")
     _stub_healthy_runtime(manager, monkeypatch, record)
     manager.project_release(record, restart_service=False)
@@ -896,6 +1062,8 @@ def test_isolation_guarantee_no_operator_state_touched(
     assert tmp_path in spec.desktop_path.parents
 
     live_unit_after = (
-        live_unit.read_bytes() if live_unit.is_file() and not live_unit.is_symlink() else None
+        _OPERATOR_UNIT_PATH.read_bytes()
+        if _OPERATOR_UNIT_PATH.is_file() and not _OPERATOR_UNIT_PATH.is_symlink()
+        else None
     )
     assert live_unit_before == live_unit_after

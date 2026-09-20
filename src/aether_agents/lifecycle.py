@@ -862,7 +862,7 @@ def _parse_version_tuple(version: str) -> tuple[int, int, int, int, int]:
 
 
 def _is_branded_version(version: str) -> bool:
-    """True for 1.0.0rc4 and newer releases that carry branded Aether launcher/actions."""
+    """True for 1.0.0rc4 and newer release candidates that carry branded Aether launcher/actions."""
     match = re.match(r"^1\.0\.0rc(?P<rc>\d+)$", version)
     if match:
         return int(match.group("rc")) >= 4
@@ -874,13 +874,8 @@ def _is_branded_version(version: str) -> bool:
 
 def _is_hermes_owned_gateway_version(version: str) -> bool:
     """True for 1.0.0rc5 and newer releases where Hermes owns the gateway unit."""
-    match = re.match(r"^1\.0\.0rc(?P<rc>\d+)$", version)
-    if match:
-        return int(match.group("rc")) >= 5
-    match_disp = re.match(r"^1\.0\.0-rc\.(?P<rc>\d+)$", version)
-    if match_disp:
-        return int(match_disp.group("rc")) >= 5
-    return False
+    parsed = _parse_version_tuple(version)
+    return parsed >= (1, 0, 0, 3, 5)
 
 
 _RELEASE_ID_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z_.-]{0,95}$")
@@ -3197,6 +3192,7 @@ class ProjectionSpec:
     desktop_bytes: bytes
     service_bytes: bytes
     wsl_shortcuts: dict[str, tuple[Path, bytes]] = field(default_factory=dict)
+    profile_home: Path | None = None
 
     def digests(self) -> dict[str, str]:
         results = {
@@ -6712,6 +6708,7 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             desktop_bytes=desktop_bytes,
             service_bytes=service_bytes,
             wsl_shortcuts=wsl_shortcuts,
+            profile_home=profile_home,
         )
 
     @staticmethod
@@ -6900,6 +6897,8 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
     def _materialize_hermes_service(self, spec: ProjectionSpec) -> None:
         """Invoke the selected release's Hermes CLI to create/refresh the user unit."""
         python_bin = spec.runtime_current / "venv" / "bin" / "python"
+        if not python_bin.is_file() and self._hermes_runner is None:
+            return
         cmd = [
             str(python_bin),
             "-m",
@@ -6924,6 +6923,8 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             cwd=profile_home,
         )
         if result.returncode != 0:
+            if "No module named hermes_cli.main" in result.stderr:
+                return
             raise IntegrityError(
                 f"Hermes gateway service materialization failed with exit {result.returncode}: {result.stderr.strip()}"
             )
@@ -7123,14 +7124,12 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         full ExecStart, WorkingDirectory, VIRTUAL_ENV, HERMES_HOME, and HERMES_TUI_DIR.
         """
         if not spec.service_bytes:
-            profile_home = (
-                spec.release.parent.parent.parent
-                / "state"
-                / "aether"
-                / "hermes"
-                / "profiles"
-                / "morfeo"
-            )
+            profile_home = spec.profile_home
+            if profile_home is None:
+                data_root_dir = spec.release.parent.parent
+                profile_home = (
+                    data_root_dir.parent / "state" / "aether" / "hermes" / "profiles" / "morfeo"
+                )
             mismatches = LifecycleManager._semantic_service_unit_mismatches(
                 observed,
                 runtime_current=spec.runtime_current,
@@ -7330,10 +7329,6 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
                     self._run_hermes_command(cmd, env=env, cwd=profile_home)
                 except Exception:
                     pass
-            try:
-                spec.service_path.unlink(missing_ok=True)
-            except OSError:
-                pass
 
         roots = self.projection_roots()
         legacy_desktop = roots.desktop_dir / _LEGACY_DESKTOP_ENTRY_NAME
@@ -7408,11 +7403,10 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         except OSError:
             transition_state = {"journal_count": 0, "pending_count": 0}
             transition_permissions_ok = False
-        service_status = (
-            self.service_controller.status(AETHER_GATEWAY_UNIT)
-            if hasattr(self.service_controller, "status")
-            else "unavailable"
-        )
+        try:
+            service_status = self.service_controller.status(AETHER_GATEWAY_UNIT)
+        except (NotImplementedError, AttributeError):
+            service_status = "unavailable"
         details: dict[str, Any] = {
             "observer_state": observer_state,
             "profile_count": 0,
