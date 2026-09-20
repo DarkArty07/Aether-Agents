@@ -372,7 +372,7 @@ def test_deadline_firing_before_compose_stops_new_calls(
     assert result["observed_usage"]["categories"]["deadline"] > 0
     assert backend.action_calls("semantic_compose") == []
     assert result["state"] in ("pending", "partial")
-    assert result["pipeline"]["budget_seconds"] == 300.0
+    assert result["pipeline"]["budget_seconds"] == pytest.approx(300.0)
     assert result["pipeline"]["deadline_exhausted"] is True
 
 

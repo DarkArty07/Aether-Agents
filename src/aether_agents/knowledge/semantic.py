@@ -1232,7 +1232,7 @@ def _pipeline_block(
         "plan_id": plan_id,
         "plan_reused": plan_reused,
         "plan_persisted": plan_persisted,
-        "budget_seconds": budget_seconds,
+        "budget_seconds": round(float(budget_seconds), 6),
         "structural_base_digest": (structural_base or {}).get("digest"),
         "structural_base_revision": (structural_base or {}).get("revision") or None,
         "deadline_exhausted": deadline_exhausted,
