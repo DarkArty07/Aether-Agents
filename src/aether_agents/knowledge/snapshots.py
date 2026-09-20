@@ -25,7 +25,11 @@ from .common import (
     stable_lock,
 )
 from .context import KnowledgeContext
-from .graphify import GraphifyBackend, graphify_cancel_scope
+from .graphify import (
+    GraphifyBackend,
+    _host_interrupt_requested,
+    graphify_cancel_scope,
+)
 
 MAX_FILES = 5000
 MAX_FILE_BYTES = 256_000
@@ -296,6 +300,13 @@ def knowledge_cancel_scope(event: threading.Event | None):
         yield
     finally:
         _CANCEL_EVENT.reset(token)
+
+
+def _now() -> float:
+    """Monotonic clock for the operation budget (patchable in tests)."""
+    from . import semantic
+
+    return semantic._now()
 
 
 class KnowledgeStore:
@@ -746,11 +757,22 @@ class KnowledgeStore:
         action: str,
         *,
         cancel_event: threading.Event | None = None,
+        deadline: float | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         if self.backend is None:
             raise KnowledgeError(
                 "COMPONENT_UNAVAILABLE", "Configure Graphify before graph updates."
+            )
+        if deadline is not None:
+            from .graphify import run_bounded_graphify
+
+            return run_bounded_graphify(
+                self.backend,
+                action,
+                deadline=deadline,
+                cancel_event=cancel_event,
+                **kwargs,
             )
         if cancel_event is None:
             return self.backend.run(action, **kwargs)
@@ -1014,6 +1036,7 @@ class KnowledgeStore:
                 input_sha256=state.get("input_sha256"),
                 candidate_snapshot_id=state.get("candidate"),
                 base_structural_snapshot_id=state.get("base"),
+                failure_category=state.get("failure_category"),
                 published_snapshot_id=state.get("published"),
             )
 
@@ -1048,6 +1071,7 @@ class KnowledgeStore:
         *,
         cancel_event: threading.Event | None = None,
     ) -> dict[str, Any]:
+        started_at = _now()
         mode = args.get("mode", "configured")
         if mode not in ("structural", "configured"):
             raise KnowledgeError("ARGUMENT_INVALID", "Invalid update mode.")
@@ -1057,6 +1081,22 @@ class KnowledgeStore:
             raise KnowledgeError(
                 "COMPONENT_UNAVAILABLE", "Configure Graphify before graph updates."
             )
+        cfg = self.configuration()
+        req_deadline = args.get("deadline_seconds")
+        cfg_deadline = cfg.get("deadline_seconds")
+        budget = 300.0
+        if req_deadline is not None:
+            try:
+                budget = min(budget, float(req_deadline))
+            except (TypeError, ValueError):
+                pass
+        if cfg_deadline is not None:
+            try:
+                budget = min(budget, float(cfg_deadline))
+            except (TypeError, ValueError):
+                pass
+        budget = max(0.0, min(budget, 300.0))
+        deadline = started_at + budget
         view = self._view(ctx)
         operation_cancel = cancel_event or threading.Event()
         operation_id = uuid.uuid4().hex
@@ -1064,10 +1104,36 @@ class KnowledgeStore:
             stable_lock(view / "update.lock", timeout=10.0),
             self._operation_scope(ctx, operation_id) as operation,
         ):
-            self._backend_run("probe", cancel_event=operation_cancel)
+
+            def _deadline_result(
+                manifest: dict[str, Any] | None = None,
+                semantic: dict[str, Any] | None = None,
+            ) -> dict[str, Any]:
+                operation["terminal"] = "deadline"
+                operation["failure_category"] = "deadline"
+                result = self._envelope(ctx, "update", manifest)
+                result.update(
+                    outcome="unchanged" if manifest is not None else "pending",
+                    semantic_pending=True,
+                    uncovered_paths=result["dirty_paths"],
+                )
+                result["warnings"].append(
+                    "Operation deadline reached; no candidate snapshot was published."
+                )
+                if semantic is not None:
+                    result["semantic"] = semantic
+                return result
+
+            try:
+                self._backend_run("probe", deadline=deadline, cancel_event=operation_cancel)
+            except KnowledgeError as exc:
+                if getattr(exc, "operation_deadline_timeout", False):
+                    return _deadline_result()
+                raise
             if operation_cancel.is_set():
                 raise KnowledgeError("OPERATION_CANCELLED", "Knowledge update was cancelled.")
-            cfg = self.configuration()
+            if _now() >= deadline:
+                return _deadline_result()
             sem_cfg = cfg.get("semantic", {})
             sem_enabled = bool(cfg.get("semantic_enabled") or sem_cfg.get("enabled"))
 
@@ -1094,6 +1160,8 @@ class KnowledgeStore:
             input_sha256 = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
             if operation_cancel.is_set():
                 raise KnowledgeError("OPERATION_CANCELLED", "Knowledge update was cancelled.")
+            if _now() >= deadline:
+                return _deadline_result(existing_manifest)
             operation["input_sha256"] = input_sha256
             self._operation_phase(
                 ctx, operation_id, operation, "prepare", cancel_event=operation_cancel
@@ -1171,6 +1239,8 @@ class KnowledgeStore:
                             graph_path=existing_location / "graphify-out" / "graph.json",
                             inputs=inputs,
                             configuration=cfg,
+                            deadline=deadline,
+                            cancel_event=operation_cancel,
                         )
                         if (
                             expected_fp is not None
@@ -1223,14 +1293,22 @@ class KnowledgeStore:
                     inputs=inputs,
                 )
             if structural_digest is None:
-                self._backend_run(
-                    "update",
-                    source_root=new_source_root,
-                    graph_path=new_output,
-                    cancel_event=operation_cancel,
-                )
+                try:
+                    self._backend_run(
+                        "update",
+                        source_root=new_source_root,
+                        graph_path=new_output,
+                        deadline=deadline,
+                        cancel_event=operation_cancel,
+                    )
+                except KnowledgeError as exc:
+                    if getattr(exc, "operation_deadline_timeout", False):
+                        return _deadline_result(existing_manifest)
+                    raise
             if operation_cancel.is_set():
                 raise KnowledgeError("OPERATION_CANCELLED", "Knowledge update was cancelled.")
+            if _now() >= deadline:
+                return _deadline_result(existing_manifest)
 
             try:
                 output_is_file = new_output.is_file()
@@ -1343,6 +1421,7 @@ class KnowledgeStore:
                                     "allowed_sources": list(inputs),
                                     "allow_empty": False,
                                 },
+                                deadline=deadline,
                                 cancel_event=operation_cancel,
                             )
                         except Exception:
@@ -1361,25 +1440,42 @@ class KnowledgeStore:
                                 configuration=cfg,
                                 cancel_event=operation_cancel,
                                 legacy_cache_revalidator=revalidate_legacy_fragment,
+                                operation_deadline=deadline,
                             )
-                        if operation_cancel.is_set():
+                        if operation_cancel.is_set() and not (
+                            isinstance(semantic_meta, dict)
+                            and semantic_meta.get("pipeline", {}).get("deadline_exhausted")
+                        ):
                             raise KnowledgeError(
                                 "OPERATION_CANCELLED", "Semantic extraction was cancelled."
                             )
+                        if _now() >= deadline:
+                            semantic_failed_or_incomplete = True
+                            if isinstance(semantic_meta, dict):
+                                semantic_meta.setdefault("pipeline", {})["deadline_exhausted"] = (
+                                    True
+                                )
+                                semantic_meta["reason_category"] = "deadline"
                         if semantic_meta.get("state") != "complete":
                             semantic_failed_or_incomplete = True
                     except KnowledgeError as exc:
                         if exc.code == "OPERATION_CANCELLED":
                             raise
                         semantic_failed_or_incomplete = True
+                        deadline_exc = getattr(exc, "operation_deadline_timeout", False)
+                        reason_cat = "deadline" if deadline_exc else exc.code.lower()
                         semantic_meta = {
-                            "state": "unavailable",
+                            "state": "pending" if deadline_exc else "unavailable",
                             "fingerprint": None,
                             "covered_paths": [],
                             "pending_paths": sorted(eligible_files),
                             "failed_paths": [],
                             "validated_chunk_ids": [],
-                            "reason_category": exc.code.lower(),
+                            "reason_category": reason_cat,
+                            "pipeline": {
+                                "deadline_exhausted": deadline_exc,
+                                "operation_wide": deadline_exc,
+                            },
                             "observed_usage": {},
                         }
                     except Exception as exc:
@@ -1394,6 +1490,14 @@ class KnowledgeStore:
                             "reason_category": type(exc).__name__.lower(),
                             "observed_usage": {},
                         }
+
+            operation_deadline_exhausted = _now() >= deadline or (
+                isinstance(semantic_meta, dict)
+                and semantic_meta.get("pipeline", {}).get("operation_wide") is True
+                and semantic_meta.get("pipeline", {}).get("deadline_exhausted") is True
+            )
+            if operation_deadline_exhausted:
+                return _deadline_result(existing_manifest, semantic_meta)
 
             # If semantic refresh failed or was incomplete on an existing complete snapshot:
             # retain the prior complete snapshot and keep the new candidate as diagnostic evidence.
@@ -1497,17 +1601,25 @@ class KnowledgeStore:
                 "created_at": time.time(),
                 "publisher_role": ctx.role_id,
             }
-            if operation_cancel.is_set():
+            if (cancel_event is not None and cancel_event.is_set()) or _host_interrupt_requested():
                 raise KnowledgeError("OPERATION_CANCELLED", "Knowledge update was cancelled.")
+            if _now() >= deadline:
+                raise KnowledgeError(
+                    "TIMEOUT", "Operation deadline exceeded before pointer publication."
+                )
             self._operation_phase(
-                ctx, operation_id, operation, "manifest", cancel_event=operation_cancel
+                ctx, operation_id, operation, "manifest", cancel_event=cancel_event
             )
             atomic_json(new_location / "manifest.json", manifest)
             self._validate_candidate(ctx, new_location, manifest, inputs=inputs)
-            if operation_cancel.is_set():
+            if (cancel_event is not None and cancel_event.is_set()) or _host_interrupt_requested():
                 raise KnowledgeError("OPERATION_CANCELLED", "Knowledge update was cancelled.")
+            if _now() >= deadline:
+                raise KnowledgeError(
+                    "TIMEOUT", "Operation deadline exceeded before pointer publication."
+                )
             self._operation_phase(
-                ctx, operation_id, operation, "pointer", cancel_event=operation_cancel
+                ctx, operation_id, operation, "pointer", cancel_event=cancel_event
             )
             self._publish_candidate(ctx, manifest)
             operation["published"] = new_snapshot_id

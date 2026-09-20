@@ -43,6 +43,87 @@ def _host_interrupt_requested() -> bool:
         return False
 
 
+def _now() -> float:
+    """Monotonic clock for the operation budget (patchable in tests)."""
+    from . import semantic
+
+    return semantic._now()
+
+
+def run_bounded_graphify(
+    backend: Any,
+    action: str,
+    *,
+    deadline: float,
+    cancel_event: threading.Event | None = None,
+    reserve_seconds: float | None = None,
+    source_root: Path | None = None,
+    graph_path: Path | None = None,
+    arguments: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """Execute one Graphify action within the operation-wide budget and shared cancellation."""
+
+    def _operation_timeout(message: str) -> KnowledgeError:
+        error = KnowledgeError("TIMEOUT", message)
+        error.operation_deadline_timeout = True  # type: ignore[attr-defined]
+        return error
+
+    if backend is None:
+        raise KnowledgeError("COMPONENT_UNAVAILABLE", "Configure Graphify before graph updates.")
+
+    operation_cancel = cancel_event or _CANCEL_EVENT.get()
+    if (operation_cancel is not None and operation_cancel.is_set()) or _host_interrupt_requested():
+        if operation_cancel is not None:
+            operation_cancel.set()
+        raise KnowledgeError("OPERATION_CANCELLED", "Knowledge update was cancelled.")
+
+    now = _now()
+    remaining = deadline - now
+    if remaining <= 0:
+        raise _operation_timeout("Operation budget exhausted before Graphify invocation.")
+
+    actual_reserve = reserve_seconds if reserve_seconds is not None else min(5.0, remaining * 0.5)
+    timeout = remaining - actual_reserve
+    if timeout <= 0:
+        raise _operation_timeout("Operation budget exhausted before Graphify invocation.")
+
+    call_kwargs: dict[str, Any] = dict(kwargs)
+    if source_root is not None:
+        call_kwargs["source_root"] = source_root
+    if graph_path is not None:
+        call_kwargs["graph_path"] = graph_path
+    if arguments is not None:
+        call_kwargs["arguments"] = arguments
+
+    try:
+        result = backend.run(action, timeout=timeout, cancel_event=operation_cancel, **call_kwargs)
+    except KnowledgeError as exc:
+        if exc.code == "TIMEOUT" and exc.message == "Graphify exceeded its execution limit.":
+            exc.operation_deadline_timeout = True  # type: ignore[attr-defined]
+        raise
+    except TypeError as exc:
+        msg = str(exc)
+        if "cancel_event" in msg and "timeout" in msg:
+            result = backend.run(action, **call_kwargs)
+        elif "cancel_event" in msg:
+            result = backend.run(action, timeout=timeout, **call_kwargs)
+        elif "timeout" in msg:
+            result = backend.run(action, cancel_event=operation_cancel, **call_kwargs)
+        else:
+            raise
+
+    if (operation_cancel is not None and operation_cancel.is_set()) or _host_interrupt_requested():
+        if operation_cancel is not None:
+            operation_cancel.set()
+        raise KnowledgeError("OPERATION_CANCELLED", "Knowledge update was cancelled.")
+
+    if _now() >= deadline:
+        raise _operation_timeout("Operation deadline exceeded after Graphify invocation.")
+
+    return result
+
+
 class GraphifyBackend:
     def __init__(self, python: Path, *, timeout: float = 60.0):
         # Do not resolve a venv interpreter symlink: doing so loses its environment.
@@ -81,6 +162,8 @@ class GraphifyBackend:
         effective_timeout = (
             min(self.timeout, float(timeout)) if timeout is not None else self.timeout
         )
+        if effective_timeout <= 0:
+            raise KnowledgeError("TIMEOUT", "Graphify exceeded its execution limit.")
         operation_cancel = cancel_event or _CANCEL_EVENT.get()
 
         def terminate(process: subprocess.Popen[bytes]) -> None:
@@ -169,4 +252,10 @@ class GraphifyBackend:
                 else "Graphify could not complete the requested operation."
             )
             raise KnowledgeError(code, str(msg))
+        if (
+            operation_cancel is not None and operation_cancel.is_set()
+        ) or _host_interrupt_requested():
+            raise KnowledgeError("OPERATION_CANCELLED", "Graphify operation was cancelled.")
+        if time.monotonic() >= deadline:
+            raise KnowledgeError("TIMEOUT", "Graphify exceeded its execution limit.")
         return result
