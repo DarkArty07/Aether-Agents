@@ -76,11 +76,13 @@ uv run --frozen ruff format src/aether_agents tests scripts
 uv run --frozen ruff format --check src/aether_agents tests scripts
 ```
 
-For policy-hook changes, also run the focused policy and launcher suites:
+For policy-hook changes, also run the focused policy suite. Packaged launcher tests
+import `aether_agents` and belong on the exact-Hermes pytest lane, not the stdlib-only
+hook check:
 
 ```bash
 uv run --frozen python -m unittest discover -s tests -p 'test_policy_hooks.py' -v
-uv run --frozen python -m unittest discover -s tests -p 'test_aether_tui_launcher.py' -v
+uv run --frozen python scripts/run_tests.py -- tests/test_aether_tui_launcher.py -q
 ```
 
 Use the repository runner for exact-Hermes integration coverage even if the ordinary

@@ -526,7 +526,8 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m unittest discover -s tests -p 'test_policy_hooks.py' -v
-          python3 -m unittest discover -s tests -p 'test_aether_tui_launcher.py' -v
+          # Packaged launcher tests import aether_agents (jsonschema). They run in the
+          # observation-qualification pytest lane, not this stdlib-only hook check.
           python3 -m py_compile \
             policy/hooks/aether_pre_tool_policy.py \
             scripts/aether_tui.py \
