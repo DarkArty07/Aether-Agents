@@ -88,6 +88,10 @@ def run_bounded_graphify(
     if timeout <= 0:
         raise _operation_timeout("Operation budget exhausted before Graphify invocation.")
 
+    def _operation_budget_exhausted() -> bool:
+        """True only when the operation's own remaining time is down to the reserve."""
+        return _now() >= deadline - actual_reserve
+
     call_kwargs: dict[str, Any] = dict(kwargs)
     if source_root is not None:
         call_kwargs["source_root"] = source_root
@@ -99,7 +103,10 @@ def run_bounded_graphify(
     try:
         result = backend.run(action, timeout=timeout, cancel_event=operation_cancel, **call_kwargs)
     except KnowledgeError as exc:
-        if exc.code == "TIMEOUT" and exc.message == "Graphify exceeded its execution limit.":
+        # Only a TIMEOUT that consumed this operation's own budget is a deadline. A component
+        # timeout while the operation still has time left stays a typed failure, so an
+        # independent defect is never relabeled as operation exhaustion.
+        if exc.code == "TIMEOUT" and _operation_budget_exhausted():
             exc.operation_deadline_timeout = True  # type: ignore[attr-defined]
         raise
     except TypeError as exc:

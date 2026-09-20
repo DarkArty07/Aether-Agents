@@ -1233,15 +1233,23 @@ class KnowledgeStore:
                         # Semantic is enabled: compare expected fingerprint
                         from .semantic import compute_semantic_fingerprint
 
-                        expected_fp = compute_semantic_fingerprint(
-                            backend=self.backend,
-                            source_root=existing_location / "sources",
-                            graph_path=existing_location / "graphify-out" / "graph.json",
-                            inputs=inputs,
-                            configuration=cfg,
-                            deadline=deadline,
-                            cancel_event=operation_cancel,
-                        )
+                        try:
+                            expected_fp = compute_semantic_fingerprint(
+                                backend=self.backend,
+                                source_root=existing_location / "sources",
+                                graph_path=existing_location / "graphify-out" / "graph.json",
+                                inputs=inputs,
+                                configuration=cfg,
+                                deadline=deadline,
+                                cancel_event=operation_cancel,
+                            )
+                        except KnowledgeError as exc:
+                            # A fingerprint fenced by the operation budget or a cancellation is
+                            # not "unknown": rebuilding and publishing from it would accept a
+                            # result the operation boundary already rejected.
+                            if getattr(exc, "operation_deadline_timeout", False):
+                                return _deadline_result(existing_manifest)
+                            raise
                         if (
                             expected_fp is not None
                             and existing_sem_state == "complete"
@@ -1604,9 +1612,9 @@ class KnowledgeStore:
             if (cancel_event is not None and cancel_event.is_set()) or _host_interrupt_requested():
                 raise KnowledgeError("OPERATION_CANCELLED", "Knowledge update was cancelled.")
             if _now() >= deadline:
-                raise KnowledgeError(
-                    "TIMEOUT", "Operation deadline exceeded before pointer publication."
-                )
+                # The budget owns the operation through pointer publication: an exhausted
+                # operation reports the deadline receipt instead of a failed operation record.
+                return _deadline_result(existing_manifest, semantic_meta)
             self._operation_phase(
                 ctx, operation_id, operation, "manifest", cancel_event=cancel_event
             )
@@ -1615,9 +1623,7 @@ class KnowledgeStore:
             if (cancel_event is not None and cancel_event.is_set()) or _host_interrupt_requested():
                 raise KnowledgeError("OPERATION_CANCELLED", "Knowledge update was cancelled.")
             if _now() >= deadline:
-                raise KnowledgeError(
-                    "TIMEOUT", "Operation deadline exceeded before pointer publication."
-                )
+                return _deadline_result(existing_manifest, semantic_meta)
             self._operation_phase(
                 ctx, operation_id, operation, "pointer", cancel_event=cancel_event
             )

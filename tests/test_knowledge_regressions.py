@@ -3850,3 +3850,247 @@ def test_host_cancel_terminates_process_group_releases_lock_and_leaves_no_pointe
     # Verify lock was released
     with stable_lock(view / "update.lock", timeout=1.0):
         pass
+
+
+@pytest.mark.parametrize("expiry_point", ["manifest-build", "manifest-record"])
+def test_publication_fence_deadline_returns_deadline_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, expiry_point: str
+) -> None:
+    """AC-7: budget expiry before pointer publication returns the deadline receipt, never a raise.
+
+    The operation clock is injected at the two candidate seams between the last accepted
+    backend result and the pointer write: the manifest build (first publication fence) and
+    the manifest phase record (second publication fence).
+    """
+    import aether_agents.knowledge.semantic as sem_mod
+
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    backend = _LifecycleStandInBackend()
+    store = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        backend,
+        configuration={"enabled": True, "semantic_enabled": False},
+    )
+    first = store.update(ctx, {"mode": "structural"})
+    assert first["outcome"] == "updated"
+    first_pointer = (
+        state / "knowledge" / PROJECT / "views" / ctx.view_id / f"{ctx.source_revision}.json"
+    )
+    assert first_pointer.is_file()
+
+    # A second revision exercises the full candidate pipeline instead of the unchanged fast path.
+    (root / "extra.py").write_text("def extra_helper():\n    return 1\n")
+    git_at(root, "add", ".")
+    git_at(root, "commit", "-qm", "publication fence revision")
+    revised = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    view = state / "knowledge" / PROJECT / "views" / revised.view_id
+    pointer = view / f"{revised.source_revision}.json"
+    assert not pointer.exists()
+
+    clock = [1000.0]
+    monkeypatch.setattr(sem_mod, "_now", lambda: clock[0])
+    armed = {"value": False}
+
+    def expire() -> None:
+        if armed["value"]:
+            clock[0] = 1400.0
+
+    if expiry_point == "manifest-record":
+        recorded_phase = store._operation_phase
+
+        def phase(
+            ctx_: Any, operation_id: str, operation: dict[str, Any], name: str, **kwargs: Any
+        ) -> None:
+            recorded_phase(ctx_, operation_id, operation, name, **kwargs)
+            if name == "manifest":
+                expire()
+
+        monkeypatch.setattr(store, "_operation_phase", phase)
+    else:
+        recorded_versions = store._semantic_versions
+
+        def semantic_versions(meta: dict[str, Any]) -> tuple[str, str]:
+            result = recorded_versions(meta)
+            expire()
+            return result
+
+        monkeypatch.setattr(store, "_semantic_versions", semantic_versions)
+
+    armed["value"] = True
+    result = store.update(revised, {"mode": "structural"})
+
+    assert result["outcome"] in ("pending", "unchanged")
+    assert result["semantic_pending"] is True
+    assert any("deadline" in warning.lower() for warning in result["warnings"])
+    assert not pointer.exists(), "an expired operation must not publish a pointer"
+    operation = json.loads((view / "operation.json").read_text(encoding="utf-8"))
+    assert operation["terminal_outcome"] == "deadline"
+    assert operation["failure_category"] == "deadline"
+    assert operation["outcome"] != "running"
+    assert first_pointer.is_file(), "the previously published revision keeps its pointer"
+    with stable_lock(view / "update.lock", timeout=1.0):
+        pass
+
+
+def test_publication_fence_deadline_retains_the_previous_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC-7: expiry before publication returns an unchanged receipt for the retained snapshot."""
+    import aether_agents.knowledge.semantic as sem_mod
+
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    structural = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        _LifecycleStandInBackend(),
+        configuration={"enabled": True, "semantic_enabled": False},
+    )
+    first = structural.update(ctx, {"mode": "structural"})
+    assert first["outcome"] == "updated"
+
+    view = state / "knowledge" / PROJECT / "views" / ctx.view_id
+    pointer = view / f"{ctx.source_revision}.json"
+    published_pointer = pointer.read_text(encoding="utf-8")
+
+    configured = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        _LifecycleStandInBackend(),
+        configuration={
+            "enabled": True,
+            "semantic_enabled": True,
+            "semantic_auxiliary_task": "web_extract",
+            "semantic": dict(DETERMINISTIC_ROUTE),
+        },
+    )
+    monkeypatch.setattr(
+        sem_mod, "run_semantic_extraction", lambda **_kwargs: _complete_semantic_meta()
+    )
+
+    clock = [1000.0]
+    monkeypatch.setattr(sem_mod, "_now", lambda: clock[0])
+    recorded_versions = configured._semantic_versions
+
+    def semantic_versions(meta: dict[str, Any]) -> tuple[str, str]:
+        result = recorded_versions(meta)
+        clock[0] = 1400.0
+        return result
+
+    monkeypatch.setattr(configured, "_semantic_versions", semantic_versions)
+
+    result = configured.update(ctx, {"mode": "configured"})
+
+    assert result["outcome"] == "unchanged"
+    assert result["snapshot_id"] == first["snapshot_id"], "the retained snapshot is unchanged"
+    assert result["semantic_pending"] is True
+    assert any("deadline" in warning.lower() for warning in result["warnings"])
+    assert pointer.read_text(encoding="utf-8") == published_pointer
+    operation = json.loads((view / "operation.json").read_text(encoding="utf-8"))
+    assert operation["terminal_outcome"] == "deadline"
+    assert operation["failure_category"] == "deadline"
+    with stable_lock(view / "update.lock", timeout=1.0):
+        pass
+
+
+class _TimeoutPrepareBackend(_LifecycleStandInBackend):
+    """Stand-in whose semantic fingerprint preparation reports a component timeout."""
+
+    def __init__(self, *, on_prepare: Any = None) -> None:
+        super().__init__()
+        self.on_prepare = on_prepare
+        self.prepare_calls = 0
+
+    def run(self, action: str, **kwargs: Any) -> dict[str, Any]:
+        if action == "semantic_prepare":
+            self.prepare_calls += 1
+            if self.on_prepare is not None:
+                self.on_prepare()
+            raise KnowledgeError("TIMEOUT", "Graphify exceeded its execution limit.")
+        return super().run(action, **kwargs)
+
+
+def _publish_complete_configured_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, root: Path, state: Path, ctx: Any
+) -> tuple[Path, Path, dict[str, Any], str]:
+    """Publish one complete configured snapshot with a stand-in semantic manager."""
+    import aether_agents.knowledge.semantic as sem_mod
+
+    configuration: dict[str, Any] = {
+        "enabled": True,
+        "semantic_enabled": True,
+        "semantic_auxiliary_task": "web_extract",
+        "semantic": dict(DETERMINISTIC_ROUTE),
+    }
+    store = KnowledgeStore(
+        state, tmp_path / "cache", _LifecycleStandInBackend(), configuration=configuration
+    )
+    monkeypatch.setattr(
+        sem_mod, "run_semantic_extraction", lambda **_kwargs: _complete_semantic_meta()
+    )
+    published = store.update(ctx, {"mode": "configured"})
+    assert published["outcome"] == "updated"
+    assert published["semantic"]["state"] == "complete"
+    view = state / "knowledge" / PROJECT / "views" / ctx.view_id
+    pointer = view / f"{ctx.source_revision}.json"
+    return view, pointer, configuration, pointer.read_text(encoding="utf-8")
+
+
+def test_fingerprint_prepare_timeout_never_rebuilds_or_publishes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC-6/AC-7: a component timeout on the fingerprint path is typed, not a silent rebuild."""
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    view, pointer, configuration, published_pointer = _publish_complete_configured_snapshot(
+        tmp_path, monkeypatch, root, state, ctx
+    )
+
+    backend = _TimeoutPrepareBackend()
+    store = KnowledgeStore(state, tmp_path / "cache", backend, configuration=configuration)
+    with pytest.raises(KnowledgeError) as exc_info:
+        store.update(ctx, {"mode": "configured"})
+
+    assert exc_info.value.code == "TIMEOUT"
+    assert getattr(exc_info.value, "operation_deadline_timeout", False) is False
+    assert backend.prepare_calls == 1, "the fingerprint consults the component once"
+    assert backend.update_calls == 0, "a fenced fingerprint must not rebuild the candidate"
+    assert pointer.read_text(encoding="utf-8") == published_pointer
+    operation = json.loads((view / "operation.json").read_text(encoding="utf-8"))
+    assert operation["terminal_outcome"] == "failed"
+    assert operation["failure_category"] == "TIMEOUT"
+    with stable_lock(view / "update.lock", timeout=1.0):
+        pass
+
+
+def test_fingerprint_prepare_budget_timeout_returns_deadline_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC-6/AC-7: a fingerprint timeout caused by the operation budget returns the deadline receipt."""
+    import aether_agents.knowledge.semantic as sem_mod
+
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    view, pointer, configuration, published_pointer = _publish_complete_configured_snapshot(
+        tmp_path, monkeypatch, root, state, ctx
+    )
+
+    clock = [1000.0]
+    monkeypatch.setattr(sem_mod, "_now", lambda: clock[0])
+    backend = _TimeoutPrepareBackend(on_prepare=lambda: clock.__setitem__(0, 1400.0))
+    store = KnowledgeStore(state, tmp_path / "cache", backend, configuration=configuration)
+
+    result = store.update(ctx, {"mode": "configured"})
+
+    assert result["outcome"] == "unchanged"
+    assert result["semantic_pending"] is True
+    assert any("deadline" in warning.lower() for warning in result["warnings"])
+    assert backend.update_calls == 0, "a fenced fingerprint must not rebuild the candidate"
+    assert pointer.read_text(encoding="utf-8") == published_pointer
+    operation = json.loads((view / "operation.json").read_text(encoding="utf-8"))
+    assert operation["terminal_outcome"] == "deadline"
+    assert operation["failure_category"] == "deadline"
+    with stable_lock(view / "update.lock", timeout=1.0):
+        pass

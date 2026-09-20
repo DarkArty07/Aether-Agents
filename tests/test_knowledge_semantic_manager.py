@@ -1339,10 +1339,10 @@ def test_prepare_validate_compose_receive_positive_timeout_and_shared_cancel(
         assert call["cancel_event"] is cancel_ev
 
 
-def test_compose_timeout_attributes_deadline_and_retains_cache(
+def test_compose_timeout_while_budget_remains_is_a_bounded_apply_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """AC-7: A compose TIMEOUT attributes to deadline, retains validated cache, and is not apply."""
+    """AC-7: a Graphify TIMEOUT with the operation budget intact stays typed/apply, never deadline."""
     root, state = project(tmp_path)
     ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
     sem_mod = _semantic_module()
@@ -1368,10 +1368,55 @@ def test_compose_timeout_attributes_deadline_and_retains_cache(
         ctx=ctx,
         configuration=CONFIGURED,
     )
-    # Must NOT be attributed to apply failure
-    assert receipt["observed_usage"]["categories"].get("apply", 0) == 0
-    # Must be attributed to deadline
+    # A component timeout with minutes left on the operation clock is not operation exhaustion.
+    assert receipt["pipeline"]["deadline_exhausted"] is False
+    assert receipt["observed_usage"]["categories"].get("deadline", 0) == 0
+    # It remains a bounded composition failure.
+    assert receipt["observed_usage"]["categories"].get("apply", 0) > 0
+    assert receipt["state"] in ("partial", "unavailable", "pending")
+    # Cache was written before compose and must be retained
+    cached_files = list(_cache_dir(cache_root).glob("*.json"))
+    assert len(cached_files) == 1
+
+
+def test_operation_budget_compose_timeout_attributes_deadline_and_retains_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC-7: a compose TIMEOUT that consumed the operation budget is deadline, not apply."""
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    sem_mod = _semantic_module()
+    clock = [1000.0]
+    monkeypatch.setattr(sem_mod, "_now", lambda: clock[0])
+    chunks = [_chunk(0, ["README.md"])]
+    backend = _StubBackend(chunks)
+
+    def budget_exhausting_compose(*_args: Any, **_kwargs: Any) -> Any:
+        # The component reports a TIMEOUT only after the operation clock ran out.
+        clock[0] = 1400.0
+        raise KnowledgeError("TIMEOUT", "Graphify exceeded its execution limit.")
+
+    backend._compose = budget_exhausting_compose  # noqa: SLF001
+    aux = _Aux([lambda index: _text_usage(_fragment_json(f"W{index}", chunks[index]["files"][0]))])
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", aux)
+    graph_path = _graph_file(root)
+    cache_root = tmp_path / "cache"
+    inputs = _inputs(["README.md"])
+
+    receipt = sem_mod.run_semantic_extraction(
+        backend=backend,
+        source_root=root,
+        graph_path=graph_path,
+        inputs=inputs,
+        cache_root=cache_root,
+        ctx=ctx,
+        configuration=CONFIGURED,
+        operation_deadline=1300.0,
+    )
     assert receipt["pipeline"]["deadline_exhausted"] is True
+    assert receipt["pipeline"]["operation_wide"] is True
+    assert receipt["state"] in ("pending", "partial")
+    assert receipt["observed_usage"]["categories"].get("apply", 0) == 0
     assert (
         receipt["observed_usage"]["categories"].get("deadline", 0) > 0
         or receipt["observed_usage"]["categories"].get("deadline_deferred", 0) > 0

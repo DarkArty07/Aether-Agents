@@ -1196,6 +1196,12 @@ def compute_semantic_fingerprint(
             deadline=deadline,
             cancel_event=cancel_event,
         )
+    except KnowledgeError as exc:
+        # A cancelled operation or a Graphify timeout must not be reported as "no fingerprint":
+        # the caller would rebuild and publish a candidate from a rejected result.
+        if exc.code in ("OPERATION_CANCELLED", "TIMEOUT"):
+            raise
+        return None
     except Exception:
         return None
 
