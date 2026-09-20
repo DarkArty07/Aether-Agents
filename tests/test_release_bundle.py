@@ -23,6 +23,7 @@ TOOL_PATH = ROOT / "scripts" / "release_bundle.py"
 WORKFLOW_PATH = ROOT / ".github" / "workflows" / "release.yml"
 AETHER_REMOTE = "https://github.com/DarkArty07/Aether-Agents.git"
 FORK_REMOTE = "https://github.com/DarkArty07/aether-hermes.git"
+FORK_COMMIT = "aed6591a69f453a1867b73628603e7b53ba40ffc"
 _ABSENT_COMMIT = "0" * 40
 
 
@@ -63,14 +64,32 @@ def _restore_product_module_cache() -> Iterator[None]:
 
 
 def _git(repo: Path, *arguments: str) -> str:
+    """Run one fixture Git command with no ambient repository binding inherited."""
+
     completed = subprocess.run(
         ("git", *arguments),
         cwd=repo,
         check=True,
         capture_output=True,
         text=True,
+        env={key: value for key, value in os.environ.items() if not key.startswith("GIT_")},
     )
     return completed.stdout
+
+
+def _this_checkout_git_entry() -> Path:
+    """This checkout's own ``.git`` entry, derived from the test file rather than the cwd."""
+
+    entry = ROOT / ".git"
+    assert entry.exists()
+    return entry
+
+
+def _this_checkout_object_directory() -> Path:
+    """The object store this checkout's Git commands resolve, linked worktree included."""
+
+    common = _git(ROOT, "rev-parse", "--path-format=absolute", "--git-common-dir").strip()
+    return Path(common) / "objects"
 
 
 def _repository(root: Path, *, remote: str, branch: str = "main") -> tuple[Path, str]:
@@ -473,6 +492,49 @@ def test_archive_is_deterministic_and_rejects_unsafe_members(
     with pytest.raises(tool.BundleError) as unsafe:
         tool._extract_trusted_archive(buffer.getvalue(), tmp_path / "unsafe")
     assert unsafe.value.code == "archive-unsafe"
+
+
+def test_archive_bytes_ignore_an_ambient_repository_binding(
+    tool: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A fork that lacks the pin cannot archive this checkout through ambient ``GIT_*``.
+
+    ``_isolated_environment`` inherits ``GIT_*`` from the process environment, so the
+    archive step has to delete those names rather than merely omit them from an overlay.
+    """
+
+    fork, _ = _repository(tmp_path / "fork", remote=FORK_REMOTE)
+    (fork / "pyproject.toml").write_text(
+        '[project]\nname = "hermes-agent"\nversion = "0.20.4"\nrequires-python = ">=3.11,<3.14"\n',
+        encoding="utf-8",
+    )
+    _git(fork, "add", "pyproject.toml")
+    _git(fork, "commit", "--quiet", "-m", "fork metadata")
+    fork_head = _git(fork, "rev-parse", "HEAD").strip()
+
+    monkeypatch.setenv("GIT_DIR", str(_this_checkout_git_entry()))
+
+    with pytest.raises(tool.BundleError) as refusal:
+        tool._git_archive_bytes(fork, FORK_COMMIT, "hermes-agent")
+    assert refusal.value.code == "archive-failed"
+
+    assert tool._git(["rev-parse", "HEAD"], fork).strip() == fork_head
+
+    monkeypatch.delenv("GIT_DIR")
+    monkeypatch.setenv("GIT_OBJECT_DIRECTORY", str(_this_checkout_object_directory()))
+    with pytest.raises(tool.BundleError) as object_refusal:
+        tool._git_archive_bytes(fork, FORK_COMMIT, "hermes-agent")
+    assert object_refusal.value.code == "archive-failed"
+
+    metadata = tool._read_project_metadata(fork, fork_head)
+    assert metadata["name"] == "hermes-agent"
+    assert metadata["version"] == "0.20.4"
+
+    data = tool._git_archive_bytes(fork, fork_head, "hermes-agent")
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
+        members = [member.name for member in archive.getmembers()]
+    assert "hermes-agent/README.md" in members
+    assert not any(name.startswith("hermes-agent/ui-tui") for name in members)
 
 
 # --------------------------------------------------------------- clean-install TUI stage

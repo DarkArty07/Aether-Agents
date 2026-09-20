@@ -54,12 +54,15 @@ class RecordingServiceController(DisabledServiceController):
 
 
 def _git(path: Path, *arguments: str) -> str:
+    """Run one fixture Git command with no ambient repository binding inherited."""
+
     completed = subprocess.run(
         ["git", *arguments],
         cwd=path,
         check=True,
         capture_output=True,
         text=True,
+        env={key: value for key, value in os.environ.items() if not key.startswith("GIT_")},
     )
     return completed.stdout.strip()
 

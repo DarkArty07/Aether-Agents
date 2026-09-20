@@ -115,18 +115,74 @@ def _sha256_file(path: Path) -> str:
     return hasher.hexdigest()
 
 
+#: Ambient Git environment that would silently re-bind a bundle step to a repository the
+#: caller never supplied.  ``_git_environment`` deletes these names from the isolated copy
+#: itself: an overlay that merely omits a key cannot remove it from the mapping it is
+#: merged into, so an inherited ``GIT_DIR`` would otherwise beat the supplied repository.
+_GIT_ENVIRONMENT_OVERRIDES = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_INDEX_FILE",
+    "GIT_CEILING_DIRECTORIES",
+)
+
+
 def _isolated_environment(extra: dict[str, str] | None = None) -> dict[str, str]:
-    """Drop ambient package-manager and interpreter policy from a child process."""
+    """Drop ambient package-manager, interpreter and repository policy from a child."""
 
     environment = {
         key: value
         for key, value in os.environ.items()
         if not key.startswith(("UV_", "PIP_", "PYTHON", "SOURCE_DATE_EPOCH"))
+        and key not in _GIT_ENVIRONMENT_OVERRIDES
     }
-    for name in ("VIRTUAL_ENV", "CONDA_PREFIX", "PYTHONPATH", "PYTHONHOME"):
+    for name in (
+        "VIRTUAL_ENV",
+        "CONDA_PREFIX",
+        "PYTHONPATH",
+        "PYTHONHOME",
+        *_GIT_ENVIRONMENT_OVERRIDES,
+    ):
         environment.pop(name, None)
     if extra:
         environment.update(extra)
+    return environment
+
+
+def _own_git_directory(repo: Path) -> Path | None:
+    """The supplied repository's own ``.git`` entry, never one discovered above it.
+
+    Only ``<repo>/.git`` counts.  Repository discovery upward is deliberately not used
+    here: it would let a supplied directory read whatever repository happens to enclose it.
+    """
+
+    dot_git = Path(repo) / ".git"
+    if dot_git.is_dir() or dot_git.is_file() or dot_git.is_symlink():
+        return dot_git
+    return None
+
+
+def _git_command(repo: Path, arguments: Sequence[str]) -> list[str]:
+    """Bind one Git command to the supplied repository's own ``.git`` entry."""
+
+    command = ["git", "-C", str(repo)]
+    dot_git = _own_git_directory(repo)
+    if dot_git is not None:
+        command.append(f"--git-dir={dot_git}")
+    return [*command, *arguments]
+
+
+def _git_environment(repo: Path) -> dict[str, str]:
+    """Environment for one supplied-repository Git call: no ambient or parent binding."""
+
+    environment = _isolated_environment()
+    if _own_git_directory(repo) is None:
+        # There is no repository of its own to bind to, so discovery is fenced at the
+        # supplied path: Git answers "not a repository" instead of walking up.
+        environment["GIT_CEILING_DIRECTORIES"] = str(Path(repo).resolve().parent)
     return environment
 
 
@@ -145,14 +201,14 @@ def _run(
 
 
 def _git(arguments: Sequence[str], cwd: Path) -> str:
-    completed = _run(["git", *arguments], cwd=cwd, env=_isolated_environment())
+    completed = _run(_git_command(cwd, arguments), cwd=cwd, env=_git_environment(cwd))
     if completed.returncode != 0:
         raise BundleError("git-failed", f"git {' '.join(arguments)} failed in {cwd}")
     return completed.stdout
 
 
 def _git_raw(arguments: Sequence[str], cwd: Path) -> subprocess.CompletedProcess[str]:
-    return _run(["git", *arguments], cwd=cwd, env=_isolated_environment())
+    return _run(_git_command(cwd, arguments), cwd=cwd, env=_git_environment(cwd))
 
 
 def _normalize_remote(url: str) -> str:
@@ -469,9 +525,9 @@ def materialize_commit(lifecycle: Any, repo: Path, commit: str, destination: Pat
 def _git_archive_bytes(repo: Path, commit: str, prefix: str) -> bytes:
     try:
         completed = subprocess.run(
-            ["git", "archive", "--format=tar.gz", f"--prefix={prefix}/", commit],
+            _git_command(repo, ["archive", "--format=tar.gz", f"--prefix={prefix}/", commit]),
             cwd=repo,
-            env=_isolated_environment(),
+            env=_git_environment(repo),
             check=False,
             capture_output=True,
         )
@@ -1474,7 +1530,9 @@ def _load_fork_metadata(
 
 def _read_project_metadata(repo: Path, commit: str) -> dict[str, str]:
     completed = _run(
-        ["git", "show", f"{commit}:pyproject.toml"], cwd=repo, env=_isolated_environment()
+        _git_command(repo, ["show", f"{commit}:pyproject.toml"]),
+        cwd=repo,
+        env=_git_environment(repo),
     )
     if completed.returncode != 0:
         raise BundleError("fork-metadata", "maintained fork has no pyproject.toml at that commit")

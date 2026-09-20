@@ -688,10 +688,18 @@ def _git_prefix(checkout: Path) -> list[str]:
 
 
 def _git_environment(checkout: Path) -> dict[str, str]:
-    """Environment for one supplied-checkout Git call: no ambient or parent binding."""
+    """Environment for one supplied-checkout Git call: no ambient or parent binding.
+
+    The ambient bindings are deleted from the isolated copy itself rather than merely
+    omitted by an overlay.  Merging a mapping that never carried ``GIT_DIR`` cannot remove
+    the key the isolated copy inherited from the process environment, so an overlay would
+    leave ``GIT_DIR`` winning and Git addressing whatever repository it names.
+    """
 
     environment = {
-        key: value for key, value in os.environ.items() if key not in _GIT_ENVIRONMENT_OVERRIDES
+        key: value
+        for key, value in _isolated_subprocess_environment().items()
+        if key not in _GIT_ENVIRONMENT_OVERRIDES
     }
     if _own_git_directory(checkout) is None:
         # Without the checkout's own ``.git`` there is no repository to bind to, so Git is
@@ -1252,7 +1260,7 @@ def _materialize_git_archive(checkout: Path, commit: str, destination: Path) -> 
             [*_git_prefix(checkout), "archive", "--format=tar", commit],
             check=False,
             capture_output=True,
-            env={**_isolated_subprocess_environment(), **_git_environment(checkout)},
+            env=_git_environment(checkout),
         )
     except OSError as error:
         raise IntegrityError("Hermes source archive tool is unavailable") from error
@@ -2976,7 +2984,7 @@ def build_tui_in_disposable_workspace(
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 check=False,
-                env={**_isolated_subprocess_environment(), **_git_environment(repo)},
+                env=_git_environment(repo),
             )
             if archive_proc.returncode != 0:
                 raise IntegrityError(f"failed to extract git archive of commit {commit}")

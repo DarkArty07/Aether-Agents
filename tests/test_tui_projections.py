@@ -35,16 +35,39 @@ from aether_agents.lifecycle import (
 from aether_agents.observation.checkpoint import AuthorityContext
 
 FORK_COMMIT = "aed6591a69f453a1867b73628603e7b53ba40ffc"
+_CHECKOUT = Path(__file__).resolve().parents[1]
 
 
 def _git(root: Path, *args: str) -> str:
+    """Run one fixture Git command with no ambient repository binding inherited.
+
+    A fixture is never allowed to read whatever repository the surrounding process
+    environment happens to name; the tests that set ``GIT_DIR`` on purpose depend on it.
+    """
+
     result = subprocess.run(
         ["git", "-C", str(root), *args],
         check=True,
         capture_output=True,
         text=True,
+        env={key: value for key, value in os.environ.items() if not key.startswith("GIT_")},
     )
     return result.stdout.strip()
+
+
+def _this_repository_git_entry() -> Path:
+    """This checkout's own ``.git`` entry, derived from the test file rather than the cwd."""
+
+    entry = _CHECKOUT / ".git"
+    assert entry.exists()
+    return entry
+
+
+def _this_repository_object_directory() -> Path:
+    """The object store this checkout's Git commands resolve, linked worktree included."""
+
+    common = _git(_CHECKOUT, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    return Path(common) / "objects"
 
 
 def _write_fork_tree(root: Path, marker: str) -> None:
@@ -359,6 +382,82 @@ def test_source_materialization_never_archives_an_enclosing_repository(tmp_path:
         lifecycle._materialize_git_archive(nested, commit, tmp_path / "materialized")
 
 
+def test_git_environment_deletes_ambient_repository_bindings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A supplied-tree Git call cannot inherit an ambient repository binding.
+
+    The isolated copy keeps ``GIT_*`` from the process environment, so the bindings have to
+    be deleted from that mapping: an overlay that merely omits them leaves the inherited
+    ``GIT_DIR`` in place and Git addresses whatever repository it names.
+    """
+
+    checkout, _ = _disposable_fork_source(tmp_path)
+    supplied_non_repository = tmp_path / "supplied-non-repository"
+    supplied_non_repository.mkdir()
+
+    monkeypatch.setenv("GIT_DIR", str(_this_repository_git_entry()))
+    monkeypatch.setenv("GIT_OBJECT_DIRECTORY", str(_this_repository_object_directory()))
+    monkeypatch.setenv("GIT_ALTERNATE_OBJECT_DIRECTORIES", str(_this_repository_object_directory()))
+
+    checkout_environment = lifecycle._git_environment(checkout)
+    assert "GIT_DIR" not in checkout_environment
+    assert "GIT_OBJECT_DIRECTORY" not in checkout_environment
+    assert "GIT_ALTERNATE_OBJECT_DIRECTORIES" not in checkout_environment
+    assert "GIT_CEILING_DIRECTORIES" not in checkout_environment
+
+    fenced_environment = lifecycle._git_environment(supplied_non_repository)
+    assert "GIT_DIR" not in fenced_environment
+    assert "GIT_OBJECT_DIRECTORY" not in fenced_environment
+    assert "GIT_ALTERNATE_OBJECT_DIRECTORIES" not in fenced_environment
+    # The only binding left is the deliberate ceiling that fences discovery at the tree.
+    assert fenced_environment["GIT_CEILING_DIRECTORIES"] == str(
+        supplied_non_repository.resolve().parent
+    )
+
+
+def test_materialize_git_archive_refuses_ambient_repository_binding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An ambient binding cannot make a supplied non-repository archive another repository."""
+
+    supplied = tmp_path / "supplied-non-repository"
+    supplied.mkdir()
+    (supplied / "ONLY-SUPPLIED.txt").write_text("supplied\n", encoding="utf-8")
+    destination = tmp_path / "materialized"
+
+    monkeypatch.setenv("GIT_DIR", str(_this_repository_git_entry()))
+    monkeypatch.setenv("GIT_OBJECT_DIRECTORY", str(_this_repository_object_directory()))
+
+    with pytest.raises(IntegrityError, match="archive failed"):
+        lifecycle._materialize_git_archive(supplied, FORK_COMMIT, destination)
+    assert not destination.exists()
+
+    # Separately, with only the object directory pointed at this checkout.
+    monkeypatch.delenv("GIT_DIR")
+    with pytest.raises(IntegrityError, match="archive failed"):
+        lifecycle._materialize_git_archive(supplied, FORK_COMMIT, destination)
+    assert not destination.exists()
+
+
+def test_source_materialization_binds_a_supplied_checkout_under_ambient_binding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With an ambient binding set, a supplied checkout still archives only its own commit."""
+
+    checkout, commit = _disposable_fork_source(tmp_path, marker="SUPPLIED-CHECKOUT-ENTRY")
+    monkeypatch.setenv("GIT_DIR", str(_this_repository_git_entry()))
+    monkeypatch.setenv("GIT_OBJECT_DIRECTORY", str(_this_repository_object_directory()))
+
+    destination = tmp_path / "materialized"
+    lifecycle._materialize_git_archive(checkout, commit, destination)
+
+    entry = destination / "ui-tui" / "package.json"
+    assert entry.is_file()
+    assert "SUPPLIED-CHECKOUT-ENTRY" in entry.read_text(encoding="utf-8")
+    assert not (destination / "pyproject.toml").exists()
+
+
 def test_projection_spec_branded_actions_and_tui_env(tmp_path: Path) -> None:
     """Projections generate branded Aether/Continue Aether actions, WSL adapters, and HERMES_TUI_DIR."""
     project_root = tmp_path / "my-project"
@@ -516,6 +615,7 @@ def test_locked_source_inventory_and_hashes_identical_after_tui_launch(tmp_path:
         ["git", "-C", str(fork_source), "archive", fork_commit],
         stdout=subprocess.PIPE,
         check=True,
+        env={key: value for key, value in os.environ.items() if not key.startswith("GIT_")},
     )
     source_dir.mkdir(parents=True, exist_ok=True)
     subprocess.run(["tar", "-x"], input=archive.stdout, cwd=source_dir, check=True)
