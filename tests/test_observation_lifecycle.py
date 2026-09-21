@@ -214,6 +214,26 @@ def _clean_tagged_checkout(tmp_path: Path) -> tuple[Path, str]:
     return checkout, _git(checkout, "rev-parse", "HEAD")
 
 
+def _materialize_packaged_resources(package: Path) -> None:
+    """Copy the normative bytes the release wheel force-includes as package resources.
+
+    An installed release reads its observation schemas from ``resources/schemas``
+    inside its own package.  A bare copy of the source tree does not carry them, so an
+    emulated install has to reproduce the wheel's mapping instead of falling back to
+    the checkout's ``specs/`` copy.
+    """
+
+    repo_root = Path(__file__).resolve().parents[1]
+    build = tomllib.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
+    mapping = build["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]
+    for source, destination in mapping.items():
+        if not destination.startswith("aether_agents/"):
+            continue
+        target = package.parent / destination
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(repo_root / source, target)
+
+
 def _prepared_release(root: Path, version: str, payload: bytes) -> PreparedRelease:
     wheel = root / f"aether_agents-{version}-py3-none-any.whl"
     wheel.parent.mkdir(parents=True, exist_ok=True)
@@ -231,13 +251,18 @@ def _prepared_release(root: Path, version: str, payload: bytes) -> PreparedRelea
     if os.name == "nt":
         shutil.copy2(sys.executable, synthetic_manager_python)
     else:
-        source_root = Path(__file__).parents[1] / "src"
+        site_packages = stage / "manager" / "site-packages"
+        installed_package = site_packages / "aether_agents"
+        if not installed_package.is_dir():
+            shutil.copytree(Path(lifecycle.__file__).parent, installed_package)
+        _materialize_packaged_resources(installed_package)
         synthetic_manager_python.write_text(
             f"#!{sys.executable}\n"
             "import os, sys\n"
-            f"source = {str(source_root)!r}\n"
+            "from pathlib import Path\n"
+            "import_root = Path(sys.argv[0]).resolve().parent.parent / 'site-packages'\n"
             "environment = dict(os.environ)\n"
-            "environment['PYTHONPATH'] = source\n"
+            "environment['PYTHONPATH'] = str(import_root)\n"
             "os.execvpe(sys.executable, [sys.executable, *sys.argv[1:]], environment)\n",
             encoding="utf-8",
         )

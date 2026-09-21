@@ -37,7 +37,6 @@ _UNSUPPORTED_COMMANDS = (
     "stop",
     "restart",
     "status",
-    "reconcile",
 )
 
 _STDOUT_RESULTS = ("ready", "changed", "no_change", "planned")
@@ -131,6 +130,19 @@ def _build_parser() -> argparse.ArgumentParser:
     uninstall_parser.add_argument("--dry-run", action="store_true")
     uninstall_parser.add_argument("--yes", action="store_true")
     uninstall_parser.add_argument("--json", action="store_true")
+
+    reconcile_parser = subparsers.add_parser(
+        "reconcile",
+        help="Reconcile product projections for the authenticated active release.",
+    )
+    reconcile_parser.add_argument(
+        "--to",
+        default=None,
+        help="Target for reconciliation. Only 'active' is supported in this build.",
+    )
+    reconcile_parser.add_argument("--dry-run", action="store_true")
+    reconcile_parser.add_argument("--yes", action="store_true")
+    reconcile_parser.add_argument("--json", action="store_true")
 
     for name in _UNSUPPORTED_COMMANDS:
         unsupported_parser = subparsers.add_parser(
@@ -246,6 +258,12 @@ def _dispatch_stateful_to_active(
         # way setup does; subsequent update/rollback/uninstall still require it.
         if command == "update" and "--local" in args_list:
             return None
+        if command == "reconcile":
+            return _manager_authority_error(
+                command,
+                "no active manager can authorize reconciliation; unsupported legacy route or uninitialized product",
+                json_mode=json_mode,
+            )
         return _manager_authority_error(
             command,
             "no active manager can authorize this mutation; run 'aether setup' or "
@@ -777,6 +795,101 @@ def _run_uninstall(args: argparse.Namespace) -> int:
     return _emit(envelope, json_mode=args.json, human="Aether product releases removed")
 
 
+def _run_reconcile(args: argparse.Namespace) -> int:
+    from aether_agents.lifecycle import IntegrityError
+
+    command = "reconcile"
+    if args.to != "active":
+        envelope = Envelope(
+            command=command,
+            result="unsupported",
+            manager_version=product_version(),
+        )
+        if args.to == "installed":
+            msg = (
+                "'aether reconcile --to installed' is part of the A1 manager contract and is "
+                "not implemented in this build; use 'aether reconcile --to active'"
+            )
+        else:
+            msg = "reconcile requires '--to active'; other modes are not supported in this build"
+        envelope.fail("UNSUPPORTED_RECONCILE_MODE", msg)
+        return _emit(envelope, json_mode=args.json, human=f"error: {msg}")
+
+    manager = _lifecycle_manager()
+    try:
+        active = manager.store.active(required=False)
+        if active is None:
+            raise IntegrityError("no active release to reconcile")
+        if not active.installed_file_fingerprint or active.schema_version < 3:
+            raise IntegrityError(
+                f"active release {active.release_id} cannot prove authentication; unsupported legacy route"
+            )
+        manager.executing_active_manager()
+        status = manager.projection_status(active)
+        mismatches = list(status.get("mismatches", []))
+
+        if args.dry_run or not args.yes:
+            envelope = Envelope(
+                command=command,
+                result="planned" if mismatches else "no_change",
+                changed=False,
+                manager_version=product_version(),
+                active_version=active.version,
+                data={
+                    "mode": "active",
+                    "active_release_id": active.release_id,
+                    "mismatches": mismatches,
+                    "projections_reconciled": 0,
+                },
+            )
+            if not args.yes and not args.dry_run:
+                envelope.warn(
+                    "CONFIRMATION_REQUIRED",
+                    "Re-run reconcile with --yes to apply projections.",
+                )
+            human = (
+                f"planned reconciliation for active release: {active.version} ({len(mismatches)} mismatches)"
+                if mismatches
+                else f"projections already match active release: {active.version}"
+            )
+            return _emit(envelope, json_mode=args.json, human=human)
+
+        recovery_result = manager.recover()
+        post_status = manager.projection_status(active)
+        reconciled_count = recovery_result.get("projections_reconciled", 0)
+        changed = reconciled_count > 0 or bool(mismatches)
+    except (IntegrityError, OSError) as error:
+        envelope = Envelope(
+            command=command,
+            result="error",
+            manager_version=product_version(),
+            failure_kind="integrity_failure",
+        )
+        envelope.fail("RECONCILE_REFUSED", str(error))
+        return _emit(envelope, json_mode=args.json, human=f"error: {error}")
+
+    envelope = Envelope(
+        command=command,
+        result="changed" if changed else "no_change",
+        changed=changed,
+        manager_version=product_version(),
+        active_version=active.version,
+        data={
+            "mode": "active",
+            "active_release_id": active.release_id,
+            "mismatches": list(post_status.get("mismatches", [])),
+            "projections_reconciled": reconciled_count,
+            "recovered": recovery_result,
+        },
+    )
+    human = (
+        f"reconciled projections for active release: {active.version}"
+        if changed
+        else f"projections already match active release: {active.version}"
+    )
+    return _emit(envelope, json_mode=args.json, human=human)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Parse ``argv`` and dispatch. Always returns an exit code; never raises."""
     args_list = list(sys.argv[1:] if argv is None else argv)
@@ -877,6 +990,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "rollback":
         return _run_transition(args, rollback=True)
+
+    if args.command == "reconcile":
+        return _run_reconcile(args)
 
     if args.command == "uninstall":
         return _run_uninstall(args)
