@@ -8,6 +8,7 @@ therefore preserved across update and rollback.
 from __future__ import annotations
 
 import ast
+import base64
 import configparser
 import email.parser
 import hashlib
@@ -88,6 +89,7 @@ __all__ = [
     "ProjectionRoots",
     "ReleaseRecord",
     "ReleaseStore",
+    "TargetProjectionPlan",
     "ValidatedReleaseLock",
     "UninstallResult",
     "build_tui_in_disposable_workspace",
@@ -1909,6 +1911,7 @@ class ReleaseStore:
         _assert_plain_path(mutable, kind="state root")
         self.root = candidate
         self.state_root = mutable
+        self._restoring_prior_bytes: bytes | None = None
 
     @property
     def releases(self) -> Path:
@@ -2315,6 +2318,38 @@ class ReleaseStore:
                         current_mode = stat.S_IMODE(path.stat().st_mode)
                         path.chmod(0o700 if current_mode & 0o111 else FILE_MODE)
 
+    def _target_active_payload(
+        self,
+        record: ReleaseRecord,
+        *,
+        previous_release_id: str | None | object = _CAS_UNSET,
+    ) -> dict[str, Any]:
+        """Produce the target-owned active record payload.
+
+        The immutable target record.json owns the field set and values.
+        Only the transition-owned previous_release_id is updated to the actual predecessor.
+        Preserves optional-field absence versus explicit null and predecessor history.
+        Never serializes source dataclass defaults into an older target's pointer;
+        never drops arbitrary unknown keys.
+        """
+        record_path = self.release_path(record.release_id) / "record.json"
+        if record_path.is_file() and not record_path.is_symlink():
+            try:
+                payload = json.loads(read_private_bytes(record_path).decode("utf-8"))
+            except (OSError, UnicodeError, ValueError) as error:
+                raise IntegrityError("target release record is unreadable") from error
+            if not isinstance(payload, dict):
+                raise IntegrityError("target release record is malformed")
+            target_payload = dict(payload)
+        else:
+            target_payload = asdict(record)
+
+        target_pred = (
+            record.previous_release_id if previous_release_id is _CAS_UNSET else previous_release_id
+        )
+        target_payload["previous_release_id"] = target_pred
+        return target_payload
+
     def _commit_active(
         self,
         record: ReleaseRecord,
@@ -2330,7 +2365,11 @@ class ReleaseStore:
                     raise IntegrityError(
                         "active release changed concurrently; stale transition refused"
                     )
-            _atomic_json(self.active_pointer, asdict(record))
+            if self._restoring_prior_bytes is not None:
+                _atomic_bytes(self.active_pointer, self._restoring_prior_bytes)
+            else:
+                payload = self._target_active_payload(record)
+                _atomic_json(self.active_pointer, payload)
 
     def _read_release(self, release_id: str) -> ReleaseRecord:
         path = self.release_path(release_id)
@@ -3220,6 +3259,238 @@ class UninstallResult:
     preserved_observations: bool
 
 
+@dataclass(frozen=True, slots=True)
+class TargetProjectionPlan:
+    """Bounded, authenticated projection plan prepared by the selected target release."""
+
+    release_id: str
+    version: str
+    launcher_path: Path
+    launcher_bytes: bytes
+    launcher_mode: int
+    desktop_path: Path
+    desktop_bytes: bytes
+    desktop_mode: int
+    service_path: Path
+    service_bytes: bytes
+    service_mode: int
+    wsl_shortcuts: dict[str, tuple[Path, bytes, int]]
+    is_branded: bool
+    digests: dict[str, str]
+
+
+_TARGET_RUNNER_SCRIPT = r"""
+import base64
+import hashlib
+import inspect
+import json
+import os
+import sys
+from pathlib import Path
+
+def _fail(code):
+    try:
+        sys.stderr.write(json.dumps({"error": code}) + "\n")
+        sys.stderr.flush()
+    except Exception:
+        pass
+    sys.exit(2)
+
+try:
+    raw = sys.stdin.buffer.read(65536)
+    if not raw:
+        _fail("EMPTY_REQUEST")
+    request = json.loads(raw.decode("utf-8"))
+    if not isinstance(request, dict):
+        _fail("MALFORMED_REQUEST")
+
+    operation = request.get("operation")
+    release_id = request.get("release_id")
+    store_root = request.get("store_root")
+    state_root = request.get("state_root")
+
+    if not operation or not release_id or not store_root or not state_root:
+        _fail("INVALID_ARGUMENTS")
+
+    from aether_agents.lifecycle import (
+        ReleaseRecord,
+        ReleaseStore,
+        LifecycleManager,
+        ProjectionRoots,
+        IntegrityError,
+    )
+
+    store = ReleaseStore(Path(store_root), state_root=Path(state_root))
+    installed = store._read_release(release_id)
+
+    if operation == "validate_record":
+        proposed_payload = request.get("proposed_record")
+        if not isinstance(proposed_payload, dict):
+            _fail("MISSING_PROPOSED_RECORD")
+        try:
+            proposed = ReleaseRecord.from_json(proposed_payload)
+        except Exception:
+            _fail("RECORD_SYNTAX_REJECTED")
+
+        if proposed.release_id != release_id:
+            _fail("RELEASE_ID_MISMATCH")
+        if (
+            proposed.version != installed.version
+            or proposed.wheel_sha256 != installed.wheel_sha256
+            or proposed.hermes_commit != installed.hermes_commit
+            or proposed.authority_context != installed.authority_context
+            or proposed.aether_identity != installed.aether_identity
+            or proposed.prebuild_identity != installed.prebuild_identity
+            or proposed.installed_file_fingerprint != installed.installed_file_fingerprint
+            or proposed.observation_compatibility != installed.observation_compatibility
+            or proposed.observer != installed.observer
+        ):
+            _fail("RECORD_COHERENCE_MISMATCH")
+
+        response = {
+            "status": "ok",
+            "operation": "validate_record",
+            "release_id": proposed.release_id,
+            "version": proposed.version,
+        }
+
+    elif operation == "prepare_projections":
+        proposed_payload = request.get("proposed_record")
+        if isinstance(proposed_payload, dict):
+            try:
+                record = ReleaseRecord.from_json(proposed_payload)
+            except Exception:
+                _fail("RECORD_SYNTAX_REJECTED")
+        else:
+            record = installed
+
+        roots_data = request.get("projection_roots", {})
+        proj_kwargs = {
+            "launcher_dir": Path(roots_data["launcher_dir"]),
+            "desktop_dir": Path(roots_data["desktop_dir"]),
+            "service_dir": Path(roots_data["service_dir"]),
+        }
+        if "wsl_shortcuts_dir" in getattr(ProjectionRoots, "__dataclass_fields__", {}):
+            wsl_dir = roots_data.get("wsl_shortcuts_dir")
+            proj_kwargs["wsl_shortcuts_dir"] = Path(wsl_dir) if wsl_dir else None
+
+        roots = ProjectionRoots(**proj_kwargs)
+        project_root_str = request.get("project_root")
+        project_root = Path(project_root_str) if project_root_str else None
+
+        manager_kwargs = {
+            "store": store,
+            "python_executable": Path(sys.executable),
+            "projections": roots,
+        }
+        sig = inspect.signature(LifecycleManager.__init__)
+        if "project_root" in sig.parameters:
+            manager_kwargs["project_root"] = project_root
+
+        manager = LifecycleManager(**manager_kwargs)
+        proj_sig = inspect.signature(manager.projection_spec)
+        if "project_root" in proj_sig.parameters:
+            spec = manager.projection_spec(record, project_root=project_root)
+        else:
+            spec = manager.projection_spec(record)
+
+        wsl_shortcuts_dict = {}
+        for name, (path, data) in getattr(spec, "wsl_shortcuts", {}).items():
+            wsl_shortcuts_dict[name] = {
+                "path": str(path),
+                "name": path.name,
+                "bytes_b64": base64.b64encode(data).decode("ascii"),
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "mode": 0o755,
+            }
+
+        response = {
+            "status": "ok",
+            "operation": "prepare_projections",
+            "release_id": record.release_id,
+            "version": record.version,
+            "launcher": {
+                "path": str(spec.launcher_path),
+                "name": spec.launcher_path.name,
+                "bytes_b64": base64.b64encode(spec.launcher_bytes).decode("ascii"),
+                "sha256": hashlib.sha256(spec.launcher_bytes).hexdigest(),
+                "mode": 0o755,
+            },
+            "desktop": {
+                "path": str(spec.desktop_path),
+                "name": spec.desktop_path.name,
+                "bytes_b64": base64.b64encode(spec.desktop_bytes).decode("ascii"),
+                "sha256": hashlib.sha256(spec.desktop_bytes).hexdigest(),
+                "mode": 0o644,
+            },
+            "service": {
+                "path": str(spec.service_path),
+                "name": spec.service_path.name,
+                "bytes_b64": base64.b64encode(spec.service_bytes).decode("ascii"),
+                "sha256": hashlib.sha256(spec.service_bytes).hexdigest(),
+                "mode": 0o644,
+            },
+            "wsl_shortcuts": wsl_shortcuts_dict,
+        }
+
+    elif operation == "validate_projections":
+        roots_data = request.get("projection_roots", {})
+        proj_kwargs = {
+            "launcher_dir": Path(roots_data["launcher_dir"]),
+            "desktop_dir": Path(roots_data["desktop_dir"]),
+            "service_dir": Path(roots_data["service_dir"]),
+        }
+        if "wsl_shortcuts_dir" in getattr(ProjectionRoots, "__dataclass_fields__", {}):
+            wsl_dir = roots_data.get("wsl_shortcuts_dir")
+            proj_kwargs["wsl_shortcuts_dir"] = Path(wsl_dir) if wsl_dir else None
+
+        roots = ProjectionRoots(**proj_kwargs)
+        project_root_str = request.get("project_root")
+        project_root = Path(project_root_str) if project_root_str else None
+
+        manager_kwargs = {
+            "store": store,
+            "python_executable": Path(sys.executable),
+            "projections": roots,
+        }
+        sig = inspect.signature(LifecycleManager.__init__)
+        if "project_root" in sig.parameters:
+            manager_kwargs["project_root"] = project_root
+
+        manager = LifecycleManager(**manager_kwargs)
+        proj_sig = inspect.signature(manager.projection_spec)
+        if "project_root" in proj_sig.parameters:
+            spec = manager.projection_spec(installed, project_root=project_root)
+        else:
+            spec = manager.projection_spec(installed)
+        mismatches = []
+        if not spec.launcher_path.is_file() or spec.launcher_path.read_bytes() != spec.launcher_bytes:
+            mismatches.append("launcher_mismatch")
+        if not spec.desktop_path.is_file() or spec.desktop_path.read_bytes() != spec.desktop_bytes:
+            mismatches.append("desktop_mismatch")
+        if spec.service_bytes and (not spec.service_path.is_file() or spec.service_path.read_bytes() != spec.service_bytes):
+            mismatches.append("service_mismatch")
+        for name, (path, data) in getattr(spec, "wsl_shortcuts", {}).items():
+            if not path.is_file() or path.read_bytes() != data:
+                mismatches.append(f"wsl_{name}_mismatch")
+        response = {
+            "status": "ok",
+            "operation": "validate_projections",
+            "release_id": installed.release_id,
+            "mismatches": mismatches,
+        }
+    else:
+        _fail("UNKNOWN_OPERATION")
+
+    out = json.dumps(response, sort_keys=True, separators=(",", ":"))
+    sys.stdout.write(out + "\n")
+    sys.stdout.flush()
+    sys.exit(0)
+except Exception:
+    _fail("EXECUTION_FAILED")
+"""
+
+
 class LifecycleManager:
     """Hermes-independent doctor/update/rollback/uninstall orchestration."""
 
@@ -3232,6 +3503,7 @@ class LifecycleManager:
         projections: ProjectionRoots | None = None,
         project_root: Path | str | None = None,
         hermes_runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+        target_runner: Callable[[str, dict[str, Any]], dict[str, Any]] | None = None,
     ) -> None:
         self.store = store
         self.python_executable = Path(python_executable)
@@ -3246,6 +3518,7 @@ class LifecycleManager:
         self.project_root = Path(project_root).resolve() if project_root is not None else None
         self.disabled_service_reason: str | None = None
         self._hermes_runner = hermes_runner
+        self._target_runner = target_runner
         if service_controller is not None:
             self.service_controller: ServiceController = service_controller
         elif self.installed_environment and projections is None:
@@ -3506,6 +3779,222 @@ class LifecycleManager:
         if not isinstance(value, str) or _PROJECTION_POINTER_NAME_RE.fullmatch(value) is None:
             raise IntegrityError("projection transition returned an invalid pointer identity")
         return value
+
+    def _run_target_lifecycle_subprocess(
+        self,
+        target_release_id: str,
+        request: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Execute one bounded lifecycle operation inside the target release manager."""
+
+        if self._target_runner is not None:
+            return self._target_runner(target_release_id, request)
+
+        release_path = self.store.release_path(target_release_id)
+        if not release_path.is_dir():
+            raise IntegrityError(f"target release {target_release_id} is not installed")
+        manager_python = self._environment_python(release_path / "manager")
+
+        payload_request = dict(request)
+        payload_request["release_id"] = target_release_id
+        payload_request["store_root"] = str(self.store.root)
+        payload_request["state_root"] = str(self.store.state_root)
+        encoded = json.dumps(payload_request, sort_keys=True, separators=(",", ":"))
+
+        env = _isolated_subprocess_environment()
+        try:
+            completed = subprocess.run(
+                [str(manager_python), "-c", _TARGET_RUNNER_SCRIPT],
+                input=encoded,
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=30,
+            )
+        except OSError as error:
+            raise IntegrityError("target lifecycle manager interpreter is unavailable") from error
+        except subprocess.TimeoutExpired as error:
+            raise IntegrityError("target lifecycle manager operation timed out") from error
+
+        if completed.returncode != 0:
+            error_code = "UNKNOWN"
+            try:
+                err_payload = json.loads(completed.stderr.strip())
+                if isinstance(err_payload, dict) and "error" in err_payload:
+                    error_code = str(err_payload["error"])
+            except Exception:
+                pass
+            raise IntegrityError(
+                f"target lifecycle operation failed ({payload_request.get('operation')} exit {completed.returncode}: {error_code})"
+            )
+
+        try:
+            payload = json.loads(completed.stdout.strip())
+        except (UnicodeError, json.JSONDecodeError) as error:
+            raise IntegrityError("target lifecycle manager returned malformed output") from error
+
+        if not isinstance(payload, dict) or payload.get("status") != "ok":
+            raise IntegrityError("target lifecycle manager output is incoherent")
+        return payload
+
+    def _validate_target_record_subprocess(
+        self,
+        target_release_id: str,
+        proposed_payload: dict[str, Any],
+    ) -> None:
+        """Run the proposed active record through the exact target manager's reader."""
+
+        request = {
+            "operation": "validate_record",
+            "proposed_record": proposed_payload,
+        }
+        self._run_target_lifecycle_subprocess(target_release_id, request)
+
+    def _prepare_target_projections_subprocess(
+        self,
+        target_release_id: str,
+        record: ReleaseRecord,
+        *,
+        project_root: Path | None = None,
+    ) -> TargetProjectionPlan:
+        roots = self.projection_roots()
+        roots_data = {
+            "launcher_dir": str(roots.launcher_dir),
+            "desktop_dir": str(roots.desktop_dir),
+            "service_dir": str(roots.service_dir),
+            "wsl_shortcuts_dir": (
+                str(roots.wsl_shortcuts_dir) if roots.wsl_shortcuts_dir is not None else None
+            ),
+        }
+        resolved_proj = (
+            str(project_root.resolve())
+            if project_root is not None
+            else (str(self.project_root.resolve()) if self.project_root is not None else None)
+        )
+        request = {
+            "operation": "prepare_projections",
+            "projection_roots": roots_data,
+            "project_root": resolved_proj,
+            "proposed_record": self.store._target_active_payload(record),
+        }
+        result = self._run_target_lifecycle_subprocess(target_release_id, request)
+
+        launcher_info = result.get("launcher")
+        desktop_info = result.get("desktop")
+        service_info = result.get("service")
+        wsl_info = result.get("wsl_shortcuts", {})
+
+        if (
+            not isinstance(launcher_info, dict)
+            or not isinstance(desktop_info, dict)
+            or not isinstance(service_info, dict)
+            or not isinstance(wsl_info, dict)
+        ):
+            raise IntegrityError("target projection plan is malformed")
+
+        # 1. Launcher allowlist & digest check
+        launcher_path = Path(launcher_info["path"])
+        if launcher_path != roots.launcher_dir / _LAUNCHER_NAME:
+            raise IntegrityError("target projection launcher destination is not allowlisted")
+        launcher_bytes = base64.b64decode(launcher_info["bytes_b64"])
+        if hashlib.sha256(launcher_bytes).hexdigest() != launcher_info["sha256"]:
+            raise IntegrityError("target projection launcher digest mismatch")
+
+        # 2. Desktop allowlist & digest check
+        desktop_path = Path(desktop_info["path"])
+        if desktop_path not in {
+            roots.desktop_dir / _DESKTOP_ENTRY_NAME,
+            roots.desktop_dir / _LEGACY_DESKTOP_ENTRY_NAME,
+        }:
+            raise IntegrityError("target projection desktop destination is not allowlisted")
+        desktop_bytes = base64.b64decode(desktop_info["bytes_b64"])
+        if hashlib.sha256(desktop_bytes).hexdigest() != desktop_info["sha256"]:
+            raise IntegrityError("target projection desktop digest mismatch")
+
+        # 3. Service allowlist & digest check
+        service_path = Path(service_info["path"])
+        if service_path != roots.service_dir / AETHER_GATEWAY_UNIT:
+            raise IntegrityError("target projection service destination is not allowlisted")
+        service_bytes = base64.b64decode(service_info["bytes_b64"])
+        if hashlib.sha256(service_bytes).hexdigest() != service_info["sha256"]:
+            raise IntegrityError("target projection service digest mismatch")
+
+        # 4. WSL shortcuts allowlist & digest check
+        wsl_shortcuts: dict[str, tuple[Path, bytes, int]] = {}
+        for name, info in wsl_info.items():
+            if name not in {"aether", "continue_aether"}:
+                raise IntegrityError(f"target projection wsl shortcut {name} is not allowlisted")
+            wsl_path = Path(info["path"])
+            if roots.wsl_shortcuts_dir is None or wsl_path.parent != roots.wsl_shortcuts_dir:
+                raise IntegrityError(
+                    "target projection wsl shortcut destination is not allowlisted"
+                )
+            if wsl_path.name not in {"Aether.cmd", "Continue-Aether.cmd"}:
+                raise IntegrityError("target projection wsl shortcut filename is not allowlisted")
+            wsl_bytes = base64.b64decode(info["bytes_b64"])
+            if hashlib.sha256(wsl_bytes).hexdigest() != info["sha256"]:
+                raise IntegrityError("target projection wsl shortcut digest mismatch")
+            wsl_shortcuts[name] = (wsl_path, wsl_bytes, 0o755)
+
+        digests = {
+            "launcher": launcher_info["sha256"],
+            "desktop": desktop_info["sha256"],
+            "service": service_info["sha256"],
+        }
+        for name, info in wsl_info.items():
+            digests[f"wsl_{name}"] = info["sha256"]
+
+        is_branded = desktop_path.name == _DESKTOP_ENTRY_NAME
+
+        return TargetProjectionPlan(
+            release_id=record.release_id,
+            version=record.version,
+            launcher_path=launcher_path,
+            launcher_bytes=launcher_bytes,
+            launcher_mode=0o755,
+            desktop_path=desktop_path,
+            desktop_bytes=desktop_bytes,
+            desktop_mode=0o644,
+            service_path=service_path,
+            service_bytes=service_bytes,
+            service_mode=0o644,
+            wsl_shortcuts=wsl_shortcuts,
+            is_branded=is_branded,
+            digests=digests,
+        )
+
+    def _validate_target_projections_subprocess(
+        self,
+        target_release_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> dict[str, Any]:
+        roots = self.projection_roots()
+        roots_data = {
+            "launcher_dir": str(roots.launcher_dir),
+            "desktop_dir": str(roots.desktop_dir),
+            "service_dir": str(roots.service_dir),
+            "wsl_shortcuts_dir": (
+                str(roots.wsl_shortcuts_dir) if roots.wsl_shortcuts_dir is not None else None
+            ),
+        }
+        resolved_proj = (
+            str(project_root.resolve())
+            if project_root is not None
+            else (str(self.project_root.resolve()) if self.project_root is not None else None)
+        )
+        request = {
+            "operation": "validate_projections",
+            "projection_roots": roots_data,
+            "project_root": resolved_proj,
+        }
+        result = self._run_target_lifecycle_subprocess(target_release_id, request)
+        mismatches = result.get("mismatches", [])
+        if mismatches:
+            raise IntegrityError(
+                f"target projection validation reported mismatches: {', '.join(mismatches)}"
+            )
+        return result
 
     def _run_projection_transition_locked(
         self,
@@ -5563,6 +6052,28 @@ class LifecycleManager:
     ) -> ReleaseRecord:
         """Validate, journal, switch, revalidate, or restore the prior release."""
 
+        # Pre-mutation target validation WITHOUT holding the cross-process lifecycle lock
+        target_record = self.store._read_release(release_id)
+        current_active = self.store.active(required=False)
+        pred_id = current_active.release_id if current_active is not None else None
+        if pred_id == target_record.release_id:
+            pred_id = target_record.previous_release_id
+        proposed_payload = self.store._target_active_payload(
+            target_record,
+            previous_release_id=pred_id,
+        )
+        try:
+            self._validate_target_record_subprocess(release_id, proposed_payload)
+        except IntegrityError:
+            raise
+        except Exception as error:
+            mgr_path = self.store.release_path(release_id) / "manager"
+            try:
+                self._environment_python(mgr_path)
+            except IntegrityError:
+                raise
+            raise IntegrityError(f"target record validation failed: {error}") from error
+
         expected = (
             self._capture_expected_active()
             if expected_active_release_id is _CAS_UNSET
@@ -5617,10 +6128,26 @@ class LifecycleManager:
             predecessor = target.previous_release_id
         activation_target = replace(target, previous_release_id=predecessor)
         projection_expectations: dict[str, str | None] | None = None
+        prior_active_bytes: bytes | None = None
+        if self.store.active_pointer.is_file() and not self.store.active_pointer.is_symlink():
+            try:
+                prior_active_bytes = read_private_bytes(self.store.active_pointer)
+            except OSError:
+                prior_active_bytes = None
         try:
-            # The target's own reducer builds/replays its versioned projection while
-            # the active record still names the source release.  Prepare never
-            # publishes a pointer, so interruption here cannot expose target semantics.
+            target_payload = self.store._target_active_payload(
+                activation_target,
+                previous_release_id=predecessor,
+            )
+            self._validate_target_record_subprocess(target.release_id, target_payload)
+            try:
+                projection_plan = self._prepare_target_projections_subprocess(
+                    target.release_id,
+                    activation_target,
+                    project_root=self.project_root,
+                )
+            except Exception:
+                projection_plan = None
             projection_expectations = self._prepare_release_projections_locked(activation_target)
             self._materialize_profile_homes(activation_target)
             self._validate_profile_homes(activation_target)
@@ -5636,7 +6163,12 @@ class LifecycleManager:
             # Selector, launcher, Desktop entry and the Aether-owned unit follow the one
             # authoritative active record.  This is the interrupting step: the gateway
             # is restarted immediately, unrelated services are never touched.
-            self.project_release(selected, restart_service=True, transition_kind=transition_kind)
+            self.project_release(
+                selected,
+                restart_service=True,
+                transition_kind=transition_kind,
+                target_plan=projection_plan,
+            )
         except BaseException as transition_error:
             compensation_error: BaseException | None = None
             try:
@@ -5645,14 +6177,18 @@ class LifecycleManager:
                 except IntegrityError:
                     observed = None
                 if observed is not None and observed.release_id == target.release_id:
-                    if previous is None:
+                    if previous is None or prior_active_bytes is None:
                         self.store.active_pointer.unlink(missing_ok=True)
                         _fsync_directory(self.store.root)
                     else:
-                        self.store._commit_active(
-                            previous,
-                            expected_active_release_id=target.release_id,
-                        )
+                        self.store._restoring_prior_bytes = prior_active_bytes
+                        try:
+                            self.store._commit_active(
+                                previous,
+                                expected_active_release_id=target.release_id,
+                            )
+                        finally:
+                            self.store._restoring_prior_bytes = None
                         self.validate_release(previous.release_id)
                 self._restore_profile_product_state(profile_snapshot)
                 if previous is not None:
@@ -6643,7 +7179,7 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         else:
             service_tui_line = (
                 f'Environment="HERMES_TUI_DIR={runtime_current}/tui"\n'
-                if record.version == "1.0.0rc4"
+                if _parse_version_tuple(record.version) >= (1, 0, 0, 3, 4)
                 else ""
             )
             service_bytes = (
@@ -6765,23 +7301,47 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         *,
         restart_service: bool,
         transition_kind: str | None = None,
+        target_plan: TargetProjectionPlan | None = None,
     ) -> dict[str, Any]:
         """Project the launcher, Desktop entry, unit file and selector for one release."""
 
+        if target_plan is None:
+            try:
+                target_plan = self._prepare_target_projections_subprocess(
+                    record.release_id,
+                    record,
+                    project_root=self.project_root,
+                )
+            except Exception:
+                target_plan = None
+
         spec = self.projection_spec(record)
-        branded = _is_branded_version(record.version)
         hermes_owned = _is_hermes_owned_gateway_version(record.version)
         materialize_hermes = hermes_owned or (
             record.version == "1.0.0rc3" and transition_kind == "rollback"
         )
-        targets: list[tuple[Path, bytes, int]] = [
-            (spec.launcher_path, spec.launcher_bytes, 0o755),
-            (spec.desktop_path, spec.desktop_bytes, 0o644),
-        ]
-        if not hermes_owned:
-            targets.append((spec.service_path, spec.service_bytes, 0o644))
-        for _, (wsl_path, wsl_bytes) in sorted(spec.wsl_shortcuts.items()):
-            targets.append((wsl_path, wsl_bytes, 0o755))
+        if target_plan is not None:
+            branded = target_plan.is_branded
+            targets: list[tuple[Path, bytes, int]] = [
+                (target_plan.launcher_path, target_plan.launcher_bytes, target_plan.launcher_mode),
+                (target_plan.desktop_path, target_plan.desktop_bytes, target_plan.desktop_mode),
+            ]
+            if not hermes_owned:
+                targets.append(
+                    (target_plan.service_path, target_plan.service_bytes, target_plan.service_mode)
+                )
+            for _, (wsl_path, wsl_bytes, wsl_mode) in sorted(target_plan.wsl_shortcuts.items()):
+                targets.append((wsl_path, wsl_bytes, wsl_mode))
+        else:
+            branded = _is_branded_version(record.version)
+            targets = [
+                (spec.launcher_path, spec.launcher_bytes, 0o755),
+                (spec.desktop_path, spec.desktop_bytes, 0o644),
+            ]
+            if not hermes_owned:
+                targets.append((spec.service_path, spec.service_bytes, 0o644))
+            for _, (wsl_path, wsl_bytes) in sorted(spec.wsl_shortcuts.items()):
+                targets.append((wsl_path, wsl_bytes, 0o755))
 
         roots = self.projection_roots()
         legacy_desktop = roots.desktop_dir / _LEGACY_DESKTOP_ENTRY_NAME
@@ -6852,6 +7412,11 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             }
             if restart_service:
                 outcome["service_restart"] = self._restart_service(spec)
+            if target_plan is not None:
+                self._validate_target_projections_subprocess(
+                    record.release_id,
+                    project_root=self.project_root,
+                )
             return outcome
         except BaseException:
             # Restore prior opaque state

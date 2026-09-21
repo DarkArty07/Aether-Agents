@@ -336,6 +336,39 @@ def _stub_healthy_runtime(
     monkeypatch.setattr(manager, "_select_release_projections_locked", lambda *_a, **_k: None)
     monkeypatch.setattr(manager, "_reconcile_release_projections_locked", lambda *_a, **_k: None)
     monkeypatch.setattr(manager, "_deactivate_release_projections_locked", lambda *_a, **_k: None)
+    monkeypatch.setattr(manager, "_validate_target_record_subprocess", lambda *_a, **_k: None)
+    monkeypatch.setattr(manager, "_validate_target_projections_subprocess", lambda *_a, **_k: {})
+
+    from aether_agents.lifecycle import TargetProjectionPlan
+
+    def _stub_prepare_target_plan(
+        release_id: str, record: ReleaseRecord, **_kwargs
+    ) -> TargetProjectionPlan:
+        spec = manager.projection_spec(record)
+        wsl = {
+            name: (path, data, 0o755)
+            for name, (path, data) in getattr(spec, "wsl_shortcuts", {}).items()
+        }
+        return TargetProjectionPlan(
+            release_id=record.release_id,
+            version=record.version,
+            launcher_path=spec.launcher_path,
+            launcher_bytes=spec.launcher_bytes,
+            launcher_mode=0o755,
+            desktop_path=spec.desktop_path,
+            desktop_bytes=spec.desktop_bytes,
+            desktop_mode=0o644,
+            service_path=spec.service_path,
+            service_bytes=spec.service_bytes,
+            service_mode=0o644,
+            wsl_shortcuts=wsl,
+            is_branded=spec.desktop_path.name == "aether.desktop",
+            digests=spec.digests(),
+        )
+
+    monkeypatch.setattr(
+        manager, "_prepare_target_projections_subprocess", _stub_prepare_target_plan
+    )
 
 
 def _generate_valid_hermes_unit(

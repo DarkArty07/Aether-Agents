@@ -13,6 +13,7 @@ import json
 import os
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -244,14 +245,15 @@ def _aether_identity(version: str) -> dict[str, object]:
 def _record(store: ReleaseStore, release_id: str = "1.0.0rc1-" + "a" * 16) -> ReleaseRecord:
     from aether_agents.lifecycle import AetherPrebuildIdentity
 
+    version = release_id.split("-")[0]
     tui_bytes = b"console.log('mock-tui');\n"
     tui_hash = hashlib.sha256(tui_bytes).hexdigest()
-    identity = _aether_identity("1.0.0rc1")
+    identity = _aether_identity(version)
     record = ReleaseRecord(
         schema_version=3,
         release_id=release_id,
-        version="1.0.0rc1",
-        wheel_filename="aether_agents-1.0.0rc1-py3-none-any.whl",
+        version=version,
+        wheel_filename=f"aether_agents-{version}-py3-none-any.whl",
         wheel_sha256="a" * 64,
         hermes_tag=MAINTAINED_FORK_BRANCH,
         hermes_commit="b" * 40,
@@ -933,10 +935,11 @@ def _activation_manager(
     monkeypatch: pytest.MonkeyPatch,
     *,
     controller=None,
+    project_root=None,
 ) -> LifecycleManager:
     """One disposable manager authorized for synthetic transitions only."""
 
-    manager = _manager(tmp_path, controller=controller)
+    manager = _manager(tmp_path, controller=controller, project_root=project_root)
     store = manager.store
     monkeypatch.setattr(
         manager,
@@ -1187,3 +1190,403 @@ def test_installed_environment_is_the_only_operator_projection_owner() -> None:
     else:
         assert isinstance(installed.service_controller, DisabledServiceController)
         assert installed.disabled_service_reason == "disabled_non_installed_environment"
+
+
+def _load_frozen_rc3_release_record():
+    """Load the authentic frozen rc3 ReleaseRecord from commit d8ff984c."""
+    rc3_code = subprocess.check_output(
+        [
+            "git",
+            "show",
+            "d8ff984c67bfc147ac9c83cf8a34a72edc27c8df:src/aether_agents/lifecycle.py",
+        ],
+        text=True,
+    )
+    import importlib.util
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        mod_path = Path(td) / "rc3_lifecycle.py"
+        mod_path.write_text(rc3_code, encoding="utf-8")
+        spec = importlib.util.spec_from_file_location("rc3_lifecycle", str(mod_path))
+        assert spec is not None and spec.loader is not None
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["rc3_lifecycle"] = mod
+        spec.loader.exec_module(mod)
+        return mod.ReleaseRecord, mod.IntegrityError
+
+
+def test_target_compatible_active_record_preserves_target_field_shape_and_reader_semantics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Oracle (a): target record owns field shape; absence vs null preserved; rc3 reader proves compatibility."""
+    rc3_ReleaseRecord, rc3_IntegrityError = _load_frozen_rc3_release_record()
+
+    store = ReleaseStore(tmp_path / "data" / "aether", state_root=tmp_path / "state" / "aether")
+    store._ensure_owned_root()
+    release_id = "1.0.0rc3-3333333333333333"
+    rel_path = store.release_path(release_id)
+    rel_path.mkdir(parents=True, exist_ok=True)
+
+    # rc3 payload does NOT have tui_sha256; prebuild_identity is absent
+    rc3_target_payload = {
+        "schema_version": 2,
+        "release_id": release_id,
+        "version": "1.0.0rc3",
+        "wheel_filename": "aether_agents-1.0.0rc3-py3-none-any.whl",
+        "wheel_sha256": "3" * 64,
+        "hermes_tag": "v2026.8.18",
+        "hermes_commit": "a" * 40,
+        "observer_entry_point": "aether-contract-observer=aether_agents.observation.capture.hermes_plugin",
+        "previous_release_id": None,
+        "authority_context": AuthorityContext.for_active_release(release_id).to_record(),
+        "observation_compatibility": {
+            "event_write_version": "aether.observation.event.v1",
+            "event_read_versions": ["aether.observation.event.v1"],
+            "summary_write_version": "aether.observation.summary.v1",
+            "summary_read_versions": ["aether.observation.summary.v1"],
+            "segment_manifest_write_version": "aether.observation.segment-manifest.v1",
+            "segment_manifest_read_versions": ["aether.observation.segment-manifest.v1"],
+            "projection_schema_version": "aether.observation.projection.v1",
+        },
+        "observer": {
+            "plugin_name": "aether-contract-observer",
+            "group": "hermes_agent.plugins",
+            "target": "aether_agents.observation.capture.hermes_plugin",
+        },
+        "hermes_repository": "https://github.com/DarkArty07/aether-hermes",
+        "hermes_branch": "aether-main",
+        "hermes_source_tree_sha256": "c" * 64,
+    }
+    # Write immutable target record.json
+    (rel_path / "record.json").write_text(
+        json.dumps(rc3_target_payload, indent=2), encoding="utf-8"
+    )
+
+    # Parse record using current ReleaseRecord
+    current_record = ReleaseRecord.from_json(rc3_target_payload)
+    assert current_record.tui_sha256 is None
+
+    # Commit as active with predecessor "1.0.0rc2-2222222222222222"
+    predecessor_id = "1.0.0rc2-2222222222222222"
+    current_record_with_pred = replace(current_record, previous_release_id=predecessor_id)
+    store._commit_active(current_record_with_pred)
+
+    # Read the actual persisted bytes in active_pointer
+    active_text = store.active_pointer.read_text(encoding="utf-8")
+    active_json = json.loads(active_text)
+
+    # 1. tui_sha256 MUST NOT be in active_json
+    assert "tui_sha256" not in active_json
+    # 2. prebuild_identity was absent in target record, MUST remain absent
+    assert "prebuild_identity" not in active_json
+    # 3. previous_release_id updated to actual predecessor
+    assert active_json["previous_release_id"] == predecessor_id
+
+    # 4. Proved through the frozen rc3 reader path:
+    rc3_read = rc3_ReleaseRecord.from_json(active_json)
+    assert rc3_read.release_id == release_id
+    assert rc3_read.previous_release_id == predecessor_id
+
+    # 5. Proof of defect (RED/GREEN): if tui_sha256 is added (even as null), rc3 reader rejects it
+    defective_payload = dict(active_json)
+    defective_payload["tui_sha256"] = None
+    with pytest.raises(rc3_IntegrityError, match="malformed active release record"):
+        rc3_ReleaseRecord.from_json(defective_payload)
+
+
+def test_transition_compensation_restores_byte_exact_previous_record_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Oracle (b): compensation restores byte-exact previous active-record bytes (hash-compared)."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    controller = RecordingServiceController()
+    manager = _activation_manager(tmp_path, monkeypatch, controller=controller)
+    store = manager.store
+    prior = _record(store, "1.0.0rc1-" + "a" * 16)
+    target = _record(store, "1.0.0rc1-" + "b" * 16)
+    _install_record(manager, prior)
+    _install_record(manager, target)
+    _release_manager_python(store, prior)
+    _release_manager_python(store, target)
+
+    manager.activate_existing(
+        prior.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+    before_bytes = store.active_pointer.read_bytes()
+    before_sha256 = hashlib.sha256(before_bytes).hexdigest()
+    before_symlink = os.readlink(store.root / "runtime" / "current")
+
+    def _fail_restart(*_args, **_kwargs):
+        raise IntegrityError("simulated restart failure triggering compensation")
+
+    monkeypatch.setattr(manager, "_restart_service", _fail_restart)
+
+    with pytest.raises(IntegrityError, match="simulated restart failure"):
+        manager.activate_existing(
+            target.release_id,
+            transition_kind="update",
+            expected_active_release_id=prior.release_id,
+        )
+
+    after_bytes = store.active_pointer.read_bytes()
+    after_sha256 = hashlib.sha256(after_bytes).hexdigest()
+    assert after_sha256 == before_sha256
+    assert after_bytes == before_bytes
+    assert os.readlink(store.root / "runtime" / "current") == before_symlink
+
+
+def test_incompatible_or_malformed_target_refuses_with_zero_byte_change(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Oracle (c): incompatible target refuses before cutover with 0 byte change to record, selector, projections, unit."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    controller = RecordingServiceController()
+    manager = _activation_manager(tmp_path, monkeypatch, controller=controller)
+    store = manager.store
+    prior = _record(store, "1.0.0rc1-" + "a" * 16)
+    _install_record(manager, prior)
+    _release_manager_python(store, prior)
+
+    manager.activate_existing(
+        prior.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+
+    spec = manager.projection_spec(prior)
+    witnessed_paths = [
+        store.active_pointer,
+        store.root / "runtime" / "current",
+        spec.launcher_path,
+        spec.desktop_path,
+        spec.service_path,
+    ]
+    before_hashes = {
+        p: (
+            hashlib.sha256(p.read_bytes()).hexdigest()
+            if p.is_file() and not p.is_symlink()
+            else (os.readlink(p) if p.is_symlink() else None)
+        )
+        for p in witnessed_paths
+    }
+
+    # Case 1: Target has unknown keys in record.json
+    bad_target = _record(store, "1.0.0rc1-" + "c" * 16)
+    _install_record(manager, bad_target)
+    _release_manager_python(store, bad_target)
+    bad_record_path = store.release_path(bad_target.release_id) / "record.json"
+    bad_payload = json.loads(bad_record_path.read_text(encoding="utf-8"))
+    bad_payload["unknown_future_field_not_in_schema"] = "disallowed"
+    bad_record_path.write_text(json.dumps(bad_payload), encoding="utf-8")
+
+    with pytest.raises(IntegrityError):
+        manager.activate_existing(
+            bad_target.release_id,
+            transition_kind="update",
+            expected_active_release_id=prior.release_id,
+        )
+
+    after_hashes = {
+        p: (
+            hashlib.sha256(p.read_bytes()).hexdigest()
+            if p.is_file() and not p.is_symlink()
+            else (os.readlink(p) if p.is_symlink() else None)
+        )
+        for p in witnessed_paths
+    }
+    assert after_hashes == before_hashes
+
+
+def test_reconcile_to_active_surface(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Oracle (d): reconcile --to active --dry-run is non-mutating; --yes reconciles only already-active release."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    controller = RecordingServiceController()
+    manager = _activation_manager(tmp_path, monkeypatch, controller=controller)
+    store = manager.store
+    active_rec = _record(store, "1.0.0rc1-" + "a" * 16)
+    _install_record(manager, active_rec)
+    _release_manager_python(store, active_rec)
+
+    manager.activate_existing(
+        active_rec.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+
+    spec = manager.projection_spec(active_rec)
+    spec.desktop_path.write_text("tampered desktop file\n", encoding="utf-8")
+    assert manager.projection_status(active_rec)["mismatches"] != []
+
+    desktop_before = spec.desktop_path.read_bytes()
+
+    from aether_agents.cli import main as cli_main
+
+    monkeypatch.setattr("aether_agents.cli._lifecycle_manager", lambda: manager)
+    monkeypatch.setattr(manager, "executing_active_manager", lambda: active_rec)
+
+    # 1. Unsupported modes refuse with code 3
+    assert cli_main(["reconcile", "--to", "installed", "--json"]) == 3
+    out = json.loads(capsys.readouterr().out)
+    assert out["result"] == "unsupported"
+
+    assert cli_main(["reconcile", "--json"]) == 3
+    out = json.loads(capsys.readouterr().out)
+    assert out["result"] == "unsupported"
+
+    # 2. Dry run preview is non-mutating: byte-identical before and after
+    assert cli_main(["reconcile", "--to", "active", "--dry-run", "--json"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["result"] == "planned"
+    assert "desktop_projection_mismatch" in out["data"]["mismatches"]
+    assert spec.desktop_path.read_bytes() == desktop_before
+
+    # 3. Apply with --yes
+    assert cli_main(["reconcile", "--to", "active", "--yes", "--json"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["result"] == "changed"
+    assert out["changed"] is True
+    assert manager.projection_status(active_rec)["mismatches"] == []
+    assert spec.desktop_path.read_bytes() == spec.desktop_bytes
+
+    # 4. Idempotency: second run reports no_change
+    assert cli_main(["reconcile", "--to", "active", "--yes", "--json"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["result"] == "no_change"
+    assert out["changed"] is False
+
+
+def test_reconcile_repairs_rc4_wrong_projection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Oracle (e): rc4 wrong projection (legacy hermes.desktop) is repaired by supported reconcile --to active."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    controller = RecordingServiceController()
+    project_root = tmp_path / "project"
+    project_root.mkdir(parents=True, exist_ok=True)
+    manager = _activation_manager(
+        tmp_path, monkeypatch, controller=controller, project_root=project_root
+    )
+    store = manager.store
+
+    # Active release is rc5
+    rc5_rec = _record(store, "1.0.0rc5-" + "5" * 16)
+    _install_record(manager, rc5_rec)
+    _release_manager_python(store, rc5_rec)
+
+    manager.activate_existing(
+        rc5_rec.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+
+    spec = manager.projection_spec(rc5_rec)
+    service_content = (
+        "[Unit]\nDescription=Hermes Gateway\n\n[Service]\n"
+        f"ExecStart={spec.runtime_current}/venv/bin/python -m hermes_cli.main --profile morfeo gateway run\n"
+        f"WorkingDirectory={manager.store.profile_home('morfeo')}\n"
+        f'Environment="HERMES_HOME={manager.store.profile_home("morfeo")}"\n'
+        f'Environment="VIRTUAL_ENV={spec.runtime_current}/venv"\n'
+    ).encode("utf-8")
+    spec.service_path.parent.mkdir(parents=True, exist_ok=True)
+    spec.service_path.write_bytes(service_content)
+
+    roots = manager.projection_roots()
+    legacy_desktop = roots.desktop_dir / lifecycle._LEGACY_DESKTOP_ENTRY_NAME
+
+    # Simulate rc4 writer defect: hermes.desktop present, aether.desktop missing
+    spec.desktop_path.unlink(missing_ok=True)
+    legacy_desktop.write_text("[Desktop Entry]\nName=Hermes\n", encoding="utf-8")
+    assert legacy_desktop.is_file()
+    assert not spec.desktop_path.is_file()
+
+    status = manager.projection_status(rc5_rec)
+    assert "legacy_desktop_entry_present" in status["mismatches"]
+    assert "desktop_projection_missing" in status["mismatches"]
+
+    active_bytes_before = store.active_pointer.read_bytes()
+
+    from aether_agents.cli import main as cli_main
+
+    monkeypatch.setattr("aether_agents.cli._lifecycle_manager", lambda: manager)
+    monkeypatch.setattr(manager, "executing_active_manager", lambda: rc5_rec)
+
+    assert cli_main(["reconcile", "--to", "active", "--yes", "--json"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["result"] == "changed"
+
+    # Verifications:
+    # 1. aether.desktop exists and is branded
+    assert spec.desktop_path.is_file()
+    assert "Name=Aether" in spec.desktop_path.read_text(encoding="utf-8")
+    # 2. legacy desktop is removed
+    assert not legacy_desktop.exists()
+    # 3. active.json was not edited or mutated
+    assert store.active_pointer.read_bytes() == active_bytes_before
+    # 4. projection status is 100% clean
+    assert manager.projection_status(rc5_rec)["mismatches"] == []
+    assert "PROJECTIONS_INCOHERENT" not in manager.doctor().codes
+
+
+def test_legacy_route_refusal_before_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Oracle (f)/Item 6: unauthenticated legacy route refuses before mutation without touching managed files."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    controller = RecordingServiceController()
+    manager = _activation_manager(tmp_path, monkeypatch, controller=controller)
+    store = manager.store
+
+    # Active release is an unauthenticated legacy rc3 release (no installed_file_fingerprint)
+    legacy_rec = _record(store, "1.0.0rc3-" + "3" * 16)
+    legacy_rec = replace(
+        legacy_rec,
+        schema_version=2,
+        installed_file_fingerprint=None,
+        aether_identity=None,
+        prebuild_identity=None,
+        tui_sha256=None,
+    )
+    _install_record(manager, legacy_rec)
+    _release_manager_python(store, legacy_rec)
+
+    # Directly commit as active pointer
+    store._commit_active(legacy_rec)
+    spec = manager.projection_spec(legacy_rec)
+
+    witnessed_paths = [
+        store.active_pointer,
+        spec.launcher_path,
+        spec.desktop_path,
+    ]
+    before_hashes = {
+        p: hashlib.sha256(p.read_bytes()).hexdigest() for p in witnessed_paths if p.is_file()
+    }
+
+    from aether_agents.cli import main as cli_main
+
+    monkeypatch.setattr("aether_agents.cli._lifecycle_manager", lambda: manager)
+
+    # Active reconcile refuses because rc3 cannot prove active manager authority
+    assert cli_main(["reconcile", "--to", "active", "--yes", "--json"]) == 4
+    out = json.loads(capsys.readouterr().out)
+    assert out["result"] == "error"
+    assert out["errors"][0]["code"] == "RECONCILE_REFUSED"
+
+    after_hashes = {
+        p: hashlib.sha256(p.read_bytes()).hexdigest() for p in witnessed_paths if p.is_file()
+    }
+    assert after_hashes == before_hashes
