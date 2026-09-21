@@ -31,7 +31,10 @@ from aether_agents.observation.capture.collector import (
     observing,
     reentrancy_guard,
 )
-from aether_agents.observation.capture.retained_index import get_retained_index
+from aether_agents.observation.capture.retained_index import (
+    RetainedIndex,
+    get_retained_index,
+)
 from aether_agents.observation.context import (
     ObservationContextResolver,
     canonical_project_id,
@@ -55,6 +58,7 @@ from aether_agents.observation.identity import (
     native_identity,
     parse_correlation_token,
 )
+from aether_agents.observation.locking import project_lock
 from aether_agents.observation.privacy import (
     NativePseudonymKind,
     native_agent_task_ref,
@@ -1543,7 +1547,23 @@ class _Observer:
         task_ref: str,
         relation: str,
         event: dict[str, Any],
+        from_worker: bool = False,
     ) -> bool:
+        """Attribute a native binding durably, or keep the intent pending.
+
+        ``from_worker=False`` is the synchronous hook path.  It restores an
+        already-verified row -- which writes no journal evidence -- and buffers every
+        other state, including an absence verdict, as a pending intent for the
+        reconciliation worker.  A hook therefore never replays retained history, never
+        decompresses an archive, never waits for the maintenance lock, and can never
+        publish a claim that contradicts evidence which moved after the snapshot it
+        read.
+
+        ``from_worker=True`` is the reconciliation worker, which may publish: it
+        validates at its own cadence and emits under the ``native-binding`` project
+        lock, so cooperating emitters serialize, a valid claim another producer
+        published first is preserved, and no conflicting durable claim is created.
+        """
         index = get_retained_index(collector.paths)
         state = index.binding_state(task_ref)
         retained = index.get_binding(task_ref)
@@ -1566,53 +1586,87 @@ class _Observer:
         if state == "conflict":
             collector.health.increment("BINDING_DURABLE_CONFLICT")
             return False
-        if state == "absent":
-            if not index.snapshot_covers_disk(collector.paths, own_epoch=collector.producer_epoch):
-                # The absence verdict comes from a snapshot that no longer covers the
-                # live retained evidence: another producer may already have attributed
-                # this task.  Publishing a durable claim now would contradict that
-                # evidence and leave both claims unresolvable, so keep the intent
-                # pending for the worker's validated emission path -- bounded, with no
-                # history replay and no maintenance-lock wait on this hook.
-                index.record_binding(task_ref, trace_id, relation, event=event)
-                collector.health.increment("BINDING_STALE_SNAPSHOT")
-                return False
-            outcome = collector.emit(event)
-            if outcome.accepted:
-                # The append is not authoritative until the next retained-index
-                # snapshot corroborates it. Keep it marked emitted to avoid duplicates.
-                index.record_binding(
-                    task_ref,
-                    trace_id,
-                    relation,
-                    event=event,
-                    emitted=True,
-                )
-                return True
-            return False
 
-        # Cold, incomplete, or unreadable retained state cannot prove absence. Buffer
-        # the intent for the reconciliation worker; do not attribute it as durable.
+        if state == "absent" and from_worker:
+            return self._publish_absent_binding(
+                collector,
+                index,
+                trace_id=trace_id,
+                task_ref=task_ref,
+                relation=relation,
+                event=event,
+            )
+
+        # Absent, cold, incomplete, or unreadable retained state: proving this task is
+        # unattributed would need exactly the history work the hook path must not do.
+        # Buffer the intent for the reconciliation worker and publish no durable claim.
         index.record_binding(task_ref, trace_id, relation, event=event)
         collector.health.increment("BINDING_UNRESOLVED")
         return False
 
-    def _flush_pending_binding_events(self, collector: Collector) -> None:
-        """Append pending binding intents only after a complete snapshot proves absence."""
-        index = get_retained_index(collector.paths)
-        if not index.snapshot_covers_disk(collector.paths, own_epoch=collector.producer_epoch):
-            # The snapshot this cycle validated no longer matches the live retained
-            # evidence.  Emit nothing from an absence verdict that has moved; the next
-            # reconciliation cycle re-validates and flushes.
-            return
-        for task_ref, _trace_id, _relation, event in index.pending_binding_events():
-            if self._reconciler._stop.is_set():
-                return
+    def _publish_absent_binding(
+        self,
+        collector: Collector,
+        index: RetainedIndex,
+        *,
+        trace_id: str,
+        task_ref: str,
+        relation: str,
+        event: dict[str, Any],
+    ) -> bool:
+        """Publish one absence-based claim inside the cooperating-writer serialization.
+
+        The coverage verdict and the append are one critical section under the
+        ``native-binding`` project lock, so a cooperating emitter that read the same
+        absence cannot also append: whichever process holds the lock first publishes,
+        and the other re-checks and refuses instead of creating a contradiction.  The
+        verdict stays stat-only, so no archived history is read or decompressed.
+        """
+        with project_lock(collector.paths, "native-binding"):
+            if not index.snapshot_covers_disk(collector.paths, own_epoch=collector.producer_epoch):
+                # Another producer may already have attributed this task.  Keep the
+                # intent pending; the next validated cycle retries it.
+                index.record_binding(task_ref, trace_id, relation, event=event)
+                collector.health.increment("BINDING_STALE_SNAPSHOT")
+                return False
             outcome = collector.emit(event)
-            if outcome.accepted:
-                index.mark_pending_binding_emitted(task_ref)
-            else:
-                collector.health.increment("BINDING_UNRESOLVED")
+            if not outcome.accepted:
+                return False
+            # The append is not authoritative until the next retained-index snapshot
+            # corroborates it. Keep it marked emitted to avoid duplicates.
+            index.record_binding(task_ref, trace_id, relation, event=event, emitted=True)
+            return True
+
+    def _flush_pending_binding_events(self, collector: Collector) -> None:
+        """Publish pending binding intents from a validated snapshot, serialized.
+
+        This is the only absence-based durable emission path.  It holds the
+        ``native-binding`` project lock over its coverage verdict *and* its appends --
+        the same serialization the pre-fix production emitter held over its retained
+        read and append -- so cooperating emitters cannot interleave: a claim another
+        cooperating writer published first is preserved, and this process refuses to
+        contradict it instead of creating an unresolvable conflict.  The verdict itself
+        stays stat-only, so no archived history is read or decompressed here either.
+        """
+        index = get_retained_index(collector.paths)
+        pending = index.pending_binding_events()
+        if not pending:
+            return
+        with project_lock(collector.paths, "native-binding"):
+            if not index.snapshot_covers_disk(collector.paths, own_epoch=collector.producer_epoch):
+                # The snapshot this cycle validated no longer covers the live retained
+                # evidence.  Emit nothing from an absence verdict that has moved; the
+                # next reconciliation cycle re-validates and flushes.
+                collector.health.increment("BINDING_STALE_SNAPSHOT")
+                return
+            for task_ref, _trace_id, _relation, event in pending:
+                if self._reconciler._stop.is_set():
+                    return
+                outcome = collector.emit(event)
+                if outcome.accepted:
+                    index.mark_pending_binding_emitted(task_ref)
+                else:
+                    collector.health.increment("BINDING_UNRESOLVED")
 
     def _emit_native_rejections(
         self,
@@ -1932,6 +1986,7 @@ class _Observer:
                         trace_id=t_id,
                         task_ref=task_id,
                         relation="root",
+                        from_worker=True,
                         event=builder.work_unit(
                             event_type="work_unit.bound",
                             status="reported",
@@ -1979,6 +2034,7 @@ class _Observer:
                         trace_id=decision.trace_id,
                         task_ref=task_id,
                         relation="unknown",
+                        from_worker=True,
                         event=builder.work_unit(
                             event_type="work_unit.bound",
                             status="reported",

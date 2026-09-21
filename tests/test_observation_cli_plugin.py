@@ -106,6 +106,19 @@ def _journal_events(paths: ObservationPaths) -> list[dict[str, Any]]:
     return events
 
 
+def _publish_pending_bindings(observer: Any, paths: ObservationPaths) -> None:
+    """Run the reconciliation worker's validated emission for buffered intents.
+
+    A synchronous hook keeps an absence-based binding intent pending; the
+    plugin-owned reconciliation worker is the production path that validates the
+    retained snapshot and publishes the intent inside the ``native-binding`` project
+    lock.  These tests patch the worker thread out, so they drive that same worker
+    entry point explicitly instead of waiting for its interval.
+    """
+    get_retained_index(paths).refresh(paths)
+    observer._flush_pending_binding_events(observer._collector)
+
+
 def _wait_journal_event(
     paths: ObservationPaths, event_type: str, *, timeout: float = 5.0
 ) -> dict[str, Any]:
@@ -320,6 +333,7 @@ def test_objective_contract_finalize_materializes_trace_and_root_create_binds(
         args={"idempotency_key": correlation_token(trace_id, "root")},
         result={"ok": True, "task_id": "t_12345678", "project_id": PROJECT_ID},
     )
+    _publish_pending_bindings(context.unload_callbacks[-1].__self__, paths)
     context.unload_callbacks[-1]()
     events = _journal_events(paths)
     assert {event["event_type"] for event in events} >= {
@@ -389,6 +403,7 @@ def test_objective_contract_result_resolves_project_outside_project_cwd(
         args={"idempotency_key": correlation_token(trace_id, "root")},
         result={"ok": True, "task_id": "t_87654321", "project_id": PROJECT_ID},
     )
+    _publish_pending_bindings(context.unload_callbacks[-1].__self__, paths)
     context.unload_callbacks[-1]()
 
     events = _journal_events(paths)
@@ -768,6 +783,7 @@ def test_plugin_projects_native_payload_before_any_disk_write(
         status="completed",
         summary=secret_values[6],
     )
+    _publish_pending_bindings(ctx.unload_callbacks[-1].__self__, paths)
     for callback in reversed(ctx.unload_callbacks):
         callback()
 
@@ -924,6 +940,7 @@ def test_post_only_kanban_create_success_keeps_terminal_gap_and_durable_binding(
         f"callback_errors={observer._collector.stats.callback_errors}"
     )
     assert observer._collector.stats.callback_errors == 0
+    _publish_pending_bindings(observer, paths)
     for callback in reversed(context.unload_callbacks):
         callback()
 
