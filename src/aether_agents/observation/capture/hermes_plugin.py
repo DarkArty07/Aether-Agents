@@ -32,6 +32,7 @@ from aether_agents.observation.capture.collector import (
     reentrancy_guard,
 )
 from aether_agents.observation.capture.journal import list_segments, read_segment
+from aether_agents.observation.capture.retained_index import get_retained_index
 from aether_agents.observation.context import (
     ObservationContextResolver,
     canonical_project_id,
@@ -57,7 +58,6 @@ from aether_agents.observation.identity import (
     native_identity,
     parse_correlation_token,
 )
-from aether_agents.observation.locking import project_lock
 from aether_agents.observation.privacy import (
     NativePseudonymKind,
     assert_clean,
@@ -354,39 +354,9 @@ def _retained_binding_rows(
     paths: ObservationPaths,
 ) -> dict[str, list[tuple[str, int, str, str, str, str]]]:
     """Read binding rows without inventing an order between producer processes."""
-    candidates: dict[str, list[tuple[str, int, str, str, str, str]]] = {}
-    for event in _validated_retained_events(paths):
-        unit = event.get("work_unit")
-        if not isinstance(unit, dict):
-            continue
-        event_type = event.get("event_type")
-        if event_type not in ("work_unit.bound", "work_unit.unbound") or event.get(
-            "source_kind"
-        ) not in {"hermes_hook", "native_reconciliation"}:
-            continue
-        trace_id = event.get("trace_id")
-        task_ref = native_kanban_task_ref(unit.get("task_ref"))
-        epoch = event.get("producer_epoch")
-        sequence = event.get("producer_seq")
-        if (
-            task_ref is None
-            or not isinstance(trace_id, str)
-            or not _TRACE_RE.fullmatch(trace_id)
-            or not isinstance(epoch, str)
-            or not isinstance(sequence, int)
-        ):
-            continue
-        candidates.setdefault(task_ref, []).append(
-            (
-                epoch,
-                sequence,
-                str(event.get("event_id") or ""),
-                event_type,
-                str(unit.get("relation") or "unknown"),
-                trace_id,
-            )
-        )
-    return candidates
+    index = get_retained_index(paths)
+    index.refresh(paths)
+    return index.candidate_rows
 
 
 def _resolve_retained_binding(
@@ -412,21 +382,22 @@ def _resolve_retained_binding(
 
 def _retained_binding(paths: ObservationPaths, task_ref: str) -> tuple[str, str] | None:
     """Rebuild one worker binding from retained Aether journal evidence."""
-    return _resolve_retained_binding(_retained_binding_rows(paths).get(task_ref, []))
+    index = get_retained_index(paths)
+    index.refresh(paths)
+    return index.get_binding(task_ref)
 
 
 def _retained_bindings(paths: ObservationPaths) -> dict[str, tuple[str, str]]:
     """Rebuild the latest append-only binding state without consulting SQLite."""
-    bindings: dict[str, tuple[str, str]] = {}
-    for task_ref, candidates in _retained_binding_rows(paths).items():
-        resolved = _resolve_retained_binding(candidates)
-        if resolved is not None:
-            bindings[task_ref] = resolved
-    return bindings
+    index = get_retained_index(paths)
+    index.refresh(paths)
+    return index.get_bindings()
 
 
 def _retained_trace_exists(paths: ObservationPaths, trace_id: str) -> bool:
-    return any(event.get("trace_id") == trace_id for event in _validated_retained_events(paths))
+    index = get_retained_index(paths)
+    index.refresh(paths)
+    return index.trace_exists(trace_id)
 
 
 def _verified_native_session_ids(
@@ -650,9 +621,7 @@ class _Observer:
 
         # Compile once at registration, not during the first observed call.
         event_validator()
-        collector = self._resolve_collector({})
-        if collector is not None:
-            self._restore_launch_binding(collector)
+        self._resolve_collector({})
         self._reconstruct_board_bindings()
 
     @staticmethod
@@ -895,8 +864,8 @@ class _Observer:
                     if trace_id in self._contract_board_bindings:
                         return self._contract_board_bindings[trace_id][0]
                     for p_id, col in self._collectors.items():
-                        if col.binder.root_for(trace_id) is not None or _retained_trace_exists(
-                            col.paths, trace_id
+                        if col.binder.root_for(trace_id) is not None or col.is_trace_materialized(
+                            trace_id
                         ):
                             return p_id
             result = _pick(payload, "result", "tool_result")
@@ -991,7 +960,6 @@ class _Observer:
             )
             collector.start(getattr(self._ctx, "spawn_task", None))
             self._collectors[canonical] = collector
-            self._restore_all_retained_bindings(collector)
             if self._collector is None:
                 self._collector = collector
             self._reconciler.start()
@@ -1026,12 +994,15 @@ class _Observer:
     def _restore_all_retained_bindings(self, collector: Collector) -> None:
         if collector.paths.project_id in self._retained_restored_projects:
             return
-        for task_ref, (trace_id, relation) in _retained_bindings(collector.paths).items():
+        index = get_retained_index(collector.paths)
+        for task_ref, (trace_id, relation) in index.get_bindings().items():
             collector.binder.restore(
                 task_ref=task_ref,
                 trace_id=trace_id,
                 relation=relation,
             )
+            collector.restore_materialized_trace(trace_id)
+        for trace_id in index.traces:
             collector.restore_materialized_trace(trace_id)
         self._retained_restored_projects.add(collector.paths.project_id)
 
@@ -1654,20 +1625,24 @@ class _Observer:
         relation: str,
         event: dict[str, Any],
     ) -> bool:
-        with project_lock(collector.paths, "native-binding"):
-            retained = _retained_binding(collector.paths, task_ref)
-            if retained is None:
-                return collector.emit(event).accepted
-            if retained == (trace_id, relation):
-                collector.binder.restore(
-                    task_ref=task_ref,
-                    trace_id=trace_id,
-                    relation=relation,
-                )
-                collector.restore_materialized_trace(trace_id)
+        index = get_retained_index(collector.paths)
+        retained = index.get_binding(task_ref)
+        if retained is None:
+            outcome = collector.emit(event)
+            if outcome.accepted:
+                index.record_binding(task_ref, trace_id, relation)
                 return True
-            collector.health.increment("BINDING_DURABLE_CONFLICT")
             return False
+        if retained == (trace_id, relation):
+            collector.binder.restore(
+                task_ref=task_ref,
+                trace_id=trace_id,
+                relation=relation,
+            )
+            collector.restore_materialized_trace(trace_id)
+            return True
+        collector.health.increment("BINDING_DURABLE_CONFLICT")
+        return False
 
     def _emit_native_rejections(
         self,
@@ -1675,15 +1650,14 @@ class _Observer:
         rejections: tuple[tuple[str, str | None, str | None], ...],
     ) -> None:
         """Attach content-free ingress failures only through explicit trace evidence."""
+        index = get_retained_index(collector.paths)
         for reason_code, task_ref, explicit_trace in rejections:
             candidates: set[str] = set()
             if task_ref is not None:
                 bound = collector.binder.trace_for(task_ref)
                 if bound is not None:
                     candidates.add(bound)
-            if explicit_trace is not None and _retained_trace_exists(
-                collector.paths, explicit_trace
-            ):
+            if explicit_trace is not None and index.trace_exists(explicit_trace):
                 candidates.add(explicit_trace)
             if len(candidates) != 1:
                 continue
@@ -1713,6 +1687,18 @@ class _Observer:
             self._reconcile_native_for_collector(collector)
 
     def _reconcile_native_for_collector(self, collector: Collector) -> None:
+        index = get_retained_index(collector.paths)
+        index.refresh(
+            collector.paths,
+            collector=collector,
+            stop_check=lambda: self._reconciler._stop.is_set(),
+        )
+        if self._reconciler._stop.is_set():
+            return
+
+        self._restore_all_retained_bindings(collector)
+        self._restore_launch_binding(collector)
+
         try:
             from hermes_cli import kanban_db  # type: ignore[import-not-found]
         except ImportError:
@@ -1723,7 +1709,7 @@ class _Observer:
 
         # 1. Look for active traces in this collector that lack a board binding
         for trace_id in sorted(self._active_traces):
-            if not _retained_trace_exists(collector.paths, trace_id):
+            if not index.trace_exists(trace_id):
                 continue
             if trace_id not in self._contract_board_bindings:
                 collector.health.increment("KANBAN_BOARD_UNRESOLVED")
@@ -1927,7 +1913,7 @@ class _Observer:
                 t_id, unit_ref = token_parts
                 if len(task_ids) != 1:
                     collector.health.increment("BINDING_TOKEN_REUSED")
-                    if _retained_trace_exists(collector.paths, t_id):
+                    if index.trace_exists(t_id):
                         self._emit_native_once(
                             collector,
                             ("token_ambiguity", t_id, unit_ref),
@@ -1944,7 +1930,7 @@ class _Observer:
                 task = tasks[task_id]
                 materialized_at = _native_datetime(task.get("created_at"))
                 session_id = native_pseudonym_ref(task.get("session_id"), kind="session")
-                retained = _retained_trace_exists(collector.paths, t_id)
+                retained = index.trace_exists(t_id)
                 if retained:
                     collector.restore_materialized_trace(t_id)
                 elif not collector.ensure_trace_opened(
