@@ -378,3 +378,184 @@ alter.
 No tracked non-`specs/` file was added, renamed or removed: `src/aether_agents/launcher.py` and
 `tests/test_aether_tui_launcher.py` are modified existing files and this evidence file is under `specs/`.
 Manifest lines to add to `.github/workflows/policy.yml`: **none**.
+
+## 8. RC6-LAUNCH-4 — `terminal.cwd` read through the selected runtime's YAML grammar (`t_42bbf99a`)
+
+This unit continues RC6-LAUNCH / -2 / -3 on base **`d45daabe844f8a4e2a65484719321d1c49c2c93b`** (the accepted
+RC6-LAUNCH-3 tip; the dispatcher-created worktree started from the repository's main tip and was reset to that
+base before any edit). It changes the *mechanism* by which `terminal.cwd` is interpreted; it does not change
+what the alignment check means. Mechanism commit: **`c77e9d75b8f7b6b0a67d8aa1975f4f1674e54e89`**; the commit
+carrying this section adds only this section.
+
+### 8.1 Steward disposition and its verified grounds
+
+The plan paragraph that resolves the packaging question is U1, *"Delegated packaging disposition for the
+configured-cwd check"*, in `specs/001-aether-v1-productization/plan-rc6.md` at commit
+`e773e80929d15e05ed288f694e68b1546d4ecce3`. Its direction: keep the manager/wheel dependency closure,
+interpret `terminal.cwd` with the **selected Hermes runtime's** real YAML grammar through a bounded,
+isolated, fixed-operation read-only subprocess, reuse the selected lexical-venv provenance check, transport
+only the cwd interpretation/status, and turn an unavailable interpreter into a bounded refusal rather than
+verified absence.
+
+Grounds re-verified in this unit (each one read, not recalled):
+
+| Ground | Measurement | Where |
+|---|---|---|
+| The wheel declares one runtime dependency | `Requires-Dist: jsonschema==4.26.0` (only) in the built candidate wheel's `*.dist-info/METADATA`; `dependencies = ["jsonschema==4.26.0"]` in `pyproject.toml` | `pyproject.toml`; wheel metadata measured from this revision |
+| The frozen reader requires *exact* dependency equality | `_OBSERVER_RUNTIME_DEPENDENCIES = {"jsonschema": "4.26.0"}`; the reader builds `expected_requirements = {f"{name}=={version}" …}` and raises `IntegrityError("candidate runtime dependencies mismatch")` when the sets differ | `src/aether_agents/lifecycle.py:904`, `:5779-5786` |
+| The target runtime carries the pinned YAML provider | `<release>/artifacts/hermes-requirements.txt:562` is `pyyaml==6.0.3` in the inspected release tree; `uv.lock` resolves `pyyaml` to `6.0.3` | release artifact (inspected release tree), `uv.lock` |
+| The launcher's own environment has no YAML interpreter | fixture self-check: the manager closure venv (wheel plus declared dependencies alone) exits non-zero with `No module named 'yaml'` for `python -I -c "import yaml"` | `tests/test_aether_tui_launcher.py` (`TuiPreservationTests.setUpClass`) |
+
+Consequence: importing YAML inside the launcher would make the module depend on an undeclared package, and
+declaring PyYAML in the wheel would break the exact `Requires-Dist` equality the frozen rc5 manager reader
+enforces — invalidating the required rc5 → rc6 first hop. The mechanism therefore moves the grammar to the
+selected runtime instead of moving a package into the manager closure.
+
+### 8.2 Mechanism change
+
+`src/aether_agents/launcher.py`:
+
+- `import yaml` is **gone** from the module. The launcher runs correctly with the wheel's declared
+  dependencies plus the standard library.
+- `_configured_terminal_cwd(target_python, config)` now delegates the interpretation to the target runtime
+  interpreter and keeps only launcher-side policy: the "no explicit cwd" sentinels
+  (`null`, `.`, `./`, `auto`, `cwd`, empty, absent key) and the unparseable-document abstention.
+- `inspect_activation` resolves that interpreter through the **existing** helper —
+  `_resolve_target_python(hermes, AETHER_RUNTIME_ROOT)` — with its lexical-venv provenance discipline
+  (isolated `sys.prefix`/`purelib` corroboration inside the target venv). No second provenance scheme was
+  introduced.
+- The exact-project comparison and its refusal are untouched:
+  `Morfeo terminal.cwd (<value>) contradicts selected project (<repo>)`, `ActivationError` → exit 2.
+- `--json`/`--check` remain non-mutating and keep exactly the same plan keys; the gate now also runs in those
+  modes, so the check is a faithful predictor of the launch instead of a weaker sibling of it.
+
+### 8.3 What the probe does and does not do
+
+One fixed child, started as `<target python> -I -B -c <fixed script> <config path>`:
+
+- **Isolated**: `-I` (no environment-derived path, no user site, no implicit cwd/script directory on
+  `sys.path`) and `-B` (no bytecode writes). Environment passed to the child is the minimal
+  `PATH`/`SYSTEMROOT`/`TMPDIR`/`TEMP`/`TMP` subset; `stdin` is `DEVNULL`; cwd is the interpreter's own
+  directory, else the temporary directory; timeout 10 s; both streams captured.
+- **Read-only**: the child opens one path for reading and prints one small JSON object. It performs no config
+  migration, no plugin discovery, no service or model request, and no write.
+- **Minimal verdict**: `{"status": "absent"}`, `{"status": "value", "cwd": "<string>"}`,
+  `{"status": "malformed"}`, or `{"status": "unavailable"}` (the target runtime cannot import a YAML
+  interpreter). Nothing else is transported — not the profile, not an environment value, not a secret, not a
+  parser exception text or traceback.
+- **Strictly parsed** on the launcher side: the last non-empty stdout line must be a JSON object with a
+  recognised status; a `value` status must carry a string cwd. Anything else — non-zero exit, timeout, no
+  output, unreadable or unrecognised status, missing value — is a refusal, never a guess.
+
+### 8.4 Refusal semantics (stricter than RC6-LAUNCH-3, deliberately)
+
+If the target runtime cannot be resolved/verified, cannot import a YAML interpreter, fails the probe, or
+returns anything unusable, the gate refuses visibly: `ActivationError` → exit 2 with the stable message
+
+```
+aether: Morfeo terminal.cwd cannot be verified: the selected Hermes runtime provides no YAML interpreter (<bounded reason>)
+```
+
+No traceback, no `ModuleNotFoundError` text, and no silently "ready" plan. An unresolved interpreter must not
+read as "no contradictory cwd": the abstention path stays reserved for the cases where the document *was*
+interpreted (no explicit binding) or is the runtime's own error to surface (unparseable document).
+
+### 8.5 Two closures in the test model
+
+`tests/test_aether_tui_launcher.py`:
+
+- The fixture's ad-hoc `PyYAML>=6.0` install beside the wheel is **removed**. The wheel lane is now the
+  **manager closure**: the wheel plus its declared dependencies alone, asserted by the fixture itself
+  (`import yaml` must fail there).
+- The **target-runtime closure** is a real venv carrying the pinned provider (`pyyaml==6.0.3`), built once per
+  test module and materialized per test by copy, so the provenance probe stays decisive and per-test mutation
+  (a `chmod`, a removed interpreter) cannot leak between tests. The release venv of the preservation fixture is
+  that closure; the module-level launcher fixture binds it as `home/.venv-hermes`; the separate
+  runtime/state-root fixture in `MorfeoTuiLauncherTests` now also carries a runtime closure, because a real
+  runtime store has one.
+- New regressions: manager-closure delegation (contradiction refused / matching binding accepted /
+  unparseable document still abstains), bounded refusal for a target runtime without a YAML interpreter and for
+  an unverifiable interpreter, probe hygiene and isolation (bounded child, no secret or parser text, minimal
+  environment, `-I`/`-B`, safe cwd), and isolation from a shadow `yaml` package on `PYTHONPATH`/cwd.
+
+### 8.6 RED receipt
+
+Command (identical in both trees; the wrapper only unsets `HERMES_KANBAN_*` and the ambient deployment roots
+and supplies a throwaway `TMPDIR`):
+
+```
+uv run --frozen python scripts/run_tests.py -- -q tests/test_aether_tui_launcher.py
+```
+
+Base revision `d45daabe844f8a4e2a65484719321d1c49c2c93b` in a disposable detached worktree carrying **this
+unit's** test module: **7 failed, 37 passed, 13 subtests passed**. Failures and their causes:
+
+| Node | Observed at base | Cause |
+|---|---|---|
+| `…::TuiPreservationTests::test_installed_wheel_console_script_lane_fresh_and_resume_latest` | exit 1 with a traceback | `ModuleNotFoundError: No module named 'yaml'` — the manager closure cannot satisfy the in-process import |
+| `…::TuiPreservationTests::test_aether_project_json_non_mutating_and_reports_release_identity` | exit 1 with a traceback | same |
+| `…::TuiPreservationTests::test_launch_creates_no_build_artefacts_and_leaves_locked_hermes_source_unchanged` | exit 1 with a traceback | same |
+| `…::TuiPreservationTests::test_rc6_launch4_manager_closure_interprets_terminal_cwd_via_target_runtime` | exit 1 with a traceback (expected 2) | same |
+| `…::TuiPreservationTests::test_rc6_launch4_absent_yaml_interpreter_refuses_visibly` | exit 0 and a `"result": "ready"` plan on stdout (expected 2) | base reports a *verified absence* it never verified |
+| `…::TuiPreservationTests::test_rc6_launch4_probe_child_is_bounded_and_carries_no_secret_or_parser_text` | `TypeError: _configured_terminal_cwd() takes 1 positional argument but 2 were given` | no bounded delegation child exists at base |
+| `…::TuiPreservationTests::test_rc6_launch4_probe_is_isolated_from_a_shadow_yaml_package` | exit 2 with `aether: Morfeo terminal.cwd (<shadow-declared-foreign>) contradicts selected project (<project>)` | a project-local `yaml.py` on `PYTHONPATH` answers the gate at base |
+
+The first four are the packaging defect applied to lanes that were green only while the fixture installed
+PyYAML beside the wheel; the remaining three are the new semantic obligations.
+
+### 8.7 Post-change verification (candidate)
+
+At revision `c77e9d75b8f7b6b0a67d8aa1975f4f1674e54e89`:
+
+| Check | Result |
+|---|---|
+| `uv run --frozen python scripts/run_tests.py -- -q tests/test_aether_tui_launcher.py` | PASS: **44 passed, 13 subtests passed** (40 + 4 new nodes, every previously green node still green) |
+| `uv run --frozen ruff check src/aether_agents/launcher.py tests/test_aether_tui_launcher.py` | PASS: all checks passed |
+| `uv run --frozen ruff format --check` (same files) | PASS: 2 files already formatted |
+| `uv run --frozen mypy src/aether_agents` | PASS: no issues in 68 source files |
+| `uv run --frozen python scripts/check_public_artifacts.py` | PASS: tracked surface + 0 artifacts |
+| collateral: `tests/test_project_marker_validation.py` (the only other suite loading the launcher shim) | PASS: 15 passed |
+| repository-wide `ruff check` / `ruff format --check` | identical at base and candidate: 4 pre-existing findings and 8 unformatted files, all in `lab/` and `specs/**/fixtures` or `specs/**/evidence` lineage artifacts outside this unit's surface |
+
+Helper-level re-measurement of the delegated reader (scratch probe, forms and results recorded here):
+absent key, `null`, `.`, `auto`, empty string, non-mapping `terminal` → no explicit cwd; block-style, flow-style
+and quoted-`#` values, values with trailing comments, and a non-string scalar → returned exactly as the grammar
+yields them; duplicate-key/scanner-invalid documents → abstention. With an interpreter that has no YAML
+provider, every one of those forms refuses with the stable message.
+
+### 8.8 Requirement → verification mapping (this unit)
+
+| Obligation | Verification check | Observed result | Evidence status |
+|---|---|---|---|
+| No in-process YAML import; launcher works with the wheel's declared dependencies alone | `…::test_rc6_launch4_manager_closure_…` (RED at `d45daabe`), fixture self-check in `setUpClass` | PASS: manager closure has no YAML interpreter, gate still refuses a contradictory binding and still launches a matching one | Direct |
+| `terminal.cwd` interpreted by the selected target runtime through a bounded, isolated, read-only subprocess | `…::test_rc6_launch4_manager_closure_…`, `…::test_rc6_launch4_probe_child_is_bounded_…` | PASS: `-I -B`, minimal env, safe cwd, `DEVNULL` stdin, bounded timeout, fixed script, no writes | Direct |
+| Child carries only the interpretation/status | same hygiene node (raw child stdout/stderr inspected) | PASS: `{"status": …}` only; sentinel secret and parser text absent from child and launcher streams | Direct |
+| Unavailable interpreter or missing parser ⇒ bounded refusal naming the capability | `…::test_rc6_launch4_absent_yaml_interpreter_refuses_visibly` (both check and launch modes, plus the unverifiable-interpreter case) | PASS: exit 2, stable message, no traceback, no launch | Direct |
+| Preservation: exact-project comparison, flow-style and quoted-`#` fixes, sentinel forms, malformed disposition, selector scrub, fresh/resume, `--json` plan keys | the inherited RC6-LAUNCH/-2/-3 nodes and the launch suites | PASS: 44 passed, 13 subtests; plan keys unchanged | Direct |
+| Two real closures modelled, ad-hoc PyYAML beside the wheel removed | `TuiPreservationTests.setUpClass` + the two fixture lanes | PASS: manager closure asserts no YAML; target runtime closure provides `pyyaml==6.0.3` | Direct |
+| No live or remote effect | witnesses read after the runs | No push/PR/merge/tag/release/activation/service restart/issue mutation. The live profile `config.yaml`, the project registry and the active release pointer are unchanged; nothing in the active release tree was written during this unit's window (the only newer file there is the release manager venv's cached launcher bytecode, written before this card was claimed); the two running `tui_gateway` processes pre-date this unit's window and were neither started nor terminated by it; every fixture lane launches a stub Hermes, never a real TUI | Direct |
+
+### 8.9 Boundary and residual risk carried by this change
+
+- **The gate now needs a verifiable target runtime in every mode.** `--check` and `--json` refuse (exit 2)
+  when the selected runtime's interpreter cannot be verified or provides no YAML interpreter, where they
+  previously produced a plan. That is the intended strictness of this unit, and it is a *supported-route*
+  statement the integration unit must carry: the projected `aether` entry point runs from the release runtime
+  venv, which carries the pinned provider; a manager-only environment can no longer render a plan, and it
+  fails loudly instead of silently.
+- **Deliberate abstention kept**: an unreadable or unparseable profile document is still *not* a launcher
+  refusal class — the runtime surfaces its own error for those bytes. Unreadable files are unreachable in
+  practice because the required-toolsets read of the same file precedes the gate and refuses first.
+- **Target interpreter resolved twice on a launch path**: once inside `inspect_activation` for the gate and
+  once in `main` to bind `HERMES_PYTHON`. Both are the same deterministic, read-only resolution; the
+  duplication was accepted to leave the `--json` plan surface byte-identical.
+- **`_top_level_toolsets` remains a line scanner** (pre-existing, unchanged): it fails closed, so it cannot
+  produce a silent pass. Flagged for the Supervisor, not changed here.
+- **No packaging change**: PyYAML is still not declared in the wheel's runtime metadata, and no release-lock,
+  closure or dependency change is part of this unit — that was the point of the disposition.
+
+### 8.10 Manifest lines
+
+No tracked non-`specs/` file was added, renamed or removed: `src/aether_agents/launcher.py` and
+`tests/test_aether_tui_launcher.py` are modified existing files and this evidence file is under `specs/`.
+Manifest lines to add to `.github/workflows/policy.yml`: **none**.
