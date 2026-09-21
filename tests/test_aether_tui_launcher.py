@@ -16,6 +16,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,6 +40,84 @@ EXPECTED_PLAN_KEYS = [
     "tui_dir",
 ]
 
+#: The inspected release closure pins exactly this YAML provider (release
+#: ``artifacts/hermes-requirements.txt``), so the target-runtime fixture provides it.
+_TARGET_RUNTIME_YAML_VERSION = "6.0.3"
+
+
+def _run_uv(*arguments: str, cwd: Path) -> None:
+    """Run one uv operation for a throwaway closure fixture and fail loudly."""
+
+    completed = subprocess.run(
+        ["uv", *arguments],
+        cwd=str(cwd),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(f"uv {' '.join(arguments)} failed: {completed.stderr.strip()}")
+
+
+_TARGET_RUNTIME_TEMP: tempfile.TemporaryDirectory[str] | None = None
+_TARGET_RUNTIME_VENV: Path | None = None
+
+
+def target_runtime_closure() -> Path:
+    """Return the shared *target-runtime closure* venv, built once per test module.
+
+    The alignment gate reads ``terminal.cwd`` with the selected runtime's real YAML
+    grammar, and an installed Aether release carries that grammar through the pinned
+    Hermes closure.  This fixture models that member as a real venv, so launcher lanes can
+    be exercised while the launcher's *own* environment carries no YAML package at all.
+    """
+
+    global _TARGET_RUNTIME_TEMP, _TARGET_RUNTIME_VENV
+    if _TARGET_RUNTIME_VENV is not None:
+        return _TARGET_RUNTIME_VENV
+
+    _TARGET_RUNTIME_TEMP = tempfile.TemporaryDirectory(prefix="aether-target-runtime-")
+    base = Path(_TARGET_RUNTIME_TEMP.name)
+    venv = base / "venv"
+    _run_uv("venv", str(venv), cwd=base)
+    _run_uv(
+        "pip",
+        "install",
+        "--python",
+        str(venv / "bin" / "python"),
+        f"pyyaml=={_TARGET_RUNTIME_YAML_VERSION}",
+        cwd=base,
+    )
+
+    probe = subprocess.run(
+        [
+            str(venv / "bin" / "python"),
+            "-I",
+            "-c",
+            "import yaml; print(yaml.__version__)",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if probe.returncode != 0 or probe.stdout.strip() != _TARGET_RUNTIME_YAML_VERSION:
+        raise RuntimeError(
+            f"target runtime closure provides no pinned YAML provider: {probe.stderr.strip()}"
+        )
+    _TARGET_RUNTIME_VENV = venv
+    return venv
+
+
+def materialize_target_runtime(destination: Path) -> None:
+    """Materialize a private copy of the target-runtime closure for one fixture.
+
+    The copy keeps the provenance probe decisive (``sys.prefix`` and ``purelib`` inside
+    the fixture venv) while per-test mutation — a chmod, a replaced interpreter — cannot
+    leak into a sibling test.
+    """
+
+    shutil.copytree(target_runtime_closure(), destination, symlinks=True)
+
 
 class MorfeoTuiLauncherTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -60,7 +139,6 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
         self.root = Path(self.tempdir.name) / "aether"
         (self.root / "scripts").mkdir(parents=True)
         (self.root / "home" / "profiles" / "morfeo").mkdir(parents=True)
-        (self.root / "home" / ".venv-hermes" / "bin").mkdir(parents=True)
         (self.root / "home" / "tui").mkdir(parents=True)
         (self.root / "AGENTS.md").write_text("fixture\n", encoding="utf-8")
         marker = self.root / ".aether" / "project.toml"
@@ -88,16 +166,12 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
             encoding="utf-8",
         )
         venv_dir = self.root / "home" / ".venv-hermes"
-        (venv_dir / "bin").mkdir(parents=True, exist_ok=True)
-        (venv_dir / "pyvenv.cfg").write_text(
-            f"home = {sys.base_prefix}/bin\ninclude-system-site-packages = false\nversion = {sys.version.split()[0]}\n",
-            encoding="utf-8",
-        )
+        # The launcher lane binds the *target runtime* closure: a real venv carrying the
+        # pinned YAML provider that ``terminal.cwd`` is interpreted with.
+        materialize_target_runtime(venv_dir)
         hermes = venv_dir / "bin" / "hermes"
         hermes.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         hermes.chmod(0o755)
-        py = venv_dir / "bin" / "python"
-        py.symlink_to(sys.executable)
         shutil.copy2(LAUNCHER, self.root / "scripts" / LAUNCHER.name)
         self.launcher = self.root / "scripts" / LAUNCHER.name
 
@@ -255,7 +329,9 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
         profile.mkdir(parents=True)
         shutil.copy2(self.root / "home/profiles/morfeo/config.yaml", profile / "config.yaml")
         shutil.copy2(self.root / "home/profiles/morfeo/SOUL.md", profile / "SOUL.md")
-        hermes.parent.mkdir(parents=True)
+        # A separate runtime store carries a release runtime closure, so its interpreter is
+        # the one the alignment gate reads ``terminal.cwd`` with.
+        materialize_target_runtime(runtime / "venv")
         hermes.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         hermes.chmod(0o755)
         tui.mkdir(parents=True)
@@ -856,11 +932,10 @@ class TuiPreservationTests(unittest.TestCase):
             capture_output=True,
         )
         python_bin = venv_path / "bin" / "python"
-        # ``config.yaml`` is interpreted by the launcher with the config grammar's own
-        # reader (PyYAML), which every real launch environment supplies through the
-        # release runtime closure: ``artifacts/hermes-requirements.txt`` in an installed
-        # release pins ``pyyaml``.  This synthetic wheel-only venv models that closure
-        # member, not just the wheel's own metadata.
+        # The launcher's own environment is the *manager closure*: the wheel plus its
+        # declared dependencies alone.  PyYAML is deliberately not installed beside the
+        # wheel — the wheel does not declare it, so a venv that has it proves nothing about
+        # supported installation.  The YAML grammar comes from the target runtime instead.
         subprocess.run(
             [
                 "uv",
@@ -869,7 +944,6 @@ class TuiPreservationTests(unittest.TestCase):
                 "--python",
                 str(python_bin),
                 str(wheel),
-                "PyYAML>=6.0",
             ],
             check=True,
             capture_output=True,
@@ -878,6 +952,18 @@ class TuiPreservationTests(unittest.TestCase):
         cls.console_script = venv_path / "bin" / "aether"
         if not cls.console_script.is_file():
             raise RuntimeError(f"Console script not found at {cls.console_script}")
+
+        # Self-check of this fixture's own claim: the manager closure really is without a
+        # YAML interpreter, so any lane that passes does so through the target runtime.
+        manager_yaml = subprocess.run(
+            [str(python_bin), "-I", "-c", "import yaml"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if manager_yaml.returncode == 0:
+            raise RuntimeError("manager closure unexpectedly provides a YAML interpreter")
+        target_runtime_closure()
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -939,14 +1025,11 @@ class TuiPreservationTests(unittest.TestCase):
             "console.log('tui-v1');\n", encoding="utf-8"
         )
 
-        # Stub executable for Hermes
+        # Stub executable for Hermes, inside the *target runtime* closure venv: the gate
+        # interprets ``terminal.cwd`` with this venv interpreter's YAML grammar.
         self.venv_dir = self.release_dir / "venv"
+        materialize_target_runtime(self.venv_dir)
         self.venv_bin = self.venv_dir / "bin"
-        self.venv_bin.mkdir(parents=True)
-        (self.venv_dir / "pyvenv.cfg").write_text(
-            f"home = {sys.base_prefix}/bin\ninclude-system-site-packages = false\nversion = {sys.version.split()[0]}\n",
-            encoding="utf-8",
-        )
         self.hermes_stub = self.venv_bin / "hermes"
         self.hermes_stub.write_text(
             f"#!{sys.executable}\n"
@@ -966,7 +1049,6 @@ class TuiPreservationTests(unittest.TestCase):
         self.hermes_stub.chmod(0o755)
 
         self.python_stub = self.venv_bin / "python"
-        self.python_stub.symlink_to(sys.executable)
 
         # Locked hermes-source tree
         self.hermes_source_dir = self.release_dir / "hermes-source"
@@ -2358,6 +2440,430 @@ class TuiPreservationTests(unittest.TestCase):
         with self.assertRaises(ActivationError) as ctx:
             _resolve_target_python(hermes_file)
         self.assertIn("could not be verified inside target venv", str(ctx.exception))
+
+    # ---------------------------------------------------------------------------------
+    # RC6-LAUNCH-4 (``terminal.cwd`` read through the selected runtime's YAML grammar)
+    # ---------------------------------------------------------------------------------
+
+    def _runtime_without_yaml(self, name: str, *, with_interpreter: bool) -> Path:
+        """Build a throwaway runtime whose venv interpreter provides no YAML interpreter.
+
+        The interpreter is a symlinked base interpreter inside a hand-written venv, so the
+        provenance probe accepts it while the venv's own (empty) site-packages offers no
+        YAML grammar at all.
+        """
+
+        runtime = self.temp_path / name / "current"
+        venv = runtime / "venv"
+        venv_bin = venv / "bin"
+        venv_bin.mkdir(parents=True)
+        (venv / "pyvenv.cfg").write_text(
+            f"home = {sys.base_prefix}/bin\ninclude-system-site-packages = false\n"
+            f"version = {sys.version.split()[0]}\n",
+            encoding="utf-8",
+        )
+        if with_interpreter:
+            (venv_bin / "python").symlink_to(sys.executable)
+        hermes = venv_bin / "hermes"
+        hermes.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        hermes.chmod(0o755)
+        tui = runtime / "tui"
+        tui.mkdir(parents=True)
+        (tui / "index.html").write_text("<html>TUI</html>", encoding="utf-8")
+        return runtime
+
+    def test_rc6_launch4_manager_closure_interprets_terminal_cwd_via_target_runtime(
+        self,
+    ) -> None:
+        """The installed-wheel lane has no YAML interpreter of its own and still gates.
+
+        This is the packaging disposition of the plan applied as a regression: the wheel
+        is installed with its declared dependencies alone, and ``terminal.cwd`` is still
+        interpreted — by the *selected runtime*, never by the launcher's own environment.
+        """
+
+        self.assertIsNotNone(self.console_script)
+        assert self.console_script is not None
+        self.assertIsNotNone(self._venv_dir)
+        assert self._venv_dir is not None
+        manager_python = self._venv_dir / "bin" / "python"
+
+        manager_yaml = subprocess.run(
+            [str(manager_python), "-I", "-c", "import yaml"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(manager_yaml.returncode, 0, "manager closure has a YAML interpreter")
+        self.assertIn("No module named 'yaml'", manager_yaml.stderr)
+
+        cfg_file = self.profile_dir / "config.yaml"
+        original_cfg = cfg_file.read_text(encoding="utf-8")
+        try:
+            # 1. A contradictory flow-style binding is refused before any launch.
+            cfg_file.write_text(
+                original_cfg + "terminal: {cwd: /tmp/manager-closure-foreign}\n",
+                encoding="utf-8",
+            )
+            stub_out_contradiction = self.temp_path / "manager_closure_contradiction.json"
+            res_contradiction = subprocess.run(
+                [
+                    str(self.console_script),
+                    "--project",
+                    str(self.project_dir),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=self._make_env(stub_out_contradiction),
+            )
+            self.assertEqual(res_contradiction.returncode, 2, res_contradiction.stderr)
+            self.assertIn("contradicts selected project", res_contradiction.stderr)
+            self.assertIn("/tmp/manager-closure-foreign", res_contradiction.stderr)
+            self.assertNotIn("Traceback", res_contradiction.stderr)
+            self.assertFalse(stub_out_contradiction.is_file())
+
+            # 2. A binding naming the selected project is accepted and the launch proceeds.
+            cfg_file.write_text(
+                original_cfg + f'terminal: {{cwd: "{self.project_dir}"}}\n',
+                encoding="utf-8",
+            )
+            stub_out_match = self.temp_path / "manager_closure_match.json"
+            res_match = subprocess.run(
+                [
+                    str(self.console_script),
+                    "--project",
+                    str(self.project_dir),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=self._make_env(stub_out_match),
+            )
+            self.assertEqual(res_match.returncode, 0, res_match.stderr)
+            self.assertTrue(stub_out_match.is_file())
+            data_match = json.loads(stub_out_match.read_text(encoding="utf-8"))
+            self.assertEqual(data_match["cwd"], str(self.project_dir.resolve()))
+
+            # 3. An unparseable document keeps its existing disposition: the launcher
+            #    abstains and the runtime surfaces its own error for those same bytes.
+            cfg_file.write_text(
+                original_cfg + "terminal:\n  cwd: /tmp/manager-closure\n  cwd: [unclosed\n",
+                encoding="utf-8",
+            )
+            stub_out_malformed = self.temp_path / "manager_closure_malformed.json"
+            res_malformed = subprocess.run(
+                [
+                    str(self.console_script),
+                    "--project",
+                    str(self.project_dir),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=self._make_env(stub_out_malformed),
+            )
+            self.assertEqual(res_malformed.returncode, 0, res_malformed.stderr)
+            self.assertTrue(stub_out_malformed.is_file())
+        finally:
+            cfg_file.write_text(original_cfg, encoding="utf-8")
+
+    def test_rc6_launch4_absent_yaml_interpreter_refuses_visibly(self) -> None:
+        """An unverifiable grammar is a bounded refusal, never a verified absence.
+
+        The launcher's own environment *does* carry a YAML package here (the developer
+        lane), so an implementation that reads the document in-process would silently
+        report "no contradictory cwd".  The gate must refuse instead, for both the check
+        mode and a launch attempt, and must never leak a traceback.
+        """
+
+        runtime_without_yaml = self._runtime_without_yaml("runtime_no_yaml", with_interpreter=True)
+        runtime_without_interpreter = self._runtime_without_yaml(
+            "runtime_no_interpreter", with_interpreter=False
+        )
+
+        env_check = self._make_env(self.temp_path / "absent_yaml_unused.json")
+        env_check["PYTHONPATH"] = str(ROOT / "src")
+        env_check["AETHER_RUNTIME_ROOT"] = str(runtime_without_yaml)
+
+        res_check = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aether_agents.launcher",
+                "--project",
+                str(self.project_dir),
+                "--check",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env_check,
+        )
+        self.assertEqual(res_check.returncode, 2, res_check.stdout)
+        self.assertEqual(res_check.stdout, "")
+        self.assertIn("terminal.cwd cannot be verified", res_check.stderr)
+        self.assertIn("YAML interpreter", res_check.stderr)
+        self.assertNotIn("Traceback", res_check.stderr)
+        self.assertNotIn("ModuleNotFoundError", res_check.stderr)
+
+        stub_out_launch = self.temp_path / "absent_yaml_launch.json"
+        env_launch = self._make_env(stub_out_launch)
+        env_launch["PYTHONPATH"] = str(ROOT / "src")
+        env_launch["AETHER_RUNTIME_ROOT"] = str(runtime_without_yaml)
+
+        res_launch = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aether_agents.launcher",
+                "--project",
+                str(self.project_dir),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env_launch,
+        )
+        self.assertEqual(res_launch.returncode, 2, res_launch.stderr)
+        self.assertIn("terminal.cwd cannot be verified", res_launch.stderr)
+        self.assertIn("YAML interpreter", res_launch.stderr)
+        self.assertNotIn("Traceback", res_launch.stderr)
+        self.assertFalse(stub_out_launch.is_file())
+
+        # An interpreter that cannot be verified at all is refused the same way: the
+        # capability, not the shape of the runtime layout, is what the message names.
+        env_no_interpreter = self._make_env(self.temp_path / "absent_interpreter.json")
+        env_no_interpreter["PYTHONPATH"] = str(ROOT / "src")
+        env_no_interpreter["AETHER_RUNTIME_ROOT"] = str(runtime_without_interpreter)
+
+        res_no_interpreter = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aether_agents.launcher",
+                "--project",
+                str(self.project_dir),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env_no_interpreter,
+        )
+        self.assertEqual(res_no_interpreter.returncode, 2, res_no_interpreter.stderr)
+        self.assertIn("terminal.cwd cannot be verified", res_no_interpreter.stderr)
+        self.assertIn("YAML interpreter", res_no_interpreter.stderr)
+        self.assertNotIn("Traceback", res_no_interpreter.stderr)
+
+    def test_rc6_launch4_probe_child_is_bounded_and_carries_no_secret_or_parser_text(
+        self,
+    ) -> None:
+        """The delegation child is isolated and transports one minimal status object.
+
+        Half of this node is mechanical — the child is fixed, isolated and given a minimal
+        environment — and half is behavioural: a sentinel secret in the launcher's
+        environment and in the offending document never reaches stdout or stderr, and no
+        parser exception text is transported.
+        """
+
+        from aether_agents import launcher as launcher_module
+
+        sentinel = "rc6-launch4-sentinel-secret"
+        cfg_file = self.profile_dir / "config.yaml"
+        original_cfg = cfg_file.read_text(encoding="utf-8")
+        recorded: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+        children: list[subprocess.CompletedProcess[str]] = []
+        real_run = subprocess.run
+
+        def _spy(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            completed = real_run(*args, **kwargs)
+            recorded.append((args, kwargs))
+            children.append(completed)
+            return completed
+
+        try:
+            cases = (
+                (original_cfg + 'terminal:\n  cwd: "broken\n', "malformed", None),
+                (original_cfg, "absent", None),
+                (
+                    original_cfg + "terminal: {cwd: /tmp/launch4-probed-value}\n",
+                    "value",
+                    "/tmp/launch4-probed-value",
+                ),
+            )
+            for document, expected_status, expected_value in cases:
+                cfg_file.write_text(document, encoding="utf-8")
+                with (
+                    patch.object(launcher_module.subprocess, "run", side_effect=_spy),
+                    patch.dict(os.environ, {"AETHER_LAUNCH4_SENTINEL": sentinel}),
+                ):
+                    observed = launcher_module._configured_terminal_cwd(self.python_stub, cfg_file)
+                self.assertEqual(observed, expected_value, expected_status)
+
+                call_arguments, call_kwargs = recorded[-1]
+                self.assertEqual(
+                    list(call_arguments[0]),
+                    [
+                        str(self.python_stub),
+                        "-I",
+                        "-B",
+                        "-c",
+                        launcher_module._TERMINAL_CWD_PROBE,
+                        str(cfg_file),
+                    ],
+                    expected_status,
+                )
+                child_env = call_kwargs["env"]
+                assert isinstance(child_env, dict)
+                self.assertLessEqual(
+                    set(child_env), set(launcher_module._TERMINAL_CWD_PROBE_ENV_KEYS)
+                )
+                self.assertNotIn("AETHER_LAUNCH4_SENTINEL", child_env)
+                self.assertNotIn("PYTHONPATH", child_env)
+                self.assertNotIn("HERMES_HOME", child_env)
+                self.assertEqual(Path(str(call_kwargs["cwd"])), self.python_stub.parent)
+                self.assertEqual(
+                    call_kwargs["timeout"],
+                    launcher_module._TERMINAL_CWD_PROBE_TIMEOUT_SECONDS,
+                )
+                self.assertIs(call_kwargs["stdin"], subprocess.DEVNULL)
+                self.assertIs(call_kwargs["capture_output"], True)
+
+                child = children[-1]
+                reported = json.loads(child.stdout)
+                self.assertEqual(reported.get("status"), expected_status)
+                self.assertEqual(
+                    sorted(reported.keys()),
+                    ["cwd", "status"] if expected_value is not None else ["status"],
+                )
+                self.assertNotIn(sentinel, child.stdout)
+                self.assertNotIn(sentinel, child.stderr)
+                self.assertNotIn("Traceback", child.stderr)
+                self.assertNotIn("while parsing", child.stderr)
+                if expected_value is None:
+                    self.assertEqual(
+                        child.stdout.strip(),
+                        json.dumps({"status": expected_status}),
+                    )
+
+            # End-to-end: the same secret and a secret-bearing malformed document produce
+            # no leak into the launcher's own output, and no parser text either.
+            cfg_file.write_text(
+                original_cfg + f'terminal: {{cwd: "unclosed {sentinel}\n',
+                encoding="utf-8",
+            )
+            stub_out = self.temp_path / "probe_hygiene.json"
+            env = self._make_env(stub_out)
+            env["PYTHONPATH"] = str(ROOT / "src")
+            env["AETHER_LAUNCH4_SENTINEL"] = sentinel
+            res = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aether_agents.launcher",
+                    "--project",
+                    str(self.project_dir),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
+            self.assertEqual(res.returncode, 0, res.stderr)
+            self.assertTrue(stub_out.is_file())
+            self.assertNotIn(sentinel, res.stdout)
+            self.assertNotIn(sentinel, res.stderr)
+            self.assertNotIn("Traceback", res.stderr)
+            self.assertNotIn("yaml.", res.stderr)
+            self.assertNotIn("while parsing", res.stderr)
+        finally:
+            cfg_file.write_text(original_cfg, encoding="utf-8")
+
+    def test_rc6_launch4_probe_is_isolated_from_a_shadow_yaml_package(self) -> None:
+        """A shadow ``yaml`` on ``PYTHONPATH`` or in the caller's cwd must not answer.
+
+        ``-I``-style isolation plus the minimal child environment keep the verdict bound to
+        the selected runtime's own grammar; a project-local module can neither supply a
+        verdict nor suppress one.
+        """
+
+        shadow_dir = self.temp_path / "shadow_import"
+        shadow_dir.mkdir()
+        shadow_value = self.temp_path / "shadow-declared-foreign"
+        (shadow_dir / "yaml.py").write_text(
+            "def safe_load(stream):\n"
+            f"    return {{'terminal': {{'cwd': {str(shadow_value)!r}}}}}\n",
+            encoding="utf-8",
+        )
+        (shadow_dir / "sitecustomize.py").write_text(
+            "import sys\nprint('shadow sitecustomize loaded', file=sys.stderr)\n",
+            encoding="utf-8",
+        )
+
+        # Positive control: the shadow module really would answer if it were consulted.
+        spec = importlib.util.spec_from_file_location("shadow_yaml_control", shadow_dir / "yaml.py")
+        assert spec is not None and spec.loader is not None
+        shadow_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(shadow_module)
+        self.assertEqual(
+            shadow_module.safe_load("toolsets: []"),
+            {"terminal": {"cwd": str(shadow_value)}},
+        )
+
+        # 1. Lane level: with the hostile cwd and import path in place, the launcher still
+        #    reaches the honest verdict and launches the selected project.
+        stub_out = self.temp_path / "shadow_yaml.json"
+        env = self._make_env(stub_out)
+        env["PYTHONPATH"] = os.pathsep.join((str(shadow_dir), str(ROOT / "src")))
+
+        res = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aether_agents.launcher",
+                "--project",
+                str(self.project_dir),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+            cwd=str(shadow_dir),
+        )
+        # The fixture profile configures no ``terminal.cwd``, so the honest verdict is a
+        # launch; a shadow grammar claiming a foreign cwd would refuse instead.
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertNotIn("contradicts selected project", res.stderr)
+        self.assertTrue(stub_out.is_file())
+        data = json.loads(stub_out.read_text(encoding="utf-8"))
+        self.assertEqual(data["cwd"], str(self.project_dir.resolve()))
+        self.assertEqual(data["environ"].get("PWD"), str(self.project_dir.resolve()))
+
+        # 2. Child level: the delegation child cannot import the shadow package either, so
+        #    it answers from the target runtime's grammar and loads no shadow sitecustomize.
+        from aether_agents import launcher as launcher_module
+
+        children: list[subprocess.CompletedProcess[str]] = []
+        real_run = subprocess.run
+
+        def _spy(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            completed = real_run(*args, **kwargs)
+            children.append(completed)
+            return completed
+
+        with (
+            patch.object(launcher_module.subprocess, "run", side_effect=_spy),
+            patch.dict(
+                os.environ,
+                {"PYTHONPATH": os.pathsep.join((str(shadow_dir), str(ROOT / "src")))},
+            ),
+        ):
+            shadowed = launcher_module._configured_terminal_cwd(
+                self.python_stub, self.profile_dir / "config.yaml"
+            )
+        self.assertIsNone(shadowed)
+        self.assertNotIn("shadow sitecustomize loaded", children[-1].stderr)
+        self.assertEqual(children[-1].stdout.strip(), json.dumps({"status": "absent"}))
 
 
 if __name__ == "__main__":
