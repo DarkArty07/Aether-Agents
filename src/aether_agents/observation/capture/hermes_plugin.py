@@ -1567,6 +1567,16 @@ class _Observer:
             collector.health.increment("BINDING_DURABLE_CONFLICT")
             return False
         if state == "absent":
+            if not index.snapshot_covers_disk(collector.paths, own_epoch=collector.producer_epoch):
+                # The absence verdict comes from a snapshot that no longer covers the
+                # live retained evidence: another producer may already have attributed
+                # this task.  Publishing a durable claim now would contradict that
+                # evidence and leave both claims unresolvable, so keep the intent
+                # pending for the worker's validated emission path -- bounded, with no
+                # history replay and no maintenance-lock wait on this hook.
+                index.record_binding(task_ref, trace_id, relation, event=event)
+                collector.health.increment("BINDING_STALE_SNAPSHOT")
+                return False
             outcome = collector.emit(event)
             if outcome.accepted:
                 # The append is not authoritative until the next retained-index
@@ -1590,6 +1600,11 @@ class _Observer:
     def _flush_pending_binding_events(self, collector: Collector) -> None:
         """Append pending binding intents only after a complete snapshot proves absence."""
         index = get_retained_index(collector.paths)
+        if not index.snapshot_covers_disk(collector.paths, own_epoch=collector.producer_epoch):
+            # The snapshot this cycle validated no longer matches the live retained
+            # evidence.  Emit nothing from an absence verdict that has moved; the next
+            # reconciliation cycle re-validates and flushes.
+            return
         for task_ref, _trace_id, _relation, event in index.pending_binding_events():
             if self._reconciler._stop.is_set():
                 return

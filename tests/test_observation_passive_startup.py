@@ -9,6 +9,7 @@ Satisfies:
 
 from __future__ import annotations
 
+import json
 import secrets
 import threading
 from copy import deepcopy
@@ -28,7 +29,11 @@ from observation_helpers import (
 
 from aether_agents.observation.capture import hermes_plugin
 from aether_agents.observation.capture.collector import Collector
-from aether_agents.observation.capture.journal import JournalWriter, list_segments
+from aether_agents.observation.capture.journal import (
+    JournalWriter,
+    list_segments,
+    read_segment,
+)
 
 try:
     from aether_agents.observation.capture.retained_index import (
@@ -110,6 +115,20 @@ def _write_sample_journal(paths: ObservationPaths, count: int = 5) -> list[dict[
         writer.append(ev)
     writer.close()
     return events
+
+
+def _retained_unit_claims(paths: ObservationPaths, task_ref: str) -> list[tuple[str, str]]:
+    """Return every retained ``work_unit`` claim for one task ref, in segment order."""
+    claims: list[tuple[str, str]] = []
+    for segment in list_segments(paths):
+        if segment.state == "quarantine":
+            continue
+        for line in read_segment(segment.path).lines:
+            event = json.loads(line.decode("utf-8"))
+            unit = event.get("work_unit")
+            if isinstance(unit, dict) and unit.get("task_ref") == task_ref:
+                claims.append((str(event.get("trace_id")), str(event.get("event_type"))))
+    return claims
 
 
 def test_registration_and_hot_hooks_complete_while_historical_reader_held_on_barrier(
@@ -515,3 +534,143 @@ def test_retained_index_reports_unavailable_snapshot_without_false_empty_state(
     assert not index.trace_exists(TRACE_ID)
     assert index.get_binding("t_11111111") is None
     assert index.get_bindings() == {}
+
+
+@pytest.mark.skipif(
+    RetainedIndex is None, reason="retained index is absent on the base RED revision"
+)
+def test_moved_snapshot_stops_an_absent_verdict_from_publishing_a_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stale absence verdict must not publish a claim the live evidence contradicts.
+
+    Production hook path: the retained snapshot validates task ``T`` as absent, another
+    producer then appends its own durable claim for ``T``, and this process's hook claims
+    a different trace for the same task.  Publishing that claim would leave both claims
+    unresolvable and destroy the pre-existing durable attribution, so the hook keeps its
+    intent pending for the worker's validated emission path instead.  Candidate
+    ``03c0e635`` appended the claim here (returning ``True``); base ``d2874c2f`` refused
+    it and preserved the durable attribution, which is the preservation reference for
+    this regression.
+    """
+    _, paths = _setup_project(tmp_path / "stale-binding", monkeypatch)
+    task_ref = "t_5a17e001"
+    retained_trace = "ctr_44444444444444444444444444444444"
+    claimed_trace = "ctr_55555555555555555555555555555555"
+    index = get_retained_index(paths)
+    collector = Collector(paths=paths, runtime_fingerprint="3" * 64)
+    collector.start(None)
+
+    # 1. The validated snapshot reports the task absent.
+    index.refresh(paths)
+    assert index.binding_state(task_ref) == "absent"
+
+    # 2. Another producer appends its durable claim after that validation.
+    foreign_epoch = f"prd_{secrets.token_hex(16)}"
+    foreign_event = EventFactory(
+        project_id=PROJECT_ID, trace_id=retained_trace, epoch=foreign_epoch
+    ).unit("work_unit.bound", "reported", 21.0, task_ref=task_ref, relation="root")
+    foreign_writer = JournalWriter(paths=paths, producer_epoch=foreign_epoch)
+    foreign_writer.open()
+    assert foreign_writer.append(foreign_event).accepted
+    foreign_writer.close()
+
+    assert index.binding_state(task_ref) == "absent", "the in-memory verdict is unchanged"
+
+    # 3. The hook claim must not become durable on that moved verdict.
+    claimed_event = EventFactory(
+        project_id=PROJECT_ID, trace_id=claimed_trace, epoch=collector.producer_epoch
+    ).unit("work_unit.bound", "reported", 22.0, task_ref=task_ref, relation="root")
+    observer = object.__new__(hermes_plugin._Observer)
+    observer._reconciler = hermes_plugin._NativeReconciliationWorker(observer)
+    assert not observer._emit_binding_durable(
+        collector,
+        trace_id=claimed_trace,
+        task_ref=task_ref,
+        relation="root",
+        event=claimed_event,
+    )
+    assert _retained_unit_claims(paths, task_ref) == [(retained_trace, "work_unit.bound")]
+    assert not index.snapshot_covers_disk(paths, own_epoch=collector.producer_epoch), (
+        "the absence verdict no longer covers the live retained evidence"
+    )
+
+    # 4. The worker's validated emission path refuses the same moved verdict.
+    observer._flush_pending_binding_events(collector)
+    assert _retained_unit_claims(paths, task_ref) == [(retained_trace, "work_unit.bound")]
+    collector.stop()
+
+    # 5. Validating the live evidence preserves the durable attribution and drops the
+    #    contradictory intent instead of letting it destroy the earlier claim.
+    index.refresh(paths)
+    assert index.get_binding(task_ref) == (retained_trace, "root")
+    assert index.binding_state(task_ref) == "verified"
+    assert index.pending_binding(task_ref) is None
+    assert all(row[-1] != claimed_trace for row in index.candidate_rows[task_ref])
+
+
+@pytest.mark.skipif(
+    RetainedIndex is None, reason="retained index is absent on the base RED revision"
+)
+def test_own_producer_appends_keep_a_validated_verdict_usable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """This process's own appends must not stall its own durable binding.
+
+    Guards the boundary of the moved-snapshot rule: a healthy single-producer session
+    still publishes its claim immediately, while the same snapshot viewed from another
+    producer epoch, or after a foreign segment appears, correctly stops covering the
+    live retained evidence.
+    """
+    _, paths = _setup_project(tmp_path / "own-epoch-binding", monkeypatch)
+    task_ref = "t_5a17e002"
+    own_trace = "ctr_66666666666666666666666666666666"
+    index = get_retained_index(paths)
+    collector = Collector(paths=paths, runtime_fingerprint="3" * 64)
+    collector.start(None)
+    index.refresh(paths)
+    assert index.binding_state(task_ref) == "absent"
+    assert index.snapshot_covers_disk(paths, own_epoch=collector.producer_epoch)
+
+    # The session's own events land in its own segment after that validation.
+    own_event = EventFactory(
+        project_id=PROJECT_ID, trace_id=own_trace, epoch=collector.producer_epoch
+    ).unit("work_unit.bound", "reported", 31.0, task_ref="t_5a17e003", relation="implementation")
+    assert collector.emit(own_event).accepted
+
+    assert index.snapshot_covers_disk(paths, own_epoch=collector.producer_epoch)
+    assert not index.snapshot_covers_disk(paths, own_epoch=f"prd_{secrets.token_hex(16)}")
+
+    binding_event = EventFactory(
+        project_id=PROJECT_ID, trace_id=own_trace, epoch=collector.producer_epoch
+    ).unit("work_unit.bound", "reported", 32.0, task_ref=task_ref, relation="root")
+    observer = object.__new__(hermes_plugin._Observer)
+    assert observer._emit_binding_durable(
+        collector,
+        trace_id=own_trace,
+        task_ref=task_ref,
+        relation="root",
+        event=binding_event,
+    )
+    assert _retained_unit_claims(paths, task_ref) == [(own_trace, "work_unit.bound")]
+
+    # A foreign segment appearing after validation stops covering, so the next claim
+    # for the same snapshot is kept pending instead of being published.
+    foreign_writer = JournalWriter(paths=paths, producer_epoch=f"prd_{secrets.token_hex(16)}")
+    foreign_writer.open()
+    assert foreign_writer.append(
+        EventFactory(
+            project_id=PROJECT_ID,
+            trace_id=own_trace,
+            epoch=foreign_writer.producer_epoch,
+        ).unit(
+            "work_unit.bound", "reported", 33.0, task_ref="t_5a17e004", relation="implementation"
+        )
+    ).accepted
+    foreign_writer.close()
+    assert not index.snapshot_covers_disk(paths, own_epoch=collector.producer_epoch)
+    collector.stop()
+
+    index.refresh(paths)
+    assert index.get_binding(task_ref) == (own_trace, "root")
+    assert index.get_binding("t_5a17e003") == (own_trace, "implementation")

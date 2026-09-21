@@ -53,6 +53,42 @@ def _resolve_retained_binding(
     return resolved[0] if resolved and all(value == resolved[0] for value in resolved) else None
 
 
+def _current_segment_stats(
+    paths: ObservationPaths,
+) -> tuple[list[tuple[SegmentRef, int, int, int]], bool]:
+    """Stat every eligible retained segment without reading journal content.
+
+    Quarantined segments are excluded.  An archive whose manifest cannot be verified,
+    or a segment that cannot be stated, marks the view incomplete so no caller mistakes
+    a partial enumeration for the authoritative retained set.  An enumeration failure
+    raises, exactly as it does for a full validation.
+    """
+    segments = list_segments(paths)
+    stats: list[tuple[SegmentRef, int, int, int]] = []
+    complete = True
+    for segment in segments:
+        if segment.state == "quarantine":
+            continue
+        if segment.state == "archive":
+            try:
+                from aether_agents.observation.retention import verify_archive
+
+                manifest = segment.path.with_name(segment.path.name + ".manifest.json")
+                if not verify_archive(manifest).ok:
+                    complete = False
+                    continue
+            except Exception:
+                complete = False
+                continue
+        try:
+            st = os.stat(segment.path)
+        except (OSError, UnsafeObservationPath):
+            complete = False
+            continue
+        stats.append((segment, st.st_size, st.st_mtime_ns, st.st_ino))
+    return stats, complete
+
+
 @dataclass(slots=True)
 class _SegmentIndexState:
     path: Path
@@ -89,7 +125,7 @@ class RetainedIndex:
         self.resolved_bindings: dict[str, tuple[str, str]] = {}
         self.validation_count: int = 0
         self._segment_states: dict[Path, _SegmentIndexState] = {}
-        self._snapshot_signature: tuple[tuple[str, int, int, int], ...] = ()
+        self._snapshot_signature: tuple[tuple[str, str, int, int, int], ...] = ()
         self._snapshot_state: str = "unknown"
         self._pending_bindings: dict[str, _PendingBinding] = {}
         self._conflicted_bindings: set[str] = set()
@@ -131,6 +167,64 @@ class RetainedIndex:
         if self._snapshot_state != "validated":
             return {}
         return dict(self.resolved_bindings)
+
+    def snapshot_covers_disk(
+        self,
+        paths: ObservationPaths,
+        *,
+        own_epoch: str | None = None,
+    ) -> bool:
+        """Return whether the validated snapshot still covers the live retained evidence.
+
+        Stat-only: no journal content is read and no lock is taken, so a synchronous
+        native hook may call it.  A segment that another producer added, appended to,
+        replaced, truncated or removed after validation makes the snapshot's ``absent``
+        verdict unusable as proof -- that producer may already have attributed the same
+        task, and publishing a second claim would make the conflict destroy both.  The
+        caller keeps such an intent pending for the asynchronous validated emission
+        path instead.
+
+        Segments owned by ``own_epoch`` are this process's own writer: its appends and
+        rotations are tracked as pending intents here, so they do not invalidate the
+        verdict and a healthy process still publishes its own claim promptly.
+        """
+        if self._snapshot_state != "validated":
+            return False
+        try:
+            current_stats, complete = _current_segment_stats(paths)
+        except Exception:
+            return False
+        if not complete:
+            return False
+
+        seen: set[str] = set()
+        validated = {
+            path: (epoch, size, mtime, inode)
+            for path, epoch, size, mtime, inode in self._snapshot_signature
+        }
+        for segment, size, mtime_ns, inode in current_stats:
+            path = str(segment.path)
+            seen.add(path)
+            previous = validated.get(path)
+            if previous is None:
+                # A segment that did not exist when the snapshot was validated.
+                if own_epoch is not None and segment.producer_epoch == own_epoch:
+                    continue
+                return False
+            if previous == (segment.producer_epoch, size, mtime_ns, inode):
+                continue
+            if own_epoch is not None and segment.producer_epoch == own_epoch:
+                continue
+            return False
+
+        for path, epoch, _size, _mtime, _inode in self._snapshot_signature:
+            if path in seen:
+                continue
+            if own_epoch is not None and epoch == own_epoch:
+                continue
+            # A validated foreign segment disappeared (quarantined or removed).
+            return False
+        return True
 
     def record_binding(
         self,
@@ -204,38 +298,18 @@ class RetainedIndex:
     ) -> None:
         """Update the index if the on-disk segment snapshot changed."""
         try:
-            segments = list_segments(paths)
+            current_stats, stats_complete = _current_segment_stats(paths)
         except Exception:
             self._snapshot_state = "unavailable"
             if collector is not None and hasattr(collector, "health"):
                 collector.health.increment("RETAINED_INDEX_UNAVAILABLE")
             return
 
-        # Build current file signature for all eligible non-quarantine segments.
-        current_stats: list[tuple[SegmentRef, int, int, int]] = []
-        snapshot_complete = True
-        for segment in segments:
-            if segment.state == "quarantine":
-                continue
-            if segment.state == "archive":
-                try:
-                    from aether_agents.observation.retention import verify_archive
-
-                    manifest = segment.path.with_name(segment.path.name + ".manifest.json")
-                    if not verify_archive(manifest).ok:
-                        snapshot_complete = False
-                        continue
-                except Exception:
-                    snapshot_complete = False
-                    continue
-            try:
-                st = os.stat(segment.path)
-                current_stats.append((segment, st.st_size, st.st_mtime_ns, st.st_ino))
-            except (OSError, UnsafeObservationPath):
-                snapshot_complete = False
-
+        # Build the current file signature for all eligible non-quarantine segments.
+        snapshot_complete = stats_complete
         current_sig = tuple(
-            (str(seg.path), size, mtime, ino) for seg, size, mtime, ino in current_stats
+            (str(seg.path), seg.producer_epoch, size, mtime, ino)
+            for seg, size, mtime, ino in current_stats
         )
         if current_sig == self._snapshot_signature and self._snapshot_state in {
             "validated",
