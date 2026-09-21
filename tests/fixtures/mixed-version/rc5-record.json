@@ -1,0 +1,76 @@
+{
+ "aether_identity": {
+  "distribution": "aether-agents",
+  "git_commit": "ee0aa036b2e0b70b137f761668209a5104f2e032",
+  "git_tag": "v1.0.0-rc.5",
+  "observer": {
+   "group": "hermes_agent.plugins",
+   "plugin_name": "aether-contract-observer",
+   "target": "aether_agents.observation.capture.hermes_plugin"
+  },
+  "package_version": "1.0.0rc5",
+  "python_requires": ">=3.11,<3.14"
+ },
+ "authority_context": {
+  "principals": [
+   {
+    "actor_id": "morfeo",
+    "assigned_review_refs": [],
+    "profile": "morfeo",
+    "role": "verification",
+    "verified": true
+   },
+   {
+    "actor_id": "supervisor",
+    "assigned_review_refs": [],
+    "profile": "supervisor",
+    "role": "supervision",
+    "verified": true
+   },
+   {
+    "actor_id": "implementer",
+    "assigned_review_refs": [],
+    "profile": "implementer",
+    "role": "implementation",
+    "verified": true
+   }
+  ],
+  "schema_version": "aether.authority-context.v1",
+  "source": "active_release:1.0.0rc5-40d506a4117229ad"
+ },
+ "hermes_branch": "aether-main",
+ "hermes_commit": "aed6591a69f453a1867b73628603e7b53ba40ffc",
+ "hermes_repository": "https://github.com/DarkArty07/aether-hermes",
+ "hermes_source_tree_sha256": "cc1ebf94ad167979951e7b956ef3a8c448e96fd3389c93cddf60f8f883bb5ce7",
+ "hermes_tag": "aether-main",
+ "installed_file_fingerprint": "2f1ae5f33c25d231cfcea0e4d99b36182eeec5f14abba30548fa2e22e25e80fe",
+ "observation_compatibility": {
+  "event_read_versions": [
+   "aether.observation.event.v1"
+  ],
+  "event_write_version": "aether.observation.event.v1",
+  "projection_schema_version": "aether.observation.projection.v1",
+  "segment_manifest_read_versions": [
+   "aether.observation.segment-manifest.v1"
+  ],
+  "segment_manifest_write_version": "aether.observation.segment-manifest.v1",
+  "summary_read_versions": [
+   "aether.observation.summary.v1"
+  ],
+  "summary_write_version": "aether.observation.summary.v1"
+ },
+ "observer": {
+  "group": "hermes_agent.plugins",
+  "plugin_name": "aether-contract-observer",
+  "target": "aether_agents.observation.capture.hermes_plugin"
+ },
+ "observer_entry_point": "aether-contract-observer=aether_agents.observation.capture.hermes_plugin",
+ "prebuild_identity": "b6454ea98fbec77ca21d063c47cc781dfc3b2f2829bf9bc2e3236b71645bd5a6",
+ "previous_release_id": "1.0.0rc4-9316cbddfee2b795",
+ "release_id": "1.0.0rc5-40d506a4117229ad",
+ "schema_version": 3,
+ "tui_sha256": "f56f6225d9124376eedec1834d372c76a33292aedc41021cc13d6c3b32a05643",
+ "version": "1.0.0rc5",
+ "wheel_filename": "aether_agents-1.0.0rc5-py3-none-any.whl",
+ "wheel_sha256": "40d506a4117229adddb0b6a466bda20cfab2d308f06d8a8990453213642f2d08"
+}
