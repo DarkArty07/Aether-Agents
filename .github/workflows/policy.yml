@@ -687,6 +687,7 @@ jobs:
         run: |
           set -euo pipefail
           export PYTHONPATH="${RUNNER_TEMP}/hermes-exact"
+          export AETHER_EXACT_HERMES_CHECKOUT="${RUNNER_TEMP}/hermes-exact"
           export COVERAGE_FILE="${RUNNER_TEMP}/.coverage"
           export AETHER_GRAPHIFY_PYTHON="${RUNNER_TEMP}/graphify-component/bin/python"
           export AETHER_TEST_COMPONENT_INSTALL=1
