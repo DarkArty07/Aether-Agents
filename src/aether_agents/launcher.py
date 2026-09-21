@@ -22,6 +22,8 @@ from aether_agents.project_marker import ProjectMarkerValidationError, validate_
 __all__ = [
     "REQUIRED_TOOLSETS",
     "ActivationError",
+    "_resolve_target_python",
+    "_resolve_target_source_root",
     "inspect_activation",
     "main",
 ]
@@ -286,6 +288,57 @@ def _resolve_component_paths(repo: Path) -> tuple[Path, Path, Path]:
     return profile, hermes, tui_dir
 
 
+def _resolve_target_python(hermes: Path) -> Path:
+    """Resolve the target release Python interpreter paired with the Hermes executable."""
+    parent = hermes.parent
+    resolved_parent = hermes.resolve().parent
+    candidates = [
+        parent / "python",
+        parent / "python3",
+        parent / "python.exe",
+        parent / "python3.exe",
+        resolved_parent / "python",
+        resolved_parent / "python3",
+        resolved_parent / "python.exe",
+        resolved_parent / "python3.exe",
+    ]
+    for cand in candidates:
+        try:
+            if cand.is_file() and os.access(cand, os.X_OK):
+                return cand.resolve()
+        except OSError:
+            continue
+    return Path(sys.executable).resolve()
+
+
+def _resolve_target_source_root(hermes: Path, runtime_root: Path | None, repo: Path) -> Path | None:
+    """Resolve the target release hermes-source root directory if present."""
+    candidates: list[Path] = []
+    if runtime_root is not None:
+        candidates.append(runtime_root / "hermes-source")
+    candidates.append(data_root() / "runtime" / "current" / "hermes-source")
+
+    # Releases structure: <release_dir>/venv/bin/hermes -> <release_dir>/hermes-source
+    candidates.append(hermes.parent.parent / "hermes-source")
+    candidates.append(hermes.parent.parent.parent / "hermes-source")
+
+    resolved_hermes = hermes.resolve()
+    candidates.append(resolved_hermes.parent.parent / "hermes-source")
+    candidates.append(resolved_hermes.parent.parent.parent / "hermes-source")
+
+    # Local checkout structures
+    candidates.append(repo / "home" / "hermes-source")
+    candidates.append(repo / "hermes-source")
+
+    for cand in candidates:
+        try:
+            if cand.is_dir():
+                return cand.resolve()
+        except OSError:
+            continue
+    return None
+
+
 def inspect_activation(
     extra_args: Sequence[str] = (),
     *,
@@ -414,14 +467,35 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(report, sort_keys=True))
         return 0
 
+    runtime_root = _absolute_env_path("AETHER_RUNTIME_ROOT")
+    target_python = _resolve_target_python(Path(str(report["hermes_executable"])))
+    target_source_root = _resolve_target_source_root(
+        Path(str(report["hermes_executable"])),
+        runtime_root,
+        Path(str(report["repo_root"])),
+    )
+
     environment = dict(os.environ)
     keys_to_drop = [
         k
         for k in environment
         if k.startswith("PYTHON")
+        or k == "VIRTUAL_ENV"
         or k == "HERMES_PROFILE"
+        or k == "HERMES_BIN"
+        or k == "HERMES_CWD"
+        or k == "HERMES_PYTHON"
+        or k == "HERMES_PYTHON_SRC_ROOT"
+        or k == "_HERMES_GATEWAY"
+        or k == "HERMES_UI_SESSION_ID"
+        or k == "HERMES_ACTION_ID"
         or k.startswith("HERMES_TUI")
-        or k == "HERMES_SESSION_ID"
+        or k.startswith("HERMES_SESSION")
+        or k.startswith("HERMES_RPC")
+        or k.startswith("HERMES_GATEWAY")
+        or k.startswith("HERMES_DESKTOP")
+        or k.startswith("HERMES_COMPUTE_HOST")
+        or k.startswith("HERMES_PARENT")
         or k.startswith("HERMES_KANBAN_")
         or k.startswith("HERMES_TASK")
         or k.startswith("HERMES_CRON_")
@@ -433,6 +507,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     environment["AETHER_PROJECT_ID"] = str(report["project_id"])
     environment["PWD"] = str(report["repo_root"])
     environment["HERMES_TUI_DIR"] = str(report["tui_dir"])
+    environment["HERMES_PYTHON"] = str(target_python)
+    if target_source_root is not None:
+        environment["HERMES_PYTHON_SRC_ROOT"] = str(target_source_root)
 
     command = list(cast(list[str], report["command"]))
     executable = str(report["hermes_executable"])

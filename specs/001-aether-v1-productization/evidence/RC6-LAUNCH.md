@@ -1,0 +1,165 @@
+# RC6-LAUNCH — Inherited Transport Selector Scrubbing and Packaged Launch Evidence (rc6)
+
+**Unit**: RC6-LAUNCH (`t_fb74d205`), role Implementer, worktree branch
+`aether-agents-2/t_fb74d205-rc6-launch-scrub-inherited-transport-sel`.
+**Authority**: Objective Contract `oc_b5926701207812e8@v1`
+(SHA-256 `e7164c83862b747c7868706799c08ea63151ca388aa2dc2b1b89a40be33b01fc`), base commit
+`d2874c2f3fc839a82fbaa96ece6edebab3856298`, material design
+`specs/001-aether-v1-productization/plan-rc6.md` §U1, and Supervisor breakdown with shared decisions 1–10
+(`specs/001-aether-v1-productization/tasks-rc6.md` at `adc57c2b`). Never edited the contract.
+**Delivered scope**: contract U1 (code half), D1; acceptance obligation AC-6 (code half); breakdown unit RC6-LAUNCH.
+**Unit compatibility conclusion**: `patch`.
+
+---
+
+## 1. Summary of behavior and verification
+
+1. **Scrubbing inherited transport selectors and stale paths**:
+   - `src/aether_agents/launcher.py` scrubs transport selectors and stale active-session transport paths
+     from `os.environ` before executing the Hermes TUI child process via `os.execve(executable, command, environment)`:
+     - Transport selectors: `HERMES_PYTHON`, `HERMES_PYTHON_SRC_ROOT`, `HERMES_BIN`, `HERMES_CWD`, `_HERMES_GATEWAY`.
+     - Stale socket/RPC/gateway paths: `HERMES_RPC_SOCKET`, `HERMES_RPC_DIR`, `HERMES_RPC_TOKEN`,
+       `HERMES_TUI_GATEWAY_URL`, `HERMES_TUI_SIDECAR_URL`, `HERMES_GATEWAY_SESSION`, `HERMES_GATEWAY_*`.
+     - Stale active-session transport files and ids: `HERMES_TUI_ACTIVE_SESSION_FILE`, `HERMES_SESSION_ID`,
+       `HERMES_SESSION_KEY`, `HERMES_SESSION_*`, `HERMES_UI_SESSION_ID`.
+     - Stale process/desktop state: `HERMES_DESKTOP_READY_FILE`, `HERMES_DESKTOP_CHILD_PID`, `HERMES_DESKTOP_*`,
+       `HERMES_COMPUTE_HOST_*`, `HERMES_PARENT_*`, `HERMES_ACTION_ID`.
+     - Python and virtual environment leak prevention: `PYTHON*`, `VIRTUAL_ENV`.
+     - Task/board routing: `HERMES_KANBAN_*`, `HERMES_TASK*`, `HERMES_CRON_*`, `HERMES_PROFILE`.
+   - Preserves unrelated provider credentials (e.g. `CUSTOM_CREDENTIAL_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`)
+     and model configuration (e.g. `HERMES_MODEL`, `HERMES_INFERENCE_MODEL`).
+
+2. **Binding target release identities after scrubbing**:
+   - `HERMES_PYTHON`: resolves to the active release's Python interpreter (`<target_venv>/bin/python` or `python3`),
+     falling back to the running Python interpreter if not present in the target venv. Never inherits parent's `HERMES_PYTHON`.
+   - `HERMES_PYTHON_SRC_ROOT`: resolves to the active release's `hermes-source` directory if present
+     (`<target_release>/hermes-source`). Never inherits parent's `HERMES_PYTHON_SRC_ROOT`.
+   - `HERMES_TUI_DIR`: binds the active release's TUI directory (`<target_release>/tui`).
+   - `HERMES_HOME`: binds the active release's Morfeo profile (`<state_root>/hermes/profiles/morfeo`).
+   - `AETHER_PROJECT_ID`: binds the exact verified project UUID.
+   - `PWD`: binds the exact verified repository root.
+   - Child execution: `[<hermes_executable>, "--tui", "--in", "<repo_root>", ...]` executed with the scrubbed environment.
+
+3. **Clean and contaminated shell environments**:
+   - Fresh launch and continuation launch (`--resume latest`) both succeed in a clean shell environment (no ambient
+     transport variables) and in a heavily contaminated shell environment (with old backend python, old source root,
+     stale gateway URLs, and stale sockets).
+   - In both environments, the launched child receives the exact active release identities and zero stale transport residue.
+
+4. **Bare `aether` launch inside project directory**:
+   - Tested bare invocation `aether` from cwd matching an initialized registered project without `--project`.
+   - Resolves exact project from disk marker and registry agreement, scrubs contaminated environment, and binds
+     target identities identically.
+
+5. **Non-mutating plan and locked-source preservation**:
+   - `aether --project <root> --json` remains strictly non-mutating and outputs the canonical plan keys.
+   - Reserved arguments (`--safe-mode`, `--profile`, etc.) continue to fail closed with code 2.
+   - Pre/post file-type and SHA-256 inventories of locked `hermes-source` match bit-for-bit across launches, with zero
+     npm/build artefacts generated.
+
+---
+
+## 2. Contaminated environment construction
+
+The test suite constructs the contaminated parent environment via `_make_contaminated_env()` in
+`tests/test_aether_tui_launcher.py`:
+
+```python
+env["HERMES_PYTHON"] = "/opt/stale-backend/venv/bin/python"
+env["HERMES_PYTHON_SRC_ROOT"] = "/opt/stale-backend/hermes-source"
+env["HERMES_TUI_GATEWAY_URL"] = "ws://127.0.0.1:9999"
+env["HERMES_TUI_SIDECAR_URL"] = "ws://127.0.0.1:9998"
+env["HERMES_TUI_ACTIVE_SESSION_FILE"] = "/tmp/stale-session.json"
+env["HERMES_RPC_SOCKET"] = "/tmp/stale-rpc.sock"
+env["HERMES_RPC_DIR"] = "/tmp/stale-rpc"
+env["HERMES_RPC_TOKEN"] = "stale-rpc-token"
+env["HERMES_SESSION_ID"] = "stale-session-123"
+env["HERMES_SESSION_KEY"] = "stale-session-key"
+env["HERMES_UI_SESSION_ID"] = "stale-ui-session-id"
+env["HERMES_CWD"] = "/tmp/stale-cwd"
+env["HERMES_BIN"] = "/tmp/stale-bin/hermes"
+env["VIRTUAL_ENV"] = "/opt/stale-backend/venv"
+env["_HERMES_GATEWAY"] = "1"
+env["HERMES_GATEWAY_SESSION"] = "stale-gw-session"
+env["HERMES_DESKTOP_READY_FILE"] = "/tmp/stale-desktop.ready"
+env["HERMES_PROFILE"] = "dirty-profile"
+env["PYTHONBREAKPOINT"] = "custom-breakpoint"
+env["PYTHONWARNINGS"] = "error"
+env["HERMES_TUI_DIR"] = "/tmp/stale-ambient-tui"
+env["HERMES_TUI_PORT"] = "9999"
+env["HERMES_KANBAN_TASK"] = "t_stale456"
+env["HERMES_KANBAN_DB"] = "/tmp/stale-kanban.db"
+env["HERMES_TASK_ID"] = "stale-task"
+env["HERMES_CRON_JOB"] = "stale-cron"
+env["CUSTOM_CREDENTIAL_KEY"] = "retained-secret"
+```
+
+Reproduction verification:
+- Prior to the fix, `HERMES_PYTHON`, `HERMES_PYTHON_SRC_ROOT`, `HERMES_RPC_SOCKET`, `HERMES_CWD`, `HERMES_BIN`,
+  and `VIRTUAL_ENV` leaked directly into the child process environment, causing nested/successor launches to bind
+  to the old backend.
+- After the fix, `test_regression_contaminated_parent_cannot_select_old_backend` explicitly asserts that the child's
+  `HERMES_PYTHON` and `HERMES_PYTHON_SRC_ROOT` do NOT match the stale parent values, but instead match the active release
+  target paths, and that all stale transport sockets and URLs are absent.
+
+---
+
+## 3. Requirement to verification mapping
+
+| Requirement / Clause | Verification check | Observed result | Evidence status |
+|---|---|---|---|
+| AC-6: Scrub inherited transport selectors | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_regression_contaminated_parent_cannot_select_old_backend` | PASS: child does not inherit stale `HERMES_PYTHON`, `HERMES_PYTHON_SRC_ROOT`, `HERMES_RPC_SOCKET`, `HERMES_TUI_GATEWAY_URL`, or `VIRTUAL_ENV` | Direct |
+| AC-6: Bind target interpreter and source root after scrubbing | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_launch_scrubs_inherited_transport_and_binds_target_in_clean_and_contaminated_envs` | PASS: child receives exact target `HERMES_PYTHON`, `HERMES_PYTHON_SRC_ROOT`, `HERMES_TUI_DIR`, `HERMES_HOME`, `AETHER_PROJECT_ID`, `PWD` in both clean and contaminated envs | Direct |
+| AC-6: Fresh and `--resume latest` in both environments | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_launch_scrubs_inherited_transport_and_binds_target_in_clean_and_contaminated_envs` | PASS: fresh launch and resume launch succeed in clean and contaminated envs with exact argv and target env | Direct |
+| AC-6: Installed wheel console script lane | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_installed_wheel_console_script_lane_fresh_and_resume_latest` | PASS: installed console script scrubs contaminated env and exports target `HERMES_PYTHON`, `HERMES_PYTHON_SRC_ROOT`, `HERMES_TUI_DIR` | Direct |
+| AC-6: Bare `aether` inside project directory | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_bare_aether_launch_in_project_cwd_clean_and_contaminated` | PASS: resolves project from cwd marker + registry, scrubs contaminated vars, binds target identities | Direct |
+| AC-6: Non-mutating `--json` plan and reserved args | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_aether_project_json_non_mutating_and_reports_release_identity`, `test_json_mode_non_mutating_plan_keys` | PASS: zero filesystem mutation pre/post; plan keys match canonical contract; reserved args fail closed | Direct |
+| AC-6: Source and TUI bit-for-bit preservation | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_launch_creates_no_build_artefacts_and_leaves_locked_hermes_source_unchanged` | PASS: pre/post SHA-256 inventories of locked source match bit-for-bit; no npm/build artifacts created | Direct |
+| AC-6: Projections point to stable entry point | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_desktop_and_wsl_projections_point_to_stable_aether_entry_point` | PASS: Desktop and WSL entry points target `<runtime_current>/venv/bin/aether` and support `--resume latest` | Direct |
+| Preservation: Other projection suites | `uv run --frozen pytest -q tests/test_tui_projections.py tests/test_lifecycle_projections.py` | PASS: 41 passed in 16.12s | Direct |
+| Code quality: Ruff lint | `uv run --frozen ruff check src/aether_agents tests scripts` | PASS: All checks passed | Direct |
+| Code quality: Ruff format | `uv run --frozen ruff format --check src/aether_agents tests scripts` | PASS: 175 files already formatted | Direct |
+| Code quality: Mypy static typing | `uv run --frozen mypy src/aether_agents` | PASS: Success: no issues found in 68 source files | Direct |
+| Hygiene: Public artifacts scan | `uv run --frozen python scripts/check_public_artifacts.py` | PASS: public artifact path scan passed | Direct |
+| Hygiene: Documentation validation | `uv run --frozen python scripts/check_documentation.py` | PASS: documentation validation passed | Direct |
+
+---
+
+## 4. Attribution: Direct versus Reused Evidence
+
+- **Direct evidence**:
+  - `src/aether_agents/launcher.py`: implemented `_resolve_target_python` and `_resolve_target_source_root`,
+    expanded `keys_to_drop` to scrub all transport selectors, stale RPC/gateway/socket paths, active session files,
+    and virtualenv variables; bound `HERMES_PYTHON` and `HERMES_PYTHON_SRC_ROOT` to target release identities.
+  - `tests/test_aether_tui_launcher.py`: implemented clean and contaminated test environments,
+    added `test_launch_scrubs_inherited_transport_and_binds_target_in_clean_and_contaminated_envs`,
+    `test_bare_aether_launch_in_project_cwd_clean_and_contaminated`, and
+    `test_regression_contaminated_parent_cannot_select_old_backend`.
+  - Focused test suite execution: `tests/test_aether_tui_launcher.py` (31 passed, 13 subtests passed).
+- **Reused evidence**:
+  - Unchanged projection spec generator tests (`tests/test_tui_projections.py`, `tests/test_lifecycle_projections.py`),
+    reused from rc5 at unchanged code identity.
+  - Locked source tree inventory and no-build/npm assertions from `TuiPreservationTests`, reused at unchanged structure.
+
+---
+
+## 5. Tracked file manifest lines
+
+No tracked non-`specs/` files were added, renamed, or removed in this unit:
+- `src/aether_agents/launcher.py` (modified existing file)
+- `tests/test_aether_tui_launcher.py` (modified existing file)
+- `specs/001-aether-v1-productization/evidence/RC6-LAUNCH.md` (this file; located under `specs/`, excluded from policy manifest)
+
+Manifest lines to add to `.github/workflows/policy.yml`: **none**.
+
+---
+
+## 6. Residual risk and environment limits
+
+- **Residual risk**: None identified for this unit. Transport scrubbing is comprehensive and targets all known
+  Hermes transport variables, sockets, session files, and virtualenv paths, while preserving user credentials and model
+  settings. Target resolution is deterministic from the active release and project marker.
+- **Environment limits**:
+  - Full mixed-version qualification (`scripts/qualify_mixed_version_lifecycle.py`) and live canary activation
+    belong to downstream units RC6-QUAL and RC6-CLOSE.
+  - Base `policy.yml` manifest reconciliation belongs to RC6-DOCS / RC6-INT.

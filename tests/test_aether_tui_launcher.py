@@ -888,6 +888,14 @@ class TuiPreservationTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+        # Register project in isolated registry
+        registry = ProjectRegistry(root=self.state_dir / "aether")
+        registry.register(
+            self.project_id,
+            self.project_dir,
+            name="launcher-preserve-fixture",
+        )
+
         # Set up Morfeo profile
         self.profile_dir = self.state_dir / "aether" / "hermes" / "profiles" / "morfeo"
         self.profile_dir.mkdir(parents=True)
@@ -928,6 +936,13 @@ class TuiPreservationTests(unittest.TestCase):
         )
         self.hermes_stub.chmod(0o755)
 
+        self.python_stub = self.venv_bin / "python"
+        self.python_stub.write_text(
+            f"#!{sys.executable}\nimport sys\nsys.exit(0)\n",
+            encoding="utf-8",
+        )
+        self.python_stub.chmod(0o755)
+
         # Locked hermes-source tree
         self.hermes_source_dir = self.release_dir / "hermes-source"
         self.hermes_source_dir.mkdir(parents=True)
@@ -961,28 +976,57 @@ class TuiPreservationTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tempdir.cleanup()
 
-    def _make_env(self, stub_out_path: Path) -> dict[str, str]:
+    def _make_clean_env(self, stub_out_path: Path) -> dict[str, str]:
         env = dict(os.environ)
-        # Drop existing coverage and shim vars
         for k in list(env.keys()):
-            if k.startswith("COV_CORE_") or k.startswith("COVERAGE_"):
+            if (
+                k.startswith("COV_CORE_")
+                or k.startswith("COVERAGE_")
+                or k.startswith("PYTHON")
+                or k == "VIRTUAL_ENV"
+                or k.startswith("HERMES_")
+                or k.startswith("_HERMES_")
+            ):
                 env.pop(k, None)
         env["XDG_DATA_HOME"] = str(self.data_dir)
         env["XDG_STATE_HOME"] = str(self.state_dir)
         env["AETHER_TEST_STUB_OUTPUT"] = str(stub_out_path)
         env["CUSTOM_CREDENTIAL_KEY"] = "retained-secret"
-        # Dirty/ambient environment variables that launcher must drop
+        return env
+
+    def _make_contaminated_env(self, stub_out_path: Path) -> dict[str, str]:
+        env = self._make_clean_env(stub_out_path)
+        # Inherited stale transport selectors and active-session transport paths
+        env["HERMES_PYTHON"] = "/opt/stale-backend/venv/bin/python"
+        env["HERMES_PYTHON_SRC_ROOT"] = "/opt/stale-backend/hermes-source"
+        env["HERMES_TUI_GATEWAY_URL"] = "ws://127.0.0.1:9999"
+        env["HERMES_TUI_SIDECAR_URL"] = "ws://127.0.0.1:9998"
+        env["HERMES_TUI_ACTIVE_SESSION_FILE"] = "/tmp/stale-session.json"
+        env["HERMES_RPC_SOCKET"] = "/tmp/stale-rpc.sock"
+        env["HERMES_RPC_DIR"] = "/tmp/stale-rpc"
+        env["HERMES_RPC_TOKEN"] = "stale-rpc-token"
+        env["HERMES_SESSION_ID"] = "stale-session-123"
+        env["HERMES_SESSION_KEY"] = "stale-session-key"
+        env["HERMES_UI_SESSION_ID"] = "stale-ui-session-id"
+        env["HERMES_CWD"] = "/tmp/stale-cwd"
+        env["HERMES_BIN"] = "/tmp/stale-bin/hermes"
+        env["VIRTUAL_ENV"] = "/opt/stale-backend/venv"
+        env["_HERMES_GATEWAY"] = "1"
+        env["HERMES_GATEWAY_SESSION"] = "stale-gw-session"
+        env["HERMES_DESKTOP_READY_FILE"] = "/tmp/stale-desktop.ready"
         env["HERMES_PROFILE"] = "dirty-profile"
         env["PYTHONBREAKPOINT"] = "custom-breakpoint"
         env["PYTHONWARNINGS"] = "error"
         env["HERMES_TUI_DIR"] = "/tmp/stale-ambient-tui"
         env["HERMES_TUI_PORT"] = "9999"
-        env["HERMES_SESSION_ID"] = "stale-session-123"
         env["HERMES_KANBAN_TASK"] = "t_stale456"
         env["HERMES_KANBAN_DB"] = "/tmp/stale-kanban.db"
         env["HERMES_TASK_ID"] = "stale-task"
         env["HERMES_CRON_JOB"] = "stale-cron"
         return env
+
+    def _make_env(self, stub_out_path: Path) -> dict[str, str]:
+        return self._make_contaminated_env(stub_out_path)
 
     def _hermes_source_inventory(self) -> dict[str, tuple[str, str]]:
         """Compute regular-file type and sha256 inventory of locked hermes-source."""
@@ -1053,6 +1097,28 @@ class TuiPreservationTests(unittest.TestCase):
         self.assertNotIn("HERMES_KANBAN_DB", received_env)
         self.assertNotIn("HERMES_TASK_ID", received_env)
         self.assertNotIn("HERMES_CRON_JOB", received_env)
+        self.assertEqual(
+            received_env.get("HERMES_PYTHON"),
+            str(self.python_stub.resolve()),
+        )
+        self.assertEqual(
+            received_env.get("HERMES_PYTHON_SRC_ROOT"),
+            str(self.hermes_source_dir.resolve()),
+        )
+        self.assertNotIn("HERMES_TUI_GATEWAY_URL", received_env)
+        self.assertNotIn("HERMES_TUI_SIDECAR_URL", received_env)
+        self.assertNotIn("HERMES_TUI_ACTIVE_SESSION_FILE", received_env)
+        self.assertNotIn("HERMES_RPC_SOCKET", received_env)
+        self.assertNotIn("HERMES_RPC_DIR", received_env)
+        self.assertNotIn("HERMES_RPC_TOKEN", received_env)
+        self.assertNotIn("HERMES_SESSION_KEY", received_env)
+        self.assertNotIn("HERMES_UI_SESSION_ID", received_env)
+        self.assertNotIn("HERMES_CWD", received_env)
+        self.assertNotIn("HERMES_BIN", received_env)
+        self.assertNotIn("VIRTUAL_ENV", received_env)
+        self.assertNotIn("_HERMES_GATEWAY", received_env)
+        self.assertNotIn("HERMES_GATEWAY_SESSION", received_env)
+        self.assertNotIn("HERMES_DESKTOP_READY_FILE", received_env)
         self.assertEqual(data_fresh["cwd"], str(self.project_dir.resolve()))
         self.assertEqual(
             data_fresh["argv"],
@@ -1150,6 +1216,28 @@ class TuiPreservationTests(unittest.TestCase):
         self.assertNotIn("PYTHONBREAKPOINT", received_env)
         self.assertNotIn("PYTHONWARNINGS", received_env)
         self.assertFalse(any(k.startswith("PYTHON") for k in received_env))
+        self.assertEqual(
+            received_env.get("HERMES_PYTHON"),
+            str(self.python_stub.resolve()),
+        )
+        self.assertEqual(
+            received_env.get("HERMES_PYTHON_SRC_ROOT"),
+            str(self.hermes_source_dir.resolve()),
+        )
+        self.assertNotIn("HERMES_TUI_GATEWAY_URL", received_env)
+        self.assertNotIn("HERMES_TUI_SIDECAR_URL", received_env)
+        self.assertNotIn("HERMES_TUI_ACTIVE_SESSION_FILE", received_env)
+        self.assertNotIn("HERMES_RPC_SOCKET", received_env)
+        self.assertNotIn("HERMES_RPC_DIR", received_env)
+        self.assertNotIn("HERMES_RPC_TOKEN", received_env)
+        self.assertNotIn("HERMES_SESSION_KEY", received_env)
+        self.assertNotIn("HERMES_UI_SESSION_ID", received_env)
+        self.assertNotIn("HERMES_CWD", received_env)
+        self.assertNotIn("HERMES_BIN", received_env)
+        self.assertNotIn("VIRTUAL_ENV", received_env)
+        self.assertNotIn("_HERMES_GATEWAY", received_env)
+        self.assertNotIn("HERMES_GATEWAY_SESSION", received_env)
+        self.assertNotIn("HERMES_DESKTOP_READY_FILE", received_env)
         self.assertEqual(data_fresh["cwd"], str(self.project_dir.resolve()))
         self.assertEqual(
             data_fresh["argv"],
@@ -1185,6 +1273,17 @@ class TuiPreservationTests(unittest.TestCase):
             data_resume["environ"].get("HERMES_TUI_DIR"),
             str(self.expected_tui_dir),
         )
+        self.assertEqual(
+            data_resume["environ"].get("HERMES_PYTHON"),
+            str(self.python_stub.resolve()),
+        )
+        self.assertEqual(
+            data_resume["environ"].get("HERMES_PYTHON_SRC_ROOT"),
+            str(self.hermes_source_dir.resolve()),
+        )
+        self.assertNotIn("HERMES_RPC_SOCKET", data_resume["environ"])
+        self.assertNotIn("HERMES_TUI_GATEWAY_URL", data_resume["environ"])
+        self.assertNotIn("VIRTUAL_ENV", data_resume["environ"])
         self.assertEqual(
             data_resume["argv"],
             [
@@ -1443,6 +1542,252 @@ class TuiPreservationTests(unittest.TestCase):
             spec.wsl_shortcuts["continue_aether"][1],
             spec_default.wsl_shortcuts["continue_aether"][1],
         )
+
+    def test_launch_scrubs_inherited_transport_and_binds_target_in_clean_and_contaminated_envs(
+        self,
+    ) -> None:
+        """Prove packaged launch scrubs transport selectors and binds target identities in both clean and contaminated envs."""
+        for env_kind, env_factory in [
+            ("clean", self._make_clean_env),
+            ("contaminated", self._make_contaminated_env),
+        ]:
+            with self.subTest(env=env_kind):
+                # 1. Fresh launch
+                stub_out_fresh = self.temp_path / f"stub_sub_{env_kind}_fresh.json"
+                env_fresh = env_factory(stub_out_fresh)
+                env_fresh["PYTHONPATH"] = str(ROOT / "src")
+
+                res_fresh = subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "aether_agents.launcher",
+                        "--project",
+                        str(self.project_dir),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    env=env_fresh,
+                )
+                self.assertEqual(
+                    res_fresh.returncode,
+                    0,
+                    f"{env_kind} fresh launch stderr: {res_fresh.stderr}",
+                )
+                self.assertTrue(stub_out_fresh.is_file())
+                data_fresh = json.loads(stub_out_fresh.read_text(encoding="utf-8"))
+                rec_fresh = data_fresh["environ"]
+
+                # Assert resolved identities
+                self.assertEqual(
+                    rec_fresh.get("HERMES_PYTHON"),
+                    str(self.python_stub.resolve()),
+                )
+                self.assertEqual(
+                    rec_fresh.get("HERMES_PYTHON_SRC_ROOT"),
+                    str(self.hermes_source_dir.resolve()),
+                )
+                self.assertEqual(
+                    rec_fresh.get("HERMES_TUI_DIR"),
+                    str(self.expected_tui_dir),
+                )
+                self.assertEqual(
+                    rec_fresh.get("HERMES_HOME"),
+                    str(self.profile_dir.resolve()),
+                )
+                self.assertEqual(
+                    rec_fresh.get("AETHER_PROJECT_ID"),
+                    self.project_id,
+                )
+                self.assertEqual(
+                    rec_fresh.get("PWD"),
+                    str(self.project_dir.resolve()),
+                )
+                self.assertEqual(data_fresh["cwd"], str(self.project_dir.resolve()))
+                self.assertEqual(
+                    data_fresh["argv"],
+                    [
+                        str(self.hermes_stub.resolve()),
+                        "--tui",
+                        "--in",
+                        str(self.project_dir.resolve()),
+                    ],
+                )
+                self.assertEqual(rec_fresh.get("CUSTOM_CREDENTIAL_KEY"), "retained-secret")
+
+                # Scrub assertions
+                self.assertNotIn("HERMES_TUI_GATEWAY_URL", rec_fresh)
+                self.assertNotIn("HERMES_TUI_SIDECAR_URL", rec_fresh)
+                self.assertNotIn("HERMES_TUI_ACTIVE_SESSION_FILE", rec_fresh)
+                self.assertNotIn("HERMES_RPC_SOCKET", rec_fresh)
+                self.assertNotIn("HERMES_RPC_DIR", rec_fresh)
+                self.assertNotIn("HERMES_RPC_TOKEN", rec_fresh)
+                self.assertNotIn("HERMES_SESSION_ID", rec_fresh)
+                self.assertNotIn("HERMES_SESSION_KEY", rec_fresh)
+                self.assertNotIn("HERMES_UI_SESSION_ID", rec_fresh)
+                self.assertNotIn("HERMES_CWD", rec_fresh)
+                self.assertNotIn("HERMES_BIN", rec_fresh)
+                self.assertNotIn("VIRTUAL_ENV", rec_fresh)
+                self.assertNotIn("_HERMES_GATEWAY", rec_fresh)
+                self.assertNotIn("HERMES_GATEWAY_SESSION", rec_fresh)
+                self.assertNotIn("HERMES_DESKTOP_READY_FILE", rec_fresh)
+                self.assertNotIn("HERMES_PROFILE", rec_fresh)
+                self.assertFalse(any(k.startswith("PYTHON") for k in rec_fresh))
+
+                # 2. Resume latest launch
+                stub_out_resume = self.temp_path / f"stub_sub_{env_kind}_resume.json"
+                env_resume = env_factory(stub_out_resume)
+                env_resume["PYTHONPATH"] = str(ROOT / "src")
+
+                res_resume = subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "aether_agents.launcher",
+                        "--project",
+                        str(self.project_dir),
+                        "--resume",
+                        "latest",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    env=env_resume,
+                )
+                self.assertEqual(
+                    res_resume.returncode,
+                    0,
+                    f"{env_kind} resume launch stderr: {res_resume.stderr}",
+                )
+                self.assertTrue(stub_out_resume.is_file())
+                data_resume = json.loads(stub_out_resume.read_text(encoding="utf-8"))
+                rec_resume = data_resume["environ"]
+
+                self.assertEqual(
+                    rec_resume.get("HERMES_PYTHON"),
+                    str(self.python_stub.resolve()),
+                )
+                self.assertEqual(
+                    rec_resume.get("HERMES_PYTHON_SRC_ROOT"),
+                    str(self.hermes_source_dir.resolve()),
+                )
+                self.assertEqual(
+                    rec_resume.get("HERMES_TUI_DIR"),
+                    str(self.expected_tui_dir),
+                )
+                self.assertEqual(
+                    rec_resume.get("HERMES_HOME"),
+                    str(self.profile_dir.resolve()),
+                )
+                self.assertEqual(
+                    rec_resume.get("AETHER_PROJECT_ID"),
+                    self.project_id,
+                )
+                self.assertEqual(
+                    rec_resume.get("PWD"),
+                    str(self.project_dir.resolve()),
+                )
+                self.assertEqual(
+                    data_resume["argv"],
+                    [
+                        str(self.hermes_stub.resolve()),
+                        "--tui",
+                        "--in",
+                        str(self.project_dir.resolve()),
+                        "--resume",
+                        "latest",
+                    ],
+                )
+
+    def test_bare_aether_launch_in_project_cwd_clean_and_contaminated(
+        self,
+    ) -> None:
+        """Prove bare aether (without --project) inside project cwd works in clean and contaminated envs."""
+        for env_kind, env_factory in [
+            ("clean", self._make_clean_env),
+            ("contaminated", self._make_contaminated_env),
+        ]:
+            with self.subTest(env=env_kind):
+                stub_out = self.temp_path / f"stub_bare_{env_kind}.json"
+                env = env_factory(stub_out)
+                env["PYTHONPATH"] = str(ROOT / "src")
+
+                res = subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "aether_agents.launcher",
+                    ],
+                    cwd=str(self.project_dir),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    env=env,
+                )
+                self.assertEqual(res.returncode, 0, res.stderr)
+                self.assertTrue(stub_out.is_file())
+                data = json.loads(stub_out.read_text(encoding="utf-8"))
+                rec = data["environ"]
+
+                self.assertEqual(rec.get("HERMES_PYTHON"), str(self.python_stub.resolve()))
+                self.assertEqual(
+                    rec.get("HERMES_PYTHON_SRC_ROOT"),
+                    str(self.hermes_source_dir.resolve()),
+                )
+                self.assertEqual(rec.get("HERMES_TUI_DIR"), str(self.expected_tui_dir))
+                self.assertEqual(rec.get("HERMES_HOME"), str(self.profile_dir.resolve()))
+                self.assertEqual(rec.get("AETHER_PROJECT_ID"), self.project_id)
+                self.assertEqual(rec.get("PWD"), str(self.project_dir.resolve()))
+                self.assertEqual(data["cwd"], str(self.project_dir.resolve()))
+                self.assertNotIn("HERMES_RPC_SOCKET", rec)
+                self.assertNotIn("HERMES_TUI_GATEWAY_URL", rec)
+                self.assertNotIn("VIRTUAL_ENV", rec)
+
+    def test_regression_contaminated_parent_cannot_select_old_backend(
+        self,
+    ) -> None:
+        """Reproduction oracle: contaminated parent env cannot select old backend or stale transport."""
+        stub_out = self.temp_path / "stub_reproduction.json"
+        env = self._make_contaminated_env(stub_out)
+        env["PYTHONPATH"] = str(ROOT / "src")
+
+        old_backend_python = "/opt/stale-backend/venv/bin/python"
+        old_backend_source = "/opt/stale-backend/hermes-source"
+        old_rpc_socket = "/tmp/stale-rpc.sock"
+        old_gateway_url = "ws://127.0.0.1:9999"
+
+        self.assertEqual(env["HERMES_PYTHON"], old_backend_python)
+        self.assertEqual(env["HERMES_PYTHON_SRC_ROOT"], old_backend_source)
+        self.assertEqual(env["HERMES_RPC_SOCKET"], old_rpc_socket)
+        self.assertEqual(env["HERMES_TUI_GATEWAY_URL"], old_gateway_url)
+
+        res = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aether_agents.launcher",
+                "--project",
+                str(self.project_dir),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertTrue(stub_out.is_file())
+        data = json.loads(stub_out.read_text(encoding="utf-8"))
+        rec = data["environ"]
+
+        # Crucial reproduction assertion: child NEVER inherits old backend python or source
+        self.assertNotEqual(rec.get("HERMES_PYTHON"), old_backend_python)
+        self.assertNotEqual(rec.get("HERMES_PYTHON_SRC_ROOT"), old_backend_source)
+        self.assertEqual(rec.get("HERMES_PYTHON"), str(self.python_stub.resolve()))
+        self.assertEqual(rec.get("HERMES_PYTHON_SRC_ROOT"), str(self.hermes_source_dir.resolve()))
+        self.assertNotIn("HERMES_RPC_SOCKET", rec)
+        self.assertNotIn("HERMES_TUI_GATEWAY_URL", rec)
+        self.assertNotIn("VIRTUAL_ENV", rec)
 
 
 if __name__ == "__main__":
