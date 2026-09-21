@@ -475,6 +475,75 @@ def test_seed_observation_corpus_populates_store(entry: Any, tmp_path: Path) -> 
     assert scale["digest"] is not None
 
 
+def test_helper_loader_ignores_a_shadowing_tests_package(
+    entry: Any, tmp_path: Path, monkeypatch: Any
+) -> None:
+    """The repository helper is loaded by path, never through the shadowable ``tests`` name.
+
+    The project's locked gate puts the exact Hermes checkout on ``PYTHONPATH``, and that
+    checkout ships its own *real* ``tests`` package, which wins over this repository's
+    namespace-package directory.  A helper import written as ``tests.observation_helpers``
+    therefore resolved to the checkout and raised ``ModuleNotFoundError``.  The loader must
+    be immune to that, including against a hostile ``tests`` package that is first on
+    ``sys.path``.
+    """
+
+    shadow = tmp_path / "shadow"
+    (shadow / "tests").mkdir(parents=True)
+    (shadow / "tests" / "__init__.py").write_text("", encoding="utf-8")
+    (shadow / "tests" / "observation_helpers.py").write_text(
+        "raise RuntimeError('the shadowing helper must never be executed')\n", encoding="utf-8"
+    )
+    monkeypatch.syspath_prepend(str(shadow))
+
+    module = entry.load_repository_test_helper("observation_helpers")
+
+    assert module.__name__ == "rc6_qualification_observation_helpers"
+    assert callable(module.complete_trace)
+    assert (
+        Path(module.__file__).resolve()
+        == (REPO_ROOT / "tests" / "observation_helpers.py").resolve()
+    )
+
+
+def test_helper_loader_refuses_an_absent_repository_helper(entry: Any, tmp_path: Path) -> None:
+    """An absent helper is a refusal, not a silent fallback to whatever is importable."""
+
+    with pytest.raises(entry.Refusal):
+        entry.load_repository_test_helper("absent_helper", root=tmp_path)
+
+
+def test_module_runs_through_the_locked_test_gate() -> None:
+    """Regression: this module must pass under ``scripts/run_tests.py``, the locked gate.
+
+    The wrapper prepends the exact Hermes checkout to ``PYTHONPATH`` (its
+    ``tests/__init__.py`` makes ``tests`` a real package), and that is exactly the
+    environment in which the entry's old ``tests.observation_helpers`` import failed with
+    ``29 passed, 1 failed``.  A plain-``pytest`` run cannot see the defect, so the module is
+    re-run through the real wrapper here.  The nested run is the same shape the project gate
+    uses; this test itself is deselected so the nesting is finite.
+    """
+
+    wrapper = REPO_ROOT / "scripts" / "run_tests.py"
+    node = "tests/test_mixed_version_lifecycle_qualification.py"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(wrapper),
+            "--",
+            node,
+            "-q",
+            "--deselect",
+            f"{node}::test_module_runs_through_the_locked_test_gate",
+        ],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
 def test_terminal_screen_reads_ink_incremental_repaint(entry: Any) -> None:
     """A real launch repaint stream is unreadable to a naive strip, readable on screen.
 

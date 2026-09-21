@@ -57,6 +57,7 @@ import argparse
 import base64
 import contextlib
 import hashlib
+import importlib.util
 import json
 import os
 import pty
@@ -848,6 +849,38 @@ def render(lines: Sequence[str]) -> str:
 
 def b64(data: bytes) -> str:
     return base64.b64encode(data).decode("ascii")
+
+
+def repository_root() -> Path:
+    """The checkout this entry is being run from."""
+
+    return Path(__file__).resolve().parent.parent
+
+
+def load_repository_test_helper(name: str, *, root: Path | None = None) -> Any:
+    """Load ``<repository>/tests/<name>.py`` by file location.
+
+    The entry must never import a repository test helper through the generic ``tests``
+    package name.  The project's locked test gate (``scripts/run_tests.py``) prepends the
+    exact Hermes checkout to ``PYTHONPATH`` and that checkout ships its own *real* ``tests``
+    package, which wins over this repository's namespace-package directory, so
+    ``from tests.observation_helpers import ...`` resolved outside this repository and
+    failed with ``ModuleNotFoundError``.  The same shadowing bites an operator who runs
+    the entry with such a ``PYTHONPATH``.  Loading by explicit path removes the
+    dependency on whatever ``tests`` a caller's environment happens to expose.
+    """
+
+    repository = repository_root() if root is None else root
+    path = repository / "tests" / f"{name}.py"
+    if not path.is_file():
+        raise Refusal(f"the repository test helper is missing: {path}")
+    spec = importlib.util.spec_from_file_location(f"rc6_qualification_{name}", path)
+    if spec is None or spec.loader is None:  # pragma: no cover - defensive
+        raise Refusal(f"the repository test helper is not loadable: {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 # --------------------------------------------------------------------------------------
@@ -2527,14 +2560,18 @@ def scenario_legacy(inputs: Inputs, session: Session, result: ScenarioResult) ->
 
 
 def seed_observation_corpus(isolation: Isolation, project_id: str) -> dict[str, Any]:
-    """Seed the isolated observation store with a meaningful corpus before launch."""
-    repo_root = str(Path(__file__).resolve().parent.parent)
-    if repo_root not in sys.path:
-        sys.path.insert(0, repo_root)
+    """Seed the isolated observation store with a meaningful corpus before launch.
+
+    The trace factory comes from this repository's test helpers, but it is loaded by file
+    location: importing it as ``tests.observation_helpers`` is shadowable by whatever
+    ``tests`` package the caller's ``PYTHONPATH`` exposes (see
+    :func:`load_repository_test_helper`).
+    """
 
     from aether_agents.observation.capture.journal import JournalWriter
     from aether_agents.paths import ObservationPaths
-    from tests.observation_helpers import complete_trace
+
+    complete_trace = load_repository_test_helper("observation_helpers").complete_trace
 
     paths = ObservationPaths.for_project(project_id, root=isolation.state_root)
     paths.ensure()
