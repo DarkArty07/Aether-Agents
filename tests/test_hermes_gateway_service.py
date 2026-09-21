@@ -16,13 +16,16 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+import aether_agents.lifecycle as lifecycle
 from aether_agents.lifecycle import (
     AETHER_GATEWAY_UNIT,
     HERMES_BASELINE,
@@ -184,6 +187,52 @@ def _aether_identity(version: str) -> dict[str, Any]:
     }
 
 
+def _materialize_packaged_resources(package: Path) -> None:
+    """Copy the normative bytes the release wheel force-includes as package resources.
+
+    An installed release reads its observation schemas from ``resources/schemas``
+    inside its own package.  A bare copy of the source tree does not carry them, so an
+    emulated install has to reproduce the wheel's mapping instead of falling back to
+    the checkout's ``specs/`` copy.
+    """
+
+    repo_root = Path(__file__).resolve().parents[1]
+    build = tomllib.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
+    mapping = build["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]
+    for source, destination in mapping.items():
+        if not destination.startswith("aether_agents/"):
+            continue
+        target = package.parent / destination
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(repo_root / source, target)
+
+
+def _materialize_manager_environment(release: Path) -> None:
+    """Give one synthetic release a working manager environment.
+
+    An installed release executes its own product code from inside its own tree, so
+    the fixture materializes the package under the release's environment and points
+    the synthetic interpreter there instead of at the checkout that runs the test.
+    """
+
+    site_packages = release / "manager" / "site-packages"
+    installed_package = site_packages / "aether_agents"
+    if not installed_package.is_dir():
+        shutil.copytree(Path(lifecycle.__file__).parent, installed_package)
+    _materialize_packaged_resources(installed_package)
+    python = release / "manager" / "bin" / "python"
+    python.write_text(
+        f"#!{sys.executable}\n"
+        "import os, sys\n"
+        f"import_root = {str(site_packages)!r}\n"
+        "environment = dict(os.environ)\n"
+        "environment['PYTHONPATH'] = import_root\n"
+        "os.execvpe(sys.executable, [sys.executable, *sys.argv[1:]], environment)\n",
+        encoding="utf-8",
+    )
+    python.chmod(0o755)
+
+
 def _make_release(
     manager: LifecycleManager,
     version: str,
@@ -220,6 +269,7 @@ def _make_release(
         py.write_text("#!/bin/sh\nexit 0\n")
         py.chmod(0o755)
         (env_dir / "aether-wheel.sha256").write_text(wheel_sha + "\n")
+    _materialize_manager_environment(rel_path)
 
     manifest = {
         "schema_version": 1,

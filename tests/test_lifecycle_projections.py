@@ -11,8 +11,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tomllib
 from dataclasses import replace
 from pathlib import Path
 
@@ -506,6 +508,8 @@ def test_projection_follows_the_selector_and_reports_coherence(
     controller = RecordingServiceController()
     manager = _manager(tmp_path, controller=controller)
     record = _record(manager.store)
+    _install_record(manager, record)
+    _release_manager_python(manager.store, record)
 
     outcome = manager.project_release(record, restart_service=True)
 
@@ -627,6 +631,7 @@ def test_doctor_reports_fail_closed_projection_mismatches(
     store = manager.store
     record = _record(store)
     _publish_record(manager, record)
+    _release_manager_python(store, record)
     manager.project_release(record, restart_service=False)
 
     spec = manager.projection_spec(record)
@@ -654,6 +659,7 @@ def test_projection_status_rejects_incoherent_hermes_refreshed_units(
     manager = _manager(tmp_path)
     record = _record(manager.store)
     _publish_record(manager, record)
+    _release_manager_python(manager.store, record)
     manager.project_release(record, restart_service=False)
     spec = manager.projection_spec(record)
     runtime = str(spec.runtime_current)
@@ -709,6 +715,7 @@ def test_recovery_reprojects_a_partial_transition(
     manager = _manager(tmp_path)
     record = _record(manager.store)
     _publish_record(manager, record)
+    _release_manager_python(manager.store, record)
     manager.project_release(record, restart_service=False)
     spec = manager.projection_spec(record)
     # Simulate a transition interrupted after the record was written but before the
@@ -740,6 +747,8 @@ def test_rollback_and_uninstall_preserve_user_state_bytes(
     before = hashlib.sha256((observations / "journal.bin").read_bytes()).hexdigest()
 
     record = _record(store)
+    _install_record(manager, record)
+    _release_manager_python(store, record)
     manager.project_release(record, restart_service=False)
 
     assert hashlib.sha256((observations / "journal.bin").read_bytes()).hexdigest() == before
@@ -762,6 +771,8 @@ def test_deactivation_never_removes_foreign_projection_bytes(
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     manager = _manager(tmp_path)
     record = _record(manager.store)
+    _install_record(manager, record)
+    _release_manager_python(manager.store, record)
     manager.project_release(record, restart_service=False)
     spec = manager.projection_spec(record)
     spec.launcher_path.write_text("#!/bin/sh\n# owner-managed\n", encoding="utf-8")
@@ -782,6 +793,7 @@ def test_deactivation_removes_selector_coherent_hermes_refreshed_units(
     manager = _manager(tmp_path)
     record = _record(manager.store)
     _publish_record(manager, record)
+    _release_manager_python(manager.store, record)
     manager.project_release(record, restart_service=False)
     spec = manager.projection_spec(record)
     runtime = str(spec.runtime_current)
@@ -822,6 +834,7 @@ def test_deactivation_preserves_incoherent_service_units(
     manager = _manager(tmp_path)
     record = _record(manager.store)
     _publish_record(manager, record)
+    _release_manager_python(manager.store, record)
     manager.project_release(record, restart_service=False)
     spec = manager.projection_spec(record)
     runtime = str(spec.runtime_current)
@@ -888,8 +901,33 @@ def test_tree_projection_encoding_is_the_documented_canonical_recipe(tmp_path: P
     assert lifecycle._tree_sha256(root) == expected
 
 
+def _materialize_packaged_resources(package: Path) -> None:
+    """Copy the normative bytes the release wheel force-includes as package resources.
+
+    An installed release reads its observation schemas from ``resources/schemas``
+    inside its own package.  A bare copy of the source tree does not carry them, so an
+    emulated install has to reproduce the wheel's mapping instead of falling back to
+    the checkout's ``specs/`` copy.
+    """
+
+    repo_root = Path(__file__).resolve().parents[1]
+    build = tomllib.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
+    mapping = build["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]
+    for source, destination in mapping.items():
+        if not destination.startswith("aether_agents/"):
+            continue
+        target = package.parent / destination
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(repo_root / source, target)
+
+
 def _release_manager_python(store: ReleaseStore, record: ReleaseRecord) -> None:
-    """Give one synthetic release the bundle and manager interpreter activation needs."""
+    """Give one synthetic release the bundle and manager interpreter activation needs.
+
+    The synthetic manager environment mirrors an installed release: its interpreter
+    reaches the product package from inside the release tree, never from the invoking
+    project directory, so the target's own code answers for the target.
+    """
 
     release = store.release_path(record.release_id)
     release.mkdir(parents=True, exist_ok=True)
@@ -906,15 +944,19 @@ def _release_manager_python(store: ReleaseStore, record: ReleaseRecord) -> None:
             skill = profile / "skills" / skill_name / "SKILL.md"
             skill.parent.mkdir(parents=True, exist_ok=True)
             skill.write_bytes((resources / "skills" / skill_name / "SKILL.md").read_bytes())
+    site_packages = release / "manager" / "site-packages"
+    installed_package = site_packages / "aether_agents"
+    if not installed_package.is_dir():
+        shutil.copytree(Path(lifecycle.__file__).parent, installed_package)
+    _materialize_packaged_resources(installed_package)
     python = release / "manager" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     python.parent.mkdir(parents=True, exist_ok=True)
-    source_root = Path(__file__).parents[1] / "src"
     python.write_text(
         f"#!{sys.executable}\n"
         "import os, sys\n"
-        f"source = {str(source_root)!r}\n"
+        f"import_root = {str(site_packages)!r}\n"
         "environment = dict(os.environ)\n"
-        "environment['PYTHONPATH'] = source\n"
+        "environment['PYTHONPATH'] = import_root\n"
         "os.execvpe(sys.executable, [sys.executable, *sys.argv[1:]], environment)\n",
         encoding="utf-8",
     )
@@ -1147,6 +1189,7 @@ def test_disposable_lane_cannot_reach_the_operator_unit_or_systemctl(
     )
     record = _record(store)
     _publish_record(manager, record)
+    _release_manager_python(store, record)
 
     assert manager.installed_environment is False
     assert isinstance(manager.service_controller, DisabledServiceController)
@@ -1590,3 +1633,244 @@ def test_legacy_route_refusal_before_mutation(
         p: hashlib.sha256(p.read_bytes()).hexdigest() for p in witnessed_paths if p.is_file()
     }
     assert after_hashes == before_hashes
+
+
+def _hostile_target_package_source() -> str:
+    """Source of a permissive stand-in that answers for a target wherever it is imported.
+
+    It is the fixture's stand-in for project-local code: every identity comparison
+    succeeds, so anything built from it is self-consistent but nobody authenticated it.
+    """
+
+    return f'''
+"""Permissive stand-in package that answers for a target from an unauthenticated path."""
+
+from pathlib import Path
+
+
+class IntegrityError(Exception):
+    pass
+
+
+class _StandInRecord:
+    def __init__(self, release_id):
+        self.release_id = release_id
+        self.version = "0.0.0+spoofed"
+
+    def __getattr__(self, name):
+        return None
+
+    def __eq__(self, other):
+        return True
+
+    def __ne__(self, other):
+        return False
+
+
+class ReleaseRecord:
+    @staticmethod
+    def from_json(payload):
+        release_id = payload.get("release_id") if isinstance(payload, dict) else "spoofed"
+        return _StandInRecord(release_id)
+
+
+class ReleaseStore:
+    def __init__(self, *args, **kwargs):
+        self.releases = Path("/spoofed/releases")
+
+    def release_path(self, release_id):
+        return self.releases / release_id
+
+    def _read_release(self, release_id):
+        return _StandInRecord(release_id)
+
+
+class ProjectionRoots:
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+
+class _StandInSpec:
+    def __init__(self, roots):
+        self.launcher_path = Path(roots.launcher_dir) / {lifecycle._LAUNCHER_NAME!r}
+        self.launcher_bytes = b"#!/bin/sh\\n# spoofed-by-cwd\\n"
+        self.desktop_path = Path(roots.desktop_dir) / {lifecycle._DESKTOP_ENTRY_NAME!r}
+        self.desktop_bytes = b"spoofed desktop\\n"
+        self.service_path = Path(roots.service_dir) / {lifecycle.AETHER_GATEWAY_UNIT!r}
+        self.service_bytes = b"spoofed unit\\n"
+        self.wsl_shortcuts = {{}}
+
+
+class LifecycleManager:
+    def __init__(self, **kwargs):
+        self.roots = kwargs.get("projections")
+
+    def projection_spec(self, record, project_root=None):
+        return _StandInSpec(self.roots)
+'''
+
+
+def test_target_runner_answers_only_from_the_target_release_not_the_invoking_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The target boundary is not spoofable from the launcher's own working directory.
+
+    ``python -c`` normally puts the current directory first on ``sys.path``, so a
+    project-local ``aether_agents`` package would answer for the selected target: it
+    would accept a record the target's real reader refuses and it would supply the
+    projected bytes.  The child is isolated and proves its own import provenance.
+    """
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    manager = _activation_manager(tmp_path, monkeypatch)
+    store = manager.store
+    target = _record(store, "1.0.0rc5-" + "d" * 16)
+    _install_record(manager, target)
+    _release_manager_python(store, target)
+
+    record_path = store.release_path(target.release_id) / "record.json"
+    payload = json.loads(record_path.read_text(encoding="utf-8"))
+    assert "unknown_future_field_not_in_schema" not in payload
+    spoofed = dict(payload)
+    spoofed["unknown_future_field_not_in_schema"] = "disallowed"
+
+    hostile = tmp_path / "hostile-project"
+    (hostile / "aether_agents").mkdir(parents=True)
+    (hostile / "aether_agents" / "__init__.py").write_text("", encoding="utf-8")
+    (hostile / "aether_agents" / "lifecycle.py").write_text(
+        _hostile_target_package_source(),
+        encoding="utf-8",
+    )
+
+    # The exact target reader rejects the added key from a neutral directory...
+    with pytest.raises(IntegrityError, match="RECORD_SYNTAX_REJECTED"):
+        manager._validate_target_record_subprocess(target.release_id, spoofed)
+
+    # ...and a hostile working directory cannot answer in the target's place.
+    monkeypatch.chdir(hostile)
+    with pytest.raises(IntegrityError, match="RECORD_SYNTAX_REJECTED"):
+        manager._validate_target_record_subprocess(target.release_id, spoofed)
+
+    # Projection bytes are equally owned by the target release, not by cwd.
+    plan = manager._prepare_target_projections_subprocess(target.release_id, target)
+    expected = manager.projection_spec(store._read_release(target.release_id))
+    assert plan.launcher_bytes == expected.launcher_bytes
+    assert plan.desktop_bytes == expected.desktop_bytes
+    assert b"spoofed-by-cwd" not in plan.launcher_bytes
+    assert b"spoofed" not in plan.desktop_bytes
+
+
+def test_unavailable_target_projection_plan_refuses_before_any_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A target that cannot produce its plan stops the transition before any byte moves.
+
+    Swallowing that failure would complete the transition with the executing source's
+    own projection bytes and without any target-side validation, which is the
+    rc5-shaped "completed broken" outcome the transition must refuse.
+    """
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    controller = RecordingServiceController()
+    manager = _activation_manager(tmp_path, monkeypatch, controller=controller)
+    store = manager.store
+    prior = _record(store, "1.0.0rc1-" + "a" * 16)
+    target = _record(store, "1.0.0rc1-" + "b" * 16)
+    _install_record(manager, prior)
+    _install_record(manager, target)
+    _release_manager_python(store, prior)
+    _release_manager_python(store, target)
+
+    manager.activate_existing(
+        prior.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+
+    spec = manager.projection_spec(prior)
+    witnessed_paths = [
+        store.active_pointer,
+        store.root / "runtime" / "current",
+        spec.launcher_path,
+        spec.desktop_path,
+        spec.service_path,
+    ]
+    before_hashes = {
+        p: (
+            hashlib.sha256(p.read_bytes()).hexdigest()
+            if p.is_file() and not p.is_symlink()
+            else (os.readlink(p) if p.is_symlink() else None)
+        )
+        for p in witnessed_paths
+    }
+    before_bytes = store.active_pointer.read_bytes()
+    before_calls = list(controller.calls)
+
+    prepare_target_plan = manager._prepare_target_projections_subprocess
+
+    def _refuse_the_target(*args, **kwargs):
+        if args and args[0] == target.release_id:
+            raise IntegrityError("simulated unavailable target projection plan")
+        return prepare_target_plan(*args, **kwargs)
+
+    monkeypatch.setattr(manager, "_prepare_target_projections_subprocess", _refuse_the_target)
+
+    with pytest.raises(IntegrityError, match="simulated unavailable target projection plan"):
+        manager.activate_existing(
+            target.release_id,
+            transition_kind="update",
+            expected_active_release_id=prior.release_id,
+        )
+
+    # The refused transition promoted nothing and interrupted nothing.
+    restored = store.active()
+    assert restored is not None
+    assert restored.release_id == prior.release_id
+    assert store.active_pointer.read_bytes() == before_bytes
+    assert manager.projection_status(restored)["mismatches"] == []
+    after_hashes = {
+        p: (
+            hashlib.sha256(p.read_bytes()).hexdigest()
+            if p.is_file() and not p.is_symlink()
+            else (os.readlink(p) if p.is_symlink() else None)
+        )
+        for p in witnessed_paths
+    }
+    assert after_hashes == before_hashes
+    assert controller.calls == before_calls
+
+
+def test_unreadable_target_record_refuses_instead_of_synthesizing_a_pointer(
+    tmp_path: Path,
+) -> None:
+    """A target with no immutable record refuses; source dataclass defaults never leak.
+
+    The pointer's field shape belongs to the target.  When the target's immutable
+    ``record.json`` is absent or unsafe there is nothing to persist, so the transition
+    must refuse instead of serializing this process's own field set into it.
+    """
+
+    store = ReleaseStore(tmp_path / "data" / "aether", state_root=tmp_path / "state" / "aether")
+    store._ensure_owned_root()
+    record = _record(store, "1.0.0rc1-" + "e" * 16)
+    release = store.release_path(record.release_id)
+    release.mkdir(parents=True, exist_ok=True)
+    payload = {field: getattr(record, field) for field in record.__dataclass_fields__}
+    lifecycle._atomic_json(release / "record.json", payload)
+
+    # Sanity: with its own immutable record present the target owns the field set.
+    assert store._target_active_payload(record)["release_id"] == record.release_id
+
+    (release / "record.json").unlink()
+    with pytest.raises(IntegrityError, match="no immutable record"):
+        store._target_active_payload(record)
+
+    # A symlinked record is not an immutable target record either.
+    elsewhere = tmp_path / "borrowed-record.json"
+    elsewhere.write_text(json.dumps(payload), encoding="utf-8")
+    (release / "record.json").symlink_to(elsewhere)
+    with pytest.raises(IntegrityError, match="no immutable record"):
+        store._target_active_payload(record)

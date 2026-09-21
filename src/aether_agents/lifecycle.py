@@ -2333,16 +2333,22 @@ class ReleaseStore:
         never drops arbitrary unknown keys.
         """
         record_path = self.release_path(record.release_id) / "record.json"
-        if record_path.is_file() and not record_path.is_symlink():
-            try:
-                payload = json.loads(read_private_bytes(record_path).decode("utf-8"))
-            except (OSError, UnicodeError, ValueError) as error:
-                raise IntegrityError("target release record is unreadable") from error
-            if not isinstance(payload, dict):
-                raise IntegrityError("target release record is malformed")
-            target_payload = dict(payload)
-        else:
-            target_payload = asdict(record)
+        if record_path.is_symlink() or not record_path.is_file():
+            # A target that cannot present its own immutable record cannot own the
+            # field shape of the active pointer.  Synthesizing one from this process's
+            # dataclass would serialize executing-source defaults into an older
+            # target's pointer, which is exactly the defect this method exists to
+            # prevent, so refuse instead of guessing.
+            raise IntegrityError(
+                f"target release {record.release_id} has no immutable record to persist"
+            )
+        try:
+            payload = json.loads(read_private_bytes(record_path).decode("utf-8"))
+        except (OSError, UnicodeError, ValueError) as error:
+            raise IntegrityError("target release record is unreadable") from error
+        if not isinstance(payload, dict):
+            raise IntegrityError("target release record is malformed")
+        target_payload = dict(payload)
 
         target_pred = (
             record.previous_release_id if previous_release_id is _CAS_UNSET else previous_release_id
@@ -3320,7 +3326,24 @@ try:
         IntegrityError,
     )
 
+    import aether_agents
+
     store = ReleaseStore(Path(store_root), state_root=Path(state_root))
+
+    # Import provenance.  This child exists to answer for the selected target release:
+    # its reader must be the target's reader and its projection spec must be the
+    # target's spec.  An ``aether_agents`` package reached from anywhere but the
+    # target release tree (a project-local shadow, an ambient path entry, a
+    # redirected install) would silently answer in its place, so refuse it here
+    # rather than returning a self-consistent answer for code nobody authenticated.
+    package_file = getattr(aether_agents, "__file__", None)
+    if not package_file:
+        _fail("TARGET_IMPORT_PROVENANCE_UNAVAILABLE")
+    try:
+        Path(package_file).resolve().relative_to(store.release_path(release_id).resolve())
+    except ValueError:
+        _fail("TARGET_IMPORT_PROVENANCE_MISMATCH")
+
     installed = store._read_release(release_id)
 
     if operation == "validate_record":
@@ -3804,11 +3827,16 @@ class LifecycleManager:
         env = _isolated_subprocess_environment()
         try:
             completed = subprocess.run(
-                [str(manager_python), "-c", _TARGET_RUNNER_SCRIPT],
+                # ``-P`` keeps the launcher's working directory off ``sys.path`` and
+                # ``-s`` keeps user site-packages off it, so the only code this child
+                # can import is the target release's own environment.  ``cwd`` is the
+                # target release root, never the invoking project directory.
+                [str(manager_python), "-P", "-s", "-c", _TARGET_RUNNER_SCRIPT],
                 input=encoded,
                 capture_output=True,
                 text=True,
                 env=env,
+                cwd=str(release_path),
                 timeout=30,
             )
         except OSError as error:
@@ -6140,14 +6168,16 @@ class LifecycleManager:
                 previous_release_id=predecessor,
             )
             self._validate_target_record_subprocess(target.release_id, target_payload)
-            try:
-                projection_plan = self._prepare_target_projections_subprocess(
-                    target.release_id,
-                    activation_target,
-                    project_root=self.project_root,
-                )
-            except Exception:
-                projection_plan = None
+            # The authenticated target owns the launcher, Desktop, WSL and service
+            # bytes.  An unavailable or refused target plan fails the transition here,
+            # before any pointer, unit, profile or projection byte moves; the executing
+            # source's own projection spec is never a substitute for a target that
+            # cannot prove what its projections are.
+            projection_plan = self._prepare_target_projections_subprocess(
+                target.release_id,
+                activation_target,
+                project_root=self.project_root,
+            )
             projection_expectations = self._prepare_release_projections_locked(activation_target)
             self._materialize_profile_homes(activation_target)
             self._validate_profile_homes(activation_target)
@@ -7306,42 +7336,31 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         """Project the launcher, Desktop entry, unit file and selector for one release."""
 
         if target_plan is None:
-            try:
-                target_plan = self._prepare_target_projections_subprocess(
-                    record.release_id,
-                    record,
-                    project_root=self.project_root,
-                )
-            except Exception:
-                target_plan = None
+            # No caller may manufacture the projected bytes locally: the selected
+            # target's own code owns them.  A target that cannot produce its plan
+            # fails this projection instead of inheriting the source's branding.
+            target_plan = self._prepare_target_projections_subprocess(
+                record.release_id,
+                record,
+                project_root=self.project_root,
+            )
 
         spec = self.projection_spec(record)
         hermes_owned = _is_hermes_owned_gateway_version(record.version)
         materialize_hermes = hermes_owned or (
             record.version == "1.0.0rc3" and transition_kind == "rollback"
         )
-        if target_plan is not None:
-            branded = target_plan.is_branded
-            targets: list[tuple[Path, bytes, int]] = [
-                (target_plan.launcher_path, target_plan.launcher_bytes, target_plan.launcher_mode),
-                (target_plan.desktop_path, target_plan.desktop_bytes, target_plan.desktop_mode),
-            ]
-            if not hermes_owned:
-                targets.append(
-                    (target_plan.service_path, target_plan.service_bytes, target_plan.service_mode)
-                )
-            for _, (wsl_path, wsl_bytes, wsl_mode) in sorted(target_plan.wsl_shortcuts.items()):
-                targets.append((wsl_path, wsl_bytes, wsl_mode))
-        else:
-            branded = _is_branded_version(record.version)
-            targets = [
-                (spec.launcher_path, spec.launcher_bytes, 0o755),
-                (spec.desktop_path, spec.desktop_bytes, 0o644),
-            ]
-            if not hermes_owned:
-                targets.append((spec.service_path, spec.service_bytes, 0o644))
-            for _, (wsl_path, wsl_bytes) in sorted(spec.wsl_shortcuts.items()):
-                targets.append((wsl_path, wsl_bytes, 0o755))
+        branded = target_plan.is_branded
+        targets: list[tuple[Path, bytes, int]] = [
+            (target_plan.launcher_path, target_plan.launcher_bytes, target_plan.launcher_mode),
+            (target_plan.desktop_path, target_plan.desktop_bytes, target_plan.desktop_mode),
+        ]
+        if not hermes_owned:
+            targets.append(
+                (target_plan.service_path, target_plan.service_bytes, target_plan.service_mode)
+            )
+        for _, (wsl_path, wsl_bytes, wsl_mode) in sorted(target_plan.wsl_shortcuts.items()):
+            targets.append((wsl_path, wsl_bytes, wsl_mode))
 
         roots = self.projection_roots()
         legacy_desktop = roots.desktop_dir / _LEGACY_DESKTOP_ENTRY_NAME
