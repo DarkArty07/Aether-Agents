@@ -65,6 +65,8 @@ aether [--project PATH] [--json]
 
 Validates setup, active release, project identity, service readiness, and Morfeo profile. An explicit invocation may visibly start the Aether user service if it is stopped. It then launches Morfeo in the selected project. It never initializes a project implicitly.
 
+Path input and project identity are distinct: a non-empty explicit `--project PATH` may be relative and is normalized against the invocation's current working directory before the exact marker, registry and conflict checks; an empty `--project` value is refused. `AETHER_PROJECT_ROOT` must instead be a non-empty absolute path, and an empty or relative environment value is refused rather than replaced with cwd. `AETHER_PROJECT_ID` must be a canonical UUID consistent with the selected project. Path normalization does not permit approximate, name-based or recency-based project selection.
+
 `--json` validates and reports the launch plan but does not replace an interactive TUI with a JSON conversation.
 
 ### Service lifecycle

@@ -206,7 +206,7 @@ A release operator installs the RC from PyPI and runs a preregistered realistic 
 
 - **A1-FR-041**: Aether MUST manage the local Hermes gateway/dispatcher required for board work through an Aether-owned user service, never a system service requiring root.
 - **A1-FR-042**: The CLI MUST expose `start`, `stop`, `restart`, and `status`; these commands MUST address only the Aether-managed service.
-- **A1-FR-043**: Invoking `aether` in a valid initialized project MUST validate the active release, ensure the local service is ready, and launch Morfeo in that project.
+- **A1-FR-043**: Invoking `aether` in a valid initialized project MUST validate the active release, ensure the local service is ready, and launch Morfeo in that project. An explicit non-empty `--project PATH` MAY be relative and MUST be normalized against the invocation's current working directory before the same exact project-marker, registry and conflict checks are applied; this normalization is not approximate project matching. An empty `--project` value MUST be refused. `AETHER_PROJECT_ROOT`, when supplied, MUST be a non-empty absolute path; an empty or relative environment value MUST be refused rather than replaced by the current directory. `AETHER_PROJECT_ID`, when supplied, MUST be a canonical UUID consistent with the selected project's marker and registry binding. No display-name or recency inference is authorized.
 - **A1-FR-044**: Automatic start caused by an explicit `aether` invocation MUST be visible; background startup at login MUST remain opt-in.
 - **A1-FR-045**: Messaging channels MAY be configured through the managed Hermes runtime, but TUI is the required 1.0 interaction surface and no messaging adapter is part of the 1.0 release gate.
 
