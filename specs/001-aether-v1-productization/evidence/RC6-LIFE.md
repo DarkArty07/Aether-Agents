@@ -303,4 +303,3 @@ Below, rows tested within this unit's test suite report the invocation form actu
 - **WSL2 Windows Terminal paths**: Handled within test fixtures with mock paths; live WSL qualification belongs to RC6-QUAL.
 - **End-to-end multi-interpreter qualification**: The qualification harness exercises live cross-release transitions; this unit provides the verified CLI dispatch mechanics.
 - **Live activation/cutover**: Owned by RC6-CLOSE.
-
