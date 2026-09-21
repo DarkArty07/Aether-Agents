@@ -17,11 +17,22 @@ The command is read-only with respect to the board, sessions and canonical artif
 Journal catch-up commits resumable batches rather than restarting an interrupted
 segment from its beginning. Each query ingestion pass has a cooperative 60-second
 budget and a bounded maintenance-lock wait. When catch-up remains incomplete or
-maintenance owns the lock, the command returns an explicit unavailable error rather
+maintenance owns the lock, the command returns an explicit bounded error rather
 than reducing an apparently complete summary from partial input. Completed batch
 progress is retained for a subsequent query; source journals and authoritative
 board/session state are not discarded. These are ingestion safeguards, not a claim
 that every full reduction or filesystem operation has a fixed end-to-end latency.
+
+Those bounded errors are transient, not corruption: CLI `STATE_BUSY` means the
+maintenance lock is currently held, `CATCHUP_INCOMPLETE` means the ingestion budget
+ended before every retained event was ingested, and the native `aether_observe` tool
+reports the same two conditions as `AETHER-OBSERVE-BUSY` and
+`AETHER-OBSERVE-CATCHUP-INCOMPLETE`. Retry them after the contending writer or the
+next ingestion pass finishes; a settled snapshot still succeeds normally. A retryable
+error is never presented as a successful or fresh summary. Genuinely unreadable,
+schema-invalid, or privacy-refused state remains fail-closed as `STATE_UNREADABLE` /
+`AETHER-OBSERVE-STATE-UNREADABLE` with no raw exception, path, payload, or lock-owner
+detail exposed.
 
 For routine contract-wide questions, Morfeo starts with the compact `aether_observe` tool: `status` normally, `changes` against a known successful summary, and `diagnose` for an actual anomaly. Verify the exact project/contract, freshness and coverage before reporting. Consult individual review handoffs, code or logs for specific details or when observation is unavailable; disclose a failed observation rather than silently substituting a full-history reconstruction. Final acceptance still requires the contract-result review and supporting evidence.
 

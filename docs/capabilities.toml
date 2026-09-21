@@ -11,8 +11,8 @@ surfaces = ["cli.command.aether", "cli.option.aether.--json", "cli.option.aether
 documents = ["docs/getting-started.md", "docs/reference/cli.md"]
 specifications = ["specs/001-aether-v1-productization/contracts/cli.md"]
 implementation = ["src/aether_agents/cli.py", "src/aether_agents/launcher.py", "scripts/aether_tui.py"]
-verification = ["tests/test_aether_tui_launcher.py", "tests/test_observation_lifecycle.py"]
-notes = "Bare aether validates project identity and launches Morfeo into the active release-owned TUI; --json emits a non-mutating launch plan. Reserved arguments are rejected and --resume latest is passed through."
+verification = ["tests/test_aether_tui_launcher.py", "tests/test_observation_lifecycle.py", "tests/test_observation_usage_guidance.py"]
+notes = "Bare aether validates project identity and launches Morfeo into the active release-owned TUI; --json emits a non-mutating launch plan. Project selection stays exact and explicit (--project PATH, then AETHER_PROJECT_ROOT with precedence over the current directory, then a verified AETHER_PROJECT_ID, then the current or nearest initialized directory, then the single registered project) with a bounded ambiguity error instead of name/recency inference; identity values fail visibly instead of falling back to the current directory, where an empty --project value is refused while a relative --project PATH is resolved against the current working directory, AETHER_PROJECT_ROOT must be an absolute path, and AETHER_PROJECT_ID must be a canonical UUID agreeing with the portable marker. Reserved arguments are rejected and --resume latest is passed through. Activation installs the matching branded Aether (fresh) and Continue Aether (--resume latest) desktop and Windows Terminal actions, and Aether never writes a personal shell preference."
 
 [[capabilities]]
 id = "cli.doctor"
@@ -44,26 +44,26 @@ surfaces = ["cli.argument.aether.observe.ref", "cli.command.aether.observe", "cl
 documents = ["docs/guides/observation.md", "docs/reference/cli.md"]
 specifications = ["specs/001-aether-v1-productization/contracts/cli.md", "specs/002-aether-contract-observation/spec.md"]
 implementation = ["src/aether_agents/commands/observe.py", "src/aether_agents/observation/query.py", "src/aether_agents/observation/report.py"]
-verification = ["tests/test_observation_cli_plugin.py", "tests/test_observation_reducer.py", "tests/test_observation_ingest_scale.py", "tests/test_observation_batch_replay_regression.py"]
-notes = "Catch-up commits resumable event batches and bounds ingestion/maintenance-lock waiting. Incomplete catch-up is unavailable, never a complete summary. Active release 1.0.0rc3-8987f650c027ad09 qualified the original large #417 trace: status completed in 19.266s then 15.598s, changes in 15.576s, post-reactivation status in 34.655s then 23.495s, watch emitted its baseline, and native status/changes/diagnose tool responses remained within configured bounds. This is installation-local evidence, not public release or cross-platform qualification."
+verification = ["tests/test_observation_cli_plugin.py", "tests/test_observation_query_parity.py", "tests/test_observation_reducer.py", "tests/test_observation_ingest_scale.py", "tests/test_observation_batch_replay_regression.py"]
+notes = "Catch-up commits resumable event batches and bounds ingestion/maintenance-lock waiting. A bounded read failure caused by a held maintenance lock or an unfinished catch-up pass is reported as the retryable STATE_BUSY or CATCHUP_INCOMPLETE, never as a complete or fresh summary, and succeeds once the contention clears; genuine unreadable/schema/privacy failures stay fail-closed as STATE_UNREADABLE. Active release 1.0.0rc3-8987f650c027ad09 qualified the original large #417 trace: status completed in 19.266s then 15.598s, changes in 15.576s, post-reactivation status in 34.655s then 23.495s, watch emitted its baseline, and native status/changes/diagnose tool responses remained within configured bounds. This is installation-local evidence, not public release or cross-platform qualification."
 
 [[capabilities]]
 id = "cli.reconcile"
-status = "unsupported"
-summary = "The public command name is reserved but currently returns an explicit unsupported result."
-surfaces = ["cli.command.aether.reconcile", "cli.option.aether.reconcile.--json"]
-documents = ["docs/reference/cli.md", "docs/reference/limitations-and-troubleshooting.md"]
+status = "partial"
+summary = "Reconciles the managed projections and selector of the already active, authenticated release against that release's own authoritative record; every other mode stays explicitly unsupported."
+surfaces = ["cli.command.aether.reconcile", "cli.option.aether.reconcile.--dry-run", "cli.option.aether.reconcile.--json", "cli.option.aether.reconcile.--to", "cli.option.aether.reconcile.--yes"]
+documents = ["docs/guides/lifecycle.md", "docs/reference/cli.md", "docs/reference/limitations-and-troubleshooting.md"]
 specifications = ["specs/001-aether-v1-productization/contracts/cli.md", "specs/r9-state-and-recovery/spec.md"]
-implementation = ["src/aether_agents/cli.py"]
-verification = ["tests/test_observation_lifecycle.py"]
-notes = "Manager/product mismatch reconciliation is not implemented in the current CLI build."
+implementation = ["src/aether_agents/cli.py", "src/aether_agents/lifecycle.py"]
+verification = ["tests/test_lifecycle_projections.py", "tests/test_observation_lifecycle.py", "tests/test_observation_usage_guidance.py"]
+notes = "Only the bounded `--to active` mode is implemented. Without `--yes` (or with `--dry-run`) it plans only and changes nothing; with `--yes` it repairs the already active, authenticated release's managed projections and is idempotent. It never selects another release, installs a package, edits a release record, or restarts a service where read-only reconciliation suffices. `--to installed` and a missing `--to` are refused with `UNSUPPORTED_RECONCILE_MODE`, and an unauthenticated legacy active release is refused with `RECONCILE_REFUSED` before any byte changes. Manager/product mismatch staging for a direct package-manager change therefore remains unimplemented."
 
 [[capabilities]]
 id = "cli.rollback"
 status = "partial"
 summary = "Selects a previously coherent staged release with planning and confirmation paths while preserving mutable user state."
 surfaces = ["cli.argument.aether.rollback.version", "cli.command.aether.rollback", "cli.option.aether.rollback.--dry-run", "cli.option.aether.rollback.--json", "cli.option.aether.rollback.--yes"]
-documents = ["docs/guides/policy-and-recovery.md", "docs/reference/cli.md"]
+documents = ["docs/guides/lifecycle.md", "docs/guides/policy-and-recovery.md", "docs/reference/cli.md"]
 specifications = ["specs/001-aether-v1-productization/contracts/cli.md", "specs/r9-state-and-recovery/spec.md"]
 implementation = ["src/aether_agents/cli.py", "src/aether_agents/lifecycle.py"]
 verification = ["tests/test_observation_lifecycle.py"]
@@ -175,9 +175,9 @@ summary = "The observer plugin records bounded metadata and offers a curated Mor
 surfaces = ["plugin.aether-contract-observer", "tool.aether_observe", "tool_action.aether_observe.changes", "tool_action.aether_observe.diagnose", "tool_action.aether_observe.status"]
 documents = ["docs/guides/observation.md", "docs/reference/plugins-and-tools.md"]
 specifications = ["specs/002-aether-contract-observation/spec.md"]
-implementation = ["src/aether_agents/observation/brief.py", "src/aether_agents/observation/capture/hermes_plugin.py", "src/aether_agents/resources/profiles/morfeo/config.yaml", "src/aether_agents/resources/profiles/morfeo/SOUL.md"]
-verification = ["tests/test_observation_brief_tool.py", "tests/test_observation_cli_plugin.py", "tests/test_observation_packaging.py", "tests/test_observation_usage_guidance.py"]
-notes = "The entry point and provider-free behavior are tested. Active release 1.0.0rc3-8987f650c027ad09 qualified the managed-profile plugin on the original large #417 trace: status completed in 19.266s then 15.598s, changes in 15.576s, post-reactivation status in 34.655s then 23.495s, watch emitted its baseline, and native status/changes/diagnose tool envelopes remained within configured bounds. This remains installation-local evidence rather than public release or cross-platform qualification."
+implementation = ["src/aether_agents/observation/brief.py", "src/aether_agents/observation/capture/hermes_plugin.py", "src/aether_agents/observation/capture/retained_index.py", "src/aether_agents/resources/profiles/morfeo/config.yaml", "src/aether_agents/resources/profiles/morfeo/SOUL.md"]
+verification = ["tests/test_observation_brief_tool.py", "tests/test_observation_cli_plugin.py", "tests/test_observation_packaging.py", "tests/test_observation_passive_startup.py", "tests/test_observation_query_parity.py", "tests/test_observation_usage_guidance.py"]
+notes = "The entry point and provider-free behavior are tested. Registration and synchronous native hooks install hooks/tools and record bounded events without replaying retained journal history or holding the maintenance lock; retained bindings restore asynchronously through the plugin-owned worker with one validated index per catch-up snapshot, and an event is never attributed to a guessed trace: unresolved, stale or contradictory coverage is reported plainly instead. Under contention the native tool returns the bounded retryable AETHER-OBSERVE-BUSY or AETHER-OBSERVE-CATCHUP-INCOMPLETE and genuine unreadable state stays fail-closed. Active release 1.0.0rc3-8987f650c027ad09 qualified the managed-profile plugin on the original large #417 trace: status completed in 19.266s then 15.598s, changes in 15.576s, post-reactivation status in 34.655s then 23.495s, watch emitted its baseline, and native status/changes/diagnose tool envelopes remained within configured bounds. This remains installation-local evidence rather than public release or cross-platform qualification."
 
 [[capabilities]]
 id = "telegram-monitor.hourly-progress"

@@ -74,6 +74,7 @@ jobs:
           .aether/objective-contracts/oc_a578f1815b1eeee9/v1.md
           .aether/objective-contracts/oc_a63ccc67b95411eb/v1.md
           .aether/objective-contracts/oc_a7a3cff05e82c148/v1.md
+          .aether/objective-contracts/oc_b5926701207812e8/v1.md
           .aether/objective-contracts/oc_b8865f5129d60535/v1.md
           .aether/objective-contracts/oc_ba23edf6f74b7b43/v1.md
           .aether/objective-contracts/oc_c0abec2179f6b09c/v1.md
@@ -233,8 +234,9 @@ jobs:
           scripts/e2e/run.py
           scripts/e2e/scenarios
           scripts/e2e/synthetic_owner.py
-          scripts/qualify_observation.py
           scripts/qualify_knowledge_expansion.py
+          scripts/qualify_mixed_version_lifecycle.py
+          scripts/qualify_observation.py
           scripts/sync_policy_hooks.py
           SECURITY.md
           src/aether_agents/cli.py
@@ -280,6 +282,7 @@ jobs:
           src/aether_agents/observation/capture/__init__.py
           src/aether_agents/observation/capture/journal.py
           src/aether_agents/observation/capture/projectors.py
+          src/aether_agents/observation/capture/retained_index.py
           src/aether_agents/observation/checkpoint.py
           src/aether_agents/observation/context.py
           src/aether_agents/observation/contracts.py
@@ -325,6 +328,12 @@ jobs:
           src/aether_agents/resources/hermes-baseline.json
           src/aether_agents/result.py
           tests/fixtures/e2e
+          tests/fixtures/mixed-version/candidate-record.json
+          tests/fixtures/mixed-version/launch-ink-hydrated-frame.bin
+          tests/fixtures/mixed-version/launch-ink-lazy-frame.bin
+          tests/fixtures/mixed-version/rc3-record.json
+          tests/fixtures/mixed-version/rc4-record.json
+          tests/fixtures/mixed-version/rc5-record.json
           tests/fixtures/observation/complete-summary.json
           tests/fixtures/observation/performance-baseline.json
           tests/observation_helpers.py
@@ -345,6 +354,7 @@ jobs:
           tests/test_hermes_gateway_service.py
           tests/test_lifecycle_adoption.py
           tests/test_lifecycle_projections.py
+          tests/test_mixed_version_lifecycle_qualification.py
           tests/test_tui_projections.py
           tests/test_objective_contracts.py
           tests/test_observation_batch_replay_regression.py
@@ -355,9 +365,11 @@ jobs:
           tests/test_observation_journal_storage.py
           tests/test_observation_lifecycle.py
           tests/test_observation_packaging.py
+          tests/test_observation_passive_startup.py
           tests/test_observation_path_confinement.py
           tests/test_observation_performance.py
           tests/test_observation_qualification.py
+          tests/test_observation_query_parity.py
           tests/test_observation_reducer.py
           tests/test_policy_hooks.py
           tests/test_projection_transition_runner.py
@@ -675,6 +687,7 @@ jobs:
         run: |
           set -euo pipefail
           export PYTHONPATH="${RUNNER_TEMP}/hermes-exact"
+          export AETHER_EXACT_HERMES_CHECKOUT="${RUNNER_TEMP}/hermes-exact"
           export COVERAGE_FILE="${RUNNER_TEMP}/.coverage"
           export AETHER_GRAPHIFY_PYTHON="${RUNNER_TEMP}/graphify-component/bin/python"
           export AETHER_TEST_COMPONENT_INSTALL=1
@@ -722,10 +735,10 @@ jobs:
           else
             git diff-tree --check --root --no-commit-id -r "$GITHUB_SHA"
           fi
-          uv run --frozen python -m compileall -q src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/qualify_telegram_monitor.py scripts/telegram_monitor_lab.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py tests/test_documentation.py
+          uv run --frozen python -m compileall -q src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_mixed_version_lifecycle.py scripts/qualify_observation.py scripts/qualify_telegram_monitor.py scripts/telegram_monitor_lab.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py tests/test_documentation.py
           uv run --frozen mypy src/aether_agents
-          uv run --frozen ruff check src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/qualify_telegram_monitor.py scripts/telegram_monitor_lab.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/release_bundle.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py
-          uv run --frozen ruff format --check src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/qualify_telegram_monitor.py scripts/telegram_monitor_lab.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/release_bundle.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py
+          uv run --frozen ruff check src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_mixed_version_lifecycle.py scripts/qualify_observation.py scripts/qualify_telegram_monitor.py scripts/telegram_monitor_lab.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/release_bundle.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py
+          uv run --frozen ruff format --check src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_mixed_version_lifecycle.py scripts/qualify_observation.py scripts/qualify_telegram_monitor.py scripts/telegram_monitor_lab.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/release_bundle.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py
       - name: Build wheel and source distribution
         run: uv build --out-dir "${RUNNER_TEMP}/aether-dist"
       - name: Reject operator-specific paths in public artifacts

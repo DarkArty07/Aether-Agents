@@ -31,7 +31,10 @@ from aether_agents.observation.capture.collector import (
     observing,
     reentrancy_guard,
 )
-from aether_agents.observation.capture.journal import list_segments, read_segment
+from aether_agents.observation.capture.retained_index import (
+    RetainedIndex,
+    get_retained_index,
+)
 from aether_agents.observation.context import (
     ObservationContextResolver,
     canonical_project_id,
@@ -43,13 +46,11 @@ from aether_agents.observation.contracts import (
     RUN_STATUSES,
     CoverageClass,
     canonical_digest,
-    canonical_json_bytes,
     canonical_json_str,
     compute_runtime_fingerprint,
     event_validator,
     fallback_tool_category,
     normalize_native_status,
-    validate_event,
 )
 from aether_agents.observation.fingerprints import configuration_fingerprint_id
 from aether_agents.observation.identity import (
@@ -60,7 +61,6 @@ from aether_agents.observation.identity import (
 from aether_agents.observation.locking import project_lock
 from aether_agents.observation.privacy import (
     NativePseudonymKind,
-    assert_clean,
     native_agent_task_ref,
     native_kanban_task_ref,
     native_profile_ref,
@@ -303,130 +303,24 @@ def _bounded_dispatch_result(result: Any) -> dict[str, Any]:
     }
 
 
-def _validated_retained_events(paths: ObservationPaths):
-    """Yield only canonical, schema-valid events coherent with their owned segment.
-
-    Retained bytes are a recovery source, not authority merely because they exist.
-    This reader follows the same valid-prefix boundary as ingestion and rejects
-    quarantine, unverified archives, cross-project rows, and filename/sequence
-    contradictions before they can restore an in-memory trace or task binding.
-    """
-    for segment in list_segments(paths):
-        if segment.state == "quarantine":
-            continue
-        if segment.state == "archive":
-            from aether_agents.observation.retention import verify_archive
-
-            manifest = segment.path.with_name(segment.path.name + ".manifest.json")
-            if not verify_archive(manifest).ok:
-                continue
-        try:
-            snapshot = read_segment(segment.path)
-        except (OSError, EOFError, UnsafeObservationPath):
-            continue
-        if segment.last_seq is not None and (
-            snapshot.trailing_fragment
-            or not snapshot.lines
-            or segment.last_seq != segment.first_seq + len(snapshot.lines) - 1
-        ):
-            continue
-        for index, line in enumerate(snapshot.lines):
-            try:
-                event = json.loads(line.decode("utf-8"))
-                if not isinstance(event, dict) or canonical_json_bytes(event) != line:
-                    raise ValueError("retained event is not canonical")
-                validate_event(event)
-                assert_clean(event)
-                if event.get("project_id") != paths.project_id:
-                    raise ValueError("retained event belongs to another project")
-                if event.get("producer_epoch") != segment.producer_epoch:
-                    raise ValueError("retained event producer does not match segment")
-                if event.get("producer_seq") != segment.first_seq + index:
-                    raise ValueError("retained event sequence does not match segment")
-            except Exception:
-                # Mirror ingestion's valid-prefix rule. Bytes after a malformed row
-                # cannot recover authority even if they happen to look plausible.
-                break
-            yield event
-
-
-def _retained_binding_rows(
-    paths: ObservationPaths,
-) -> dict[str, list[tuple[str, int, str, str, str, str]]]:
-    """Read binding rows without inventing an order between producer processes."""
-    candidates: dict[str, list[tuple[str, int, str, str, str, str]]] = {}
-    for event in _validated_retained_events(paths):
-        unit = event.get("work_unit")
-        if not isinstance(unit, dict):
-            continue
-        event_type = event.get("event_type")
-        if event_type not in ("work_unit.bound", "work_unit.unbound") or event.get(
-            "source_kind"
-        ) not in {"hermes_hook", "native_reconciliation"}:
-            continue
-        trace_id = event.get("trace_id")
-        task_ref = native_kanban_task_ref(unit.get("task_ref"))
-        epoch = event.get("producer_epoch")
-        sequence = event.get("producer_seq")
-        if (
-            task_ref is None
-            or not isinstance(trace_id, str)
-            or not _TRACE_RE.fullmatch(trace_id)
-            or not isinstance(epoch, str)
-            or not isinstance(sequence, int)
-        ):
-            continue
-        candidates.setdefault(task_ref, []).append(
-            (
-                epoch,
-                sequence,
-                str(event.get("event_id") or ""),
-                event_type,
-                str(unit.get("relation") or "unknown"),
-                trace_id,
-            )
-        )
-    return candidates
-
-
-def _resolve_retained_binding(
-    candidates: list[tuple[str, int, str, str, str, str]],
-) -> tuple[str, str] | None:
-    if not candidates:
-        return None
-    per_epoch: dict[str, list[tuple[str, int, str, str, str, str]]] = {}
-    for candidate in candidates:
-        per_epoch.setdefault(candidate[0], []).append(candidate)
-    resolved: list[tuple[str, str] | None] = []
-    for rows in per_epoch.values():
-        highest_sequence = max(row[1] for row in rows)
-        latest = [row for row in rows if row[1] == highest_sequence]
-        values = {None if row[3] == "work_unit.unbound" else (row[5], row[4]) for row in latest}
-        if len(values) != 1:
-            return None
-        resolved.append(values.pop())
-    # Independent producers may corroborate the same durable fact, but neither a clock
-    # nor an opaque producer/event ID may resolve contradictory bind/unbind claims.
-    return resolved[0] if resolved and all(value == resolved[0] for value in resolved) else None
-
-
 def _retained_binding(paths: ObservationPaths, task_ref: str) -> tuple[str, str] | None:
     """Rebuild one worker binding from retained Aether journal evidence."""
-    return _resolve_retained_binding(_retained_binding_rows(paths).get(task_ref, []))
+    index = get_retained_index(paths)
+    index.refresh(paths)
+    return index.get_binding(task_ref)
 
 
 def _retained_bindings(paths: ObservationPaths) -> dict[str, tuple[str, str]]:
-    """Rebuild the latest append-only binding state without consulting SQLite."""
-    bindings: dict[str, tuple[str, str]] = {}
-    for task_ref, candidates in _retained_binding_rows(paths).items():
-        resolved = _resolve_retained_binding(candidates)
-        if resolved is not None:
-            bindings[task_ref] = resolved
-    return bindings
+    """Return verified retained bindings from the shared snapshot index."""
+    index = get_retained_index(paths)
+    index.refresh(paths)
+    return index.get_bindings()
 
 
 def _retained_trace_exists(paths: ObservationPaths, trace_id: str) -> bool:
-    return any(event.get("trace_id") == trace_id for event in _validated_retained_events(paths))
+    index = get_retained_index(paths)
+    index.refresh(paths)
+    return index.trace_exists(trace_id)
 
 
 def _verified_native_session_ids(
@@ -650,9 +544,7 @@ class _Observer:
 
         # Compile once at registration, not during the first observed call.
         event_validator()
-        collector = self._resolve_collector({})
-        if collector is not None:
-            self._restore_launch_binding(collector)
+        self._resolve_collector({})
         self._reconstruct_board_bindings()
 
     @staticmethod
@@ -895,8 +787,8 @@ class _Observer:
                     if trace_id in self._contract_board_bindings:
                         return self._contract_board_bindings[trace_id][0]
                     for p_id, col in self._collectors.items():
-                        if col.binder.root_for(trace_id) is not None or _retained_trace_exists(
-                            col.paths, trace_id
+                        if col.binder.root_for(trace_id) is not None or col.is_trace_materialized(
+                            trace_id
                         ):
                             return p_id
             result = _pick(payload, "result", "tool_result")
@@ -991,7 +883,6 @@ class _Observer:
             )
             collector.start(getattr(self._ctx, "spawn_task", None))
             self._collectors[canonical] = collector
-            self._restore_all_retained_bindings(collector)
             if self._collector is None:
                 self._collector = collector
             self._reconciler.start()
@@ -1026,12 +917,15 @@ class _Observer:
     def _restore_all_retained_bindings(self, collector: Collector) -> None:
         if collector.paths.project_id in self._retained_restored_projects:
             return
-        for task_ref, (trace_id, relation) in _retained_bindings(collector.paths).items():
+        index = get_retained_index(collector.paths)
+        for task_ref, (trace_id, relation) in index.get_bindings().items():
             collector.binder.restore(
                 task_ref=task_ref,
                 trace_id=trace_id,
                 relation=relation,
             )
+            collector.restore_materialized_trace(trace_id)
+        for trace_id in index.traces:
             collector.restore_materialized_trace(trace_id)
         self._retained_restored_projects.add(collector.paths.project_id)
 
@@ -1653,11 +1547,27 @@ class _Observer:
         task_ref: str,
         relation: str,
         event: dict[str, Any],
+        from_worker: bool = False,
     ) -> bool:
-        with project_lock(collector.paths, "native-binding"):
-            retained = _retained_binding(collector.paths, task_ref)
-            if retained is None:
-                return collector.emit(event).accepted
+        """Attribute a native binding durably, or keep the intent pending.
+
+        ``from_worker=False`` is the synchronous hook path.  It restores an
+        already-verified row -- which writes no journal evidence -- and buffers every
+        other state, including an absence verdict, as a pending intent for the
+        reconciliation worker.  A hook therefore never replays retained history, never
+        decompresses an archive, never waits for the maintenance lock, and can never
+        publish a claim that contradicts evidence which moved after the snapshot it
+        read.
+
+        ``from_worker=True`` is the reconciliation worker, which may publish: it
+        validates at its own cadence and emits under the ``native-binding`` project
+        lock, so cooperating emitters serialize, a valid claim another producer
+        published first is preserved, and no conflicting durable claim is created.
+        """
+        index = get_retained_index(collector.paths)
+        state = index.binding_state(task_ref)
+        retained = index.get_binding(task_ref)
+        if state == "verified":
             if retained == (trace_id, relation):
                 collector.binder.restore(
                     task_ref=task_ref,
@@ -1668,6 +1578,95 @@ class _Observer:
                 return True
             collector.health.increment("BINDING_DURABLE_CONFLICT")
             return False
+        if state == "pending":
+            if index.pending_binding(task_ref) == (trace_id, relation):
+                return False
+            collector.health.increment("BINDING_DURABLE_CONFLICT")
+            return False
+        if state == "conflict":
+            collector.health.increment("BINDING_DURABLE_CONFLICT")
+            return False
+
+        if state == "absent" and from_worker:
+            return self._publish_absent_binding(
+                collector,
+                index,
+                trace_id=trace_id,
+                task_ref=task_ref,
+                relation=relation,
+                event=event,
+            )
+
+        # Absent, cold, incomplete, or unreadable retained state: proving this task is
+        # unattributed would need exactly the history work the hook path must not do.
+        # Buffer the intent for the reconciliation worker and publish no durable claim.
+        index.record_binding(task_ref, trace_id, relation, event=event)
+        collector.health.increment("BINDING_UNRESOLVED")
+        return False
+
+    def _publish_absent_binding(
+        self,
+        collector: Collector,
+        index: RetainedIndex,
+        *,
+        trace_id: str,
+        task_ref: str,
+        relation: str,
+        event: dict[str, Any],
+    ) -> bool:
+        """Publish one absence-based claim inside the cooperating-writer serialization.
+
+        The coverage verdict and the append are one critical section under the
+        ``native-binding`` project lock, so a cooperating emitter that read the same
+        absence cannot also append: whichever process holds the lock first publishes,
+        and the other re-checks and refuses instead of creating a contradiction.  The
+        verdict stays stat-only, so no archived history is read or decompressed.
+        """
+        with project_lock(collector.paths, "native-binding"):
+            if not index.snapshot_covers_disk(collector.paths, own_epoch=collector.producer_epoch):
+                # Another producer may already have attributed this task.  Keep the
+                # intent pending; the next validated cycle retries it.
+                index.record_binding(task_ref, trace_id, relation, event=event)
+                collector.health.increment("BINDING_STALE_SNAPSHOT")
+                return False
+            outcome = collector.emit(event)
+            if not outcome.accepted:
+                return False
+            # The append is not authoritative until the next retained-index snapshot
+            # corroborates it. Keep it marked emitted to avoid duplicates.
+            index.record_binding(task_ref, trace_id, relation, event=event, emitted=True)
+            return True
+
+    def _flush_pending_binding_events(self, collector: Collector) -> None:
+        """Publish pending binding intents from a validated snapshot, serialized.
+
+        This is the only absence-based durable emission path.  It holds the
+        ``native-binding`` project lock over its coverage verdict *and* its appends --
+        the same serialization the pre-fix production emitter held over its retained
+        read and append -- so cooperating emitters cannot interleave: a claim another
+        cooperating writer published first is preserved, and this process refuses to
+        contradict it instead of creating an unresolvable conflict.  The verdict itself
+        stays stat-only, so no archived history is read or decompressed here either.
+        """
+        index = get_retained_index(collector.paths)
+        pending = index.pending_binding_events()
+        if not pending:
+            return
+        with project_lock(collector.paths, "native-binding"):
+            if not index.snapshot_covers_disk(collector.paths, own_epoch=collector.producer_epoch):
+                # The snapshot this cycle validated no longer covers the live retained
+                # evidence.  Emit nothing from an absence verdict that has moved; the
+                # next reconciliation cycle re-validates and flushes.
+                collector.health.increment("BINDING_STALE_SNAPSHOT")
+                return
+            for task_ref, _trace_id, _relation, event in pending:
+                if self._reconciler._stop.is_set():
+                    return
+                outcome = collector.emit(event)
+                if outcome.accepted:
+                    index.mark_pending_binding_emitted(task_ref)
+                else:
+                    collector.health.increment("BINDING_UNRESOLVED")
 
     def _emit_native_rejections(
         self,
@@ -1675,15 +1674,14 @@ class _Observer:
         rejections: tuple[tuple[str, str | None, str | None], ...],
     ) -> None:
         """Attach content-free ingress failures only through explicit trace evidence."""
+        index = get_retained_index(collector.paths)
         for reason_code, task_ref, explicit_trace in rejections:
             candidates: set[str] = set()
             if task_ref is not None:
                 bound = collector.binder.trace_for(task_ref)
                 if bound is not None:
                     candidates.add(bound)
-            if explicit_trace is not None and _retained_trace_exists(
-                collector.paths, explicit_trace
-            ):
+            if explicit_trace is not None and index.trace_exists(explicit_trace):
                 candidates.add(explicit_trace)
             if len(candidates) != 1:
                 continue
@@ -1713,6 +1711,22 @@ class _Observer:
             self._reconcile_native_for_collector(collector)
 
     def _reconcile_native_for_collector(self, collector: Collector) -> None:
+        index = get_retained_index(collector.paths)
+        index.refresh(
+            collector.paths,
+            collector=collector,
+            stop_check=lambda: self._reconciler._stop.is_set(),
+        )
+        if self._reconciler._stop.is_set():
+            return
+
+        self._flush_pending_binding_events(collector)
+        if self._reconciler._stop.is_set():
+            return
+
+        self._restore_all_retained_bindings(collector)
+        self._restore_launch_binding(collector)
+
         try:
             from hermes_cli import kanban_db  # type: ignore[import-not-found]
         except ImportError:
@@ -1723,7 +1737,7 @@ class _Observer:
 
         # 1. Look for active traces in this collector that lack a board binding
         for trace_id in sorted(self._active_traces):
-            if not _retained_trace_exists(collector.paths, trace_id):
+            if not index.trace_exists(trace_id):
                 continue
             if trace_id not in self._contract_board_bindings:
                 collector.health.increment("KANBAN_BOARD_UNRESOLVED")
@@ -1927,7 +1941,7 @@ class _Observer:
                 t_id, unit_ref = token_parts
                 if len(task_ids) != 1:
                     collector.health.increment("BINDING_TOKEN_REUSED")
-                    if _retained_trace_exists(collector.paths, t_id):
+                    if index.trace_exists(t_id):
                         self._emit_native_once(
                             collector,
                             ("token_ambiguity", t_id, unit_ref),
@@ -1944,7 +1958,7 @@ class _Observer:
                 task = tasks[task_id]
                 materialized_at = _native_datetime(task.get("created_at"))
                 session_id = native_pseudonym_ref(task.get("session_id"), kind="session")
-                retained = _retained_trace_exists(collector.paths, t_id)
+                retained = index.trace_exists(t_id)
                 if retained:
                     collector.restore_materialized_trace(t_id)
                 elif not collector.ensure_trace_opened(
@@ -1972,6 +1986,7 @@ class _Observer:
                         trace_id=t_id,
                         task_ref=task_id,
                         relation="root",
+                        from_worker=True,
                         event=builder.work_unit(
                             event_type="work_unit.bound",
                             status="reported",
@@ -2019,6 +2034,7 @@ class _Observer:
                         trace_id=decision.trace_id,
                         task_ref=task_id,
                         relation="unknown",
+                        from_worker=True,
                         event=builder.work_unit(
                             event_type="work_unit.bound",
                             status="reported",

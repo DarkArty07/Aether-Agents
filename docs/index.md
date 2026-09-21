@@ -4,7 +4,7 @@ Aether is a multi-agent software-engineering product built on [Hermes Agent](htt
 
 This index is navigation only and routes reader questions to the appropriate guide, reference, or authority artifact. For the complete reader-facing placement and conflict-resolution map across all artifact classes, see [Authority and artifact ownership](authority.md).
 
-The executable Hermes source for the current local-only `1.0.0rc5` candidate is Aether's
+The executable Hermes source for the current local-only `1.0.0rc6` candidate is Aether's
 maintained fork `DarkArty07/aether-hermes` branch `aether-main`, bound by release-lock
 `schema_version` 4 source mode `maintained_fork` and installed through `aether update`.
 In the historical rc3 qualification, active release `1.0.0rc3-8987f650c027ad09` was
@@ -33,6 +33,8 @@ issue #261 stays open with those publication and platform gates outstanding. See
 ### Getting started and project setup
 - **How do I explore Aether locally without provider calls or credentials?**
   See [Getting started](getting-started.md).
+- **How do I launch Aether in an already initialized project, and which commands recover an active installation?**
+  See [Launch Aether in an initialized project](getting-started.md#launch-aether-in-an-initialized-project) and the [lifecycle recovery surfaces](guides/lifecycle.md#recovery-surfaces).
 - **How do I bind an existing Git repository root to a Hermes Project?**
   See [Project initialization](guides/project-initialization.md).
 

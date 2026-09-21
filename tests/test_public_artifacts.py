@@ -30,6 +30,7 @@ ACCEPTED_PACKAGE_IDENTITIES = (
     "1.0.0rc3",
     "1.0.0rc4",
     "1.0.0rc5",
+    "1.0.0rc6",
     "2.30.4",
     "1.0.0.dev3",
 )
@@ -145,19 +146,23 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     assert "sole current implementation-status and traceability registry" in readme
     assert "documented transitional downstream" in readme
     # The portal must state the current release identity and the disposition of the
-    # predecessor candidates. It replaces the rc.4 assertions with the
-    # truthful local-only rc.5 identity and a truthfulness guard (no published rc.5 link),
-    # because the status has to stay true of the artifact this README is embedded into
-    # (the wheel's `METADATA` long description) and must not carry a time-bound promise.
+    # predecessor candidates. It replaces the rc.5 assertions with the
+    # truthful local-only rc.6 identity and a truthfulness guard (no published rc.6 link
+    # and no stale published rc.5 link), because the status has to stay true of the artifact
+    # this README is embedded into (the wheel's `METADATA` long description) and must not
+    # carry a time-bound promise.
+    assert "releases/tag/v1.0.0-rc.6" not in readme
     assert "releases/tag/v1.0.0-rc.5" not in readme
-    assert "package version `1.0.0rc5`" in readme
-    assert "annotated tag `v1.0.0-rc.5`" in readme
+    assert "package version `1.0.0rc6`" in readme
+    assert "display version `1.0.0-rc.6`" in readme
+    assert "annotated tag `v1.0.0-rc.6`" in readme
     assert "local-only candidate that is not pushed and not published" in readme
-    assert "local rc.2, rc.3 and rc.4 tags and activation history remain immutable" in readme
+    assert "local rc.2, rc.3, rc.4 and rc.5 tags and activation history remain immutable" in readme
     assert "releases/tag/v1.0.0-rc.1" in readme
     assert "remains published and byte-immutable but rejected, and must not be activated" in readme
     status = [line for line in readme.splitlines() if line.startswith("**Status:**")]
     assert len(status) == 1, f"expected exactly one status paragraph, found {len(status)}"
+    assert "releases/tag/v1.0.0-rc.6" not in status[0]
     assert "releases/tag/v1.0.0-rc.5" not in status[0]
     assert "release_impact = patch" in status[0]
     assert "release_action = prepare" in status[0]
@@ -173,6 +178,7 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
         "#261 therefore stays open with the stable, PyPI/OIDC and WSL2 gates outstanding" in readme
     )
     assert "remain explicit unsupported placeholders" in readme
+    assert "`aether reconcile` supports only its bounded `--to active` form" in readme
     assert "Historical snapshot" in incomplete
     assert "does not state the current implementation" in incomplete
     assert project["name"] == "aether-agents"
