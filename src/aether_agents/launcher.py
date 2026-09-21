@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import tomllib
 from collections.abc import Sequence
@@ -288,27 +289,142 @@ def _resolve_component_paths(repo: Path) -> tuple[Path, Path, Path]:
     return profile, hermes, tui_dir
 
 
-def _resolve_target_python(hermes: Path) -> Path:
-    """Resolve the target release Python interpreter paired with the Hermes executable."""
-    parent = hermes.parent
-    resolved_parent = hermes.resolve().parent
-    candidates = [
-        parent / "python",
-        parent / "python3",
-        parent / "python.exe",
-        parent / "python3.exe",
-        resolved_parent / "python",
-        resolved_parent / "python3",
-        resolved_parent / "python.exe",
-        resolved_parent / "python3.exe",
-    ]
-    for cand in candidates:
+def _probe_venv_interpreter(python_path: Path, target_venvs: Sequence[Path]) -> bool:
+    """Verify in an isolated subprocess that python_path reports sys.prefix and purelib inside target_venvs."""
+    probe_code = (
+        "import sys, sysconfig\n"
+        "print(sys.prefix)\n"
+        "print(sysconfig.get_paths().get('purelib', ''))\n"
+    )
+    env = {
+        k: v for k, v in os.environ.items() if k in ("PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP")
+    }
+    try:
+        proc = subprocess.run(
+            [os.fspath(python_path), "-c", probe_code],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            env=env,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+    if proc.returncode != 0:
+        return False
+
+    lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+    if len(lines) < 2:
+        return False
+
+    reported_prefix = Path(lines[0]).resolve()
+    reported_purelib = Path(lines[1]).resolve()
+
+    resolved_targets: list[Path] = []
+    for t in target_venvs:
         try:
-            if cand.is_file() and os.access(cand, os.X_OK):
-                return cand.resolve()
+            resolved_targets.append(t.resolve())
+        except OSError:
+            resolved_targets.append(t)
+
+    prefix_ok = any(
+        reported_prefix == target or reported_prefix.is_relative_to(target)
+        for target in resolved_targets
+    )
+    purelib_ok = any(
+        reported_purelib == target or reported_purelib.is_relative_to(target)
+        for target in resolved_targets
+    )
+    return prefix_ok and purelib_ok
+
+
+def _resolve_target_python(hermes: Path, runtime_root: Path | None = None) -> Path:
+    """Resolve and verify the target release Python interpreter paired with the Hermes executable.
+
+    Returns the absolute lexical path within the target release venv (without dereferencing
+    leaf symlinks to base interpreters) after proving in a bounded isolated subprocess that
+    the interpreter reports sys.prefix and purelib within the target venv.
+    """
+    target_venvs: list[Path] = []
+    if hermes.parent.name in ("bin", "Scripts"):
+        target_venvs.append(hermes.parent.parent)
+    else:
+        target_venvs.append(hermes.parent)
+
+    resolved_hermes = hermes.resolve()
+    if resolved_hermes != hermes:
+        if resolved_hermes.parent.name in ("bin", "Scripts"):
+            target_venvs.append(resolved_hermes.parent.parent)
+        else:
+            target_venvs.append(resolved_hermes.parent)
+
+    if runtime_root is not None:
+        target_venvs.append(runtime_root / "current" / "venv")
+        target_venvs.append(runtime_root / "venv")
+    try:
+        target_venvs.append(data_root() / "runtime" / "current" / "venv")
+    except Exception:
+        pass
+
+    resolved_targets: list[Path] = []
+    for t in target_venvs:
+        try:
+            resolved_targets.append(t.resolve())
+        except OSError:
+            resolved_targets.append(t)
+
+    candidates: list[Path] = []
+    for name in ("python", "python3", "python.exe", "python3.exe"):
+        candidates.append(hermes.parent / name)
+    if resolved_hermes.parent != hermes.parent:
+        for name in ("python", "python3", "python.exe", "python3.exe"):
+            candidates.append(resolved_hermes.parent / name)
+    if runtime_root is not None:
+        for name in ("python", "python3", "python.exe", "python3.exe"):
+            candidates.append(runtime_root / "current" / "venv" / "bin" / name)
+            candidates.append(runtime_root / "venv" / "bin" / name)
+
+    for cand in candidates:
+        lexical_cand = Path(os.path.abspath(os.fspath(cand)))
+        try:
+            if not (lexical_cand.is_file() and os.access(lexical_cand, os.X_OK)):
+                continue
+            cand_venv = (
+                lexical_cand.parent.parent.resolve()
+                if lexical_cand.parent.name in ("bin", "Scripts")
+                else lexical_cand.parent.resolve()
+            )
+            if not any(
+                cand_venv == target or cand_venv.is_relative_to(target)
+                for target in resolved_targets
+            ):
+                continue
         except OSError:
             continue
-    return Path(sys.executable).resolve()
+
+        if _probe_venv_interpreter(lexical_cand, target_venvs):
+            return lexical_cand
+
+    # Check fallback sys.executable only if it proves to be inside target_venvs
+    current_exe = Path(os.path.abspath(sys.executable))
+    try:
+        exe_venv = (
+            current_exe.parent.parent.resolve()
+            if current_exe.parent.name in ("bin", "Scripts")
+            else current_exe.parent.resolve()
+        )
+        if any(
+            exe_venv == target or exe_venv.is_relative_to(target) for target in resolved_targets
+        ):
+            if _probe_venv_interpreter(current_exe, target_venvs):
+                return current_exe
+    except OSError:
+        pass
+
+    raise ActivationError(
+        f"Target release Python interpreter for '{hermes}' could not be verified inside "
+        f"target venv (checked candidates: {[str(c) for c in candidates]})"
+    )
 
 
 def _resolve_target_source_root(hermes: Path, runtime_root: Path | None, repo: Path) -> Path | None:
@@ -468,7 +584,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     runtime_root = _absolute_env_path("AETHER_RUNTIME_ROOT")
-    target_python = _resolve_target_python(Path(str(report["hermes_executable"])))
+    try:
+        target_python = _resolve_target_python(
+            Path(str(report["hermes_executable"])),
+            runtime_root,
+        )
+    except ActivationError as exc:
+        print(f"aether: {exc}", file=sys.stderr)
+        return 2
+
     target_source_root = _resolve_target_source_root(
         Path(str(report["hermes_executable"])),
         runtime_root,

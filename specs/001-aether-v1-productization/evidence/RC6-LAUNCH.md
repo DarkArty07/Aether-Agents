@@ -30,8 +30,12 @@
      and model configuration (e.g. `HERMES_MODEL`, `HERMES_INFERENCE_MODEL`).
 
 2. **Binding target release identities after scrubbing**:
-   - `HERMES_PYTHON`: resolves to the active release's Python interpreter (`<target_venv>/bin/python` or `python3`),
-     falling back to the running Python interpreter if not present in the target venv. Never inherits parent's `HERMES_PYTHON`.
+   - `HERMES_PYTHON`: resolves to the active release's absolute lexical Python interpreter path
+     (`<target_venv>/bin/python` or `python3`), preserving the venv symlink without leaf dereference to
+     the base interpreter. Proved via a bounded isolated subprocess probe asserting `sys.prefix` and `purelib`
+     resolve within the target release venv. Foreign or failing candidates raise `ActivationError` and are
+     never bound silently. Current process `sys.executable` fallback is accepted only if it also proves to be
+     inside the target release venv.
    - `HERMES_PYTHON_SRC_ROOT`: resolves to the active release's `hermes-source` directory if present
      (`<target_release>/hermes-source`). Never inherits parent's `HERMES_PYTHON_SRC_ROOT`.
    - `HERMES_TUI_DIR`: binds the active release's TUI directory (`<target_release>/tui`).
@@ -45,6 +49,8 @@
      transport variables) and in a heavily contaminated shell environment (with old backend python, old source root,
      stale gateway URLs, and stale sockets).
    - In both environments, the launched child receives the exact active release identities and zero stale transport residue.
+   - The bound `HERMES_PYTHON` is lexically equal to the release venv interpreter path and distinct from the
+     dereferenced base interpreter, with `sys.prefix` and `purelib` verified inside the release venv.
 
 4. **Bare `aether` launch inside project directory**:
    - Tested bare invocation `aether` from cwd matching an initialized registered project without `--project`.
@@ -109,14 +115,17 @@ Reproduction verification:
 | Requirement / Clause | Verification check | Observed result | Evidence status |
 |---|---|---|---|
 | AC-6: Scrub inherited transport selectors | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_regression_contaminated_parent_cannot_select_old_backend` | PASS: child does not inherit stale `HERMES_PYTHON`, `HERMES_PYTHON_SRC_ROOT`, `HERMES_RPC_SOCKET`, `HERMES_TUI_GATEWAY_URL`, or `VIRTUAL_ENV` | Direct |
-| AC-6: Bind target interpreter and source root after scrubbing | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_launch_scrubs_inherited_transport_and_binds_target_in_clean_and_contaminated_envs` | PASS: child receives exact target `HERMES_PYTHON`, `HERMES_PYTHON_SRC_ROOT`, `HERMES_TUI_DIR`, `HERMES_HOME`, `AETHER_PROJECT_ID`, `PWD` in both clean and contaminated envs | Direct |
+| AC-6: Bind target interpreter and source root after scrubbing | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_launch_scrubs_inherited_transport_and_binds_target_in_clean_and_contaminated_envs` | PASS: child receives exact target `HERMES_PYTHON`, `HERMES_PYTHON_SRC_ROOT`, `HERMES_TUI_DIR`, `HERMES_HOME`, `AETHER_PROJECT_ID`, `PWD` in both clean and contaminated envs; `_assert_bound_target_python` confirms lexical path and subprocess probe `sys.prefix`/`purelib` match release venv | Direct |
+| AC-6: Symlink venv interpreter preserved without leaf dereference | `tests/test_aether_tui_launcher.py::TuiPreservationTests::_assert_bound_target_python` in all launch tests | PASS: `HERMES_PYTHON` equals lexical `<target_venv>/bin/python` symlink and differs from dereferenced base interpreter; subprocess probe confirms `sys.prefix` equals target venv | Direct |
+| AC-6: Secondary case regular-file executable stub | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_target_python_supports_regular_file_executable_stub_secondary_case` | PASS: regular file executable inside target venv passing probe is accepted and returns lexical path | Direct |
+| AC-6: Foreign or failing interpreter fails closed | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_target_python_rejects_foreign_or_failing_interpreter` | PASS: foreign `sys.prefix`, non-executable binary, or failing probe raises `ActivationError` and never binds silently | Direct |
 | AC-6: Fresh and `--resume latest` in both environments | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_launch_scrubs_inherited_transport_and_binds_target_in_clean_and_contaminated_envs` | PASS: fresh launch and resume launch succeed in clean and contaminated envs with exact argv and target env | Direct |
 | AC-6: Installed wheel console script lane | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_installed_wheel_console_script_lane_fresh_and_resume_latest` | PASS: installed console script scrubs contaminated env and exports target `HERMES_PYTHON`, `HERMES_PYTHON_SRC_ROOT`, `HERMES_TUI_DIR` | Direct |
 | AC-6: Bare `aether` inside project directory | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_bare_aether_launch_in_project_cwd_clean_and_contaminated` | PASS: resolves project from cwd marker + registry, scrubs contaminated vars, binds target identities | Direct |
 | AC-6: Non-mutating `--json` plan and reserved args | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_aether_project_json_non_mutating_and_reports_release_identity`, `test_json_mode_non_mutating_plan_keys` | PASS: zero filesystem mutation pre/post; plan keys match canonical contract; reserved args fail closed | Direct |
 | AC-6: Source and TUI bit-for-bit preservation | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_launch_creates_no_build_artefacts_and_leaves_locked_hermes_source_unchanged` | PASS: pre/post SHA-256 inventories of locked source match bit-for-bit; no npm/build artifacts created | Direct |
 | AC-6: Projections point to stable entry point | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_desktop_and_wsl_projections_point_to_stable_aether_entry_point` | PASS: Desktop and WSL entry points target `<runtime_current>/venv/bin/aether` and support `--resume latest` | Direct |
-| Preservation: Other projection suites | `uv run --frozen pytest -q tests/test_tui_projections.py tests/test_lifecycle_projections.py` | PASS: 41 passed in 16.12s | Direct |
+| Preservation: Other projection suites | `uv run --frozen pytest -q tests/test_tui_projections.py tests/test_lifecycle_projections.py` | PASS: 41 passed in 17.24s | Direct |
 | Code quality: Ruff lint | `uv run --frozen ruff check src/aether_agents tests scripts` | PASS: All checks passed | Direct |
 | Code quality: Ruff format | `uv run --frozen ruff format --check src/aether_agents tests scripts` | PASS: 175 files already formatted | Direct |
 | Code quality: Mypy static typing | `uv run --frozen mypy src/aether_agents` | PASS: Success: no issues found in 68 source files | Direct |
@@ -128,14 +137,16 @@ Reproduction verification:
 ## 4. Attribution: Direct versus Reused Evidence
 
 - **Direct evidence**:
-  - `src/aether_agents/launcher.py`: implemented `_resolve_target_python` and `_resolve_target_source_root`,
-    expanded `keys_to_drop` to scrub all transport selectors, stale RPC/gateway/socket paths, active session files,
-    and virtualenv variables; bound `HERMES_PYTHON` and `HERMES_PYTHON_SRC_ROOT` to target release identities.
-  - `tests/test_aether_tui_launcher.py`: implemented clean and contaminated test environments,
-    added `test_launch_scrubs_inherited_transport_and_binds_target_in_clean_and_contaminated_envs`,
-    `test_bare_aether_launch_in_project_cwd_clean_and_contaminated`, and
-    `test_regression_contaminated_parent_cannot_select_old_backend`.
-  - Focused test suite execution: `tests/test_aether_tui_launcher.py` (31 passed, 13 subtests passed).
+  - `src/aether_agents/launcher.py`: implemented `_resolve_target_python`, `_probe_venv_interpreter`, and
+    `_resolve_target_source_root`; expanded `keys_to_drop` to scrub all transport selectors, stale RPC/gateway/socket
+    paths, active session files, and virtualenv variables; bound `HERMES_PYTHON` and `HERMES_PYTHON_SRC_ROOT` to
+    target release identities. `_resolve_target_python` preserves lexical symlinks, confines candidates to the release
+    venv, verifies `sys.prefix` and `purelib` via an isolated probe, and fails closed with `ActivationError` if no candidate qualifies.
+  - `tests/test_aether_tui_launcher.py`: modeled the real symlinked venv layout in test fixtures with `pyvenv.cfg`,
+    implemented `_assert_bound_target_python` verifying both lexical path equality and subprocess probe results,
+    added `test_target_python_supports_regular_file_executable_stub_secondary_case` and
+    `test_target_python_rejects_foreign_or_failing_interpreter`, and updated all launch tests to assert target venv confinement.
+  - Focused test suite execution: `tests/test_aether_tui_launcher.py` (33 passed, 13 subtests passed).
 - **Reused evidence**:
   - Unchanged projection spec generator tests (`tests/test_tui_projections.py`, `tests/test_lifecycle_projections.py`),
     reused from rc5 at unchanged code identity.
@@ -156,9 +167,11 @@ Manifest lines to add to `.github/workflows/policy.yml`: **none**.
 
 ## 6. Residual risk and environment limits
 
-- **Residual risk**: None identified for this unit. Transport scrubbing is comprehensive and targets all known
-  Hermes transport variables, sockets, session files, and virtualenv paths, while preserving user credentials and model
-  settings. Target resolution is deterministic from the active release and project marker.
+- **Residual risk**: Target interpreter resolution relies on the release venv containing an executable Python binary
+  or symlink and a valid `pyvenv.cfg` so Python initializes `sys.prefix` and `purelib` matching the release venv.
+  If an installed release venv is damaged (e.g. missing interpreter or unresolvable purelib), the launcher fails closed
+  with `ActivationError` (exit code 2) rather than silently executing with a foreign or ambient interpreter.
+  Live canary qualification in RC6-QUAL and RC6-CLOSE exercises the end-to-end launch on real release trees.
 - **Environment limits**:
   - Full mixed-version qualification (`scripts/qualify_mixed_version_lifecycle.py`) and live canary activation
     belong to downstream units RC6-QUAL and RC6-CLOSE.
