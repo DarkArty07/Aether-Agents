@@ -154,6 +154,28 @@ def run_observe(
         return _emit(
             envelope, json_mode=args.json, human=f"error: {exc}", stdout=stdout, stderr=stderr
         )
+    except query.StateBusyError as exc:
+        _fail(
+            envelope,
+            result="error",
+            failure_kind="runtime_failure",
+            code="STATE_BUSY",
+            message=str(exc),
+        )
+        return _emit(
+            envelope, json_mode=args.json, human=f"error: {exc}", stdout=stdout, stderr=stderr
+        )
+    except query.CatchupIncompleteError as exc:
+        _fail(
+            envelope,
+            result="error",
+            failure_kind="runtime_failure",
+            code="CATCHUP_INCOMPLETE",
+            message=str(exc),
+        )
+        return _emit(
+            envelope, json_mode=args.json, human=f"error: {exc}", stdout=stdout, stderr=stderr
+        )
     except query.StateUnreadableError as exc:
         _fail(
             envelope,
@@ -171,6 +193,28 @@ def run_observe(
 
     try:
         summary = query.load_summary(paths, trace_id, ingest=False)
+    except query.StateBusyError as exc:
+        _fail(
+            envelope,
+            result="error",
+            failure_kind="runtime_failure",
+            code="STATE_BUSY",
+            message=str(exc),
+        )
+        return _emit(
+            envelope, json_mode=args.json, human=f"error: {exc}", stdout=stdout, stderr=stderr
+        )
+    except query.CatchupIncompleteError as exc:
+        _fail(
+            envelope,
+            result="error",
+            failure_kind="runtime_failure",
+            code="CATCHUP_INCOMPLETE",
+            message=str(exc),
+        )
+        return _emit(
+            envelope, json_mode=args.json, human=f"error: {exc}", stdout=stdout, stderr=stderr
+        )
     except query.StateUnreadableError as exc:
         _fail(
             envelope,
@@ -213,6 +257,28 @@ def run_observe(
                 result="error",
                 failure_kind="invalid_input",
                 code="SINCE_SUMMARY_NOT_FOUND",
+                message=str(exc),
+            )
+            return _emit(
+                envelope, json_mode=args.json, human=f"error: {exc}", stdout=stdout, stderr=stderr
+            )
+        except query.StateBusyError as exc:
+            _fail(
+                envelope,
+                result="error",
+                failure_kind="runtime_failure",
+                code="STATE_BUSY",
+                message=str(exc),
+            )
+            return _emit(
+                envelope, json_mode=args.json, human=f"error: {exc}", stdout=stdout, stderr=stderr
+            )
+        except query.CatchupIncompleteError as exc:
+            _fail(
+                envelope,
+                result="error",
+                failure_kind="runtime_failure",
+                code="CATCHUP_INCOMPLETE",
                 message=str(exc),
             )
             return _emit(
@@ -286,7 +352,7 @@ def _run_watch(
             stdout.flush()
     except KeyboardInterrupt:
         return 0
-    except query.StateUnreadableError as exc:
+    except (query.StateUnreadableError, query.StateBusyError, query.CatchupIncompleteError) as exc:
         print(f"error: {exc}", file=stderr)
         return 6
     return 0

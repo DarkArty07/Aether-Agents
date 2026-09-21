@@ -29,6 +29,7 @@ from aether_agents.objective_contracts.execution_boards import execution_board_s
 from aether_agents.observation import query, report
 from aether_agents.observation.brief import observe as observe_brief
 from aether_agents.observation.capture.journal import JournalWriter, list_segments, read_segment
+from aether_agents.observation.capture.retained_index import get_retained_index
 from aether_agents.observation.context import ProjectRegistry
 from aether_agents.observation.contracts import (
     canonical_json_bytes,
@@ -269,6 +270,7 @@ def test_objective_contract_finalize_materializes_trace_and_root_create_binds(
     from aether_agents.observation.capture import hermes_plugin
 
     _, paths = _install_project(monkeypatch, tmp_path)
+    get_retained_index(paths).refresh(paths)
     monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
     monkeypatch.setattr(hermes_plugin._NativeReconciliationWorker, "start", lambda self: None)
     context = FakePluginContext()
@@ -339,6 +341,7 @@ def test_objective_contract_result_resolves_project_outside_project_cwd(
     from aether_agents.observation.capture import hermes_plugin
 
     project, paths = _install_project(monkeypatch, tmp_path)
+    get_retained_index(paths).refresh(paths)
     outside = tmp_path / "outside"
     outside.mkdir()
     monkeypatch.chdir(outside)
@@ -672,6 +675,7 @@ def test_plugin_projects_native_payload_before_any_disk_write(
     from aether_agents.observation.capture import hermes_plugin
 
     _, paths = _install_project(monkeypatch, tmp_path)
+    get_retained_index(paths).refresh(paths)
     monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes" / "profiles" / "morfeo"))
     monkeypatch.setattr(hermes_plugin._NativeReconciliationWorker, "start", lambda self: None)
@@ -896,6 +900,7 @@ def test_post_only_kanban_create_success_keeps_terminal_gap_and_durable_binding(
     from aether_agents.observation.capture import hermes_plugin
 
     _, paths = _install_project(monkeypatch, tmp_path)
+    get_retained_index(paths).refresh(paths)
     monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
     monkeypatch.setattr(hermes_plugin._NativeReconciliationWorker, "start", lambda self: None)
     context = FakePluginContext()
