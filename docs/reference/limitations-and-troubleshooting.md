@@ -38,7 +38,7 @@ A missing active release may make `doctor` return an integrity error. That is an
 --fork-commit SHA` without `--yes` is a safe, non-mutating preview of a local candidate; only
 an explicit `--yes` may stage and activate one, and that activation interrupts Aether-owned
 instances. A mismatch between the authoritative active-release record, `runtime/current`, the
-launcher, the Desktop entry and the Aether-owned service projection is reported as a
+launcher, or the Desktop entry, or an invalid Hermes-owned service selector, is reported as a
 fail-closed doctor diagnostic rather than repaired silently; `aether rollback` returns to the
 prior coherent release without rolling user state backward.
 

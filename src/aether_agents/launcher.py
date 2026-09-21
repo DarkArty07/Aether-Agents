@@ -444,3 +444,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"aether: {exc}", file=sys.stderr)
         return 2
     raise AssertionError("os.execve returned unexpectedly")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

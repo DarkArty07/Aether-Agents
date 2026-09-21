@@ -17,6 +17,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import shutil
 import sqlite3
 import stat
@@ -31,7 +32,7 @@ import zipfile
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path, PurePosixPath
-from typing import Any, Iterator, Sequence
+from typing import Any, Callable, Iterator, Sequence
 
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError, ValidationError
@@ -833,6 +834,50 @@ def verify_source_checkout(
 
 
 _VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[A-Za-z0-9_.-]{0,48})?$")
+
+
+def _parse_version_tuple(version: str) -> tuple[int, int, int, int, int]:
+    """Parse a package or display version into a comparable 5-tuple:
+    (major, minor, patch, pre_stage, pre_num)
+    pre_stage: 1 for 'a' (alpha), 2 for 'b' (beta), 3 for 'rc', 4 for final release.
+    """
+    match = re.match(
+        r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)(?:[-.]?(?P<pre_stage>a|b|rc)\.?(?P<pre_num>\d+))?",
+        version,
+    )
+    if not match:
+        return (0, 0, 0, 0, 0)
+    stage_map = {"a": 1, "b": 2, "rc": 3}
+    stage_str = match.group("pre_stage")
+    stage_val = stage_map[stage_str] if stage_str else 4
+    num_str = match.group("pre_num")
+    num_val = int(num_str) if num_str else 0
+    return (
+        int(match.group("major")),
+        int(match.group("minor")),
+        int(match.group("patch")),
+        stage_val,
+        num_val,
+    )
+
+
+def _is_branded_version(version: str) -> bool:
+    """True for 1.0.0rc4 and newer release candidates that carry branded Aether launcher/actions."""
+    match = re.match(r"^1\.0\.0rc(?P<rc>\d+)$", version)
+    if match:
+        return int(match.group("rc")) >= 4
+    match_disp = re.match(r"^1\.0\.0-rc\.(?P<rc>\d+)$", version)
+    if match_disp:
+        return int(match_disp.group("rc")) >= 4
+    return False
+
+
+def _is_hermes_owned_gateway_version(version: str) -> bool:
+    """True for 1.0.0rc5 and newer releases where Hermes owns the gateway unit."""
+    parsed = _parse_version_tuple(version)
+    return parsed >= (1, 0, 0, 3, 5)
+
+
 _RELEASE_ID_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z_.-]{0,95}$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _TRANSITION_ID_RE = re.compile(r"^trn_[0-9a-f]{32}$")
@@ -2767,6 +2812,9 @@ class ServiceController:
     def restart(self, unit_name: str) -> str:  # pragma: no cover - interface definition
         raise NotImplementedError
 
+    def status(self, unit_name: str) -> str:  # pragma: no cover - interface definition
+        raise NotImplementedError
+
 
 class SystemdUserController(ServiceController):
     """Restart one Aether-owned unit through the user systemd manager."""
@@ -2796,6 +2844,24 @@ class SystemdUserController(ServiceController):
         )
         return "restarted" if restarted.returncode == 0 else "restart_failed"
 
+    def status(self, unit_name: str) -> str:
+        if not self.available():
+            return "unavailable"
+        environment = _isolated_subprocess_environment()
+        result = subprocess.run(
+            ["systemctl", "--user", "is-active", unit_name],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        out = result.stdout.strip()
+        if result.returncode == 0 and out == "active":
+            return "active"
+        if out:
+            return out
+        return "inactive" if result.returncode != 0 else "active"
+
 
 class DisabledServiceController(ServiceController):
     """A controller that performs no service effect (disposable or headless lanes)."""
@@ -2805,6 +2871,9 @@ class DisabledServiceController(ServiceController):
 
     def restart(self, unit_name: str) -> str:
         return "disabled"
+
+    def status(self, unit_name: str) -> str:
+        return "active" if self.available() else "disabled"
 
 
 def detect_wsl_distribution() -> str | None:
@@ -3123,13 +3192,15 @@ class ProjectionSpec:
     desktop_bytes: bytes
     service_bytes: bytes
     wsl_shortcuts: dict[str, tuple[Path, bytes]] = field(default_factory=dict)
+    profile_home: Path | None = None
 
     def digests(self) -> dict[str, str]:
         results = {
             "launcher": hashlib.sha256(self.launcher_bytes).hexdigest(),
             "desktop": hashlib.sha256(self.desktop_bytes).hexdigest(),
-            "service": hashlib.sha256(self.service_bytes).hexdigest(),
         }
+        if self.service_bytes:
+            results["service"] = hashlib.sha256(self.service_bytes).hexdigest()
         for name, (_, data) in sorted(self.wsl_shortcuts.items()):
             results[f"wsl_{name}"] = hashlib.sha256(data).hexdigest()
         return results
@@ -3160,6 +3231,7 @@ class LifecycleManager:
         service_controller: ServiceController | None = None,
         projections: ProjectionRoots | None = None,
         project_root: Path | str | None = None,
+        hermes_runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
     ) -> None:
         self.store = store
         self.python_executable = Path(python_executable)
@@ -3173,6 +3245,7 @@ class LifecycleManager:
         self.projections = projections
         self.project_root = Path(project_root).resolve() if project_root is not None else None
         self.disabled_service_reason: str | None = None
+        self._hermes_runner = hermes_runner
         if service_controller is not None:
             self.service_controller: ServiceController = service_controller
         elif self.installed_environment and projections is None:
@@ -3180,6 +3253,25 @@ class LifecycleManager:
         else:
             self.disabled_service_reason = "disabled_non_installed_environment"
             self.service_controller = DisabledServiceController()
+
+    def _run_hermes_command(
+        self,
+        cmd: list[str],
+        *,
+        env: dict[str, str],
+        cwd: Path,
+    ) -> subprocess.CompletedProcess[str]:
+        """Execute one Hermes CLI lifecycle command through the injected runner or subprocess."""
+        if self._hermes_runner is not None:
+            return self._hermes_runner(cmd, env, cwd)
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+            cwd=str(cwd),
+        )
 
     def _resolve_default_project(self) -> Path | None:
         """Resolve the unique exact project binding for branded one-click entries.
@@ -5544,7 +5636,7 @@ class LifecycleManager:
             # Selector, launcher, Desktop entry and the Aether-owned unit follow the one
             # authoritative active record.  This is the interrupting step: the gateway
             # is restarted immediately, unrelated services are never touched.
-            self.project_release(selected, restart_service=True)
+            self.project_release(selected, restart_service=True, transition_kind=transition_kind)
         except BaseException as transition_error:
             compensation_error: BaseException | None = None
             try:
@@ -6461,7 +6553,8 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         state_parent = self.store.state_root.parent
         runtime_current = self.store.root / "runtime" / "current"
         roots = self.projection_roots()
-        branded = record.version == "1.0.0rc4"
+        branded = _is_branded_version(record.version)
+        hermes_owned = _is_hermes_owned_gateway_version(record.version)
         launcher = roots.launcher_dir / _LAUNCHER_NAME
         desktop = roots.desktop_dir / (
             _DESKTOP_ENTRY_NAME if branded else _LEGACY_DESKTOP_ENTRY_NAME
@@ -6513,7 +6606,6 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
                 "Name=Continue Aether\n"
                 f"Exec={runtime_current}/venv/bin/aether --project {resolved_project} --resume latest\n"
             ).encode("utf-8")
-            service_tui_line = f'Environment="HERMES_TUI_DIR={runtime_current}/tui"\n'
         else:
             # Pre-rc4 records retain their immutable legacy Hermes projection and
             # never infer a project path for the branded one-click actions.
@@ -6545,38 +6637,47 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
                 "StartupNotify=true\n"
                 "StartupWMClass=Hermes\n"
             ).encode("utf-8")
-            service_tui_line = ""
         profile_home = self.store.profile_home("morfeo")
-        service_bytes = (
-            "[Unit]\n"
-            "Description=Aether-owned Hermes gateway (morfeo profile)\n"
-            "After=network-online.target\n"
-            "Wants=network-online.target\n"
-            "StartLimitIntervalSec=0\n"
-            "\n"
-            "[Service]\n"
-            "Type=simple\n"
-            f"ExecStart={runtime_current}/venv/bin/python -m hermes_cli.main "
-            "--profile morfeo gateway run\n"
-            f"WorkingDirectory={profile_home}\n"
-            f'Environment="PATH={runtime_current}/venv/bin:'
-            f"{data_parent}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:"
-            '/usr/bin:/sbin:/bin"\n'
-            f'Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
-            f'Environment="HERMES_HOME={profile_home}"\n' + service_tui_line + "Restart=always\n"
-            "RestartSec=5\n"
-            "RestartForceExitStatus=75\n"
-            "RestartPreventExitStatus=78\n"
-            "KillMode=mixed\n"
-            "KillSignal=SIGTERM\n"
-            "ExecReload=/bin/kill -USR1 $MAINPID\n"
-            "TimeoutStopSec=90\n"
-            "StandardOutput=journal\n"
-            "StandardError=journal\n"
-            "\n"
-            "[Install]\n"
-            "WantedBy=default.target\n"
-        ).encode("utf-8")
+        if hermes_owned:
+            service_bytes = b""
+        else:
+            service_tui_line = (
+                f'Environment="HERMES_TUI_DIR={runtime_current}/tui"\n'
+                if record.version == "1.0.0rc4"
+                else ""
+            )
+            service_bytes = (
+                "[Unit]\n"
+                "Description=Aether-owned Hermes gateway (morfeo profile)\n"
+                "After=network-online.target\n"
+                "Wants=network-online.target\n"
+                "StartLimitIntervalSec=0\n"
+                "\n"
+                "[Service]\n"
+                "Type=simple\n"
+                f"ExecStart={runtime_current}/venv/bin/python -m hermes_cli.main "
+                "--profile morfeo gateway run\n"
+                f"WorkingDirectory={profile_home}\n"
+                f'Environment="PATH={runtime_current}/venv/bin:'
+                f"{data_parent}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:"
+                '/usr/bin:/sbin:/bin"\n'
+                f'Environment="VIRTUAL_ENV={runtime_current}/venv"\n'
+                f'Environment="HERMES_HOME={profile_home}"\n'
+                + service_tui_line
+                + "Restart=always\n"
+                "RestartSec=5\n"
+                "RestartForceExitStatus=75\n"
+                "RestartPreventExitStatus=78\n"
+                "KillMode=mixed\n"
+                "KillSignal=SIGTERM\n"
+                "ExecReload=/bin/kill -USR1 $MAINPID\n"
+                "TimeoutStopSec=90\n"
+                "StandardOutput=journal\n"
+                "StandardError=journal\n"
+                "\n"
+                "[Install]\n"
+                "WantedBy=default.target\n"
+            ).encode("utf-8")
         _ = state_parent
 
         wsl_shortcuts: dict[str, tuple[Path, bytes]] = {}
@@ -6607,6 +6708,7 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             desktop_bytes=desktop_bytes,
             service_bytes=service_bytes,
             wsl_shortcuts=wsl_shortcuts,
+            profile_home=profile_home,
         )
 
     @staticmethod
@@ -6657,16 +6759,27 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             temporary.unlink(missing_ok=True)
         _fsync_directory(target)
 
-    def project_release(self, record: ReleaseRecord, *, restart_service: bool) -> dict[str, Any]:
+    def project_release(
+        self,
+        record: ReleaseRecord,
+        *,
+        restart_service: bool,
+        transition_kind: str | None = None,
+    ) -> dict[str, Any]:
         """Project the launcher, Desktop entry, unit file and selector for one release."""
 
         spec = self.projection_spec(record)
-        branded = record.version == "1.0.0rc4"
+        branded = _is_branded_version(record.version)
+        hermes_owned = _is_hermes_owned_gateway_version(record.version)
+        materialize_hermes = hermes_owned or (
+            record.version == "1.0.0rc3" and transition_kind == "rollback"
+        )
         targets: list[tuple[Path, bytes, int]] = [
             (spec.launcher_path, spec.launcher_bytes, 0o755),
             (spec.desktop_path, spec.desktop_bytes, 0o644),
-            (spec.service_path, spec.service_bytes, 0o644),
         ]
+        if not hermes_owned:
+            targets.append((spec.service_path, spec.service_bytes, 0o644))
         for _, (wsl_path, wsl_bytes) in sorted(spec.wsl_shortcuts.items()):
             targets.append((wsl_path, wsl_bytes, 0o755))
 
@@ -6684,6 +6797,20 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
                     prior_snapshots.append((path, None, None))
             else:
                 prior_snapshots.append((path, None, None))
+
+        prior_service_snapshot: tuple[Path, bytes | None, int | None] | None = None
+        if hermes_owned:
+            if spec.service_path.is_file() and not spec.service_path.is_symlink():
+                try:
+                    prior_service_snapshot = (
+                        spec.service_path,
+                        spec.service_path.read_bytes(),
+                        stat.S_IMODE(spec.service_path.stat().st_mode),
+                    )
+                except OSError:
+                    prior_service_snapshot = (spec.service_path, None, None)
+            else:
+                prior_service_snapshot = (spec.service_path, None, None)
 
         legacy_snapshot: tuple[Path, bytes | None, int | None] | None = None
         if legacy_desktop.is_file() and not legacy_desktop.is_symlink():
@@ -6712,6 +6839,8 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
                 except OSError:
                     pass
             self._switch_runtime_current(spec.release)
+            if materialize_hermes and restart_service:
+                self._materialize_hermes_service(spec)
             outcome = {
                 "runtime_current": str(spec.runtime_current),
                 "release": str(spec.release),
@@ -6732,6 +6861,15 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
                         self._write_projection(path, data, mode=mode)
                     else:
                         path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            if prior_service_snapshot is not None:
+                svc_path, svc_data, svc_mode = prior_service_snapshot
+                try:
+                    if svc_data is not None and svc_mode is not None:
+                        self._write_projection(svc_path, svc_data, mode=svc_mode)
+                    else:
+                        svc_path.unlink(missing_ok=True)
                 except Exception:
                     pass
             if legacy_snapshot is not None:
@@ -6755,6 +6893,46 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             except Exception:
                 pass
             raise
+
+    def _materialize_hermes_service(self, spec: ProjectionSpec) -> None:
+        """Invoke the selected release's Hermes CLI to create/refresh the user unit."""
+        python_bin = spec.runtime_current / "venv" / "bin" / "python"
+        if not python_bin.is_file() and self._hermes_runner is None:
+            return
+        cmd = [
+            str(python_bin),
+            "-m",
+            "hermes_cli.main",
+            "--profile",
+            "morfeo",
+            "gateway",
+            "install",
+            "--force",
+            "--no-start-now",
+            "--start-on-login",
+        ]
+        profile_home = self.store.profile_home("morfeo")
+        env = _isolated_subprocess_environment()
+        env["HERMES_HOME"] = str(profile_home)
+        if "HOME" not in env and "HOME" in os.environ:
+            env["HOME"] = os.environ["HOME"]
+
+        result = self._run_hermes_command(
+            cmd,
+            env=env,
+            cwd=profile_home,
+        )
+        if result.returncode != 0:
+            if "No module named hermes_cli.main" in result.stderr:
+                return
+            raise IntegrityError(
+                f"Hermes gateway service materialization failed with exit {result.returncode}: {result.stderr.strip()}"
+            )
+        env_home = Path(env.get("HOME", str(Path.home())))
+        hermes_unit_path = env_home / ".config" / "systemd" / "user" / AETHER_GATEWAY_UNIT
+        if spec.service_path != hermes_unit_path and hermes_unit_path.is_file():
+            spec.service_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(hermes_unit_path, spec.service_path)
 
     def _restart_service(self, spec: ProjectionSpec) -> str:
         """Restart only the Aether-owned unit, through the injected controller."""
@@ -6798,6 +6976,146 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         return exec_start, working, virtual_env, hermes_home, hermes_tui_dir
 
     @staticmethod
+    def _semantic_service_unit_mismatches(
+        observed: bytes,
+        *,
+        runtime_current: Path,
+        profile_home: Path,
+        require_tui_dir: bool = False,
+    ) -> list[str]:
+        """Validate that a systemd unit semantically selects this runtime and profile.
+
+        Attributed diagnostic mismatches:
+        - service_projection_unreadable
+        - service_projection_missing_exec_start
+        - service_projection_wrong_runtime_python
+        - service_projection_wrong_profile
+        - service_projection_wrong_exec_start
+        - service_projection_missing_working_directory
+        - service_projection_wrong_working_directory
+        - service_projection_missing_hermes_home
+        - service_projection_wrong_home
+        - service_projection_missing_virtual_env
+        - service_projection_wrong_virtual_env
+        - service_projection_conflicting_selectors
+        """
+        try:
+            text = observed.decode("utf-8")
+        except UnicodeError:
+            return ["service_projection_unreadable"]
+
+        active = LifecycleManager._service_unit_active_lines(text)
+        exec_starts = [line for line in active if line.startswith("ExecStart=")]
+        workings = [line for line in active if line.startswith("WorkingDirectory=")]
+        hermes_homes = [
+            line
+            for line in active
+            if line.startswith('Environment="HERMES_HOME=')
+            or line.startswith("Environment='HERMES_HOME=")
+            or line.startswith("Environment=HERMES_HOME=")
+        ]
+        virtual_envs = [
+            line
+            for line in active
+            if line.startswith('Environment="VIRTUAL_ENV=')
+            or line.startswith("Environment='VIRTUAL_ENV=")
+            or line.startswith("Environment=VIRTUAL_ENV=")
+        ]
+
+        expected_python = str(runtime_current / "venv" / "bin" / "python")
+        expected_exec_start = (
+            f"ExecStart={expected_python} -m hermes_cli.main --profile morfeo gateway run"
+        )
+        expected_home_val = str(profile_home)
+        expected_venv_val = str(runtime_current / "venv")
+
+        mismatches: list[str] = []
+
+        # 1. ExecStart
+        if len(exec_starts) == 0:
+            mismatches.append("service_projection_missing_exec_start")
+        elif len(exec_starts) > 1:
+            mismatches.append("service_projection_conflicting_selectors")
+        else:
+            line = exec_starts[0]
+            if line != expected_exec_start:
+                val = line[len("ExecStart=") :].strip()
+                parts = shlex.split(val)
+                if not parts:
+                    mismatches.append("service_projection_wrong_exec_start")
+                else:
+                    actual_python = parts[0]
+                    if actual_python != expected_python:
+                        mismatches.append("service_projection_wrong_runtime_python")
+                    elif len(parts) < 6 or parts[1:3] != ["-m", "hermes_cli.main"]:
+                        mismatches.append("service_projection_wrong_exec_start")
+                    elif "--profile" not in parts:
+                        mismatches.append("service_projection_wrong_profile")
+                    else:
+                        try:
+                            prof_idx = parts.index("--profile")
+                            if prof_idx + 1 >= len(parts) or parts[prof_idx + 1] != "morfeo":
+                                mismatches.append("service_projection_wrong_profile")
+                            elif "gateway" not in parts or "run" not in parts:
+                                mismatches.append("service_projection_wrong_exec_start")
+                            else:
+                                mismatches.append("service_projection_wrong_exec_start")
+                        except ValueError:
+                            mismatches.append("service_projection_wrong_profile")
+
+        # 2. WorkingDirectory
+        if len(workings) == 0:
+            mismatches.append("service_projection_missing_working_directory")
+        elif len(workings) > 1:
+            mismatches.append("service_projection_conflicting_selectors")
+        else:
+            val = workings[0][len("WorkingDirectory=") :].strip()
+            if val != expected_home_val:
+                mismatches.append("service_projection_wrong_working_directory")
+
+        def _extract_env(line: str, var_name: str) -> str | None:
+            prefix = "Environment="
+            if not line.startswith(prefix):
+                return None
+            content = line[len(prefix) :].strip()
+            if (content.startswith('"') and content.endswith('"')) or (
+                content.startswith("'") and content.endswith("'")
+            ):
+                content = content[1:-1]
+            if content.startswith(f"{var_name}="):
+                return content[len(f"{var_name}=") :]
+            return None
+
+        # 3. HERMES_HOME
+        if len(hermes_homes) == 0:
+            mismatches.append("service_projection_missing_hermes_home")
+        elif len(hermes_homes) > 1:
+            mismatches.append("service_projection_conflicting_selectors")
+        else:
+            val = _extract_env(hermes_homes[0], "HERMES_HOME")
+            if val != expected_home_val:
+                mismatches.append("service_projection_wrong_home")
+
+        # 4. VIRTUAL_ENV
+        if len(virtual_envs) == 0:
+            mismatches.append("service_projection_missing_virtual_env")
+        elif len(virtual_envs) > 1:
+            mismatches.append("service_projection_conflicting_selectors")
+        else:
+            val = _extract_env(virtual_envs[0], "VIRTUAL_ENV")
+            if val != expected_venv_val:
+                mismatches.append("service_projection_wrong_virtual_env")
+
+        # 5. Optional TUI check (for historical rc4)
+        if require_tui_dir:
+            tui_lines = [entry_line for entry_line in active if "HERMES_TUI_DIR=" in entry_line]
+            expected_tui = f'Environment="HERMES_TUI_DIR={runtime_current}/tui"'
+            if not tui_lines or any(entry_line != expected_tui for entry_line in tui_lines):
+                mismatches.append("service_projection_mismatch")
+
+        return list(dict.fromkeys(mismatches))
+
+    @staticmethod
     def _service_unit_selects_release(observed: bytes, spec: ProjectionSpec) -> bool:
         """Return True when a Hermes-refreshed unit still selects this release.
 
@@ -6805,6 +7123,19 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         equality of the Aether-owned selector lines among non-comment unit text:
         full ExecStart, WorkingDirectory, VIRTUAL_ENV, HERMES_HOME, and HERMES_TUI_DIR.
         """
+        if not spec.service_bytes:
+            profile_home = spec.profile_home
+            if profile_home is None:
+                data_root_dir = spec.release.parent.parent
+                profile_home = (
+                    data_root_dir.parent / "state" / "aether" / "hermes" / "profiles" / "morfeo"
+                )
+            mismatches = LifecycleManager._semantic_service_unit_mismatches(
+                observed,
+                runtime_current=spec.runtime_current,
+                profile_home=profile_home,
+            )
+            return len(mismatches) == 0
 
         try:
             text = observed.decode("utf-8")
@@ -6860,7 +7191,6 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         for label, path, expected in (
             ("launcher", spec.launcher_path, spec.launcher_bytes),
             ("desktop", spec.desktop_path, spec.desktop_bytes),
-            ("service", spec.service_path, spec.service_bytes),
         ):
             try:
                 if path.is_symlink() or not path.is_file():
@@ -6869,14 +7199,36 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
                 observed = path.read_bytes()
                 if observed == expected:
                     continue
-                if label == "service" and self._service_unit_selects_release(observed, spec):
-                    # Hermes refreshes the unit on gateway start and may rewrite
-                    # description/PATH/ExecStopPost while preserving the Aether
-                    # runtime selector.  That remains a coherent projection.
-                    continue
                 status["mismatches"].append(f"{label}_projection_mismatch")
             except OSError:
                 status["mismatches"].append(f"{label}_projection_unreadable")
+
+        hermes_owned = _is_hermes_owned_gateway_version(record.version)
+        service_path = spec.service_path
+        if not service_path.exists():
+            status["mismatches"].append("service_projection_missing")
+        elif service_path.is_symlink() or not service_path.is_file():
+            status["mismatches"].append("service_projection_not_regular")
+        else:
+            try:
+                observed_service = service_path.read_bytes()
+            except OSError:
+                status["mismatches"].append("service_projection_unreadable")
+            else:
+                if hermes_owned:
+                    mismatches = self._semantic_service_unit_mismatches(
+                        observed_service,
+                        runtime_current=spec.runtime_current,
+                        profile_home=self.store.profile_home("morfeo"),
+                    )
+                    status["mismatches"].extend(mismatches)
+                else:
+                    if observed_service == spec.service_bytes:
+                        pass
+                    elif self._service_unit_selects_release(observed_service, spec):
+                        pass
+                    else:
+                        status["mismatches"].append("service_projection_mismatch")
 
         for label, (path, expected) in spec.wsl_shortcuts.items():
             try:
@@ -6894,7 +7246,7 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         if (
             record.tui_sha256 is not None
             or (spec.release / "tui").exists()
-            or record.version >= "1.0.0rc4"
+            or _is_branded_version(record.version)
         ):
             if not tui_entry.is_file():
                 status["mismatches"].append("tui_asset_missing")
@@ -6909,7 +7261,7 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
 
         roots = self.projection_roots()
         legacy_desktop = roots.desktop_dir / _LEGACY_DESKTOP_ENTRY_NAME
-        if record.version == "1.0.0rc4" and legacy_desktop.is_file():
+        if _is_branded_version(record.version) and legacy_desktop.is_file():
             status["mismatches"].append("legacy_desktop_entry_present")
 
         status["projection_digests"] = spec.digests()
@@ -6924,12 +7276,20 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         Incoherent units stay fail-closed (not deleted).
         """
 
-        spec = self.projection_spec(record)
+        try:
+            spec = self.projection_spec(record)
+        except IntegrityError:
+            try:
+                spec = self.projection_spec(record, project_root=self.store.root)
+            except IntegrityError:
+                return
+        hermes_owned = _is_hermes_owned_gateway_version(record.version)
         targets = [
             (spec.launcher_path, spec.launcher_bytes),
             (spec.desktop_path, spec.desktop_bytes),
-            (spec.service_path, spec.service_bytes),
         ]
+        if not hermes_owned:
+            targets.append((spec.service_path, spec.service_bytes))
         for _, (path, expected) in spec.wsl_shortcuts.items():
             targets.append((path, expected))
 
@@ -6947,10 +7307,33 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
                 path.unlink()
             except OSError:
                 continue
+
+        if hermes_owned:
+            python_bin = spec.runtime_current / "venv" / "bin" / "python"
+            if python_bin.exists():
+                cmd = [
+                    str(python_bin),
+                    "-m",
+                    "hermes_cli.main",
+                    "--profile",
+                    "morfeo",
+                    "gateway",
+                    "uninstall",
+                ]
+                profile_home = self.store.profile_home("morfeo")
+                env = _isolated_subprocess_environment()
+                env["HERMES_HOME"] = str(profile_home)
+                if "HOME" not in env and "HOME" in os.environ:
+                    env["HOME"] = os.environ["HOME"]
+                try:
+                    self._run_hermes_command(cmd, env=env, cwd=profile_home)
+                except Exception:
+                    pass
+
         roots = self.projection_roots()
         legacy_desktop = roots.desktop_dir / _LEGACY_DESKTOP_ENTRY_NAME
         if (
-            record.version == "1.0.0rc4"
+            _is_branded_version(record.version)
             and legacy_desktop.is_file()
             and not legacy_desktop.is_symlink()
         ):
@@ -7020,6 +7403,10 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
         except OSError:
             transition_state = {"journal_count": 0, "pending_count": 0}
             transition_permissions_ok = False
+        try:
+            service_status = self.service_controller.status(AETHER_GATEWAY_UNIT)
+        except (NotImplementedError, AttributeError):
+            service_status = "unavailable"
         details: dict[str, Any] = {
             "observer_state": observer_state,
             "profile_count": 0,
@@ -7027,6 +7414,7 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             "service_controller": {
                 "available": self.service_controller.available(),
                 "reason": self.disabled_service_reason,
+                "unit_status": service_status,
             },
         }
         if not observer_permissions_ok:
@@ -7181,6 +7569,10 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
                 codes.append("TUI_ASSET_UNREADABLE")
             if any(item == "legacy_desktop_entry_present" for item in projections["mismatches"]):
                 codes.append("LEGACY_DESKTOP_ENTRY_PRESENT")
+        if self.service_controller.available() and service_status != "active":
+            codes.append("SERVICE_UNAVAILABLE")
+            if "projections" in details and "mismatches" in details["projections"]:
+                details["projections"]["mismatches"].append("service_unavailable")
         if os.name == "posix":
             permission_targets = {
                 self.store.root: DIR_MODE,

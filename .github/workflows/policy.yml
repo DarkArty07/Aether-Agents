@@ -73,6 +73,7 @@ jobs:
           .aether/objective-contracts/oc_a28ff9b7fa20d29d/v1.md
           .aether/objective-contracts/oc_a578f1815b1eeee9/v1.md
           .aether/objective-contracts/oc_a63ccc67b95411eb/v1.md
+          .aether/objective-contracts/oc_a7a3cff05e82c148/v1.md
           .aether/objective-contracts/oc_b8865f5129d60535/v1.md
           .aether/objective-contracts/oc_ba23edf6f74b7b43/v1.md
           .aether/objective-contracts/oc_c0abec2179f6b09c/v1.md
@@ -341,6 +342,7 @@ jobs:
           tests/test_hermes_patch_reconciliation.py
           tests/test_hermes_baseline.py
           tests/test_hermes_editable.py
+          tests/test_hermes_gateway_service.py
           tests/test_lifecycle_adoption.py
           tests/test_lifecycle_projections.py
           tests/test_tui_projections.py

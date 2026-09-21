@@ -4,20 +4,21 @@ Aether is a multi-agent software-engineering product built on [Hermes Agent](htt
 
 This index is navigation only and routes reader questions to the appropriate guide, reference, or authority artifact. For the complete reader-facing placement and conflict-resolution map across all artifact classes, see [Authority and artifact ownership](authority.md).
 
-The executable Hermes source for the current local-only `1.0.0rc4` candidate is Aether's
+The executable Hermes source for the current local-only `1.0.0rc5` candidate is Aether's
 maintained fork `DarkArty07/aether-hermes` branch `aether-main`, bound by release-lock
 `schema_version` 4 source mode `maintained_fork` and installed through `aether update`.
-Active release `1.0.0rc3-8987f650c027ad09` is locally selected from Aether merge
-`d8ff984c67bfc147ac9c83cf8a34a72edc27c8df` and maintained-fork commit
-`aed6591a69f453a1867b73628603e7b53ba40ffc`; `aether doctor` reports `ready` with 22/22
-callbacks. On the original large #417 trace, status completed in 19.266s then 15.598s,
-changes in 15.576s, and post-reactivation status in 34.655s then 23.495s; watch emitted
-its baseline and all requests remained below the 420-second native bound. One rollback to
-`1.0.0rc2-b3ad4dd42eb0e1da` and forward reactivation preserved mutable state. This is not
-a public GitHub Release, stable `1.0.0`, a package-index publication or a WSL2 qualification
-result; the annotated tag remains local-only, and issue #261 stays open with those
-publication and platform gates outstanding. See [Lifecycle](guides/lifecycle.md),
-[Policy and recovery](guides/policy-and-recovery.md) and [CLI reference](reference/cli.md).
+In the historical rc3 qualification, active release `1.0.0rc3-8987f650c027ad09` was
+locally selected from Aether merge `d8ff984c67bfc147ac9c83cf8a34a72edc27c8df` and
+maintained-fork commit `aed6591a69f453a1867b73628603e7b53ba40ffc`; `aether doctor`
+reported `ready` with 22/22 callbacks. On the original large #417 trace, status completed
+in 19.266s then 15.598s, changes in 15.576s, and post-reactivation status in 34.655s then
+23.495s; watch emitted its baseline and all requests remained below the 420-second native
+bound. One rollback to `1.0.0rc2-b3ad4dd42eb0e1da` and forward reactivation preserved
+mutable state. This is not a public GitHub Release, stable `1.0.0`, a package-index
+publication or a WSL2 qualification result; the annotated tag remains local-only, and
+issue #261 stays open with those publication and platform gates outstanding. See
+[Lifecycle](guides/lifecycle.md), [Policy and recovery](guides/policy-and-recovery.md) and
+[CLI reference](reference/cli.md).
 
 ## Navigate by question
 

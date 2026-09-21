@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import io
 import json
@@ -811,6 +812,637 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
             with self.assertRaises(ActivationError) as ctx:
                 inspect_activation(project=self.root)
             self.assertIn("AETHER_RUNTIME_ROOT must not be empty", str(ctx.exception))
+
+
+class TuiPreservationTests(unittest.TestCase):
+    """Preservation tests proving Aether launch surfaces deliver release-owned TUI (rc5/AC-5)."""
+
+    _wheel_temp_dir: tempfile.TemporaryDirectory[str] | None = None
+    _venv_dir: Path | None = None
+    console_script: Path | None = None
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._wheel_temp_dir = tempfile.TemporaryDirectory(prefix="aether-tui-preserve-wheel-")
+        wheel_out = Path(cls._wheel_temp_dir.name) / "dist"
+        wheel_out.mkdir(parents=True)
+        venv_path = Path(cls._wheel_temp_dir.name) / "venv"
+
+        subprocess.run(
+            ["uv", "build", "--wheel", "--out-dir", str(wheel_out)],
+            cwd=str(ROOT),
+            check=True,
+            capture_output=True,
+        )
+        wheels = sorted(wheel_out.glob("*.whl"))
+        if not wheels:
+            raise RuntimeError("No wheel produced by uv build")
+        wheel = wheels[0]
+
+        subprocess.run(
+            ["uv", "venv", str(venv_path)],
+            check=True,
+            capture_output=True,
+        )
+        python_bin = venv_path / "bin" / "python"
+        subprocess.run(
+            ["uv", "pip", "install", "--python", str(python_bin), str(wheel)],
+            check=True,
+            capture_output=True,
+        )
+        cls._venv_dir = venv_path
+        cls.console_script = venv_path / "bin" / "aether"
+        if not cls.console_script.is_file():
+            raise RuntimeError(f"Console script not found at {cls.console_script}")
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        if cls._wheel_temp_dir is not None:
+            cls._wheel_temp_dir.cleanup()
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory(prefix="aether-tui-preserve-")
+        self.temp_path = Path(self.tempdir.name)
+        self.data_dir = self.temp_path / "data"
+        self.state_dir = self.temp_path / "state"
+
+        # Set up isolated project
+        self.project_dir = self.temp_path / "project"
+        self.project_dir.mkdir(parents=True)
+        (self.project_dir / "AGENTS.md").write_text("fixture\n", encoding="utf-8")
+        (self.project_dir / ".aether").mkdir()
+        self.project_id = "12027989-a08f-41cd-a82c-54ff1bfb6b03"
+        (self.project_dir / ".aether" / "project.toml").write_text(
+            "\n".join(
+                (
+                    "schema_version = 1",
+                    f'project_id = "{self.project_id}"',
+                    'name = "Aether launcher fixture"',
+                    'initialized_by = "1.0.0"',
+                    'forge = "local"',
+                    'contract_root = "specs"',
+                    'default_branch = "main"',
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
+
+        # Set up Morfeo profile
+        self.profile_dir = self.state_dir / "aether" / "hermes" / "profiles" / "morfeo"
+        self.profile_dir.mkdir(parents=True)
+        (self.profile_dir / "config.yaml").write_text(
+            "toolsets:\n  - file\n  - kanban\n", encoding="utf-8"
+        )
+        (self.profile_dir / "SOUL.md").write_text("# Morfeo\n", encoding="utf-8")
+
+        # Set up prepared release
+        self.release_id = "1.0.0rc4-" + "b" * 16
+        self.release_dir = self.data_dir / "aether" / "releases" / self.release_id
+        self.tui_dir = self.release_dir / "tui"
+        self.tui_dir.mkdir(parents=True)
+        (self.tui_dir / "index.html").write_text("<html>TUI</html>", encoding="utf-8")
+        (self.tui_dir / "dist").mkdir(parents=True)
+        (self.tui_dir / "dist" / "entry.js").write_text(
+            "console.log('tui-v1');\n", encoding="utf-8"
+        )
+
+        # Stub executable for Hermes
+        self.venv_bin = self.release_dir / "venv" / "bin"
+        self.venv_bin.mkdir(parents=True)
+        self.hermes_stub = self.venv_bin / "hermes"
+        self.hermes_stub.write_text(
+            f"#!{sys.executable}\n"
+            "import json, os, sys\n"
+            "out = os.environ.get('AETHER_TEST_STUB_OUTPUT')\n"
+            "if out:\n"
+            "    data = {\n"
+            "        'argv': sys.argv,\n"
+            "        'cwd': os.getcwd(),\n"
+            "        'environ': dict(os.environ),\n"
+            "    }\n"
+            "    with open(out, 'w', encoding='utf-8') as f:\n"
+            "        json.dump(data, f)\n"
+            "sys.exit(0)\n",
+            encoding="utf-8",
+        )
+        self.hermes_stub.chmod(0o755)
+
+        # Locked hermes-source tree
+        self.hermes_source_dir = self.release_dir / "hermes-source"
+        self.hermes_source_dir.mkdir(parents=True)
+        (self.hermes_source_dir / "package.json").write_text(
+            json.dumps({"name": "hermes-tui", "version": "1.0.0"}, indent=2),
+            encoding="utf-8",
+        )
+        (self.hermes_source_dir / "tsconfig.json").write_text(
+            json.dumps({"compilerOptions": {"target": "es2022"}}, indent=2),
+            encoding="utf-8",
+        )
+        (self.hermes_source_dir / "pyproject.toml").write_text(
+            '[project]\nname = "hermes-agent"\nversion = "0.20.4"\n',
+            encoding="utf-8",
+        )
+        (self.hermes_source_dir / "README.md").write_text(
+            "# Hermes Locked Source\n", encoding="utf-8"
+        )
+        src_dir = self.hermes_source_dir / "src"
+        src_dir.mkdir(parents=True)
+        (src_dir / "index.ts").write_text("export const name = 'hermes';\n", encoding="utf-8")
+
+        # Symlink runtime/current -> releases/<release_id>
+        runtime_dir = self.data_dir / "aether" / "runtime"
+        runtime_dir.mkdir(parents=True)
+        self.runtime_current = runtime_dir / "current"
+        self.runtime_current.symlink_to(f"../releases/{self.release_id}")
+
+        self.expected_tui_dir = (self.runtime_current / "tui").resolve()
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def _make_env(self, stub_out_path: Path) -> dict[str, str]:
+        env = dict(os.environ)
+        # Drop existing coverage and shim vars
+        for k in list(env.keys()):
+            if k.startswith("COV_CORE_") or k.startswith("COVERAGE_"):
+                env.pop(k, None)
+        env["XDG_DATA_HOME"] = str(self.data_dir)
+        env["XDG_STATE_HOME"] = str(self.state_dir)
+        env["AETHER_TEST_STUB_OUTPUT"] = str(stub_out_path)
+        env["CUSTOM_CREDENTIAL_KEY"] = "retained-secret"
+        # Dirty/ambient environment variables that launcher must drop
+        env["HERMES_PROFILE"] = "dirty-profile"
+        env["PYTHONBREAKPOINT"] = "custom-breakpoint"
+        env["PYTHONWARNINGS"] = "error"
+        env["HERMES_TUI_DIR"] = "/tmp/stale-ambient-tui"
+        env["HERMES_TUI_PORT"] = "9999"
+        env["HERMES_SESSION_ID"] = "stale-session-123"
+        env["HERMES_KANBAN_TASK"] = "t_stale456"
+        env["HERMES_KANBAN_DB"] = "/tmp/stale-kanban.db"
+        env["HERMES_TASK_ID"] = "stale-task"
+        env["HERMES_CRON_JOB"] = "stale-cron"
+        return env
+
+    def _hermes_source_inventory(self) -> dict[str, tuple[str, str]]:
+        """Compute regular-file type and sha256 inventory of locked hermes-source."""
+        inv: dict[str, tuple[str, str]] = {}
+        for root, _dirs, files in os.walk(self.hermes_source_dir):
+            for filename in sorted(files):
+                full_path = Path(root) / filename
+                rel_path = str(full_path.relative_to(self.hermes_source_dir))
+                if full_path.is_file() and not full_path.is_symlink():
+                    sha = hashlib.sha256(full_path.read_bytes()).hexdigest()
+                    inv[rel_path] = ("file", sha)
+        return inv
+
+    def test_real_packaged_launcher_executes_stub_hermes_fresh_and_resume_latest(
+        self,
+    ) -> None:
+        """Prove packaged launcher exports HERMES_TUI_DIR to stub Hermes for fresh and resume."""
+        stub_out_fresh = self.temp_path / "stub_fresh.json"
+        env_fresh = self._make_env(stub_out_fresh)
+        env_fresh["PYTHONPATH"] = str(ROOT / "src")
+
+        # 1. Fresh launch
+        res_fresh = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aether_agents.launcher",
+                "--project",
+                str(self.project_dir),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env_fresh,
+        )
+        self.assertEqual(res_fresh.returncode, 0, res_fresh.stderr)
+        self.assertTrue(stub_out_fresh.is_file())
+        data_fresh = json.loads(stub_out_fresh.read_text(encoding="utf-8"))
+
+        received_env = data_fresh["environ"]
+        self.assertEqual(
+            received_env.get("HERMES_TUI_DIR"),
+            str(self.expected_tui_dir),
+        )
+        self.assertEqual(
+            received_env.get("HERMES_HOME"),
+            str(self.profile_dir.resolve()),
+        )
+        self.assertEqual(
+            received_env.get("AETHER_PROJECT_ID"),
+            self.project_id,
+        )
+        self.assertEqual(
+            received_env.get("PWD"),
+            str(self.project_dir.resolve()),
+        )
+        self.assertEqual(
+            received_env.get("CUSTOM_CREDENTIAL_KEY"),
+            "retained-secret",
+        )
+        self.assertNotIn("HERMES_PROFILE", received_env)
+        self.assertNotIn("PYTHONBREAKPOINT", received_env)
+        self.assertNotIn("PYTHONWARNINGS", received_env)
+        self.assertFalse(any(k.startswith("PYTHON") for k in received_env))
+        self.assertNotIn("HERMES_TUI_PORT", received_env)
+        self.assertNotIn("HERMES_SESSION_ID", received_env)
+        self.assertNotIn("HERMES_KANBAN_TASK", received_env)
+        self.assertNotIn("HERMES_KANBAN_DB", received_env)
+        self.assertNotIn("HERMES_TASK_ID", received_env)
+        self.assertNotIn("HERMES_CRON_JOB", received_env)
+        self.assertEqual(data_fresh["cwd"], str(self.project_dir.resolve()))
+        self.assertEqual(
+            data_fresh["argv"],
+            [
+                str(self.hermes_stub.resolve()),
+                "--tui",
+                "--in",
+                str(self.project_dir.resolve()),
+            ],
+        )
+
+        # 2. Continuation launch (--resume latest)
+        stub_out_resume = self.temp_path / "stub_resume.json"
+        env_resume = self._make_env(stub_out_resume)
+        env_resume["PYTHONPATH"] = str(ROOT / "src")
+
+        res_resume = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aether_agents.launcher",
+                "--project",
+                str(self.project_dir),
+                "--resume",
+                "latest",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env_resume,
+        )
+        self.assertEqual(res_resume.returncode, 0, res_resume.stderr)
+        self.assertTrue(stub_out_resume.is_file())
+        data_resume = json.loads(stub_out_resume.read_text(encoding="utf-8"))
+        self.assertEqual(
+            data_resume["environ"].get("HERMES_TUI_DIR"),
+            str(self.expected_tui_dir),
+        )
+        self.assertEqual(
+            data_resume["argv"],
+            [
+                str(self.hermes_stub.resolve()),
+                "--tui",
+                "--in",
+                str(self.project_dir.resolve()),
+                "--resume",
+                "latest",
+            ],
+        )
+
+    def test_installed_wheel_console_script_lane_fresh_and_resume_latest(
+        self,
+    ) -> None:
+        """Prove installed-wheel console script exports HERMES_TUI_DIR for fresh and resume."""
+        self.assertIsNotNone(self.console_script)
+        assert self.console_script is not None
+
+        # 1. Fresh launch via installed console script
+        stub_out_fresh = self.temp_path / "wheel_stub_fresh.json"
+        env_fresh = self._make_env(stub_out_fresh)
+
+        res_fresh = subprocess.run(
+            [
+                str(self.console_script),
+                "--project",
+                str(self.project_dir),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env_fresh,
+        )
+        self.assertEqual(res_fresh.returncode, 0, res_fresh.stderr)
+        self.assertTrue(stub_out_fresh.is_file())
+        data_fresh = json.loads(stub_out_fresh.read_text(encoding="utf-8"))
+
+        received_env = data_fresh["environ"]
+        self.assertEqual(
+            received_env.get("HERMES_TUI_DIR"),
+            str(self.expected_tui_dir),
+        )
+        self.assertEqual(
+            received_env.get("HERMES_HOME"),
+            str(self.profile_dir.resolve()),
+        )
+        self.assertEqual(
+            received_env.get("AETHER_PROJECT_ID"),
+            self.project_id,
+        )
+        self.assertEqual(
+            received_env.get("CUSTOM_CREDENTIAL_KEY"),
+            "retained-secret",
+        )
+        self.assertNotIn("HERMES_PROFILE", received_env)
+        self.assertNotIn("PYTHONBREAKPOINT", received_env)
+        self.assertNotIn("PYTHONWARNINGS", received_env)
+        self.assertFalse(any(k.startswith("PYTHON") for k in received_env))
+        self.assertEqual(data_fresh["cwd"], str(self.project_dir.resolve()))
+        self.assertEqual(
+            data_fresh["argv"],
+            [
+                str(self.hermes_stub.resolve()),
+                "--tui",
+                "--in",
+                str(self.project_dir.resolve()),
+            ],
+        )
+
+        # 2. Continuation launch via installed console script
+        stub_out_resume = self.temp_path / "wheel_stub_resume.json"
+        env_resume = self._make_env(stub_out_resume)
+
+        res_resume = subprocess.run(
+            [
+                str(self.console_script),
+                "--project",
+                str(self.project_dir),
+                "--resume",
+                "latest",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env_resume,
+        )
+        self.assertEqual(res_resume.returncode, 0, res_resume.stderr)
+        self.assertTrue(stub_out_resume.is_file())
+        data_resume = json.loads(stub_out_resume.read_text(encoding="utf-8"))
+        self.assertEqual(
+            data_resume["environ"].get("HERMES_TUI_DIR"),
+            str(self.expected_tui_dir),
+        )
+        self.assertEqual(
+            data_resume["argv"],
+            [
+                str(self.hermes_stub.resolve()),
+                "--tui",
+                "--in",
+                str(self.project_dir.resolve()),
+                "--resume",
+                "latest",
+            ],
+        )
+
+    def test_aether_project_json_non_mutating_and_reports_release_identity(
+        self,
+    ) -> None:
+        """Prove aether --project <root> --json is non-mutating and reports projection identity."""
+        self.assertIsNotNone(self.console_script)
+        assert self.console_script is not None
+
+        def _full_snapshot() -> dict[str, tuple[str, int, str]]:
+            snap: dict[str, tuple[str, int, str]] = {}
+            for base in (self.project_dir, self.data_dir, self.state_dir):
+                for root, _dirs, files in os.walk(base):
+                    for fname in files:
+                        p = Path(root) / fname
+                        rel = str(p.relative_to(self.temp_path))
+                        if p.is_file() and not p.is_symlink():
+                            b = p.read_bytes()
+                            snap[rel] = ("file", len(b), hashlib.sha256(b).hexdigest())
+                        elif p.is_symlink():
+                            snap[rel] = ("symlink", 0, os.readlink(p))
+            return snap
+
+        before_snapshot = _full_snapshot()
+        env = self._make_env(self.temp_path / "unused.json")
+
+        # Run via installed console script
+        res = subprocess.run(
+            [
+                str(self.console_script),
+                "--project",
+                str(self.project_dir),
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+        self.assertEqual(res.returncode, 0, res.stderr)
+
+        after_snapshot = _full_snapshot()
+        self.assertEqual(
+            before_snapshot,
+            after_snapshot,
+            "aether --project <root> --json modified filesystem state",
+        )
+
+        plan = json.loads(res.stdout)
+        self.assertEqual(plan["result"], "ready")
+        self.assertEqual(plan["project_id"], self.project_id)
+        self.assertEqual(plan["repo_root"], str(self.project_dir.resolve()))
+        self.assertEqual(plan["cwd"], str(self.project_dir.resolve()))
+        self.assertEqual(plan["hermes_home"], str(self.profile_dir.resolve()))
+        self.assertEqual(plan["tui_dir"], str(self.expected_tui_dir))
+        self.assertEqual(plan["hermes_executable"], str(self.hermes_stub.resolve()))
+        self.assertEqual(
+            plan["command"],
+            [
+                str(self.hermes_stub.resolve()),
+                "--tui",
+                "--in",
+                str(self.project_dir.resolve()),
+            ],
+        )
+
+    def test_launch_creates_no_build_artefacts_and_leaves_locked_hermes_source_unchanged(
+        self,
+    ) -> None:
+        """Prove launch creates no npm/build artefacts and hermes-source inventory is unchanged."""
+        self.assertIsNotNone(self.console_script)
+        assert self.console_script is not None
+
+        pre_inventory = self._hermes_source_inventory()
+        self.assertTrue(len(pre_inventory) >= 5, "Hermes source tree should have locked files")
+
+        env = self._make_env(self.temp_path / "stub_launch.json")
+
+        # 1. Fresh launch
+        res1 = subprocess.run(
+            [
+                str(self.console_script),
+                "--project",
+                str(self.project_dir),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+        self.assertEqual(res1.returncode, 0, res1.stderr)
+
+        # 2. Continuation launch
+        res2 = subprocess.run(
+            [
+                str(self.console_script),
+                "--project",
+                str(self.project_dir),
+                "--resume",
+                "latest",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+        self.assertEqual(res2.returncode, 0, res2.stderr)
+
+        post_inventory = self._hermes_source_inventory()
+        self.assertEqual(
+            pre_inventory,
+            post_inventory,
+            "Launch modified the locked hermes-source tree",
+        )
+
+        # Assert no npm or build artifacts were created anywhere
+        forbidden_patterns = (
+            "node_modules",
+            "package-lock.json",
+            "*.tsbuildinfo",
+            ".npm",
+            ".turbo",
+            "npm-debug.log*",
+        )
+        for base in (self.hermes_source_dir, self.release_dir, self.project_dir):
+            for pat in forbidden_patterns:
+                matches = list(base.glob(f"**/{pat}"))
+                self.assertEqual(
+                    matches,
+                    [],
+                    f"Unexpected build/npm artifact found matching {pat}: {matches}",
+                )
+
+    def test_desktop_and_wsl_projections_point_to_stable_aether_entry_point(
+        self,
+    ) -> None:
+        """Prove Desktop and WSL projections target stable aether entry point and resume latest."""
+        from aether_agents.lifecycle import (
+            MAINTAINED_FORK_BRANCH,
+            MAINTAINED_FORK_REPOSITORY,
+            AetherPrebuildIdentity,
+            AuthorityContext,
+            DisabledServiceController,
+            LifecycleManager,
+            ProjectionRoots,
+            ReleaseRecord,
+            ReleaseStore,
+        )
+
+        store = ReleaseStore(
+            root=self.data_dir / "aether",
+            state_root=self.state_dir / "aether",
+        )
+        projections_root = self.temp_path / "projections"
+        projections = ProjectionRoots.disposable(projections_root)
+
+        manager = LifecycleManager(
+            store=store,
+            python_executable=Path(sys.executable),
+            service_controller=DisabledServiceController(),
+            projections=projections,
+            project_root=self.project_dir,
+        )
+
+        identity = {
+            "distribution": "aether-agents",
+            "package_version": "1.0.0rc4",
+            "git_tag": "v1.0.0-rc.4",
+            "git_commit": "a" * 40,
+            "python_requires": ">=3.11,<3.14",
+            "observer": {
+                "plugin_name": "aether-contract-observer",
+                "group": "hermes_agent.plugins",
+                "target": "aether_agents.observation.capture.hermes_plugin",
+            },
+        }
+        record = ReleaseRecord(
+            schema_version=3,
+            release_id=self.release_id,
+            version="1.0.0rc4",
+            wheel_filename="aether_agents-1.0.0rc4-py3-none-any.whl",
+            wheel_sha256="a" * 64,
+            hermes_tag=MAINTAINED_FORK_BRANCH,
+            hermes_commit="a" * 40,
+            observer_entry_point="aether-contract-observer=aether_agents.observation.capture.hermes_plugin",
+            previous_release_id=None,
+            authority_context=AuthorityContext.for_active_release(self.release_id).to_record(),
+            aether_identity=identity,
+            prebuild_identity=AetherPrebuildIdentity.from_record(identity).digest,
+            installed_file_fingerprint="e" * 64,
+            hermes_repository=MAINTAINED_FORK_REPOSITORY,
+            hermes_branch=MAINTAINED_FORK_BRANCH,
+            hermes_source_tree_sha256="c" * 64,
+            tui_sha256="d" * 64,
+        )
+        record.validate()
+
+        # 1. With explicit project_root
+        spec = manager.projection_spec(record, project_root=self.project_dir)
+
+        # Linux Desktop entry assertions
+        desktop_text = spec.desktop_bytes.decode("utf-8")
+        expected_desktop_exec = (
+            f"Exec={spec.runtime_current}/venv/bin/aether --project {self.project_dir.resolve()}"
+        )
+        self.assertIn(expected_desktop_exec, desktop_text)
+        self.assertIn("Actions=Continue;", desktop_text)
+        self.assertIn("[Desktop Action Continue]", desktop_text)
+        self.assertIn("Name=Continue Aether", desktop_text)
+        expected_desktop_continue = f"Exec={spec.runtime_current}/venv/bin/aether --project {self.project_dir.resolve()} --resume latest"
+        self.assertIn(expected_desktop_continue, desktop_text)
+
+        # WSL Windows Terminal shortcuts assertions
+        self.assertIn("aether", spec.wsl_shortcuts)
+        self.assertIn("continue_aether", spec.wsl_shortcuts)
+
+        _aether_cmd_path, aether_cmd_bytes = spec.wsl_shortcuts["aether"]
+        _continue_cmd_path, continue_cmd_bytes = spec.wsl_shortcuts["continue_aether"]
+
+        aether_cmd_text = aether_cmd_bytes.decode("utf-8")
+        continue_cmd_text = continue_cmd_bytes.decode("utf-8")
+
+        self.assertIn("wt.exe", aether_cmd_text)
+        self.assertIn("wsl.exe", aether_cmd_text)
+        self.assertIn(
+            f'"{spec.runtime_current}/venv/bin/aether" --project "{self.project_dir.resolve()}"',
+            aether_cmd_text,
+        )
+        self.assertNotIn("--resume latest", aether_cmd_text)
+
+        self.assertIn("wt.exe", continue_cmd_text)
+        self.assertIn("wsl.exe", continue_cmd_text)
+        self.assertIn(
+            f'"{spec.runtime_current}/venv/bin/aether" --project "{self.project_dir.resolve()}" --resume latest',
+            continue_cmd_text,
+        )
+
+        # 2. With default project resolution (via manager.project_root)
+        spec_default = manager.projection_spec(record)
+        self.assertEqual(spec.desktop_bytes, spec_default.desktop_bytes)
+        self.assertEqual(
+            spec.wsl_shortcuts["aether"][1],
+            spec_default.wsl_shortcuts["aether"][1],
+        )
+        self.assertEqual(
+            spec.wsl_shortcuts["continue_aether"][1],
+            spec_default.wsl_shortcuts["continue_aether"][1],
+        )
 
 
 if __name__ == "__main__":

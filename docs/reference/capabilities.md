@@ -59,11 +59,12 @@ The CLI diagnoses lifecycle coherence without importing Hermes, but it does not 
 - [src/aether_agents/lifecycle.py](../../src/aether_agents/lifecycle.py)
 
 ### Verification
+- [tests/test_hermes_gateway_service.py](../../tests/test_hermes_gateway_service.py)
 - [tests/test_observation_lifecycle.py](../../tests/test_observation_lifecycle.py)
 
 ### Notes / current limits
 
-A clean environment with no active Aether release truthfully reports an integrity error; project-specific diagnostics remain unfinished. A mismatch between the authoritative active-release record, `runtime/current`, the launcher, the Desktop entry and the Aether-owned service projection is reported as an actionable fail-closed diagnostic rather than a silent degradation.
+A clean environment with no active Aether release truthfully reports an integrity error; project-specific diagnostics remain unfinished. The doctor semantically verifies that the Hermes-owned gateway service selects the active runtime/current Python, Morfeo profile and home, and active virtualenv, without byte comparison or HERMES_TUI_DIR coupling. Mismatches between the authoritative active-release record, `runtime/current`, launcher, Desktop entry, or gateway service are reported as actionable fail-closed diagnostics.
 
 ## `cli.init`
 
@@ -229,7 +230,7 @@ Service lifecycle command names are reserved and return explicit unsupported res
 
 ### Notes / current limits
 
-No Aether-managed user service is activated or controlled by this build.
+No Aether-managed user service is activated or controlled by this build. The gateway service is owned and materialized directly by Hermes Agent, not by Aether service lifecycle commands.
 
 ## `cli.setup`
 
