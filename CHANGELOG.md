@@ -1,5 +1,79 @@
 # Changelog
 
+## 1.0.0rc6 — release candidate (pre-stable, local-only activation candidate)
+
+The release identity is package version `1.0.0rc6`, display version `1.0.0-rc.6`, annotated tag
+`v1.0.0-rc.6` (`release_impact=patch`, `release_action=prepare`, `release_channel=prerelease`);
+`VERSION` remains the single product-version source.
+
+- This candidate is local-only: one local annotated tag `v1.0.0-rc.6` is prepared locally on
+  accepted `main` and is never pushed, published, or released to GitHub in this objective.
+- Predecessors: rc1–rc5 remain immutable history; the local rc.2, rc.3, rc.4 and rc.5 candidate
+  tags and activation history remain immutable non-accepting history; `1.0.0rc1` /
+  `v1.0.0-rc.1` remains published, byte-immutable and rejected, and must not be activated.
+- Mixed-version lifecycle: the immutable target `record.json` owns the persisted active-record
+  field shape, so the source manager no longer serializes its own defaults into an older target's
+  pointer; optional-field absence versus explicit null and unknown keys are preserved.
+- Pre-mutation target validation: the proposed active record is validated through the exact
+  target's reader in an isolated subprocess (`-P -s`, target-root working directory, stripped
+  `PYTHON*` environment, in-runner `aether_agents.__file__` provenance assertion) before any
+  pointer or projection byte moves. An unavailable or out-of-bounds target projection plan
+  refuses the transition instead of falling back to source-owned bytes.
+- Byte-exact compensation: a failed transition restores the previously captured active-record
+  bytes and its paired selector rather than reserializing through a failing release class.
+- Target-owned projections: the authenticated target release's own code determines launcher,
+  Desktop, WSL and service projection bytes, and the parent validates allowlisted destinations
+  and digests before applying them and re-validates from the selected target afterwards. The
+  service-unit version discriminator is brand-agnostic (no exact-version equality).
+- Bounded reconciliation: the reserved `aether reconcile --to active [--dry-run] [--yes]
+  [--json]` surface is implemented for the already active, authenticated release. Its preview is
+  non-mutating, it never selects another release, installs packages or restarts a service where
+  read-only reconciliation suffices, and `--to installed` remains explicitly unsupported with
+  `UNSUPPORTED_RECONCILE_MODE`. An active release that cannot authenticate itself is refused
+  before mutation.
+- Passive observer startup: registration and synchronous native hooks install hooks/tools and
+  record bounded events without replaying retained journal history or holding the maintenance
+  lock. Retained bindings restore asynchronously through the existing plugin worker with one
+  validated retained index per catch-up snapshot; segment enumeration failures and stale
+  snapshots are reported as content-free health counters and incomplete coverage instead of a
+  guessed trace.
+- Native/CLI query parity under contention: known bounded catch-up conditions return the fixed
+  public codes native `AETHER-OBSERVE-BUSY` / `AETHER-OBSERVE-CATCHUP-INCOMPLETE` and CLI
+  `STATE_BUSY` / `CATCHUP_INCOMPLETE`, while genuine unreadable state stays fail-closed as
+  `STATE_UNREADABLE`/`AETHER-OBSERVE-STATE-UNREADABLE`. A retryable error is not presented as a
+  successful or fresh summary, and the existing callback/reduction gates and 22-callback
+  qualification lock are unchanged.
+- Launch: the packaged launcher clears inherited transport selectors (`HERMES_PYTHON`,
+  `HERMES_PYTHON_SRC_ROOT`, Hermes RPC/gateway/session and desktop state, `PYTHON*`,
+  `VIRTUAL_ENV`, task/board routing) and then binds the target release's interpreter, source
+  root, TUI directory, Morfeo profile and exact project, so a nested old TUI cannot silently
+  start the old backend. Fresh and `--resume latest` launches select the exact backend from a
+  clean or contaminated parent environment, an unqualified or damaged release venv fails closed
+  with `ActivationError`, and launches create no npm/build artefacts and leave the locked
+  `hermes-source` tree bit-for-bit unchanged.
+- Public startup, default-selection and recovery guidance: how `aether` selects an initialized
+  project from the current directory, how `--project PATH` (or `AETHER_PROJECT_ROOT`) overrides
+  that selection, the fresh and Continue actions, `--resume latest`, visible ambiguity instead of
+  name/recency inference, and optional personal Bash/Zsh and Fish defaults with their matching
+  removal commands. Aether never silently writes a personal shell preference.
+- Reconciled canonical surfaces: the CLI contract, the A1 specification, the observation
+  specification, the lifecycle/observation/CLI/limitations guides and the capability registry
+  describe the frozen behavior above; `docs/reference/capabilities.md` is regenerated from
+  `docs/capabilities.toml`.
+- Registered tracked contract file `.aether/objective-contracts/oc_b5926701207812e8/v1.md`,
+  the observation module and regression paths added by this objective, and its focused suites in
+  `.github/workflows/policy.yml`.
+- Pinned maintained-fork runtime source unchanged: `DarkArty07/aether-hermes` `aether-main`
+  revision `aed6591a69f453a1867b73628603e7b53ba40ffc` (source-tree digest
+  `cc1ebf94ad167979951e7b956ef3a8c448e96fd3389c93cddf60f8f883bb5ce7`); no Hermes-fork change.
+- This is a pre-stable release candidate. It is not stable `1.0.0`, no PyPI or other
+  package-index publication occurs, WSL2 (and any macOS/Windows lane) is unverified and
+  recorded as such, and issue #261 remains open with the deferred stable, PyPI/OIDC and
+  WSL2 obligations explicit. Mixed-version qualification, the local annotated tag, local
+  activation, live canaries and issue closeout belong to the same objective's later units; this
+  entry records the release identity, status, guidance, capability reconciliation, manifest and
+  oracle updates performed here.
+
 ## 1.0.0rc5 — release candidate (pre-stable, local-only activation candidate)
 
 The release identity is package version `1.0.0rc5`, display version `1.0.0-rc.5`, annotated tag `v1.0.0-rc.5`

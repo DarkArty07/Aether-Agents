@@ -31,6 +31,50 @@ uv run --frozen aether init
 
 The command validates or writes `.aether/project.toml`, maps its portable UUID to the exact-path native Hermes Project, and makes the marker and finalized Objective Contracts trackable while keeping drafts ignored. It refuses missing, ambiguous, mismatched, invalid, or conflicting identity rather than guessing. See [Project initialization](guides/project-initialization.md) for the full boundary.
 
+## Launch Aether in an initialized project
+
+Aether never infers a project from a display name, a session history, a board default, or checkout recency. It resolves exactly one initialized project through this precedence:
+
+1. an explicit `--project PATH`;
+2. `AETHER_PROJECT_ROOT` in the environment, which also takes precedence over the current directory;
+3. a verified `AETHER_PROJECT_ID` whose project-registry entry and portable marker agree;
+4. the current directory, or its nearest initialized parent directory;
+5. only when none of the above applies: the single registered project.
+
+An empty or relative identity value fails visibly instead of falling back to the current directory; a directory that is not an initialized project root, a registry/marker disagreement, and a conflict between an explicit identity and the registry are all reported as errors. With several registered projects and no explicit selection the launch stops with a bounded `ambiguous project identity` error rather than presenting a picker, name match, or most-recent guess.
+
+```bash
+cd /path/to/an/initialized/project
+aether                                            # fresh Morfeo session in this project
+aether --project /path/to/project                 # explicit project, from anywhere
+aether --project /path/to/project --resume latest # continue that project's latest session
+aether --project /path/to/project --json          # non-mutating launch plan
+```
+
+Top-level launch binds the active release's own interpreter, source root, TUI directory, Morfeo profile, and the exact project. In an activated installation the same two actions are installed as branded desktop entries — `Aether` (fresh) and `Continue Aether` (`--resume latest`) — and, on WSL hosts, as Windows Terminal fragments; both point at the stable `runtime/current/venv/bin/aether` entry with the exact project root.
+
+### Optional personal shell defaults
+
+Aether never writes a personal shell preference: a shortcut in your own shell configuration is optional, stays yours, and is added and removed by you. Use the stable `runtime/current` entry so the shortcut follows an activated release.
+
+Bash and Zsh (`~/.bashrc`, `~/.zshrc`):
+
+```bash
+alias aether='/path/to/aether/runtime/current/venv/bin/aether'
+```
+
+Remove it with `unalias aether` and by deleting the alias line.
+
+Fish (`~/.config/fish/config.fish`):
+
+```fish
+function aether
+    /path/to/aether/runtime/current/venv/bin/aether $argv
+end
+```
+
+Remove it with `functions -e aether` and by deleting the function block.
+
 ## What not to infer
 
 The package has local lifecycle candidate commands (`setup`, `update`, `rollback`, and `uninstall`), but these are not a complete public installation path. Do not run a state-changing lifecycle command merely to explore the documentation. The current supported discovery commands are `--help`, `--version`, `observe --help`, and read-only `doctor`; see [CLI reference](reference/cli.md) and [limitations](reference/limitations-and-troubleshooting.md).
