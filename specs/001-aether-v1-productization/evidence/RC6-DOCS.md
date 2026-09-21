@@ -179,3 +179,99 @@ literals above are the complete set the reviewed units recorded for files that e
   the merged candidate revision. The disposable RED worktree used for the base comparison was
   created outside the repository and removed after use. No operator-local absolute path appears
   in any tracked artifact.
+
+---
+
+## 7. RC6-DOCS-2 — correction of the shell-default, recovery-preamble and identity-value claims
+
+**Unit**: RC6-DOCS-2 (`t_e90863a1`), role Implementer, branch
+`aether-agents-2/t_e90863a1-rc6-docs-2-correct-u1-shell-default-exam`, based on this unit's
+accepted tip `80ce317809d4413a718b3fec412c543b17e2c3ab`. Authority unchanged: Objective Contract
+`oc_b5926701207812e8@v1`, material design `plan-rc6.md` §U1 (line 80). Docs-only fix forward: no
+behavior code, no contract text, no card-state reopen, no release, remote or board effect.
+
+### 7.1 Requirement → check → observed result → evidence
+
+| # | Requirement | Check actually run | Observed result | Evidence |
+| --- | --- | --- | --- | --- |
+| D1 | §U1: teach optional `AETHER_PROJECT_ROOT` selection and its precedence over cwd, with Bash/Zsh **and** Fish examples and removal commands, generic paths | `uv run --frozen pytest -q tests/test_observation_usage_guidance.py`, shell-default assertions scoped to the section | RED at `80ce3178`: `AssertionError: takes precedence over the current directory`. GREEN on this candidate: 9 passed. | `docs/getting-started.md` §"Optional personal shell defaults"; `tests/test_observation_usage_guidance.py` |
+| D2 | The recovery preamble must not deny the rollback surface's own release selection, and must keep the refusals that are true of all three | same lane, recovery assertions: negative pin on the retired sentence plus the four retained claims | RED at `80ce3178`: `'None of them selects a different release' is contained here`. GREEN on this candidate. | `docs/guides/lifecycle.md` §"Recovery surfaces"; `tests/test_observation_usage_guidance.py` |
+| D3 | State precisely which identity value fails and which is resolved, in all three named surfaces, with the registry regenerated | same lane, identity-split oracle over `docs/getting-started.md`, `docs/reference/cli.md`, `docs/capabilities.toml` and the generated `docs/reference/capabilities.md`, plus the resolver exercise | RED at `80ce3178`: `('docs/getting-started.md', 'an empty --project value is refused')`. GREEN on this candidate. | the four surfaces listed; `tests/test_observation_usage_guidance.py` |
+
+RED method: `git stash push -- docs/` kept the candidate test module while restoring the base
+documents at `80ce3178`, the lane then exited 1 with exactly the three failures above, and
+`git stash pop` restored the candidate. Exactly the three corrected functions fail at base; the
+other six pass. Recorded as observed, not inferred.
+
+### 7.2 Direct measurement behind the corrected identity wording
+
+A disposable probe outside the repository imported the packaged launcher from this worktree with
+isolated `HOME`/`XDG_*`/`TMPDIR`/`HERMES_HOME` and every `AETHER_*`/`HERMES_*` selector cleared, then
+called `_resolve_project` against a fixture project. Observed: relative `--project alpha` and
+`projects_root/alpha` resolved to the fixture root and returned its portable project id; empty
+`--project` was refused with `project path must not be empty`; `AETHER_PROJECT_ROOT=relative/project`
+was refused with `AETHER_PROJECT_ROOT must be an absolute path`; empty `AETHER_PROJECT_ROOT` was
+refused with `AETHER_PROJECT_ROOT must not be empty`; `AETHER_PROJECT_ID=not-a-uuid` was refused with
+`is not a valid canonical UUID`. The durable oracle for the same split is
+`test_documented_identity_value_split_matches_the_implemented_resolver`, together with the extended
+assertion inside `test_documented_project_selection_precedence_matches_the_implemented_resolver`.
+
+### 7.3 Same-claim-class sweep (`docs/**`, `README.md`)
+
+- Fixed: `docs/guides/lifecycle.md` §"Recovery surfaces" was the only surface claiming that no
+  recovery surface selects a different release.
+- Reviewed and left unchanged as accurate: the reconcile-scoped "never selects another release"
+  statements (`docs/reference/cli.md`, `docs/reference/capabilities.md`, `docs/capabilities.toml` and
+  the canonical `specs/001-…/contracts/cli.md`), which bind `reconcile --to active` only; and the
+  update-scoped "no other surface stages or activates a release", which describes staging or
+  activating a *new* release, while rollback re-points product-owned pointers to a release already
+  recorded as coherent.
+- `README.md` needed no correction: its single rollback sentence ("rollback restores product code
+  without rolling user state backward") is accurate and does not deny the release switch.
+
+### 7.4 Gates
+
+| Gate | Command | Result |
+| --- | --- | --- |
+| Documentation registry | `uv run --frozen python scripts/check_documentation.py` (with `--write` to regenerate the reference) | `documentation validation passed`; the regenerated diff is confined to the one notes paragraph |
+| Guidance/documentation/artifact lane | `uv run --frozen pytest -q tests/test_observation_usage_guidance.py tests/test_documentation.py tests/test_public_artifacts.py` | 36 passed (9 + 18 + 9) |
+| Manifest equality | `… pytest -q tests/test_public_artifacts.py::test_canonical_base_manifest_matches_tracked_non_specs_files` | 1 passed; no tracked path added, so `manifest_lines: none` |
+| Public artifact scan | `uv run --frozen python scripts/check_public_artifacts.py` | `public artifact path scan passed: tracked surface + 0 artifact(s)` |
+| Lint / format / types | `ruff check src/aether_agents tests scripts`; `ruff format --check src/aether_agents tests scripts`; `mypy src/aether_agents` | all clean; 178 files already formatted; 69 source files type-clean |
+
+Isolation: every check ran with disposable `HOME`, `XDG_STATE_HOME`, `XDG_DATA_HOME`,
+`XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, `TMPDIR` and `HERMES_HOME`, and with every `HERMES_*`/`AETHER_*`
+routing variable unset. No live installation, gateway, TUI, service, board, contract or observation
+store was touched; no push, PR, merge, tag, release, activation, service restart or issue mutation
+occurred.
+
+### 7.5 Direct versus reused attribution
+
+**Direct work in this unit**: all three document corrections and the registry regeneration; the new
+and extended oracle assertions and the resolver exercise; the claim-class sweep; every gate above.
+**Reused, re-verified rather than trusted**: the design steward's defect report (consumed as a defect
+list — each defect was re-measured from source and behavior before editing), the existing
+documentation generator `scripts/check_documentation.py --write`, the existing guidance oracles
+(extended, not replaced), and the accepted RC6-LAUNCH/RC6-LIFE behavior read from the merged source
+rather than re-authored.
+**Not claimed**: no independent review of this correction, no terminal integration, no release or
+aggregate compatibility conclusion (the unit-level impact stays `patch`), and no live-candidate
+qualification.
+
+### 7.6 Residual limits
+
+- **Contract wording stays broader than the implementation.** `specs/001-…/spec.md` (A1-FR-043) and
+  `specs/001-…/contracts/cli.md` still state that "an empty or relative identity MUST fail visibly",
+  while the accepted launcher refuses only an empty `--project` value and resolves a relative
+  `--project PATH`. Those files are outside this unit's writable surface, so the discrepancy is
+  reported on the card for an owner-side decision instead of being softened in the docs or changed in
+  code. The canonical sentence is unchanged; the documents now describe implemented behavior.
+- **One oracle is not RED at base.** The relative-`--project` resolver pin passes at `80ce3178` as
+  well as on this candidate, because the behavior is unchanged and only the prose was wrong. It is
+  recorded as a grounding pin for the corrected wording, not as a RED assertion; the three prose
+  assertions carry the RED evidence.
+- **Bounded scope.** Only the three reported discrepancies and their same-claim-class neighbours were
+  reviewed; this is not a general documentation audit, and no other guide's wording was changed.
+- **Environment**: isolated worktree at the accepted base; the RED comparison used `git stash` on
+  tracked `docs/` paths plus a probe script outside the repository. No operator-local absolute path
+  appears in any tracked artifact.

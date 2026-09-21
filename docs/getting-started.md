@@ -41,7 +41,7 @@ Aether never infers a project from a display name, a session history, a board de
 4. the current directory, or its nearest initialized parent directory;
 5. only when none of the above applies: the single registered project.
 
-An empty or relative identity value fails visibly instead of falling back to the current directory; a directory that is not an initialized project root, a registry/marker disagreement, and a conflict between an explicit identity and the registry are all reported as errors. With several registered projects and no explicit selection the launch stops with a bounded `ambiguous project identity` error rather than presenting a picker, name match, or most-recent guess.
+Identity values fail visibly instead of falling back to the current directory, and each one fails differently: an empty `--project` value is refused, while a relative `--project PATH` is resolved against the current working directory; `AETHER_PROJECT_ROOT` must be an absolute path, so an empty or relative value is refused (`must not be empty` / `must be an absolute path`); and `AETHER_PROJECT_ID` must be a canonical UUID whose registry entry and portable marker agree. A directory that is not an initialized project root, a registry/marker disagreement, and a conflict between an explicit identity and the registry are all reported as errors. With several registered projects and no explicit selection the launch stops with a bounded `ambiguous project identity` error rather than presenting a picker, name match, or most-recent guess.
 
 ```bash
 cd /path/to/an/initialized/project
@@ -55,7 +55,27 @@ Top-level launch binds the active release's own interpreter, source root, TUI di
 
 ### Optional personal shell defaults
 
-Aether never writes a personal shell preference: a shortcut in your own shell configuration is optional, stays yours, and is added and removed by you. Use the stable `runtime/current` entry so the shortcut follows an activated release.
+Aether never writes a personal shell preference: a default or shortcut in your own shell configuration is optional, stays yours, and is added and removed by you.
+
+**Project default (`AETHER_PROJECT_ROOT`).** Setting `AETHER_PROJECT_ROOT` to an absolute project path selects that project from any directory: it takes precedence over the current directory (and over the single registered project), while an explicit `--project PATH` still wins over it. A relative or empty value is refused, so use an absolute path of your own.
+
+Bash and Zsh (`~/.bashrc`, `~/.zshrc`):
+
+```bash
+export AETHER_PROJECT_ROOT='/path/to/an/initialized/project'
+```
+
+Remove it with `unset AETHER_PROJECT_ROOT` and by deleting the line.
+
+Fish (`~/.config/fish/config.fish`):
+
+```fish
+set -gx AETHER_PROJECT_ROOT /path/to/an/initialized/project
+```
+
+Remove it with `set -e AETHER_PROJECT_ROOT` and by deleting the line.
+
+**Executable shortcut (optional convenience).** A shortcut is unrelated to project selection and only saves typing. Use the stable `runtime/current` entry so the shortcut follows an activated release.
 
 Bash and Zsh (`~/.bashrc`, `~/.zshrc`):
 
