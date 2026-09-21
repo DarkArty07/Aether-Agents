@@ -69,6 +69,16 @@ class _SegmentIndexState:
     candidates: dict[str, list[tuple[str, int, str, str, str, str]]]
 
 
+@dataclass(slots=True)
+class _PendingBinding:
+    """A native binding intent waiting for retained evidence validation."""
+
+    trace_id: str
+    relation: str
+    event: dict[str, Any] | None = None
+    emitted: bool = False
+
+
 class RetainedIndex:
     """Validated index of traces and bindings derived from retained journal segments."""
 
@@ -80,20 +90,110 @@ class RetainedIndex:
         self.validation_count: int = 0
         self._segment_states: dict[Path, _SegmentIndexState] = {}
         self._snapshot_signature: tuple[tuple[str, int, int, int], ...] = ()
+        self._snapshot_state: str = "unknown"
+        self._pending_bindings: dict[str, _PendingBinding] = {}
+        self._conflicted_bindings: set[str] = set()
+
+    @property
+    def snapshot_state(self) -> str:
+        """Return whether the current retained snapshot is usable for attribution."""
+        return self._snapshot_state
 
     def trace_exists(self, trace_id: str) -> bool:
-        return trace_id in self.traces
+        return self._snapshot_state == "validated" and trace_id in self.traces
 
     def get_binding(self, task_ref: str) -> tuple[str, str] | None:
+        """Return only a binding verified by the current retained snapshot."""
+        if self._snapshot_state != "validated":
+            return None
         return self.resolved_bindings.get(task_ref)
 
+    def binding_state(self, task_ref: str) -> str:
+        """Classify one binding without treating an unvalidated absence as proof.
+
+        ``pending`` is an in-process native intent and is deliberately not returned by
+        ``get_binding``.  ``incomplete`` covers cold, unreadable, or valid-prefix-limited
+        snapshots; callers must keep coverage unresolved in that state.
+        """
+        if self._snapshot_state != "validated":
+            if task_ref in self._pending_bindings:
+                return "pending"
+            return "incomplete"
+        if task_ref in self.resolved_bindings:
+            return "verified"
+        if task_ref in self._pending_bindings:
+            return "pending"
+        if task_ref in self._conflicted_bindings or task_ref in self.candidate_rows:
+            return "conflict"
+        return "absent"
+
     def get_bindings(self) -> dict[str, tuple[str, str]]:
+        if self._snapshot_state != "validated":
+            return {}
         return dict(self.resolved_bindings)
 
-    def record_binding(self, task_ref: str, trace_id: str, relation: str) -> None:
-        """Record an in-memory binding immediately without waiting for disk sync."""
-        self.traces.add(trace_id)
-        self.resolved_bindings[task_ref] = (trace_id, relation)
+    def record_binding(
+        self,
+        task_ref: str,
+        trace_id: str,
+        relation: str,
+        *,
+        event: dict[str, Any] | None = None,
+        emitted: bool = False,
+    ) -> None:
+        """Keep a native binding intent pending until retained evidence corroborates it."""
+        candidate = (trace_id, relation)
+        existing = self.resolved_bindings.get(task_ref)
+        if existing is not None:
+            if existing != candidate:
+                self._conflicted_bindings.add(task_ref)
+            return
+        if task_ref in self.candidate_rows:
+            self._conflicted_bindings.add(task_ref)
+            return
+        pending = self._pending_bindings.get(task_ref)
+        if pending is not None:
+            if (pending.trace_id, pending.relation) != candidate:
+                self._conflicted_bindings.add(task_ref)
+                self._pending_bindings.pop(task_ref, None)
+                return
+            if pending.event is None and event is not None:
+                pending.event = event
+            pending.emitted = pending.emitted or emitted
+            return
+        self._pending_bindings[task_ref] = _PendingBinding(
+            trace_id=trace_id,
+            relation=relation,
+            event=event,
+            emitted=emitted,
+        )
+
+    def pending_binding(self, task_ref: str) -> tuple[str, str] | None:
+        pending = self._pending_bindings.get(task_ref)
+        return None if pending is None else (pending.trace_id, pending.relation)
+
+    def pending_binding_events(
+        self,
+    ) -> tuple[tuple[str, str, str, dict[str, Any]], ...]:
+        """Return un-emitted intents only after a complete snapshot proves absence."""
+        if self._snapshot_state != "validated":
+            return ()
+        ready: list[tuple[str, str, str, dict[str, Any]]] = []
+        for task_ref, pending in self._pending_bindings.items():
+            if pending.event is None or pending.emitted:
+                continue
+            if (
+                task_ref not in self.resolved_bindings
+                and task_ref not in self.candidate_rows
+                and task_ref not in self._conflicted_bindings
+            ):
+                ready.append((task_ref, pending.trace_id, pending.relation, pending.event))
+        return tuple(ready)
+
+    def mark_pending_binding_emitted(self, task_ref: str) -> None:
+        pending = self._pending_bindings.get(task_ref)
+        if pending is not None:
+            pending.emitted = True
 
     def refresh(
         self,
@@ -106,10 +206,14 @@ class RetainedIndex:
         try:
             segments = list_segments(paths)
         except Exception:
+            self._snapshot_state = "unavailable"
+            if collector is not None and hasattr(collector, "health"):
+                collector.health.increment("RETAINED_INDEX_UNAVAILABLE")
             return
 
         # Build current file signature for all eligible non-quarantine segments.
         current_stats: list[tuple[SegmentRef, int, int, int]] = []
+        snapshot_complete = True
         for segment in segments:
             if segment.state == "quarantine":
                 continue
@@ -119,19 +223,24 @@ class RetainedIndex:
 
                     manifest = segment.path.with_name(segment.path.name + ".manifest.json")
                     if not verify_archive(manifest).ok:
+                        snapshot_complete = False
                         continue
                 except Exception:
+                    snapshot_complete = False
                     continue
             try:
                 st = os.stat(segment.path)
                 current_stats.append((segment, st.st_size, st.st_mtime_ns, st.st_ino))
             except (OSError, UnsafeObservationPath):
-                continue
+                snapshot_complete = False
 
         current_sig = tuple(
             (str(seg.path), size, mtime, ino) for seg, size, mtime, ino in current_stats
         )
-        if current_sig == self._snapshot_signature:
+        if current_sig == self._snapshot_signature and self._snapshot_state in {
+            "validated",
+            "incomplete",
+        }:
             return  # Snapshot is unchanged; skip all validation
 
         new_segment_states: dict[Path, _SegmentIndexState] = {}
@@ -150,6 +259,8 @@ class RetainedIndex:
             ):
                 # Completely unchanged segment; reuse cached evidence
                 new_segment_states[segment.path] = prev
+                if not prev.valid:
+                    snapshot_complete = False
                 continue
 
             # Need to read or incrementally update this segment
@@ -164,9 +275,19 @@ class RetainedIndex:
             )
             if seg_state is not None:
                 new_segment_states[segment.path] = seg_state
+                if not seg_state.valid:
+                    snapshot_complete = False
+            else:
+                snapshot_complete = False
 
         if not changed and len(new_segment_states) == len(self._segment_states):
             self._snapshot_signature = current_sig
+            self._snapshot_state = "validated" if snapshot_complete else "incomplete"
+            self.validation_count += 1
+            if collector is not None and hasattr(collector, "health"):
+                collector.health.increment("RETAINED_INDEX_VALIDATED")
+                if not snapshot_complete:
+                    collector.health.increment("RETAINED_INDEX_INCOMPLETE")
             return
 
         # Re-aggregate across all valid segments
@@ -178,20 +299,40 @@ class RetainedIndex:
                 all_candidates.setdefault(t_ref, []).extend(rows)
 
         all_bindings: dict[str, tuple[str, str]] = {}
+        conflicted: set[str] = set()
         for t_ref, cands in all_candidates.items():
             resolved = _resolve_retained_binding(cands)
             if resolved is not None:
                 all_bindings[t_ref] = resolved
+            else:
+                conflicted.add(t_ref)
+
+        # A pending native intent is not evidence. Keep it while its event is not
+        # visible in the validated snapshot; once the task has retained candidates,
+        # either corroborate the exact intent or reject it as contradictory.
+        for task_ref, pending in list(self._pending_bindings.items()):
+            candidate = (pending.trace_id, pending.relation)
+            if task_ref not in all_candidates:
+                continue
+            if all_bindings.get(task_ref) == candidate:
+                del self._pending_bindings[task_ref]
+            else:
+                del self._pending_bindings[task_ref]
+                conflicted.add(task_ref)
 
         self.traces = all_traces
         self.candidate_rows = all_candidates
         self.resolved_bindings = all_bindings
+        self._conflicted_bindings = conflicted
+        self._snapshot_state = "validated" if snapshot_complete else "incomplete"
         self._segment_states = new_segment_states
         self._snapshot_signature = current_sig
         self.validation_count += 1
 
         if collector is not None and hasattr(collector, "health"):
             collector.health.increment("RETAINED_INDEX_VALIDATED")
+            if not snapshot_complete:
+                collector.health.increment("RETAINED_INDEX_INCOMPLETE")
 
     def _index_segment(
         self,

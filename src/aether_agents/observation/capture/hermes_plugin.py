@@ -31,7 +31,6 @@ from aether_agents.observation.capture.collector import (
     observing,
     reentrancy_guard,
 )
-from aether_agents.observation.capture.journal import list_segments, read_segment
 from aether_agents.observation.capture.retained_index import get_retained_index
 from aether_agents.observation.context import (
     ObservationContextResolver,
@@ -44,13 +43,11 @@ from aether_agents.observation.contracts import (
     RUN_STATUSES,
     CoverageClass,
     canonical_digest,
-    canonical_json_bytes,
     canonical_json_str,
     compute_runtime_fingerprint,
     event_validator,
     fallback_tool_category,
     normalize_native_status,
-    validate_event,
 )
 from aether_agents.observation.fingerprints import configuration_fingerprint_id
 from aether_agents.observation.identity import (
@@ -60,7 +57,6 @@ from aether_agents.observation.identity import (
 )
 from aether_agents.observation.privacy import (
     NativePseudonymKind,
-    assert_clean,
     native_agent_task_ref,
     native_kanban_task_ref,
     native_profile_ref,
@@ -303,83 +299,6 @@ def _bounded_dispatch_result(result: Any) -> dict[str, Any]:
     }
 
 
-def _validated_retained_events(paths: ObservationPaths):
-    """Yield only canonical, schema-valid events coherent with their owned segment.
-
-    Retained bytes are a recovery source, not authority merely because they exist.
-    This reader follows the same valid-prefix boundary as ingestion and rejects
-    quarantine, unverified archives, cross-project rows, and filename/sequence
-    contradictions before they can restore an in-memory trace or task binding.
-    """
-    for segment in list_segments(paths):
-        if segment.state == "quarantine":
-            continue
-        if segment.state == "archive":
-            from aether_agents.observation.retention import verify_archive
-
-            manifest = segment.path.with_name(segment.path.name + ".manifest.json")
-            if not verify_archive(manifest).ok:
-                continue
-        try:
-            snapshot = read_segment(segment.path)
-        except (OSError, EOFError, UnsafeObservationPath):
-            continue
-        if segment.last_seq is not None and (
-            snapshot.trailing_fragment
-            or not snapshot.lines
-            or segment.last_seq != segment.first_seq + len(snapshot.lines) - 1
-        ):
-            continue
-        for index, line in enumerate(snapshot.lines):
-            try:
-                event = json.loads(line.decode("utf-8"))
-                if not isinstance(event, dict) or canonical_json_bytes(event) != line:
-                    raise ValueError("retained event is not canonical")
-                validate_event(event)
-                assert_clean(event)
-                if event.get("project_id") != paths.project_id:
-                    raise ValueError("retained event belongs to another project")
-                if event.get("producer_epoch") != segment.producer_epoch:
-                    raise ValueError("retained event producer does not match segment")
-                if event.get("producer_seq") != segment.first_seq + index:
-                    raise ValueError("retained event sequence does not match segment")
-            except Exception:
-                # Mirror ingestion's valid-prefix rule. Bytes after a malformed row
-                # cannot recover authority even if they happen to look plausible.
-                break
-            yield event
-
-
-def _retained_binding_rows(
-    paths: ObservationPaths,
-) -> dict[str, list[tuple[str, int, str, str, str, str]]]:
-    """Read binding rows without inventing an order between producer processes."""
-    index = get_retained_index(paths)
-    index.refresh(paths)
-    return index.candidate_rows
-
-
-def _resolve_retained_binding(
-    candidates: list[tuple[str, int, str, str, str, str]],
-) -> tuple[str, str] | None:
-    if not candidates:
-        return None
-    per_epoch: dict[str, list[tuple[str, int, str, str, str, str]]] = {}
-    for candidate in candidates:
-        per_epoch.setdefault(candidate[0], []).append(candidate)
-    resolved: list[tuple[str, str] | None] = []
-    for rows in per_epoch.values():
-        highest_sequence = max(row[1] for row in rows)
-        latest = [row for row in rows if row[1] == highest_sequence]
-        values = {None if row[3] == "work_unit.unbound" else (row[5], row[4]) for row in latest}
-        if len(values) != 1:
-            return None
-        resolved.append(values.pop())
-    # Independent producers may corroborate the same durable fact, but neither a clock
-    # nor an opaque producer/event ID may resolve contradictory bind/unbind claims.
-    return resolved[0] if resolved and all(value == resolved[0] for value in resolved) else None
-
-
 def _retained_binding(paths: ObservationPaths, task_ref: str) -> tuple[str, str] | None:
     """Rebuild one worker binding from retained Aether journal evidence."""
     index = get_retained_index(paths)
@@ -388,7 +307,7 @@ def _retained_binding(paths: ObservationPaths, task_ref: str) -> tuple[str, str]
 
 
 def _retained_bindings(paths: ObservationPaths) -> dict[str, tuple[str, str]]:
-    """Rebuild the latest append-only binding state without consulting SQLite."""
+    """Return verified retained bindings from the shared snapshot index."""
     index = get_retained_index(paths)
     index.refresh(paths)
     return index.get_bindings()
@@ -1626,23 +1545,59 @@ class _Observer:
         event: dict[str, Any],
     ) -> bool:
         index = get_retained_index(collector.paths)
+        state = index.binding_state(task_ref)
         retained = index.get_binding(task_ref)
-        if retained is None:
+        if state == "verified":
+            if retained == (trace_id, relation):
+                collector.binder.restore(
+                    task_ref=task_ref,
+                    trace_id=trace_id,
+                    relation=relation,
+                )
+                collector.restore_materialized_trace(trace_id)
+                return True
+            collector.health.increment("BINDING_DURABLE_CONFLICT")
+            return False
+        if state == "pending":
+            if index.pending_binding(task_ref) == (trace_id, relation):
+                return False
+            collector.health.increment("BINDING_DURABLE_CONFLICT")
+            return False
+        if state == "conflict":
+            collector.health.increment("BINDING_DURABLE_CONFLICT")
+            return False
+        if state == "absent":
             outcome = collector.emit(event)
             if outcome.accepted:
-                index.record_binding(task_ref, trace_id, relation)
+                # The append is not authoritative until the next retained-index
+                # snapshot corroborates it. Keep it marked emitted to avoid duplicates.
+                index.record_binding(
+                    task_ref,
+                    trace_id,
+                    relation,
+                    event=event,
+                    emitted=True,
+                )
                 return True
             return False
-        if retained == (trace_id, relation):
-            collector.binder.restore(
-                task_ref=task_ref,
-                trace_id=trace_id,
-                relation=relation,
-            )
-            collector.restore_materialized_trace(trace_id)
-            return True
-        collector.health.increment("BINDING_DURABLE_CONFLICT")
+
+        # Cold, incomplete, or unreadable retained state cannot prove absence. Buffer
+        # the intent for the reconciliation worker; do not attribute it as durable.
+        index.record_binding(task_ref, trace_id, relation, event=event)
+        collector.health.increment("BINDING_UNRESOLVED")
         return False
+
+    def _flush_pending_binding_events(self, collector: Collector) -> None:
+        """Append pending binding intents only after a complete snapshot proves absence."""
+        index = get_retained_index(collector.paths)
+        for task_ref, _trace_id, _relation, event in index.pending_binding_events():
+            if self._reconciler._stop.is_set():
+                return
+            outcome = collector.emit(event)
+            if outcome.accepted:
+                index.mark_pending_binding_emitted(task_ref)
+            else:
+                collector.health.increment("BINDING_UNRESOLVED")
 
     def _emit_native_rejections(
         self,
@@ -1693,6 +1648,10 @@ class _Observer:
             collector=collector,
             stop_check=lambda: self._reconciler._stop.is_set(),
         )
+        if self._reconciler._stop.is_set():
+            return
+
+        self._flush_pending_binding_events(collector)
         if self._reconciler._stop.is_set():
             return
 

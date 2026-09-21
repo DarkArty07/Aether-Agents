@@ -1,155 +1,156 @@
-# RC6-OBS — Passive Observer Startup, Retained-History Index, and Native Query Parity Evidence
+# RC6-OBS — Passive observer startup, retained-history index, and native query parity
 
-**Unit**: RC6-OBS (`t_f6d83945`), role Implementer, worktree branch
-`aether-agents-2/t_f6d83945-rc6-obs-passive-observer-startup-retaine`.
-**Authority**: Objective Contract `oc_b5926701207812e8@v1`
-(SHA-256 `e7164c83862b747c7868706799c08ea63151ca388aa2dc2b1b89a40be33b01fc`), base commit
-`d2874c2f3fc839a82fbaa96ece6edebab3856298`, material design `specs/001-aether-v1-productization/plan-rc6.md` §O1/§O2,
-Supervisor breakdown with shared decisions 1–10 (`specs/001-aether-v1-productization/tasks-rc6.md` at `adc57c2b`). Never edited the contract.
-**Delivered scope**: contract in-scope O1, O2, D1; acceptance obligations AC-4, AC-5; breakdown unit RC6-OBS.
-**Unit compatibility**: `patch`.
+**Unit**: RC6-OBS (`t_f6d83945`), Implementer
+**Authority**: Objective Contract `oc_b5926701207812e8@v1` (digest
+`e7164c83862b747c7868706799c08ea63151ca388aa2dc2b1b89a40be33b01fc`), base
+`d2874c2f3fc839a82fbaa96ece6edebab3856298`, and
+`specs/001-aether-v1-productization/plan-rc6.md` §O1/§O2.
+**Scope**: O1, O2, D1; acceptance AC-4 and AC-5. The contract was not edited.
+**Compatibility conclusion**: unit-level `patch`; no aggregate release or publication conclusion.
 
----
+## 1. Implemented behavior
 
-## 1. Summary of behavior and mechanisms
+1. Registration and synchronous native hooks remain passive. Retained journal validation,
+   native reads, and maintenance-lock work run through the plugin-owned reconciliation
+   worker rather than `_Observer` construction, collector creation, or hot callbacks.
+2. `RetainedIndex` validates one retained snapshot and reuses unchanged segment state.
+   Its snapshot state is `validated`, `incomplete`, or `unavailable`; invalid, replaced,
+   truncated, quarantined, and unverified archive inputs cannot become verified bindings.
+   Segment enumeration failures increment `RETAINED_INDEX_UNAVAILABLE` and do not look like
+   an empty successful snapshot.
+3. Native binding claims no longer treat an unknown or stale index as proof of absence.
+   A hook claim is kept as a bounded pending intent until a complete snapshot corroborates
+   it or proves the task absent. Contradictory retained rows remain unresolved. Pending
+   intents survive unrelated snapshot refreshes and are flushed only through the worker
+   after validation; the hook never waits for that work.
+4. The previously implemented native/CLI query parity and fixed transient codes remain
+   intact: native `AETHER-OBSERVE-BUSY` / `AETHER-OBSERVE-CATCHUP-INCOMPLETE` and CLI
+   `STATE_BUSY` / `CATCHUP_INCOMPLETE`, with genuine unreadable state still fail-closed.
 
-1. **Passive startup (OBS-D-027, OBS-FR-082)**:
-   - Eliminated synchronous historical journal replays and lock acquisitions from `_Observer.__init__`,
-     `_collector_for_project`, and synchronous hook callbacks (`pre_tool_call`, `post_tool_call`,
-     `on_session_start`, `pre_api_request`, `post_api_request`, `kanban_task_claimed`).
-   - Plugin registration completes passively in ~0.022s even across a multi-project accumulated corpus,
-     reaching agent-ready without waiting for historical recovery.
-   - Synchronous hook callbacks record bounded events into active collector streams in memory and flush out-of-band,
-     strictly meeting the canonical p95 <= 5 ms / p99 <= 20 ms latency gate.
+## 2. Requirement → check → observed result → evidence
 
-2. **Asynchronous retained bindings and background reconciliation**:
-   - Retained work unit bindings and launch bindings are restored asynchronously by the plugin-owned
-     daemon worker (`_NativeReconciliationWorker`) outside all hook callbacks and registration.
-   - Before background catch-up completes, unbound tasks report existing incomplete/unresolved coverage rather
-     than attributing events to a guessed trace.
-   - Verified native and canonical bindings proceed independently without blocking on historical catch-up.
+| Requirement / oracle | Check actually run | Observed result | Evidence path / attribution |
+|---|---|---|---|
+| AC-4(a): registration and hot hooks do not wait for a paused retained reader | `uv run --frozen python scripts/run_tests.py -- -q tests/test_observation_passive_startup.py` | **5 passed**. Candidate registration and hot-hook path complete while the worker-side reader is held; the base-compatible harness fails intentionally when the base synchronous path reaches the patched `hermes_plugin.list_segments` barrier. | `tests/test_observation_passive_startup.py`; direct candidate run. Base RED run on disposable `d2874c2f` worktree: **1 failed** with the expected synchronous-history-wait assertion. |
+| AC-4(b): one validated index per unchanged snapshot | Same passive-startup command; instrumentation asserts `validation_count` remains one across repeated lookups and increments once after an append | **PASS**. Counters demonstrate reuse rather than prose-only attribution. | `tests/test_observation_passive_startup.py::test_unchanged_retained_snapshot_validated_once_via_instrumentation`; direct. |
+| AC-4(c): append, replacement, truncation, conflict, quarantine, and full/incremental equivalence | Same passive-startup command | **PASS**. Five tests pass, including production-boundary regressions for a cold/stale conflicting claim, a pending claim during an unrelated segment refresh, and retained-store enumeration failure. | `tests/test_observation_passive_startup.py`; direct. |
+| AC-4(d): unchanged callback/reduction budgets | `uv run --frozen python scripts/run_tests.py -- -q tests/test_observation_performance.py` (included in focused run) | **PASS** in the focused suite; existing p95 ≤ 5 ms, p99 ≤ 20 ms callback and reduction gates remain unchanged. | `tests/test_observation_performance.py`; direct. The previously independently measured candidate corpus recorded hook p95 0.8 µs / p99 2.8 µs. |
+| AC-5(e): native/CLI busy and incomplete parity with later recovery | `uv run --frozen python scripts/run_tests.py -- -q tests/test_observation_query_parity.py tests/test_observation_cli_plugin.py tests/test_observation_brief_tool.py` (included in focused run) | **PASS**. Fixed native and CLI transient codes are returned under controlled contention; settled state succeeds with equivalent summaries. | `tests/test_observation_query_parity.py`; direct. |
+| AC-5(f): genuine corruption/privacy failures remain errors without leaks | Same parity/CLI/brief command | **PASS**. Fixed unreadable errors remain errors; no raw exception, path, payload, or lock-owner detail is exposed. | `tests/test_observation_query_parity.py`; direct. |
+| Focused observation lane | `uv run --frozen python scripts/run_tests.py -- -q tests/test_observation_performance.py tests/test_observation_brief_tool.py tests/test_observation_batch_replay_regression.py tests/test_observation_journal_storage.py tests/test_observation_ingest_scale.py tests/test_observation_cli_plugin.py tests/test_observation_passive_startup.py tests/test_observation_query_parity.py` | **254 passed**. | Canonical exact-Hermes runner; direct. |
+| Full observation regression lane | `uv run --frozen python scripts/run_tests.py -- -q tests/test_observation_*.py` | **679 passed, 1 skipped**. | Canonical exact-Hermes runner; direct. The skip is an existing qualification/environment boundary, not a suppressed failure. |
+| Qualification lock and exact source harness | `uv run --frozen python scripts/qualify_observation.py checkout --path <isolated exact Hermes checkout> --json` followed by `uv run --frozen python scripts/qualify_observation.py test --checkout <isolated exact Hermes checkout> --json` | **472 passed**, `collected=472`; node manifest SHA-256 `c1b1215945754612bb768e513fbeefb4974ce6bba7b44fec39ab9a43ccc0ae0a`; plugin callback count **22**; raw payload absent. | `scripts/qualify_observation.py`; direct. Exact Hermes source identity was the locked `v2026.8.18` / commit `e624e9fde561e1add9388384012b295fde669ade`; private checkout receipts are not copied here. |
+| Qualification mirror | `uv run --frozen python scripts/run_tests.py -- -q tests/test_observation_qualification.py` | **60 passed, 1 skipped**. | Canonical exact-Hermes runner; direct. |
+| Static quality | `uv run --frozen ruff check src/aether_agents tests scripts && uv run --frozen ruff format --check src/aether_agents tests scripts && uv run --frozen mypy src/aether_agents` | **PASS**: Ruff clean, format clean for 178 files, mypy clean for 69 source files. | Direct. |
+| Public-artifact path privacy | `uv run --frozen python scripts/check_public_artifacts.py` | **PASS** after replacing operator-local checkout paths with generic lane references. | `scripts/check_public_artifacts.py`; direct. |
 
-3. **One validated retained index per snapshot (`RetainedIndex`)**:
-   - Implemented `RetainedIndex` in `src/aether_agents/observation/capture/retained_index.py`.
-   - Derives a content-free, privacy-safe snapshot signature `(path, size, mtime_ns, inode)` across eligible journal segments.
-   - When the snapshot signature is unchanged, lookups (`trace_exists`, `get_binding`, `get_bindings`) operate in O(1) time
-     without reading disk or parsing JSON. Instrumentation counter (`validation_count` and `RETAINED_INDEX_VALIDATED`)
-     increments exactly once per snapshot.
-   - Live appends to active segments are parsed incrementally from the previous valid offset.
-   - File replacement (inode change) or truncation (size decrease) triggers safe invalidation and valid-prefix re-indexing.
-   - Quarantined segments are excluded; archive segments verify manifests; privacy assertion (`assert_clean`) is enforced on every event.
+The companion public-artifact manifest comparison is still a pre-existing integrated
+surface mismatch at the supplied base and is owned by the documentation/integration
+units; this unit did not edit `.github/workflows/policy.yml`.
 
-4. **Bounded work lifecycle**:
-   - The reconciliation worker thread yields and cancels promptly via `_stop.is_set()` check boundaries.
-   - Observer unload (`observer.unload()`) stops the reconciler and flushers within 2.0 seconds with no surviving threads.
+## 3. Measured retained corpus and startup attribution
 
-5. **Native query parity and honest transient codes**:
-   - Introduced typed internal errors `StateBusyError` and `CatchupIncompleteError` in `aether_agents.observation.query`,
-     subclassing `StateUnreadableError` for full backwards compatibility while allowing fine-grained distinction.
-   - Contention on the maintenance lock (`storage-transition`) within the 2.0s timeout returns fixed bounded public codes:
-     - Native tool `brief.observe`: `AETHER-OBSERVE-BUSY`
-     - CLI `aether observe`: `STATE_BUSY` (exit code 6, `runtime_failure`)
-   - Catch-up budget / deadline exhaustion within 60s returns:
-     - Native tool `brief.observe`: `AETHER-OBSERVE-CATCHUP-INCOMPLETE`
-     - CLI `aether observe`: `CATCHUP_INCOMPLETE` (exit code 6, `runtime_failure`)
-   - Settled state query returns identical deterministic summary semantics between native tool and CLI.
-   - Genuine corruption fails closed with `AETHER-OBSERVE-STATE-UNREADABLE` / `STATE_UNREADABLE` with zero leak of
-     internal paths, exceptions, payloads, or lock owners.
+The objective-scale reproduction used the isolated retained corpus previously measured by
+Supervisor review: **244 journal files, 76 summaries, 7 registered projects, and 22 native
+callbacks**. The accepted candidate measurement recorded:
 
-6. **Qualification lock**:
-   - The observation core test suite (472 tests) passes completely green (`passed=472`, `collected=472`).
-   - The expected node manifest SHA-256 (`c1b1215945754612bb768e513fbeefb4974ce6bba7b44fec39ab9a43ccc0ae0a`)
-     remains exact and unchanged.
+- passive registration: **0.0222 s**;
+- initial background index build for one 35-segment project corpus: **0.0863 s**;
+- unchanged snapshot check: **0.00145 s** mean-scale observation, with independent review
+  measuring 1.47 ms mean / 1.76 ms maximum over repeated checks;
+- prior behavior on the accumulated corpus: **7m36s** before agent-ready due to repeated
+  retained-history validation.
 
----
+These are retained-corpus and registration measurements, not a universal total-TUI SLO and
+not a rendered-shell readiness claim. The startup regression is direct in this unit. The
+objective-scale timings above are reused, independently reviewed measurements from the
+same executable candidate behavior; no live installation or owner process was touched by
+this correction. The new pending-binding regressions add no synchronous history work.
 
-## 2. Verification table
+## 4. RED discipline and semantic-risk correction
 
-| Clause / Oracle | Assigned obligation | Exact command executed | Observed result | Evidence status |
-|---|---|---|---|---|
-| Oracle (a) | Registration and hot hooks complete while historical reader is held on barrier | `PYTHONPATH=tests uv run --frozen pytest -vv tests/test_observation_passive_startup.py::test_registration_and_hot_hooks_complete_while_historical_reader_held_on_barrier` | PASS: registration took 0.038s (< 1.0s vs 5.0s barrier), hot hooks took 0.002s (< 0.050s) | Direct |
-| Oracle (b) | Unchanged retained snapshot validated once per snapshot (instrumented) | `PYTHONPATH=tests uv run --frozen pytest -vv tests/test_observation_passive_startup.py::test_unchanged_retained_snapshot_validated_once_via_instrumentation` | PASS: validation_count=1 for initial validation and 10 repeated lookups; increments to 2 only after append | Direct |
-| Oracle (c) | Appended segments preserve full-vs-incremental semantic equivalence | `PYTHONPATH=tests uv run --frozen pytest -vv tests/test_observation_passive_startup.py::test_retained_index_full_versus_incremental_semantic_equivalence` | PASS: incremental traces, candidate rows, and resolved bindings exactly match fresh rebuild from scratch | Direct |
-| Oracle (c) | Truncated, replaced, conflicting, and quarantined segments handled safely | `PYTHONPATH=tests uv run --frozen pytest -vv tests/test_observation_passive_startup.py::test_retained_index_handles_truncated_replaced_conflicting_and_quarantined` | PASS: truncation/replacement trigger re-validation; quarantine ignored; cross-epoch conflict drops safely | Direct |
-| Oracle (d) | Callback and reduction performance gates pass unchanged | `PYTHONPATH=/home/darkarty/.local/share/aether/releases/1.0.0rc5-40d506a4117229ad/hermes-source uv run --frozen pytest -vv tests/test_observation_performance.py` | PASS: 4 passed; 10k reduction in 0.12s (<= 2.0s); callback p95 <= 5ms, p99 <= 20ms | Direct |
-| Oracle (e) | Controlled lock contention returns AETHER-OBSERVE-BUSY / STATE_BUSY; clears on release | `PYTHONPATH=tests uv run --frozen pytest -vv tests/test_observation_query_parity.py::test_controlled_lock_contention_and_recovery_parity` | PASS: AETHER-OBSERVE-BUSY and STATE_BUSY (exit 6) returned under lock; both succeed with identical summary on release | Direct |
-| Oracle (e) | Catchup incomplete returns AETHER-OBSERVE-CATCHUP-INCOMPLETE / CATCHUP_INCOMPLETE | `PYTHONPATH=tests uv run --frozen pytest -vv tests/test_observation_query_parity.py::test_catchup_incomplete_parity` | PASS: AETHER-OBSERVE-CATCHUP-INCOMPLETE and CATCHUP_INCOMPLETE (exit 6) returned within budget | Direct |
-| Oracle (f) | Genuine corruption fails closed with no raw exception, path, or payload leak | `PYTHONPATH=tests uv run --frozen pytest -vv tests/test_observation_query_parity.py::test_genuine_corruption_stays_fail_closed_with_no_leak` | PASS: AETHER-OBSERVE-STATE-UNREADABLE and STATE_UNREADABLE (exit 6) with no internal paths or exception leak | Direct |
-| Oracle (e/f) | Project, ref resolution, and empty state parity | `PYTHONPATH=tests uv run --frozen pytest -vv tests/test_observation_query_parity.py::test_project_ref_resolution_and_empty_state_parity` | PASS: exact parity for PROJECT_UNRESOLVED, TRACE_NOT_FOUND, and empty state representation | Direct |
-| Focused Suite | Complete focused observation suite | `PYTHONPATH=/home/darkarty/.local/share/aether/releases/1.0.0rc5-40d506a4117229ad/hermes-source uv run --frozen pytest -q tests/test_observation_performance.py tests/test_observation_brief_tool.py tests/test_observation_batch_replay_regression.py tests/test_observation_journal_storage.py tests/test_observation_ingest_scale.py tests/test_observation_cli_plugin.py tests/test_observation_passive_startup.py tests/test_observation_query_parity.py` | PASS: 253 passed in 41.77s | Direct |
-| Qualification | Isolated core observation qualification harness | `uv run --frozen python scripts/qualify_observation.py test --checkout /tmp/hermes-checkout` | PASS: 472 passed in 22.03s, manifest SHA-256 matched, clean checkout | Direct |
-| Qualify Mirror | Qualification test suite | `PYTHONPATH=/home/darkarty/.local/share/aether/releases/1.0.0rc5-40d506a4117229ad/hermes-source uv run --frozen pytest -q tests/test_observation_qualification.py` | PASS: 51 passed, 10 skipped in 3.59s | Direct |
-| All Observation Tests | Complete observation test suite (14 files) | `PYTHONPATH=/home/darkarty/.local/share/aether/releases/1.0.0rc5-40d506a4117229ad/hermes-source uv run --frozen pytest -q tests/test_observation_*.py` | PASS: 668 passed, 11 skipped in 122.32s | Direct |
-| Code Quality | Style and formatting check | `uv run --frozen ruff check src/aether_agents tests scripts && uv run --frozen ruff format --check src/aether_agents tests scripts` | PASS: All checks passed, 178 files formatted | Direct |
-| Typing | Static type check | `uv run --frozen mypy src/aether_agents` | PASS: Success: no issues found in 69 source files | Direct |
+The original passive-startup test could not collect at base because the retained-index
+module did not exist there. The test harness now conditionally imports that RC6-only module
+and, on the base revision, patches the history seam present in both revisions:
+`hermes_plugin.list_segments`. The base run reached that seam during registration and was
+held by the barrier; the test failed with the expected synchronous-history assertion.
+The candidate run passed the same module's four tests. This is an executable RED/PASS pair,
+not a claim inferred only from the prior live observation.
 
----
+The prior review reproduced two binding-window failures: a new hook claim could be emitted
+while retained history still contained a contradictory binding, and a local in-memory
+claim could disappear when another segment triggered re-aggregation. The correction keeps
+such claims pending, never returns them as verified, preserves them across unrelated
+refreshes, and either corroborates the exact retained row or leaves coverage unresolved.
+The production-boundary tests exercise both paths and verify that contradictory retained
+history is not overwritten and that an unrelated segment does not drop the pending intent.
 
-## 3. Measured startup corpus and latency
+## 5. Direct versus reused attribution
 
-Reproduction on isolated benchmark corpus matching the objective scale:
-- **Corpus scale**: 244 journal files, 76 summaries, 7 registered projects.
-- **Passive registration time**: **0.0222s** (22.2 ms) — down from 7m36s (456 seconds) observed on old behavior.
-- **Initial snapshot index build** (35 journal files for one project): **0.0863s** (86.3 ms) on background worker.
-- **Subsequent unchanged snapshot check**: **0.00145s** (1.45 ms).
-- **Synchronous hot hooks latency**:
-  - Tool callbacks: p95 <= 5.0 ms, p99 <= 20.0 ms.
-  - API request callbacks: p95 <= 5.0 ms, p99 <= 20.0 ms.
-  - Registration under reader barrier: 0.038s (bounded; does not wait for 5s barrier).
+**Direct in this correction**:
 
----
+- `src/aether_agents/observation/capture/retained_index.py`: snapshot-state/error health,
+  verified-only getters, pending binding intents, conflict preservation, and complete-snapshot
+  flush eligibility;
+- `src/aether_agents/observation/capture/hermes_plugin.py`: hook binding now distinguishes
+  verified, pending, conflicting, absent, and incomplete state; worker flushes pending
+  intents after retained validation; obsolete full-history helper readers were removed;
+- `tests/test_observation_passive_startup.py`: base-compatible RED harness and binding-window
+  regressions;
+- `tests/test_observation_cli_plugin.py`: existing hook fixtures now seed a validated empty
+  snapshot explicitly where they assert immediate durable binding behavior;
+- `specs/001-aether-v1-productization/evidence/RC6-OBS.md`: corrected portable evidence,
+  verification lane, RED receipt, and residual-risk statement.
 
-## 4. Direct versus reused attribution
+**Reused and independently rechecked**: the previously reviewed native/CLI typed error
+mapping, passive worker lifecycle, index segment parser, privacy/quarantine rules, callback
+and reduction gates, qualification constants, and the 22-callback exact-Hermes harness.
+No observation core test was added, removed, or renamed; the locked 472-node manifest and
+its mirror remain unchanged.
 
-- **Direct implementation**:
-  - `src/aether_agents/observation/capture/retained_index.py`: `RetainedIndex` class, snapshot signature caching, valid-prefix parser, incremental appends, truncation/replacement detection.
-  - `src/aether_agents/observation/capture/hermes_plugin.py`: removal of synchronous journal validation on startup/hooks; integration of asynchronous background index and bindings; elimination of un-indexed full-history rescans.
-  - `src/aether_agents/observation/capture/collector.py`: added `is_trace_materialized` query method.
-  - `src/aether_agents/observation/query.py`: `StateBusyError` and `CatchupIncompleteError` typed exception classes and catch-up handlers.
-  - `src/aether_agents/observation/brief.py`: handling of `AETHER-OBSERVE-BUSY` and `AETHER-OBSERVE-CATCHUP-INCOMPLETE`.
-  - `src/aether_agents/commands/observe.py`: handling of `STATE_BUSY` and `CATCHUP_INCOMPLETE` with exit code 6.
-  - `tests/test_observation_passive_startup.py`: 4 new direct tests covering oracles (a), (b), (c).
-  - `tests/test_observation_query_parity.py`: 4 new direct tests covering oracles (e), (f).
-- **Reused baseline**:
-  - `scripts/qualify_observation.py` core test runner and locked constants.
-  - `tests/test_observation_performance.py` (callback p95/p99 and 10k reduction budgets).
-  - `tests/test_observation_qualification.py` (51 qualification mirror tests).
-  - `tests/test_observation_cli_plugin.py` (65 existing CLI and plugin hook tests).
-  - `tests/test_observation_batch_replay_regression.py` (reconciliation and deduplication regression tests).
+## 6. Tracked manifest lines for integration
 
----
+No new tracked non-`specs/` paths were added by this review correction. The unit's existing
+new paths relative to base, which must remain literal in the integration manifest, are:
 
-## 5. Tracked file manifest changes
-
-Tracked non-`specs/` files added (report for `.github/workflows/policy.yml` update by RC6-INT):
 ```text
 src/aether_agents/observation/capture/retained_index.py
 tests/test_observation_passive_startup.py
 tests/test_observation_query_parity.py
 ```
 
-Modified tracked files:
-- `src/aether_agents/commands/observe.py`
-- `src/aether_agents/observation/brief.py`
-- `src/aether_agents/observation/capture/collector.py`
-- `src/aether_agents/observation/capture/hermes_plugin.py`
-- `src/aether_agents/observation/query.py`
+Modified paths remain within the assigned writable surface:
 
-Preserved boundaries:
-- `src/aether_agents/lifecycle.py` (untouched; owned by RC6-LIFE)
-- `src/aether_agents/cli.py` (untouched)
-- `src/aether_agents/launcher.py` (untouched; owned by RC6-LAUNCH)
-- `scripts/aether_tui.py` (untouched)
-- `tests/test_lifecycle_projections.py` (untouched)
-- `tests/test_tui_projections.py` (untouched)
-- `tests/test_observation_lifecycle.py` (untouched)
-- `tests/fixtures/observation/complete-summary.json` (untouched; regenerated by RC6-DOCS)
-- `scripts/qualify_observation.py` (constants verified and untouched)
-- `VERSION`, `CHANGELOG.md`, `README.md`, `docs/**`, `docs/capabilities.toml`, `.github/workflows/policy.yml` (untouched)
+```text
+src/aether_agents/commands/observe.py
+src/aether_agents/observation/brief.py
+src/aether_agents/observation/capture/collector.py
+src/aether_agents/observation/capture/hermes_plugin.py
+src/aether_agents/observation/query.py
+tests/test_observation_cli_plugin.py
+tests/test_observation_passive_startup.py
+```
 
----
+Preserved owner boundaries include `src/aether_agents/lifecycle.py`, `src/aether_agents/cli.py`,
+`src/aether_agents/launcher.py`, `scripts/aether_tui.py`, `docs/**`, `VERSION`,
+`.github/workflows/policy.yml`, the normative specs, and
+`tests/fixtures/observation/complete-summary.json`.
 
-## 6. Residual risk and environment limits
+## 7. Residual risk and environment limits
 
-- **Residual risk**: None identified within unit boundaries. All 668 observation tests and 472 qualification core tests pass cleanly. Synchronous hook performance and passive startup have been verified under deliberate barrier contention.
-- **Environment limits**: Tests requiring live `hermes_cli` native database reconciliation require `hermes-agent` source on `PYTHONPATH` (supplied by release checkout or isolated qualification harness `scripts/qualify_observation.py checkout`).
+- A pending native binding can remain unresolved if the worker is stopped before its next
+  complete snapshot. It is intentionally not presented as a verified binding; the bounded
+  consequence is incomplete coverage, not a false task attribution. Unload still joins the
+  plugin-owned worker within its existing two-second bound.
+- If retained segment enumeration or archive verification is unavailable, the index reports
+  `unavailable`/`incomplete`, increments a content-free health counter, and returns no
+  verified binding. A later worker cycle must reattempt validation; this is not reported as
+  a successful empty state.
+- The focused and full observation lanes use the canonical exact-Hermes runner because plain
+  pytest without the locked Hermes checkout cannot import the native `hermes_cli` boundary.
+  The exact checkout, HOME/XDG state, and temporary qualification destinations were isolated;
+  no live profile, board, gateway, TUI, credentials, provider configuration, or external
+  service was read for mutation or changed by this unit.
+- This handoff does not claim live candidate-TUI readiness, integrated lifecycle/launcher
+  compatibility, release qualification beyond the observation lane, publication, activation,
+  or aggregate objective acceptance. Supervisor owns those conclusions and the next review.
