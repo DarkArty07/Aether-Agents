@@ -6,8 +6,9 @@ widen the contract, redefine the material design in
 `specs/001-aether-v1-productization/plan-rc6.md`, or record acceptance. Card, flow and
 board identities stay on the execution board.
 
-**Derived by:** Supervisor (root task `t_6610f2a5`, flow
-`aether.flow.v1:a88871409f103f77ed209cc18e9ab9bbd17c5f69b9a8d686330b0c9e93b6c11a`).
+**Derived by:** Supervisor (root task `t_6610f2a5`; the opaque flow, task and board
+correlation identifiers stay on the execution board as native routing side data and are
+deliberately not republished in this public artifact).
 
 **Source contract:** `.aether/objective-contracts/oc_b5926701207812e8/v1.md`
 (SHA-256 `e7164c83862b747c7868706799c08ea63151ca388aa2dc2b1b89a40be33b01fc`), `status:
