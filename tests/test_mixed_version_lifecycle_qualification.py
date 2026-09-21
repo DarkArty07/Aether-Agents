@@ -25,6 +25,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -445,7 +446,11 @@ def test_scenario_result_roundtrip_from_json(entry: Any) -> None:
         harness_sha256="1234abcd" * 8,
     )
     scenario.check("AC-7/launch", "ready", "ready", "ready")
-    scenario.artifacts["pty"] = {"agent_ready_ms": 4500, "corpus_scale": {"events": 25}}
+    scenario.artifacts["pty"] = {
+        "agent_constructed_ms": 4500,
+        "construction_signal": "post_build_session_info_banner",
+        "corpus_scale": {"events": 25},
+    }
     encoded = scenario.to_json()
     assert encoded["reused"] is True
     assert encoded["harness_sha256"] == "1234abcd" * 8
@@ -457,7 +462,7 @@ def test_scenario_result_roundtrip_from_json(entry: Any) -> None:
     assert decoded.harness_sha256 == "1234abcd" * 8
     assert len(decoded.assertions) == 1
     assert decoded.assertions[0].ok is True
-    assert decoded.artifacts["pty"]["agent_ready_ms"] == 4500
+    assert decoded.artifacts["pty"]["agent_constructed_ms"] == 4500
 
 
 def test_seed_observation_corpus_populates_store(entry: Any, tmp_path: Path) -> None:
@@ -470,33 +475,108 @@ def test_seed_observation_corpus_populates_store(entry: Any, tmp_path: Path) -> 
     assert scale["digest"] is not None
 
 
-def test_detect_agent_readiness_rejects_visible_prompt_with_construction_paused(
+def test_terminal_screen_reads_ink_incremental_repaint(entry: Any) -> None:
+    """A real launch repaint stream is unreadable to a naive strip, readable on screen.
+
+    The shipped TUI repaints through Ink: only changed cells are rewritten and the cursor
+    is moved over the rest, so the concatenated stream loses characters that the terminal
+    kept from an earlier frame.  This is the exact reason the previous revision's
+    ``strip-and-search`` oracle never saw the hydrated banner: the stream carries
+    ``39 t`` + cursor-forward + ``ols``, while the painted screen carries ``39 tools``.
+    """
+
+    data = (FIXTURES / "launch-ink-hydrated-frame.bin").read_bytes()
+    text = data.decode("utf-8", "replace")
+
+    stripped = entry.strip_terminal_controls(text)
+    assert not re.search(r"(?<!\w)\d+\s+tools\b", stripped)
+    assert "39 t" in stripped
+
+    screen = entry.TerminalScreen()
+    entry.feed_terminal_screen(screen, text)
+    rendered = screen.text()
+    assert re.search(r"(?<!\w)39\s+tools\b", rendered)
+    assert re.search(r"(?<!\w)87\s+skills\b", rendered)
+    assert entry.detect_agent_construction(rendered) == (
+        True,
+        "post_build_session_info_banner",
+    )
+    banner = entry.screen_line(rendered, entry.CONSTRUCTION_TOOLS_BANNER)
+    assert banner is not None
+    assert banner.strip(" │┃") == "39 tools · 87 skills · /help for commands"
+
+
+def test_terminal_screen_lazy_frame_is_not_a_construction_signal(entry: Any) -> None:
+    """The real pre-construction frame (lazy counts) must never satisfy the measurement."""
+
+    data = (FIXTURES / "launch-ink-lazy-frame.bin").read_bytes()
+    screen = entry.TerminalScreen()
+    entry.feed_terminal_screen(screen, data.decode("utf-8", "replace"))
+    rendered = screen.text()
+    assert entry.LAZY_SESSION_BANNER.search(rendered)
+    assert "… tools · … skills · /help for commands" in rendered
+    assert entry.detect_agent_construction(rendered) == (False, None)
+
+
+def test_detect_agent_construction_rejects_paused_construction_with_title(
     entry: Any,
 ) -> None:
-    # A visible prompt glyph/placeholder while agent construction is paused
-    # (status still 'summoning hermes...', skeleton tool/skill rows) must NOT pass.
-    paused_buffer = (
-        b"\x1b[H\r\n\xe2\x94\x80 summoning hermes\xe2\x80\xa6 \xe2\x94\x82 \xe2\x94\x80 /project\r\n"
-        b'\xe2\x9d\xaf Try "/help" for commands\r\n'
-        b"\xe2\x94\x82 \xe2\x96\x81\xe2\x96\x81\xe2\x96\x81\xe2\x96\x81\xe2\x96\x81 \xe2\x94\x82\r\n"
+    """A visible prompt, an idle ``✓`` title and skeleton rows are not construction."""
+
+    paused = "\n".join(
+        (
+            "─ summoning hermes… │ ─ /project",
+            "\x1b]2;✓ stub-non-sending · /project",
+            '❯ Try "/help" for commands',
+            "│ ▁▁▁▁▁ ▁▁▁▁▁▁▁▁ │",
+            "▸ Available Skills (0)",
+            "… tools · … skills · /help for commands",
+        )
     )
-    is_ready, signal_name = entry.detect_agent_readiness(paused_buffer)
-    assert not is_ready
-    assert signal_name is None
+    assert entry.detect_agent_construction(paused) == (False, None)
 
 
-def test_detect_agent_readiness_accepts_hydrated_and_titled_state(entry: Any) -> None:
-    # Once agent construction completes, window title and/or hydrated tools arrive
-    titled_buffer = (
-        b"\x1b[H\r\n\xe2\x94\x80 ready \xe2\x94\x82 \xe2\x94\x80 /project\r\n"
-        b"\x1b]2;\xe2\x9c\x93 stub-non-sending \xc2\xb7 /project\x07\r\n"
-        b"39 tools \xc2\xb7 87 skills (and 9 more toolsets\xe2\x80\xa6)\r\n"
-        b'\xe2\x9d\xaf Try "/help" for commands\r\n'
+def test_feed_terminal_screen_applies_cursor_moves_and_erase(entry: Any) -> None:
+    """Cursor forwarding, carriage returns and erasure are applied to the painted screen."""
+
+    screen = entry.TerminalScreen(rows=2, cols=10)
+    entry.feed_terminal_screen(screen, "abc\r\x1b[2Cde")
+    assert screen.text().splitlines()[0] == "abde"
+    entry.feed_terminal_screen(screen, "\x1b[2;1Hxy\x1b[K")
+    lines = screen.text().splitlines()
+    assert lines[1].strip() == "xy"
+
+
+def test_detect_agent_construction_requires_both_counts(entry: Any) -> None:
+    """A single numeric count is not the runtime's post-build session information."""
+
+    assert entry.detect_agent_construction("39 tools · … skills · /help for commands") == (
+        False,
+        None,
     )
-    is_ready, signal_name = entry.detect_agent_readiness(titled_buffer)
-    assert is_ready
-    assert signal_name in (
-        "window_title_ready_glyph",
-        "status_chrome_ready",
-        "hydrated_tools_banner",
+    assert entry.detect_agent_construction("… tools · 87 skills · /help for commands") == (
+        False,
+        None,
     )
+
+
+def test_isolated_gateway_witnesses_report_command_lines(entry: Any, tmp_path: Path) -> None:
+    """The held-construction control records which isolated processes it stopped."""
+
+    witnesses = entry.isolated_gateway_witnesses(tmp_path / "store")
+    assert witnesses == []
+
+
+def test_title_and_session_cwd_extraction(entry: Any) -> None:
+    # Session root cwd extracted from TUI OSC title matches shortCwd format
+    output = (
+        "some terminal output\r\n"
+        "\x1b]1;✓\x07\x1b]2;✓ stub-non-sending · …qual/final-work/project\x07"
+    )
+    assert entry.extract_window_title(output) == "✓ stub-non-sending · …qual/final-work/project"
+    assert entry.extract_reported_session_cwd(output) == "…qual/final-work/project"
+    assert (
+        entry.format_expected_short_cwd("/var/tmp/rc6qual/final-work/project", 24)
+        == "…qual/final-work/project"
+    )
+    assert entry.format_expected_short_cwd("/short/path", 24) == "/short/path"

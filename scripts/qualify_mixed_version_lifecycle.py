@@ -25,7 +25,9 @@ What it proves with *real* artifacts:
   record edits, and unsupported or unprovable legacy routes refuse before mutation.
 * ``launch``          -- fresh and ``--resume latest`` packaged-launcher launches against a
   candidate installed into the isolated store, from a clean and from a deliberately
-  contaminated transport environment, with the measured time to real agent-ready.
+  contaminated transport environment, with the measured time to the runtime's post-build
+  session information (deferred agent construction complete, distinct from provider-backed
+  agent readiness) and a held-construction negative control.
 * ``docs``            -- the repository's own documentation/manifest checks plus the
   documented installed CLI forms (ambiguity, ``AETHER_PROJECT_ROOT`` override/unset).
 * ``isolation``       -- confinement witnesses for the live unit, active pointer, selector
@@ -53,6 +55,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
 import hashlib
 import json
 import os
@@ -333,7 +336,13 @@ class Isolation:
         for name, value in source.items():
             if name.startswith(("HERMES_", "AETHER_", "PYTHON", "UV_", "PIP_")):
                 continue
-            if name in ("VIRTUAL_ENV", "DBUS_SESSION_BUS_ADDRESS", "SYSTEMD_EXEC_PID"):
+            if name in (
+                "VIRTUAL_ENV",
+                "DBUS_SESSION_BUS_ADDRESS",
+                "SYSTEMD_EXEC_PID",
+                "TERMINAL_CWD",
+                "MESSAGING_CWD",
+            ):
                 continue
             environment[name] = value
         environment.update(
@@ -2572,11 +2581,88 @@ def seed_resume_session(inputs: Inputs, project: Path) -> str:
     return session_id
 
 
+def verify_dependency_closures(
+    inputs: Inputs,
+    session: Session,
+    result: ScenarioResult,
+    candidate_dir: Path,
+) -> None:
+    """Prove manager-wheel and target-runtime dependency closures independently."""
+    isolation = inputs.isolation
+    probe = (
+        "import importlib.metadata as metadata, importlib.util, json, sys; "
+        "dist = metadata.distribution('aether-agents'); "
+        "yaml_spec = importlib.util.find_spec('yaml'); "
+        "print(json.dumps({'python': sys.executable, 'requires': dist.requires or [], "
+        "'yaml_available': yaml_spec is not None, "
+        "'pyyaml_version': (metadata.version('PyYAML') if yaml_spec else None)}))"
+    )
+    closures: dict[str, dict[str, Any]] = {}
+    for kind, interpreter in (
+        ("manager", candidate_dir / "manager" / "bin" / "python"),
+        ("target_runtime", candidate_dir / "runtime" / "bin" / "python"),
+    ):
+        record = session.run(
+            f"launch-{kind}-dependency-closure",
+            [str(interpreter), "-I", "-c", probe],
+            env=isolation.environment(),
+            cwd=isolation.work_root,
+            check=False,
+        )
+        parsed = parse_json_stdout(record)
+        if record.exit_code != 0 or parsed is None:
+            raise ScenarioFailure(
+                f"{kind} dependency closure probe failed (exit {record.exit_code})"
+            )
+        closures[kind] = parsed
+    manager = closures["manager"]
+    runtime = closures["target_runtime"]
+    manager_requirements = [str(item).lower() for item in manager.get("requires", [])]
+    result.artifacts["dependency_closures"] = {
+        "manager": {
+            "declared_requirements": manager.get("requires", []),
+            "yaml_available": manager.get("yaml_available"),
+            "pyyaml_version": manager.get("pyyaml_version"),
+        },
+        "target_runtime": {
+            "declared_requirements": runtime.get("requires", []),
+            "yaml_available": runtime.get("yaml_available"),
+            "pyyaml_version": runtime.get("pyyaml_version"),
+            "locked_requirement": "pyyaml==6.0.3",
+        },
+        "launch_entry_point_closure": (
+            "the packaged launcher and the TUI it starts run under the target runtime closure "
+            "(the launch binds HERMES_PYTHON/HERMES_PYTHON_SRC_ROOT to the release's runtime, which "
+            "carries the locked PyYAML interpreter); the manager closure, which carries only the "
+            "wheel-declared jsonschema dependency, is used for lifecycle commands only"
+        ),
+    }
+    result.require(
+        "AC-7/closure: manager carries the wheel-declared jsonschema dependency",
+        True,
+        any(item == "jsonschema==4.26.0" for item in manager_requirements),
+        True,
+    )
+    result.require(
+        "AC-7/closure: manager does not carry an undeclared YAML interpreter",
+        False,
+        manager.get("yaml_available"),
+        False,
+    )
+    result.require(
+        "AC-7/closure: target runtime carries locked PyYAML",
+        "6.0.3",
+        runtime.get("pyyaml_version"),
+        "6.0.3",
+    )
+
+
 def scenario_launch(inputs: Inputs, session: Session, result: ScenarioResult) -> None:
     isolation = inputs.isolation
     candidate_dir = find_release_directory(isolation.store_root, CANDIDATE_VERSION)
     if candidate_dir is None:
         raise ScenarioFailure("the candidate release is not installed in the isolated store")
+    verify_dependency_closures(inputs, session, result, candidate_dir)
     project = isolation.project
     second_project = isolation.second_project
     if active_release_id(isolation) != candidate_dir.name:
@@ -2692,7 +2778,9 @@ def scenario_launch(inputs: Inputs, session: Session, result: ScenarioResult) ->
         ["--resume", "latest"],
     )
 
-    # contaminated transport environment: stale selectors must not reach the target.
+    # contaminated transport environment: stale selectors and hostile cwd selectors must not reach the target.
+    foreign_cwd = isolation.work_root / "foreign-cwd"
+    foreign_cwd.mkdir(parents=True, exist_ok=True)
     contaminated = isolation.environment(
         {
             "HERMES_PYTHON": "/usr/bin/python3",
@@ -2700,6 +2788,8 @@ def scenario_launch(inputs: Inputs, session: Session, result: ScenarioResult) ->
             "HERMES_UI_SESSION_ID": "stale-session",
             "HERMES_GATEWAY_URL": "http://127.0.0.1:1/stale",
             "HERMES_SESSION_ID": "stale-session",
+            "TERMINAL_CWD": str(foreign_cwd),
+            "MESSAGING_CWD": str(foreign_cwd),
         }
     )
     contaminated_report = activation(
@@ -2743,6 +2833,21 @@ def scenario_launch(inputs: Inputs, session: Session, result: ScenarioResult) ->
     )
     result.artifacts["pty_resume"] = resume_launch
 
+    # held-construction control: the same real launch path, with the isolated gateway child
+    # stopped while the prompt is already painted and the deferred build is unfinished.
+    hold_launch = pty_launch(
+        inputs,
+        session,
+        result,
+        label="launch-pty-construction-hold",
+        argv=[str(store_cli(isolation)), "--project", str(project)],
+        env=clean_env,
+        cwd=project,
+        timeout=inputs.launch_timeout,
+        hold_construction_ms=3000,
+    )
+    result.artifacts["pty_construction_hold"] = hold_launch
+
     environment = launch.get("child_environment", {})
     pty_output = launch.get("output_head", "") + launch.get("output_tail", "")
     result.artifacts["pty_reached_target_runtime"] = "Hermes" in pty_output or bool(pty_output)
@@ -2753,16 +2858,66 @@ def scenario_launch(inputs: Inputs, session: Session, result: ScenarioResult) ->
         True,
     )
     result.require(
-        "AC-7/launch: fresh PTY launch reaches agent-ready",
+        "AC-7/launch: the fresh launch observes the runtime's post-build session information "
+        "(deferred agent construction complete, not provider-backed readiness)",
         True,
-        launch.get("agent_ready_ms") is not None and launch.get("agent_ready_ms", 0) > 0,
+        launch.get("agent_constructed_ms") is not None
+        and launch.get("agent_constructed_ms", 0) > 0,
         True,
     )
     result.require(
-        "AC-7/launch: resume PTY launch reaches agent-ready",
+        "AC-7/launch: the resume launch observes the runtime's post-build session information "
+        "(deferred agent construction complete, not provider-backed readiness)",
         True,
-        resume_launch.get("agent_ready_ms") is not None
-        and resume_launch.get("agent_ready_ms", 0) > 0,
+        resume_launch.get("agent_constructed_ms") is not None
+        and resume_launch.get("agent_constructed_ms", 0) > 0,
+        True,
+    )
+    for launch_label, launch_payload in (("fresh", launch), ("resume", resume_launch)):
+        preconstruction = launch_payload.get("preconstruction_frame") or {}
+        result.artifacts[f"{launch_label}_preconstruction_frame"] = preconstruction
+        result.require(
+            f"AC-7/launch: the {launch_label} pre-construction frame (prompt painted while the "
+            "deferred build is unfinished) does not satisfy the construction measurement",
+            {"prompt_visible": True, "construction_detected": False},
+            {
+                "prompt_visible": preconstruction.get("prompt_visible"),
+                "construction_detected": preconstruction.get("construction_detected"),
+            },
+            {"prompt_visible": True, "construction_detected": False},
+        )
+        result.require(
+            f"AC-7/launch: the {launch_label} pre-construction frame precedes the measurement",
+            True,
+            preconstruction.get("ms") is not None
+            and launch_payload.get("agent_constructed_ms") is not None
+            and preconstruction.get("ms", 0) < launch_payload.get("agent_constructed_ms", 0),
+            True,
+        )
+    construction_hold = hold_launch.get("construction_hold") or {}
+    result.require(
+        "AC-7/launch: the held-construction control stopped the isolated gateway child",
+        True,
+        bool(construction_hold.get("applied")),
+        True,
+    )
+    result.require(
+        "AC-7/launch: the construction measurement cannot fire while construction is held "
+        "(prompt visible, gateway stopped)",
+        {"prompt_visible": True, "construction_detected_while_held": False},
+        {
+            "prompt_visible": construction_hold.get("prompt_visible"),
+            "construction_detected_while_held": construction_hold.get(
+                "construction_detected_while_held"
+            ),
+        },
+        {"prompt_visible": True, "construction_detected_while_held": False},
+    )
+    result.require(
+        "AC-7/launch: construction completes once the held gateway is resumed",
+        True,
+        hold_launch.get("agent_constructed_ms") is not None
+        and hold_launch.get("agent_constructed_ms", 0) > 0,
         True,
     )
     result.require(
@@ -2774,9 +2929,11 @@ def scenario_launch(inputs: Inputs, session: Session, result: ScenarioResult) ->
     result.limits.append(
         "the isolated lane uses an explicitly labelled non-sending provider fixture in the profile "
         "configuration (access_kind: isolated_stub_provider_fixture), enabling the candidate "
-        "runtime and TUI package to fully initialize without copying operator credentials or "
+        "runtime and TUI package to initialize without copying operator credentials or "
         "contacting live external endpoints; the recorded pre-live measurement is the real measured "
-        "time to interactive agent prompt readiness against a pre-seeded observation corpus; the "
+        "time to the runtime's post-build session information (deferred agent construction "
+        "complete) rendered by the shipped TUI against a pre-seeded observation corpus; this lane "
+        "does not claim provider-backed agent readiness or a successful provider turn, and the "
         "single live external provider completion belongs to RC6-CLOSE"
     )
     result.require(
@@ -2816,6 +2973,30 @@ def scenario_launch(inputs: Inputs, session: Session, result: ScenarioResult) ->
         resume_launch.get("release_tree_unchanged"),
         True,
         resume_launch.get("release_tree_unchanged"),
+    )
+
+    expected_short_cwd = format_expected_short_cwd(project, 24)
+    fresh_session_cwd = launch.get("reported_session_cwd")
+    resume_session_cwd = resume_launch.get("reported_session_cwd")
+    result.artifacts["fresh_reported_session_cwd"] = fresh_session_cwd
+    result.artifacts["resume_reported_session_cwd"] = resume_session_cwd
+    result.artifacts["foreign_cwd"] = str(foreign_cwd)
+    result.require(
+        "AC-6/U1: the fresh launch session root equals the isolated project despite contaminated cwd selectors",
+        expected_short_cwd,
+        fresh_session_cwd,
+        expected_short_cwd,
+    )
+    result.require(
+        "AC-6/U1: the resume launch session root equals the isolated project",
+        expected_short_cwd,
+        resume_session_cwd,
+        expected_short_cwd,
+    )
+    result.artifacts["residue_observation"] = (
+        "each PTY launch leaves a detached tui_gateway process after the TUI terminates; "
+        "the qualification harness sweeps them in isolation teardown and reports the residue "
+        "for the pre-live witness record"
     )
 
     # documented selection forms: override, unset-default, empty refusal, ambiguity.
@@ -2878,37 +3059,212 @@ def scenario_launch(inputs: Inputs, session: Session, result: ScenarioResult) ->
     )
 
 
-def detect_agent_readiness(buffer: bytes | bytearray) -> tuple[bool, str | None]:
-    """Detect whether the PTY output has reached real interactive agent readiness.
+def format_expected_short_cwd(path: Path | str, max_len: int = 24) -> str:
+    """Format expected short cwd as the TUI shortCwd helper does."""
+    p = str(Path(path).resolve())
+    if len(p) <= max_len:
+        return p
+    return f"…{p[-(max_len - 1) :]}"
 
-    A visible prompt glyph or placeholder alone precedes agent construction (the
-    status line still shows 'summoning hermes...' with skeleton rows while the
-    background build thread discovers tools and configures the agent). Real readiness
-    requires that the agent has finished construction and hydrated the session chrome.
+
+def extract_window_title(output: str) -> str | None:
+    """Extract the last OSC window title emitted by the TUI."""
+    titles = re.findall(r"\x1b\][012];([^\x07\x1b]+)(?:\x07|\x1b\\)", output)
+    return titles[-1] if titles else None
+
+
+def extract_reported_session_cwd(output: str) -> str | None:
+    """Extract the session cwd displayed in the TUI window title."""
+    title = extract_window_title(output)
+    if not title:
+        return None
+    # Tab title format: marker + " " + [sessionTitle, model, cwd].join(" · ")
+    # When sessionTitle is empty: marker + " " + model + " · " + cwd
+    parts = [p.strip() for p in title.split("·")]
+    if len(parts) >= 2:
+        return parts[-1]
+    return None
+
+
+def find_isolated_gateway_pids(store_root: Path) -> list[int]:
+    """Find any running tui_gateway processes spawned from this isolated store."""
+    pids: list[int] = []
+    store_str = str(store_root.resolve())
+    for p in Path("/proc").glob("[0-9]*"):
+        try:
+            cmdline = (p / "cmdline").read_bytes().decode("utf-8", "replace")
+            if "tui_gateway" in cmdline and store_str in cmdline:
+                pids.append(int(p.name))
+        except (OSError, ValueError):
+            continue
+    return pids
+
+
+def strip_terminal_controls(output: str) -> str:
+    """Remove ANSI CSI/OSC controls so rendered text can be inspected safely.
+
+    Retained as the *naive* reference the screen model replaces: it concatenates whatever
+    was written and therefore cannot recover characters Ink left unpainted, which is why
+    a rendered line must be read from :class:`TerminalScreen` instead.
     """
-    buf = bytes(buffer)
-    prompt_visible = b'Try "/help"' in buf or b"\xe2\x9d\xaf" in buf or b'Try "' in buf
-    if not prompt_visible:
-        return False, None
+    output = re.sub(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)", "", output)
+    output = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", output)
+    return output.replace("\r", "")
 
-    # Signals that prove agent construction completed:
-    # 1. Window title escape set to idle with the ready checkmark: '\x1b]2;✓' or '\x1b]1;✓'
-    if b"\x1b]2;\xe2\x9c\x93" in buf or b"\x1b]1;\xe2\x9c\x93" in buf:
-        return True, "window_title_ready_glyph"
 
-    # 2. Status line updated to '─ ready'
-    if b"\xe2\x94\x80 ready" in buf or b"- ready" in buf:
-        return True, "status_chrome_ready"
+def isolated_gateway_witnesses(store_root: Path) -> list[dict[str, Any]]:
+    """The isolated ``tui_gateway`` children of this launch, with their command lines."""
 
-    # 3. Toolsets and skills hydrated in the intro banner (replacing skeleton ShimmerRows)
-    if (
-        re.search(rb"\d+\s*tools\s*[\xc2\xb7\xb7\x2e\x2d]\s*\d+\s*skills", buf)
-        or b"toolsets\xe2\x80\xa6)" in buf
-        or b"toolsets...)" in buf
+    store = str(store_root.resolve())
+    witnesses: list[dict[str, Any]] = []
+    for pid in find_isolated_gateway_pids(store_root):
+        try:
+            cmdline = (
+                (Path("/proc") / str(pid) / "cmdline")
+                .read_bytes()
+                .decode("utf-8", "replace")
+                .replace("\0", " ")
+                .strip()
+            )
+        except OSError:
+            continue
+        witnesses.append({"pid": pid, "cmdline": cmdline, "in_store": store in cmdline})
+    return witnesses
+
+
+CSI_SEQUENCE = re.compile(r"\x1b\[([0-9;?]*)([ -/]*)([@-~])")
+OSC_SEQUENCE = re.compile(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
+
+
+class TerminalScreen:
+    """A minimal terminal model, so the *painted screen* can be read back.
+
+    The shipped TUI renders through Ink, which repaints by rewriting only the cells
+    that changed and moving the cursor over the rest.  Concatenating the raw stream
+    after stripping escape sequences therefore *loses* characters that were painted
+    earlier and left untouched, so a repainted line cannot be recognized from the
+    stripped stream (a painted ``39 tools`` can arrive as ``39 tols``).  The screen
+    is reconstructed here by applying printable text and cursor controls in order.
+    """
+
+    def __init__(self, rows: int = 24, cols: int = 80) -> None:
+        self.rows = rows
+        self.cols = cols
+        self.grid: list[list[str]] = [[" "] * cols for _ in range(rows)]
+        self.row = 0
+        self.col = 0
+
+    def _put(self, character: str) -> None:
+        if self.col >= self.cols:
+            self.col = self.cols - 1
+        if 0 <= self.row < self.rows:
+            self.grid[self.row][self.col] = character
+        self.col += 1
+
+    def write(self, text: str) -> None:
+        for character in text:
+            if character == "\r":
+                self.col = 0
+            elif character == "\n":
+                self.row = min(self.rows - 1, self.row + 1)
+            elif character == "\b":
+                self.col = max(0, self.col - 1)
+            elif character == "\t":
+                self.col = min(self.cols - 1, (self.col // 8 + 1) * 8)
+            elif character >= " ":
+                self._put(character)
+
+    def erase(self, mode: int) -> None:
+        if mode == 2:
+            self.grid = [[" "] * self.cols for _ in range(self.rows)]
+        elif mode == 0:
+            for column in range(self.col, self.cols):
+                self.grid[self.row][column] = " "
+            for row in range(self.row + 1, self.rows):
+                self.grid[row] = [" "] * self.cols
+
+    def column(self, first: int) -> None:
+        self.col = max(0, min(self.cols - 1, first - 1))
+
+    def move(self, code: str, count: int) -> None:
+        if code == "A":
+            self.row = max(0, self.row - count)
+        elif code == "B":
+            self.row = min(self.rows - 1, self.row + count)
+        elif code == "C":
+            self.col = min(self.cols - 1, self.col + count)
+        elif code == "D":
+            self.col = max(0, self.col - count)
+
+    def position(self, row: int, column: int) -> None:
+        self.row = max(0, min(self.rows - 1, row - 1))
+        self.col = max(0, min(self.cols - 1, column - 1))
+
+    def text(self) -> str:
+        return "\n".join("".join(row).rstrip() for row in self.grid)
+
+
+def feed_terminal_screen(screen: TerminalScreen, text: str) -> None:
+    """Apply one decoded PTY chunk to the screen model (CSI/OSC aware)."""
+
+    index = 0
+    while index < len(text):
+        character = text[index]
+        if character != "\x1b":
+            screen.write(character)
+            index += 1
+            continue
+        osc = OSC_SEQUENCE.match(text, index)
+        if osc:
+            index = osc.end()
+            continue
+        csi = CSI_SEQUENCE.match(text, index)
+        if csi is None:
+            index += 1
+            continue
+        params, _, final = csi.groups()
+        numbers = [int(part) for part in params.split(";") if part.isdigit()]
+        if final in ("H", "f"):
+            screen.position(numbers[0] if numbers else 1, numbers[1] if len(numbers) > 1 else 1)
+        elif final in ("A", "B", "C", "D"):
+            screen.move(final, numbers[0] if numbers else 1)
+        elif final == "G":
+            screen.column(numbers[0] if numbers else 1)
+        elif final in ("J", "K"):
+            screen.erase(numbers[0] if numbers else 0)
+        index = csi.end()
+
+
+# The runtime's deferred build ends with ``info = _session_info(agent, current)`` and
+# ``_emit("session.info", sid, info)`` (tui_gateway/server.py, end of ``_start_agent_build``).
+# ``_session_info`` fills ``tools``/``skills`` only when a real agent exists, while the lazy
+# ``session.create`` response always carries empty ``tools``/``skills`` with ``lazy: true``.
+# The shipped TUI paints those empty counts as ``... tools . ... skills`` and paints numeric
+# counts only from the later, post-build session information, so a numeric banner cannot
+# appear before the agent object has been constructed.
+CONSTRUCTION_TOOLS_BANNER = re.compile(r"(?<!\w)\d+\s+tools\b")
+CONSTRUCTION_SKILLS_BANNER = re.compile(r"(?<!\w)\d+\s+skills\b")
+LAZY_SESSION_BANNER = re.compile(r"\u2026\s*tools")
+PROMPT_VISIBLE = re.compile(r'Try "|\u276f|\u276f Ask')
+
+
+def detect_agent_construction(screen_text: str) -> tuple[bool, str | None]:
+    """Detect the runtime's post-build session information on the painted screen."""
+
+    if CONSTRUCTION_TOOLS_BANNER.search(screen_text) and CONSTRUCTION_SKILLS_BANNER.search(
+        screen_text
     ):
-        return True, "hydrated_tools_banner"
-
+        return True, "post_build_session_info_banner"
     return False, None
+
+
+def screen_line(screen_text: str, pattern: re.Pattern[str]) -> str | None:
+    """The first painted line matching ``pattern`` (a receipt frame excerpt)."""
+
+    for line in screen_text.splitlines():
+        if pattern.search(line):
+            return line.strip()
+    return None
 
 
 def pty_launch(
@@ -2921,8 +3277,20 @@ def pty_launch(
     env: dict[str, str],
     cwd: Path,
     timeout: int,
+    hold_construction_ms: int = 0,
 ) -> dict[str, Any]:
-    """Launch through a real PTY and measure the time to observable agent readiness."""
+    """Launch through a real PTY and measure the runtime's post-build session information.
+
+    The measured signal is painted by the shipped TUI from the *post-build* ``session.info``
+    the runtime emits after its deferred agent construction finishes: the numeric
+    ``N tools / M skills`` counts.  Before that, the TUI paints the lazy form (``... tools``)
+    taken from the ``session.create`` response, which never carries counts.  No provider turn
+    is served in this lane, so this measurement is *not* provider-backed agent readiness.
+
+    ``hold_construction_ms`` (a held-construction control) stops the isolated gateway child
+    with SIGSTOP as soon as the prompt is painted and the deferred build has not completed,
+    verifies the measurement cannot fire while construction is held, then resumes it.
+    """
 
     isolation = inputs.isolation
     before_tree = tree_identity(isolation.store_root / "runtime" / "current" / "tui")
@@ -2966,8 +3334,12 @@ def pty_launch(
     os.close(slave)
     observed: list[dict[str, Any]] = []
     buffer = bytearray()
-    ready_at: float | None = None
-    readiness_signal: str | None = None
+    screen = TerminalScreen()
+    constructed_at: float | None = None
+    construction_signal: str | None = None
+    ready_screen: dict[str, Any] | None = None
+    preconstruction: dict[str, Any] | None = None
+    construction_hold: dict[str, Any] | None = None
     child_environment: dict[str, str] = {}
     observation_event_at: float | None = None
     try:
@@ -2980,6 +3352,7 @@ def pty_launch(
                     chunk = b""
                 if chunk:
                     buffer.extend(chunk)
+                    feed_terminal_screen(screen, chunk.decode("utf-8", "replace"))
                     if not any(s["signal"] == "first_pty_output" for s in observed):
                         observed.append(
                             {
@@ -3026,8 +3399,9 @@ def pty_launch(
                         }
                     )
 
+            screen_text = screen.text()
             if not any(s["signal"] == "composer_visible" for s in observed):
-                if b'Try "/help"' in buffer or b"\xe2\x9d\xaf" in buffer or b'Try "' in buffer:
+                if PROMPT_VISIBLE.search(screen_text):
                     observed.append(
                         {
                             "signal": "composer_visible",
@@ -3035,16 +3409,72 @@ def pty_launch(
                         }
                     )
 
-            is_ready, signal_name = detect_agent_readiness(buffer)
-            if is_ready and signal_name:
-                ready_at = time.time() - started
-                readiness_signal = signal_name
+            # Negative control from the same real launch: the deferred build is still running
+            # and the TUI paints the lazy form only, which must not satisfy the measurement.
+            if preconstruction is None and LAZY_SESSION_BANNER.search(screen_text):
+                lazy_ready, _ = detect_agent_construction(screen_text)
+                preconstruction = {
+                    "ms": int((time.time() - started) * 1000),
+                    "banner_line": screen_line(screen_text, LAZY_SESSION_BANNER),
+                    "prompt_visible": bool(PROMPT_VISIBLE.search(screen_text)),
+                    "construction_detected": lazy_ready,
+                    "screen_sha256": sha256_bytes(screen_text.encode("utf-8")),
+                }
+
+            # Held-construction control: stop the isolated gateway child while the prompt is
+            # already painted and the deferred build is unfinished, then prove the measurement
+            # stays false, then resume it (test controller, explicitly recorded witnesses).
+            if (
+                hold_construction_ms
+                and construction_hold is None
+                and preconstruction is not None
+                and preconstruction.get("prompt_visible")
+                and constructed_at is None
+            ):
+                witnesses: list[dict[str, Any]] = []
+                for entry in isolated_gateway_witnesses(isolation.store_root):
+                    try:
+                        os.kill(int(entry["pid"]), signal.SIGSTOP)
+                    except OSError:
+                        continue
+                    witnesses.append({**entry, "stopped": True})
+                hold_started = time.time()
+                detected_while_held = False
+                while (time.time() - hold_started) * 1000 < hold_construction_ms:
+                    time.sleep(0.1)
+                    detected_while_held = (
+                        detected_while_held or detect_agent_construction(screen.text())[0]
+                    )
+                held_screen = screen.text()
+                for entry in witnesses:
+                    with contextlib.suppress(OSError):
+                        os.kill(int(entry["pid"]), signal.SIGCONT)
+                construction_hold = {
+                    "applied": bool(witnesses),
+                    "held_ms": hold_construction_ms,
+                    "witnesses": witnesses,
+                    "construction_detected_while_held": detected_while_held,
+                    "banner_line": screen_line(held_screen, LAZY_SESSION_BANNER),
+                    "prompt_visible": bool(PROMPT_VISIBLE.search(held_screen)),
+                    "screen_sha256": sha256_bytes(held_screen.encode("utf-8")),
+                }
                 observed.append(
                     {
-                        "signal": readiness_signal,
-                        "ms": int(ready_at * 1000),
+                        "signal": "construction_hold_released",
+                        "ms": int((time.time() - started) * 1000),
                     }
                 )
+
+            constructed, signal_name = detect_agent_construction(screen_text)
+            if constructed and signal_name:
+                constructed_at = time.time() - started
+                construction_signal = signal_name
+                ready_screen = {
+                    "banner_line": screen_line(screen_text, CONSTRUCTION_TOOLS_BANNER),
+                    "status_line": screen_line(screen_text, re.compile(r"ready")),
+                    "screen_sha256": sha256_bytes(screen_text.encode("utf-8")),
+                }
+                observed.append({"signal": construction_signal, "ms": int(constructed_at * 1000)})
                 break
 
             if process.poll() is not None:
@@ -3058,6 +3488,13 @@ def pty_launch(
                 process.kill()
                 process.wait(timeout=5)
         os.close(master)
+        # Terminate any detached tui_gateway child processes spawned by this launch; a held
+        # gateway is resumed first so a stopped process never survives the harness.
+        for pid in find_isolated_gateway_pids(isolation.store_root):
+            with contextlib.suppress(OSError):
+                os.kill(pid, signal.SIGCONT)
+            with contextlib.suppress(OSError):
+                os.kill(pid, signal.SIGTERM)
 
     output = buffer.decode("utf-8", "replace")
     after_release = {}
@@ -3075,8 +3512,11 @@ def pty_launch(
         "argv": argv,
         "exit_code": process.returncode,
         "elapsed_ms": int((time.time() - started) * 1000),
-        "readiness_signal": readiness_signal,
-        "agent_ready_ms": None if ready_at is None else int(ready_at * 1000),
+        "construction_signal": construction_signal,
+        "agent_constructed_ms": None if constructed_at is None else int(constructed_at * 1000),
+        "ready_screen": ready_screen,
+        "preconstruction_frame": preconstruction,
+        "construction_hold": construction_hold,
         "observed_signals": observed,
         "child_environment_identity": environment_identity,
         "child_environment": {
@@ -3098,6 +3538,8 @@ def pty_launch(
         ),
         "tui_tree": after_tree,
         "corpus_scale": observation_scale(isolation),
+        "reported_session_cwd": extract_reported_session_cwd(output),
+        "window_title": extract_window_title(output),
     }
     session.commands.append(
         Recorded(
@@ -3113,7 +3555,7 @@ def pty_launch(
             environment_identity=environment_identity,
         )
     )
-    result.artifacts[f"{label}_signal"] = readiness_signal
+    result.artifacts[f"{label}_signal"] = construction_signal
     return payload
 
 
@@ -3857,28 +4299,28 @@ def render_summary(record: dict[str, Any]) -> str:
             f"{scenario['scenario']:<16} {scenario['status']:<8} "
             f"{len(scenario['assertions']):<12} {detail[:110]}"
         )
-    agent_ready: list[tuple[str, int | None, Any]] = []
+    prompt_ready: list[tuple[str, int | None, Any]] = []
     for scenario in record["scenarios"]:
         pty_info = scenario.get("artifacts", {}).get("pty")
-        if isinstance(pty_info, dict) and "agent_ready_ms" in pty_info:
-            agent_ready.append(
+        if isinstance(pty_info, dict) and "agent_constructed_ms" in pty_info:
+            prompt_ready.append(
                 (
                     f"{scenario['scenario']}-fresh",
-                    pty_info.get("agent_ready_ms"),
+                    pty_info.get("agent_constructed_ms"),
                     pty_info.get("corpus_scale"),
                 )
             )
         pty_resume_info = scenario.get("artifacts", {}).get("pty_resume")
-        if isinstance(pty_resume_info, dict) and "agent_ready_ms" in pty_resume_info:
-            agent_ready.append(
+        if isinstance(pty_resume_info, dict) and "agent_constructed_ms" in pty_resume_info:
+            prompt_ready.append(
                 (
                     f"{scenario['scenario']}-resume",
-                    pty_resume_info.get("agent_ready_ms"),
+                    pty_resume_info.get("agent_constructed_ms"),
                     pty_resume_info.get("corpus_scale"),
                 )
             )
-    for name, ready, corpus in agent_ready:
-        lines.append(f"agent-ready ({name}): {ready} ms, corpus {corpus}")
+    for name, ready, corpus in prompt_ready:
+        lines.append(f"agent-constructed ({name}): {ready} ms, corpus {corpus}")
     lines.append("")
     lines.append(f"receipts: {record['run_id']}")
     return "\n".join(lines) + "\n"
