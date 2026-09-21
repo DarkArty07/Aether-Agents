@@ -29,6 +29,8 @@ __all__ = [
     "TraceAmbiguousError",
     "TraceNotFoundError",
     "StateUnreadableError",
+    "StateBusyError",
+    "CatchupIncompleteError",
     "SummaryNotFoundError",
     "load_previous_summary",
     "load_summary",
@@ -54,8 +56,8 @@ def _ingest_for_query(paths: ObservationPaths) -> None:
     )
     if report.incomplete:
         if report.lock_timed_out:
-            raise StateUnreadableError("observation catch-up unavailable: maintenance lock busy")
-        raise StateUnreadableError(
+            raise StateBusyError("observation catch-up unavailable: maintenance lock busy")
+        raise CatchupIncompleteError(
             "observation catch-up incomplete; committed progress retained for the next query"
         )
 
@@ -94,6 +96,14 @@ class TraceAmbiguousError(ObservationQueryError):
 class StateUnreadableError(ObservationQueryError):
     """Local observation state exists but could not be read (I/O failure, missing
     reduction modules, or an unexpected internal error)."""
+
+
+class StateBusyError(StateUnreadableError):
+    """Observation catch-up unavailable because maintenance lock is busy."""
+
+
+class CatchupIncompleteError(StateUnreadableError):
+    """Observation catch-up deadline exceeded before all events were ingested."""
 
 
 class SummaryNotFoundError(ObservationQueryError):
@@ -231,7 +241,7 @@ def resolve_trace(paths: ObservationPaths, ref: str | None) -> str:
 
     try:
         _ingest_for_query(paths)
-    except StateUnreadableError:
+    except (StateUnreadableError, StateBusyError, CatchupIncompleteError):
         raise
     except Exception as exc:
         raise StateUnreadableError(
@@ -300,7 +310,7 @@ def load_summary(paths: ObservationPaths, trace_id: str, *, ingest: bool = True)
         if ingest:
             _ingest_for_query(paths)
         return reduce_trace(paths, trace_id)
-    except StateUnreadableError:
+    except (StateUnreadableError, StateBusyError, CatchupIncompleteError):
         raise
     except Exception as exc:
         raise StateUnreadableError(

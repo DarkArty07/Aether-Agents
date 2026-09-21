@@ -179,6 +179,14 @@ def observe(args: dict[str, Any], *, profile_name: str) -> dict[str, Any]:
         ) from None
     except query.TraceNotFoundError:
         raise BriefError("AETHER-OBSERVE-TRACE-NOT-FOUND", "no trace matches ref") from None
+    except query.StateBusyError:
+        raise BriefError(
+            "AETHER-OBSERVE-BUSY", "observation catch-up unavailable: maintenance lock busy"
+        ) from None
+    except query.CatchupIncompleteError:
+        raise BriefError(
+            "AETHER-OBSERVE-CATCHUP-INCOMPLETE", "observation catch-up incomplete"
+        ) from None
     except query.StateUnreadableError:
         raise BriefError(
             "AETHER-OBSERVE-STATE-UNREADABLE", "observation state is unreadable"
@@ -196,6 +204,14 @@ def observe(args: dict[str, Any], *, profile_name: str) -> dict[str, Any]:
             value = _changes(summary, previous)
     except query.SummaryNotFoundError:
         raise BriefError("AETHER-OBSERVE-SINCE-NOT-FOUND", "prior summary was not found") from None
+    except query.StateBusyError:
+        raise BriefError(
+            "AETHER-OBSERVE-BUSY", "observation catch-up unavailable: maintenance lock busy"
+        ) from None
+    except query.CatchupIncompleteError:
+        raise BriefError(
+            "AETHER-OBSERVE-CATCHUP-INCOMPLETE", "observation catch-up incomplete"
+        ) from None
     except query.StateUnreadableError:
         raise BriefError(
             "AETHER-OBSERVE-STATE-UNREADABLE", "observation state is unreadable"

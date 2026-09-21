@@ -237,6 +237,10 @@ class Collector:
         """Mark a retained trace as materialized in this process without emitting."""
         self._materialized.add(trace_id)
 
+    def is_trace_materialized(self, trace_id: str) -> bool:
+        """Return True if trace_id is known/materialized in this collector."""
+        return trace_id in self._materialized
+
     def emit(self, event: dict[str, Any]) -> AppendOutcome:
         """Append one already-projected event. Never raises."""
         critical = event.get("event_type") in CRITICAL_EVENT_TYPES
