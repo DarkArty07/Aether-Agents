@@ -385,7 +385,9 @@ This unit continues RC6-LAUNCH / -2 / -3 on base **`d45daabe844f8a4e2a6548471932
 RC6-LAUNCH-3 tip; the dispatcher-created worktree started from the repository's main tip and was reset to that
 base before any edit). It changes the *mechanism* by which `terminal.cwd` is interpreted; it does not change
 what the alignment check means. Mechanism commit: **`c77e9d75b8f7b6b0a67d8aa1975f4f1674e54e89`**; the commit
-carrying this section adds only this section.
+carrying this section adds only this section. A later evidence-only commit restates the §8.9 boundary bullet
+after the review of this candidate (run 55): no source, test or measurement changes — only the description of
+which environments the gate supports was wrong.
 
 ### 8.1 Steward disposition and its verified grounds
 
@@ -537,12 +539,33 @@ provider, every one of those forms refuses with the stable message.
 
 ### 8.9 Boundary and residual risk carried by this change
 
-- **The gate now needs a verifiable target runtime in every mode.** `--check` and `--json` refuse (exit 2)
-  when the selected runtime's interpreter cannot be verified or provides no YAML interpreter, where they
-  previously produced a plan. That is the intended strictness of this unit, and it is a *supported-route*
-  statement the integration unit must carry: the projected `aether` entry point runs from the release runtime
-  venv, which carries the pinned provider; a manager-only environment can no longer render a plan, and it
-  fails loudly instead of silently.
+- **The gate needs a verifiable *selected runtime*, not a YAML interpreter in the launcher's own
+  environment.** The grammar comes from the selected runtime, so the launcher's own environment may be the
+  manager closure (the wheel plus its declared dependencies alone, with no YAML interpreter) and that is
+  *supported* whenever a valid selected runtime supplies the grammar — verified end-to-end on a disposable
+  qualification lane and on the live installation with `--json` (read-only, non-mutating). Refusal is raised
+  only when the selected interpreter cannot be resolved/verified **or** the selected runtime provides no YAML
+  interpreter; in those cases `--check` and `--json` refuse (exit 2) instead of reporting an unverified
+  absence, where they previously produced a plan. That is the strictness change this unit introduces — it
+  applies to the unverifiable case, not to the launcher's own dependency closure — and the projected `aether`
+  entry point in the release runtime venv, which carries the pinned provider, remains the supported launch
+  route.
+
+  Measurements behind that boundary statement (candidate `ae939f7ee6dccf843a8e85dc6e6ac584673e98fd`, mechanism
+  `c77e9d75b8f7b6b0a67d8aa1975f4f1674e54e89`; observed with this candidate code during the independent review
+  of it, run 55):
+
+  | Observation | Result |
+  |---|---|
+  | launcher launched by a **no-YAML** interpreter (the rc5 manager closure) on a disposable qualification lane | exit 0, `ready` plan — the manager closure renders a plan because the grammar comes from the *selected runtime*, not from the launcher's own environment |
+  | the same no-YAML launcher interpreter against the live installation with `--json` (**read-only, non-mutating**) | exit 0, `ready` plan naming the live release runtime, TUI directory and project binding |
+  | function level, target interpreter with no YAML provider | `ActivationError`: `Morfeo terminal.cwd cannot be verified: the selected Hermes runtime provides no YAML interpreter (no YAML interpreter is importable in the target runtime)` — stable message, no `ModuleNotFoundError` text, no traceback (this case is also covered by this unit's own `…::test_rc6_launch4_absent_yaml_interpreter_refuses_visibly`) |
+
+  The manager-closure half of that statement is also covered by this unit's own regression
+  `…::test_rc6_launch4_manager_closure_interprets_terminal_cwd_via_target_runtime`, which launches the
+  installed console script from a closure it asserts has no YAML interpreter and requires exit 0 (launch
+  proceeds) for a binding that names the project and exit 2 for a contradictory one.
+
 - **Deliberate abstention kept**: an unreadable or unparseable profile document is still *not* a launcher
   refusal class — the runtime surfaces its own error for those bytes. Unreadable files are unreachable in
   practice because the required-toolsets read of the same file precedes the gate and refuses first.
