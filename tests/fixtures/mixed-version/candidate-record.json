@@ -1,7 +1,7 @@
 {
  "aether_identity": {
   "distribution": "aether-agents",
-  "git_commit": "3dbde1e413a4d4846cd7361b625c3f41ea49af07",
+  "git_commit": "f59900a99837d6efefc7bc3140e89fa287f18b4f",
   "git_tag": "v1.0.0-rc.6",
   "observer": {
    "group": "hermes_agent.plugins",
@@ -36,14 +36,14 @@
    }
   ],
   "schema_version": "aether.authority-context.v1",
-  "source": "active_release:1.0.0rc6-051c7cb5b0bf5fd3"
+  "source": "active_release:1.0.0rc6-c8ac4dd255ed4a64"
  },
  "hermes_branch": "aether-main",
  "hermes_commit": "aed6591a69f453a1867b73628603e7b53ba40ffc",
  "hermes_repository": "https://github.com/DarkArty07/aether-hermes",
  "hermes_source_tree_sha256": "cc1ebf94ad167979951e7b956ef3a8c448e96fd3389c93cddf60f8f883bb5ce7",
  "hermes_tag": "aether-main",
- "installed_file_fingerprint": "39ef2c2eec89c90a11a5e84da1664227b12f04999d55f59e6082192401c1435a",
+ "installed_file_fingerprint": "ba4f763750336947d657d837c6204a3037bfbd1f84c27ad637059bfb54d3c8df",
  "observation_compatibility": {
   "event_read_versions": [
    "aether.observation.event.v1"
@@ -65,12 +65,12 @@
   "target": "aether_agents.observation.capture.hermes_plugin"
  },
  "observer_entry_point": "aether-contract-observer=aether_agents.observation.capture.hermes_plugin",
- "prebuild_identity": "2ab54dce6e6e8d40ef78a88ec60d452211967d72abde72d26d08500d2bdc7bd7",
+ "prebuild_identity": "91c1b706a9f6f352e4250f8d58935968717962804f3426e964d9a290792acb69",
  "previous_release_id": "1.0.0rc5-40d506a4117229ad",
- "release_id": "1.0.0rc6-051c7cb5b0bf5fd3",
+ "release_id": "1.0.0rc6-c8ac4dd255ed4a64",
  "schema_version": 3,
  "tui_sha256": "f56f6225d9124376eedec1834d372c76a33292aedc41021cc13d6c3b32a05643",
  "version": "1.0.0rc6",
  "wheel_filename": "aether_agents-1.0.0rc6-py3-none-any.whl",
- "wheel_sha256": "051c7cb5b0bf5fd357c2eac6f79f7c8bfb1d2cad7c06b68b36d795eb801f9aa0"
+ "wheel_sha256": "c8ac4dd255ed4a64fd3788259d528e2cbfe80d73a9e2e8ace5d9268e73ca219a"
 }

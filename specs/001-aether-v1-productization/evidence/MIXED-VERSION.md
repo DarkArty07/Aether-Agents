@@ -5,7 +5,7 @@
 `d2874c2f3fc839a82fbaa96ece6edebab3856298`.
 
 **Status:** direct qualification evidence for D2 / AC-3 and the pre-live half of AC-7, produced
-against the composed candidate revision on a disposable, isolated installation. This is unit-level
+against the recomposed candidate revision on a disposable, isolated installation. This is unit-level
 evidence: integrated verification, the local-only annotated tag, and the live activation belong to
 RC6-INT and RC6-CLOSE.
 
@@ -24,6 +24,7 @@ uv run --frozen python scripts/qualify_mixed_version_lifecycle.py run \
     [--bundle-dir <release-bundle directory>]   # unqualified corroboration only, see Findings
     --work-root <disposable work root> \
     --receipts-root <durable private receipts root> \
+    --run-id rc6qual-final \
     --scenarios all --json
 ```
 
@@ -40,11 +41,12 @@ sanitized scenario → command → result table, digests and limits.
 | RC6-LAUNCH | `c79f5b147ae0c4f52c606978ff0bf3e82c5096fb` |
 | RC6-OBS-2 | `05eed2dc07eed294dc131b36817c18ef13d1290e` |
 | RC6-DOCS | `80ce317809d4413a718b3fec412c543b17e2c3ab` |
+| RC6-LIFE-2 | `6941594ee4e2c09a463181e6a64376cdd28151b7` |
 
-Merge order RC6-LIFE → RC6-OBS → RC6-LAUNCH → RC6-OBS-2 → RC6-DOCS on the contract base; every
-unit-authored blob in the composition is byte-identical to its reviewed tip. Composed commit
-`3dbde1e413a4d4846cd7361b625c3f41ea49af07`, tree
-`ccf753d8482e0dd1d2384c45513d45b6f2e52641`, `VERSION` `1.0.0rc6`. The composition is reproducible
+Merge order RC6-LIFE → RC6-OBS → RC6-LAUNCH → RC6-OBS-2 → RC6-DOCS → RC6-LIFE-2 on the contract base;
+every unit-authored blob in the composition is byte-identical to its reviewed tip. Recomposed commit
+`f59900a99837d6efefc7bc3140e89fa287f18b4f`, tree
+`90eff5151e9f8cfd3bbcc3d15287f0ba2446c7c5`, `VERSION` `1.0.0rc6`. The composition is reproducible
 from the recorded heads and merge order alone.
 
 ## Installed lane under test
@@ -59,7 +61,7 @@ project/board registry and every `HERMES_KANBAN_*` variable):
   starts from them.
 * rc5 — the exact `ee0aa036…` release installed by the shipped `setup` route from its own
   authenticated wheel and release lock.
-* candidate `1.0.0rc6-051c7cb5b0bf5fd3` — built from the composed revision by the product's own
+* candidate `1.0.0rc6-c8ac4dd255ed4a64` — built from the recomposed revision by the product's own
   local-candidate builder and promoted into the same store **by the rc5 manager** (the
   mixed-version hop), then rolled back and re-activated.
 
@@ -67,33 +69,34 @@ project/board registry and every `HERMES_KANBAN_*` variable):
 
 | Scenario | Representative command (generic paths) | Observed | Assertions | Receipt (private) |
 | --- | --- | --- | --- | --- |
-| prepare | `aether setup --wheel <rc5 wheel> --hermes-checkout <fork> --release-lock <rc5 lock> --yes --json`; release-copy verification | exact rc5 active, selector inside the isolated store, copies byte-identical | 3 | `run.json` `a2ce5896…` |
-| cycle | `aether update --wheel <promotion wheel> --release-lock <promotion lock> --yes`; `aether rollback --yes`; `aether update 1.0.0rc6 --yes`; blocked-projection transition; three SIGKILL interruptions; rollback repair | rc5 → candidate → rc5 → candidate, pointer byte-exact against each target's own record, no false success, no pending half-state | 34 | `scenarios/cycle.json` `3e5ccb34…` |
-| frozen-readers | frozen rc3 interpreter: `ReleaseRecord.from_json` on the post-rc4 pointer, the null-field variant, the corrected writer's pointer and its own record | rc3 reader rejects the post-rc4 shape (with a real value **and** with `null`), accepts its own generation and accepts the corrected writer's target-owned record | 10 | `scenarios/frozen-readers.json` `d358dcee…` |
-| frozen-writer | frozen rc4 interpreter planning projections for a successor record; corrected source asking each target for its own plan | rc4 brands a successor with the legacy `hermes.desktop` shape; each target answers for its own identity with branded bytes | 5 | `scenarios/frozen-writer.json` `0f089f59…` |
-| legacy | rc4 writer applying its projections to the managed destinations; `reconcile --to active` preview and apply; `reconcile --to installed`; unprovable-target refusal | preview non-mutating, apply finishes the handoff (`projections_reconciled: 1`, zero mismatches) with the release record byte-identical, unsupported mode refused, unprovable target refused before mutation | 14 | `scenarios/legacy.json` `e8015377…` |
-| launch | packaged selector `aether --project <project> [--resume latest] --check --json` in clean and contaminated environments; fresh and resume PTY launches | exact target backend/TUI/project/Morfeo profile bound; stale `HERMES_PYTHON`, `HERMES_PYTHON_SRC_ROOT`, session selectors neither used nor forwarded; fresh and resume reach agent prompt ready against seeded corpus; release tree unchanged | 20 | `scenarios/launch.json` `d9b95a4d…` |
-| docs | repository `check_documentation.py`, usage/documentation pytest modules, installed `aether version --json` | green; installed CLI reports `1.0.0rc6` | 3 | `scenarios/docs.json` `a209c4a2…` |
-| isolation | guard refusal subprocess, split-root and transport-leak checks, live witnesses, service boundary | live work root refused with exit 2; no operator root, board variable, D-Bus socket or credential inherited; live unit/pointer/selector/operator config unchanged; disabled service controller | 7 | `scenarios/isolation.json` `38f5fa07…` |
+| prepare | `aether setup --wheel <rc5 wheel> --hermes-checkout <fork> --release-lock <rc5 lock> --yes --json`; release-copy verification | exact rc5 active, selector inside the isolated store, copies byte-identical | 3 | `run.json` `664eeb09…` |
+| cycle | `aether update --wheel <promotion wheel> --release-lock <promotion lock> --yes`; `aether rollback --yes`; `aether update 1.0.0rc6 --yes`; blocked-projection transition; three SIGKILL interruptions; rollback repair | rc5 → candidate → rc5 → candidate, pointer byte-exact against each target's own record, no false success, no pending half-state | 34 | `scenarios/cycle.json` `eb61c8ce…` |
+| frozen-readers | frozen rc3 interpreter: `ReleaseRecord.from_json` on the post-rc4 pointer, the null-field variant, the corrected writer's pointer and its own record | rc3 reader rejects the post-rc4 shape (with a real value **and** with `null`), accepts its own generation and accepts the corrected writer's target-owned record | 10 | `scenarios/frozen-readers.json` `ab2a0cca…` |
+| frozen-writer | frozen rc4 interpreter planning projections for a successor record; corrected source asking each target for its own plan | rc4 brands a successor with the legacy `hermes.desktop` shape; each target answers for its own identity with branded bytes | 5 | `scenarios/frozen-writer.json` `5612a3dd…` |
+| legacy | rc4 writer applying projections; direct non-manager execution refusal (`RECONCILE_REFUSED`, exit 4); projected launcher route dispatches to active manager (exit 0 `planned`); release runtime dispatches to active manager (exit 0 `planned`); manager preview (exit 0 `planned`); apply via projected launcher (exit 0 `changed`, `projections_reconciled: 1`); post-apply idempotency (exit 0 `no_change`); unsupported modes refused (`--to installed` and missing `--to`, exit 3); unprovable-target refusal | direct non-manager execution refuses before mutation; projected launcher and release runtime dispatch to active manager; preview non-mutating; apply finishes the handoff (`projections_reconciled: 1`, zero mismatches) without record edits; post-apply reports `no_change`; unsupported modes refused before bootstrap; unprovable target refused before mutation | 19 | `scenarios/legacy.json` `080024e6…` |
+| launch | packaged selector `aether --project <project> [--resume latest] --check --json` in clean and contaminated environments; fresh and resume PTY launches | exact target backend/TUI/project/Morfeo profile bound; stale `HERMES_PYTHON`, `HERMES_PYTHON_SRC_ROOT`, session selectors neither used nor forwarded; fresh and resume reach interactive agent prompt readiness against seeded corpus; release tree unchanged | 20 | `scenarios/launch.json` `9a24a566…` |
+| docs | repository `check_documentation.py`, usage/documentation pytest modules, manifest oracle on `test_public_artifacts.py` | documentation checks clean; test modules pass; manifest oracle records expected absence | 3 | `scenarios/docs.json` `dc8e3582…` |
+| isolation | guard refusal subprocess, split-root and transport-leak checks, live witnesses, service boundary | live work root refused with exit 2; no operator root, board variable, D-Bus socket or credential inherited; live unit/pointer/selector/operator config unchanged; disabled service controller | 7 | `scenarios/isolation.json` `dc35d844…` |
 
-Run-level facts: exit `0`, 96 assertions, 56 recorded commands, environment identity `8ae12e16…`.
-Each scenario receipt records its own commands with argv, cwd, exit status, timing,
-stdout/stderr digests and the isolation-relevant environment digest.
+Run-level facts: exit `0`, 101 assertions, 61 recorded commands, elapsed 322 382 ms, environment identity `8ae12e16…`.
+Every scenario ran fresh in this single decisive invocation (`reused scenarios: none`); every receipt records
+its producing harness SHA-256 (`0df3c90980d11504eca458d24c7e643a836c9867cae88dd86ae8a719bde6f30d`), argv,
+cwd, exit status, timing, stdout/stderr digests and the isolation-relevant environment digest.
 
 ## Installed launch measurement
 
 | Quantity | Value |
 | --- | --- |
 | Launch path | packaged selector → `runtime/current/venv/bin/aether` → release runtime (`hermes --tui --in <project>`) |
-| Bound backend | `<store>/releases/1.0.0rc6-051c7cb5b0bf5fd3/runtime/bin/python` and `…/runtime/bin/hermes` |
+| Bound backend | `<store>/releases/1.0.0rc6-c8ac4dd255ed4a64/runtime/bin/python` and `…/runtime/bin/hermes` |
 | Bound profile / project | `<store>/state/aether/hermes/profiles/morfeo`, the isolated managed project |
 | Access kind | `isolated_stub_provider_fixture` (disposable non-sending stub in Morfeo profile `config.yaml`; no operator credentials copied, no external network requests) |
-| Fresh PTY launch (contaminated env) | first output 283 ms, **agent prompt ready 1083 ms** (signal `agent_prompt_ready`) |
-| Resume PTY launch (`--resume latest`) | first output 307 ms, **agent prompt ready 1193 ms** (signal `agent_prompt_ready`, active session file 1141 ms) |
-| Corpus identity/scale at launch | segments 4, events 25, digest `adaa88a77ab34236795ef1ba80675e824b49c2be20ff88fec29374098a6cbffc` (pre-seeded in isolated store) |
+| Fresh PTY launch (contaminated env) | first output 266 ms, composer visible 995 ms, **agent prompt ready 3421 ms** (signal `window_title_ready_glyph`, active session file 3421 ms) |
+| Resume PTY launch (`--resume latest`) | first output 273 ms, composer visible 1012 ms, **agent prompt ready 2085 ms** (signal `window_title_ready_glyph`, active session file 2085 ms) |
+| Corpus identity/scale at launch | segments 2, events 25, digest `da9094937c8f01b7ae13b6f41f754a9ece7ae3131a0ab0a3996a8b3ec3716355` (pre-seeded in isolated store) |
 | Release tree after launch | unchanged (`tui` tree digest and `release.json` `tui_sha256` identical before/after for both launches) |
 | Locked source digest | `cc1ebf94ad167979951e7b956ef3a8c448e96fd3389c93cddf60f8f883bb5ce7` unchanged |
-| Agent-ready verification | **reached and verified in this lane**: the candidate runtime and TUI package fully initialize under the isolated non-sending provider fixture; both fresh and resume launches reach interactive prompt readiness (`❯Try "/help" for commands`). The single live provider completion belongs to RC6-CLOSE. |
+| Agent-ready verification | **reached and verified in this lane**: the candidate runtime and TUI package fully initialize under the isolated non-sending provider fixture; both fresh and resume launches reach interactive prompt readiness (`❯ Try ...` with terminal title set to `✓ stub-non-sending` and session active file written). Negative unit tests verify that a visible prompt with paused construction does NOT pass. The single live provider completion belongs to RC6-CLOSE. |
 
 No npm/build step runs at launch (the release tree is witnessed unchanged), and neither the
 project nor the profile is guessed: two projects in the registry produce a visible ambiguity
@@ -107,7 +110,8 @@ The pre-live gate for this objective is assembled from two revision-bound lanes:
 1. **This unit (RC6-QUAL)** — the exact-version, isolated, mixed-version lifecycle qualification:
    defect reproductions with frozen readers/writers, the rc5 → candidate → rc5 → candidate cycle
    with compensation and interruption invariants, the legacy handoff and its refusals, the
-   installed launch binding and the confinement witnesses. Receipts:
+   reconcile entry-point matrix across projected launcher and release runtime, the installed launch
+   binding with real agent readiness, and the confinement witnesses. Receipts:
    `<receipts-root>/rc6qual-final/` (digests above).
 2. **The observation lane (RC6-OBS / RC6-OBS-2)** — registration/hook behavior under a paused
    historical scanner, retained-index scale, and native/CLI parity; owned and evidence-bound by
@@ -129,13 +133,11 @@ re-run by this entry. Aggregate gates, the tag and the live window remain RC6-IN
    tag must dereference to the locked commit. The accepted rc5 lock carries no such tag. Neither
    defect is on the authorized delivery path; a future owner-authorized publication objective owns
    their fix.
-3. `aether reconcile --to active` cannot be reached through the shipped projected launcher: that
-   launcher runs the release *runtime*, while the command's authority proof requires the executing
-   interpreter to be the active release's *manager* environment, and `reconcile` is not among the
-   commands the CLI redispatches into the active manager. The handoff repair itself is qualified
-   here from the active release's own manager environment (receipt
-   `scenarios/legacy.json`); the launcher-route refusal is recorded verbatim in the same receipt and
-   is reported, not asserted green. Reported for the reconcile surface owner.
+3. `aether reconcile --to active` is fully reachable through the projected launcher and release
+   runtime entry points in the candidate, as routed by RC6-LIFE-2 and verified in `scenario_legacy`
+   (exit 0 `planned`, `manager_version: 1.0.0rc6`, applied `changed` with `projections_reconciled: 1`,
+   and post-apply `no_change`). Direct non-manager execution continues to refuse before mutation
+   (exit 4 `RECONCILE_REFUSED`), which is verified as the historical and boundary reproduction.
 
 For any supplied `--bundle-dir` the entry records only unqualified corroboration (identity,
 refusal log, digest inequality) and never treats it as a qualified bundle.
@@ -161,15 +163,18 @@ those three lines. `tests/test_mixed_version_lifecycle_qualification.py` is alre
 
 ## Attribution
 
-**Direct test evidence (this unit):** every row of the scenario table, the composed-revision
-record, the installed-lane identity (copy verification, release ids, wheel/lock digests), the
-launch measurements and the confinement witnesses.
+**Direct test evidence (this unit):** ALL 8 rows of the scenario table in the decisive single-invocation
+run (`reused scenarios: none`, elapsed 322 382 ms, 101 assertions), the recomposed candidate revision
+record (`f59900a9` / tree `90eff515`), the installed-lane identity (`1.0.0rc6-c8ac4dd255ed4a64`, wheel
+`c8ac4dd2…`), the launch measurements (fresh 3421 ms, resume 2085 ms against seeded corpus, title `✓`),
+and the confinement witnesses.
 
 **Reused evidence (unchanged artifact identity):** the observation lane's retained-corpus and
-native-parity receipts (`RC6-OBS.md`, `scripts/qualify_observation.py` at the same composed
+native-parity receipts (`RC6-OBS.md`, `scripts/qualify_observation.py` at the candidate
 revision); the frozen predecessor releases' own authenticated artifacts from the read-only
 installation (their identities re-verified here, not re-derived); the accepted maintained-fork
-checkout identity (`aed6591a…`, tree `cc1ebf94…`).
+checkout identity (`aed6591a…`, tree `cc1ebf94…`). No scenario rows were carried over from earlier
+invocations (`reused: none`).
 
 **Not claimed:** qualified release bundle, aggregate release conclusion, integrated candidate
 gates, tag, publication, activation or any live effect.

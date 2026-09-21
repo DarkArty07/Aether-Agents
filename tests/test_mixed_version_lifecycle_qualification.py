@@ -438,14 +438,23 @@ def test_project_paths_stay_inside_the_work_root(entry: Any, tmp_path: Path) -> 
 
 
 def test_scenario_result_roundtrip_from_json(entry: Any) -> None:
-    scenario = entry.ScenarioResult(name="launch", scope="launch-scope")
+    scenario = entry.ScenarioResult(
+        name="launch",
+        scope="launch-scope",
+        reused=True,
+        harness_sha256="1234abcd" * 8,
+    )
     scenario.check("AC-7/launch", "ready", "ready", "ready")
     scenario.artifacts["pty"] = {"agent_ready_ms": 4500, "corpus_scale": {"events": 25}}
     encoded = scenario.to_json()
+    assert encoded["reused"] is True
+    assert encoded["harness_sha256"] == "1234abcd" * 8
     decoded = entry.ScenarioResult.from_json(encoded)
     assert decoded.name == scenario.name
     assert decoded.scope == scenario.scope
     assert decoded.status == "passed"
+    assert decoded.reused is True
+    assert decoded.harness_sha256 == "1234abcd" * 8
     assert len(decoded.assertions) == 1
     assert decoded.assertions[0].ok is True
     assert decoded.artifacts["pty"]["agent_ready_ms"] == 4500
@@ -459,3 +468,35 @@ def test_seed_observation_corpus_populates_store(entry: Any, tmp_path: Path) -> 
     assert scale["segments"] >= 1
     assert scale["events"] >= 20
     assert scale["digest"] is not None
+
+
+def test_detect_agent_readiness_rejects_visible_prompt_with_construction_paused(
+    entry: Any,
+) -> None:
+    # A visible prompt glyph/placeholder while agent construction is paused
+    # (status still 'summoning hermes...', skeleton tool/skill rows) must NOT pass.
+    paused_buffer = (
+        b"\x1b[H\r\n\xe2\x94\x80 summoning hermes\xe2\x80\xa6 \xe2\x94\x82 \xe2\x94\x80 /project\r\n"
+        b'\xe2\x9d\xaf Try "/help" for commands\r\n'
+        b"\xe2\x94\x82 \xe2\x96\x81\xe2\x96\x81\xe2\x96\x81\xe2\x96\x81\xe2\x96\x81 \xe2\x94\x82\r\n"
+    )
+    is_ready, signal_name = entry.detect_agent_readiness(paused_buffer)
+    assert not is_ready
+    assert signal_name is None
+
+
+def test_detect_agent_readiness_accepts_hydrated_and_titled_state(entry: Any) -> None:
+    # Once agent construction completes, window title and/or hydrated tools arrive
+    titled_buffer = (
+        b"\x1b[H\r\n\xe2\x94\x80 ready \xe2\x94\x82 \xe2\x94\x80 /project\r\n"
+        b"\x1b]2;\xe2\x9c\x93 stub-non-sending \xc2\xb7 /project\x07\r\n"
+        b"39 tools \xc2\xb7 87 skills (and 9 more toolsets\xe2\x80\xa6)\r\n"
+        b'\xe2\x9d\xaf Try "/help" for commands\r\n'
+    )
+    is_ready, signal_name = entry.detect_agent_readiness(titled_buffer)
+    assert is_ready
+    assert signal_name in (
+        "window_title_ready_glyph",
+        "status_chrome_ready",
+        "hydrated_tools_banner",
+    )

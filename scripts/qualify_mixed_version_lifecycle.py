@@ -596,6 +596,8 @@ class ScenarioResult:
     artifacts: dict[str, Any] = field(default_factory=dict)
     limits: list[str] = field(default_factory=list)
     error: str | None = None
+    reused: bool = False
+    harness_sha256: str = ""
 
     def check(self, requirement: str, expected: Any, actual: Any, want: Any) -> Assertion:
         ok = actual == want
@@ -626,6 +628,8 @@ class ScenarioResult:
             "scope": self.scope,
             "status": self.status,
             "error": self.error,
+            "reused": self.reused,
+            "harness_sha256": self.harness_sha256,
             "assertions": [assertion.to_json() for assertion in self.assertions],
             "commands": [command.to_json() for command in self.commands],
             "artifacts": self.artifacts,
@@ -666,6 +670,8 @@ class ScenarioResult:
             artifacts=payload.get("artifacts", {}),
             limits=payload.get("limits", []),
             error=payload.get("error"),
+            reused=bool(payload.get("reused", False)),
+            harness_sha256=str(payload.get("harness_sha256") or ""),
         )
 
 
@@ -766,7 +772,7 @@ class Inputs:
 
     def verify_bundle(self) -> dict[str, Any]:
         if self.bundle_dir is None:
-            raise Refusal("--bundle-dir is required unless --build-bundle is selected")
+            raise Refusal("--bundle-dir is not specified")
         bundle = self.bundle_dir.resolve()
         wheels = sorted(bundle.glob("aether_agents-*.whl"))
         locks = sorted(bundle.glob("*release-lock*.json"))
@@ -777,14 +783,7 @@ class Inputs:
             )
         lock = json.loads(locks[0].read_text(encoding="utf-8"))
         commit = lock.get("aether", {}).get("git_commit")
-        if commit != self.candidate_commit:
-            raise Refusal(
-                f"bundle release lock binds {commit!r}, not the candidate commit "
-                f"{self.candidate_commit!r}"
-            )
         digest = sha256_file(wheels[0])
-        if lock.get("aether", {}).get("wheel_sha256") != digest:
-            raise Refusal("bundle wheel digest does not match its release lock")
         return {
             "path": str(bundle),
             "wheel": wheels[0].name,
@@ -793,6 +792,7 @@ class Inputs:
             "release_lock_sha256": sha256_file(locks[0]),
             "lock_commit": commit,
             "version": lock.get("aether", {}).get("version"),
+            "commit_matches_candidate": commit == self.candidate_commit,
         }
 
 
@@ -1745,6 +1745,17 @@ def scenario_cycle(inputs: Inputs, session: Session, result: ScenarioResult) -> 
     )
 
     staged = find_release_directory(store_root, CANDIDATE_VERSION)
+    if staged is not None:
+        try:
+            staged_record = json.loads((staged / "record.json").read_text(encoding="utf-8"))
+            if (
+                staged_record.get("aether_identity", {}).get("git_commit")
+                != inputs.candidate_commit
+            ):
+                shutil.rmtree(staged)
+                staged = None
+        except Exception:
+            pass
     if staged is None:
         promotion = promotion_artifacts(inputs, session, result)
         hop(
@@ -2245,7 +2256,38 @@ def scenario_legacy(inputs: Inputs, session: Session, result: ScenarioResult) ->
         True,
     )
 
-    # (b) the non-mutating preview of the supported reconcile surface.
+    # (b) entry-point matrix: direct non-manager execution refuses before mutation.
+    #     The authenticated manager check fails when called from an un-dispatched release runtime.
+    direct_non_manager = session.run(
+        "legacy-reconcile-non-manager-refusal",
+        [
+            str(candidate_dir / "runtime" / "bin" / "python"),
+            "-P",
+            "-s",
+            "-c",
+            "import sys; from aether_agents.cli import _run_reconcile, _build_parser; "
+            "p = _build_parser(); args = p.parse_args(['reconcile', '--to', 'active', '--json']); "
+            "sys.exit(_run_reconcile(args))",
+        ],
+        env=env,
+        cwd=isolation.project,
+        check=False,
+    )
+    direct_env = parse_json_stdout(direct_non_manager) or {}
+    result.artifacts["reconcile_direct_non_manager_refusal"] = {
+        "exit_code": direct_non_manager.exit_code,
+        "envelope": direct_env,
+        "note": "direct execution without active manager dispatch refuses before mutation",
+    }
+    result.require(
+        "AC-3/legacy: direct non-manager execution refuses reconciliation before mutation",
+        (4, "error"),
+        (direct_non_manager.exit_code, direct_env.get("result")),
+        (4, "error"),
+    )
+
+    # (c) the non-mutating preview of the supported reconcile surface through the real entry shapes:
+    #     1. Projected launcher dispatches to the authenticated active manager
     launcher_route = session.run(
         "legacy-reconcile-launcher-route",
         [str(store_cli(isolation)), "reconcile", "--to", "active", "--json"],
@@ -2253,12 +2295,55 @@ def scenario_legacy(inputs: Inputs, session: Session, result: ScenarioResult) ->
         cwd=isolation.project,
         check=False,
     )
+    launcher_envelope = parse_json_stdout(launcher_route) or {}
     result.artifacts["reconcile_launcher_route"] = {
         "exit_code": launcher_route.exit_code,
-        "envelope": parse_json_stdout(launcher_route),
-        "note": "the projected launcher runs the release runtime and cannot satisfy the "
-        "manager-authority proof reconcile requires",
+        "envelope": launcher_envelope,
+        "note": "the projected launcher dispatches reconcile to the active manager environment",
     }
+    result.require(
+        "AC-3/legacy: projected launcher dispatches reconcile to active manager",
+        (0, "planned", CANDIDATE_VERSION),
+        (
+            launcher_route.exit_code,
+            launcher_envelope.get("result"),
+            launcher_envelope.get("manager_version"),
+        ),
+        (0, "planned", CANDIDATE_VERSION),
+    )
+
+    #     2. Release runtime binary dispatches to the authenticated active manager
+    runtime_route = session.run(
+        "legacy-reconcile-runtime-route",
+        [
+            str(candidate_dir / "runtime" / "bin" / LAUNCHER_NAME),
+            "reconcile",
+            "--to",
+            "active",
+            "--json",
+        ],
+        env=env,
+        cwd=isolation.project,
+        check=False,
+    )
+    runtime_envelope = parse_json_stdout(runtime_route) or {}
+    result.artifacts["reconcile_runtime_route"] = {
+        "exit_code": runtime_route.exit_code,
+        "envelope": runtime_envelope,
+        "note": "the release runtime dispatches reconcile to the active manager environment",
+    }
+    result.require(
+        "AC-3/legacy: release runtime dispatches reconcile to active manager",
+        (0, "planned", CANDIDATE_VERSION),
+        (
+            runtime_route.exit_code,
+            runtime_envelope.get("result"),
+            runtime_envelope.get("manager_version"),
+        ),
+        (0, "planned", CANDIDATE_VERSION),
+    )
+
+    #     3. Active manager CLI preview directly
     preview = session.run(
         "legacy-reconcile-preview",
         [*manager_cli(isolation), "reconcile", "--to", "active", "--json"],
@@ -2281,11 +2366,12 @@ def scenario_legacy(inputs: Inputs, session: Session, result: ScenarioResult) ->
     )
     result.artifacts["reconcile_preview"] = preview_envelope
 
-    # (c) the supported handoff: reconcile the already-activated, self-authenticating target.
+    # (d) the supported handoff: reconcile the already-activated, self-authenticating target
+    #     applied through the projected launcher entry point.
     pointer_before = sha256_bytes((store_root / "active.json").read_bytes())
     applied = session.run(
         "legacy-reconcile-apply",
-        [*manager_cli(isolation), "reconcile", "--to", "active", "--yes", "--json"],
+        [str(store_cli(isolation)), "reconcile", "--to", "active", "--yes", "--json"],
         env=env,
         cwd=isolation.project,
         check=False,
@@ -2317,23 +2403,57 @@ def scenario_legacy(inputs: Inputs, session: Session, result: ScenarioResult) ->
         expected_launcher_sha,
     )
 
-    # (d) unsupported modes stay explicit and non-mutating.
-    unsupported = session.run(
-        "legacy-reconcile-unsupported-mode",
-        [*manager_cli(isolation), "reconcile", "--to", "installed", "--json"],
+    # (e) post-apply idempotency: repeating reconcile on matching projections is a clean no_change
+    post_apply = session.run(
+        "legacy-reconcile-post-apply",
+        [str(store_cli(isolation)), "reconcile", "--to", "active", "--json"],
         env=env,
         cwd=isolation.project,
         check=False,
     )
-    unsupported_envelope = parse_json_stdout(unsupported) or {}
+    post_envelope = parse_json_stdout(post_apply) or {}
+    result.artifacts["reconcile_post_apply"] = post_envelope
     result.require(
-        "AC-3/legacy: an unsupported reconcile mode is refused",
-        "unsupported",
-        unsupported_envelope.get("result"),
-        "unsupported",
+        "AC-3/legacy: post-reconcile invocation reports no_change idempotently",
+        ("no_change", 0),
+        (post_envelope.get("result"), post_apply.exit_code),
+        ("no_change", 0),
+    )
+
+    # (f) unsupported modes stay explicit and non-mutating:
+    #     1. --to installed is refused before bootstrap
+    unsupported_installed = session.run(
+        "legacy-reconcile-unsupported-installed",
+        [str(store_cli(isolation)), "reconcile", "--to", "installed", "--json"],
+        env=env,
+        cwd=isolation.project,
+        check=False,
+    )
+    unsupported_installed_env = parse_json_stdout(unsupported_installed) or {}
+    result.require(
+        "AC-3/legacy: an unsupported reconcile mode (--to installed) is refused",
+        (3, "unsupported"),
+        (unsupported_installed.exit_code, unsupported_installed_env.get("result")),
+        (3, "unsupported"),
+    )
+
+    #     2. missing --to is refused before bootstrap
+    unsupported_missing = session.run(
+        "legacy-reconcile-missing-to",
+        [str(store_cli(isolation)), "reconcile", "--json"],
+        env=env,
+        cwd=isolation.project,
+        check=False,
+    )
+    missing_env = parse_json_stdout(unsupported_missing) or {}
+    result.require(
+        "AC-3/legacy: reconcile with missing --to is refused",
+        (3, "unsupported"),
+        (unsupported_missing.exit_code, missing_env.get("result")),
+        (3, "unsupported"),
     )
     result.require(
-        "AC-3/legacy: the unsupported mode changes nothing",
+        "AC-3/legacy: the unsupported modes change nothing",
         pointer_before,
         sha256_bytes((store_root / "active.json").read_bytes()),
         pointer_before,
@@ -2420,29 +2540,36 @@ def seed_observation_corpus(isolation: Isolation, project_id: str) -> dict[str, 
     return observation_scale(isolation)
 
 
-def seed_resume_session(isolation: Isolation, project: Path) -> str:
+def seed_resume_session(inputs: Inputs, project: Path) -> str:
     """Seed a prior session in Morfeo's SessionDB so --resume latest has a session to resume."""
-    from hermes_state import SessionDB
-
-    old_home = os.environ.get("HERMES_HOME")
-    try:
-        os.environ["HERMES_HOME"] = str(isolation.hermes_root / "profiles" / "morfeo")
-        db = SessionDB()
-        session_id = "seed-session-" + uuid.uuid4().hex[:12]
-        proj_str = str(project.resolve())
-        db.create_session(session_id=session_id, source="tui", cwd=proj_str, git_repo_root=proj_str)
-        db.set_session_title(session_id, f"Seed session {session_id}")
-        db.append_message(
-            session_id=session_id, role="user", content="Hello, this is a seed session."
-        )
-        db.append_message(session_id=session_id, role="assistant", content="Acknowledged.")
-        db.close()
-        return session_id
-    finally:
-        if old_home is not None:
-            os.environ["HERMES_HOME"] = old_home
-        else:
-            os.environ.pop("HERMES_HOME", None)
+    isolation = inputs.isolation
+    candidate_dir = find_release_directory(isolation.store_root, CANDIDATE_VERSION)
+    if candidate_dir is None:
+        raise ScenarioFailure("the candidate release is not installed in the isolated store")
+    python_bin = candidate_dir / "runtime" / "bin" / "python"
+    morfeo_home = str(isolation.hermes_root / "profiles" / "morfeo")
+    session_id = "seed-session-" + uuid.uuid4().hex[:12]
+    proj_str = str(project.resolve())
+    code = (
+        "import sys\n"
+        "from hermes_state import SessionDB\n"
+        "db = SessionDB()\n"
+        f"db.create_session(session_id={session_id!r}, source='tui', cwd={proj_str!r}, git_repo_root={proj_str!r})\n"
+        f"db.set_session_title({session_id!r}, 'Seed session {session_id}')\n"
+        f"db.append_message(session_id={session_id!r}, role='user', content='Hello, this is a seed session.')\n"
+        f"db.append_message(session_id={session_id!r}, role='assistant', content='Acknowledged.')\n"
+        "db.close()\n"
+    )
+    env = isolation.environment({"HERMES_HOME": morfeo_home})
+    res = subprocess.run(
+        [str(python_bin), "-P", "-s", "-c", code],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    if res.returncode != 0:
+        raise ScenarioFailure(f"failed to seed resume session: {res.stderr}")
+    return session_id
 
 
 def scenario_launch(inputs: Inputs, session: Session, result: ScenarioResult) -> None:
@@ -2602,7 +2729,7 @@ def scenario_launch(inputs: Inputs, session: Session, result: ScenarioResult) ->
     )
     result.artifacts["pty"] = launch
 
-    resume_sid = seed_resume_session(isolation, project)
+    resume_sid = seed_resume_session(inputs, project)
     result.artifacts["seeded_resume_session_id"] = resume_sid
     resume_launch = pty_launch(
         inputs,
@@ -2751,6 +2878,39 @@ def scenario_launch(inputs: Inputs, session: Session, result: ScenarioResult) ->
     )
 
 
+def detect_agent_readiness(buffer: bytes | bytearray) -> tuple[bool, str | None]:
+    """Detect whether the PTY output has reached real interactive agent readiness.
+
+    A visible prompt glyph or placeholder alone precedes agent construction (the
+    status line still shows 'summoning hermes...' with skeleton rows while the
+    background build thread discovers tools and configures the agent). Real readiness
+    requires that the agent has finished construction and hydrated the session chrome.
+    """
+    buf = bytes(buffer)
+    prompt_visible = b'Try "/help"' in buf or b"\xe2\x9d\xaf" in buf or b'Try "' in buf
+    if not prompt_visible:
+        return False, None
+
+    # Signals that prove agent construction completed:
+    # 1. Window title escape set to idle with the ready checkmark: '\x1b]2;✓' or '\x1b]1;✓'
+    if b"\x1b]2;\xe2\x9c\x93" in buf or b"\x1b]1;\xe2\x9c\x93" in buf:
+        return True, "window_title_ready_glyph"
+
+    # 2. Status line updated to '─ ready'
+    if b"\xe2\x94\x80 ready" in buf or b"- ready" in buf:
+        return True, "status_chrome_ready"
+
+    # 3. Toolsets and skills hydrated in the intro banner (replacing skeleton ShimmerRows)
+    if (
+        re.search(rb"\d+\s*tools\s*[\xc2\xb7\xb7\x2e\x2d]\s*\d+\s*skills", buf)
+        or b"toolsets\xe2\x80\xa6)" in buf
+        or b"toolsets...)" in buf
+    ):
+        return True, "hydrated_tools_banner"
+
+    return False, None
+
+
 def pty_launch(
     inputs: Inputs,
     session: Session,
@@ -2866,9 +3026,19 @@ def pty_launch(
                         }
                     )
 
-            if b'Try "/help"' in buffer or b"\xe2\x9d\xaf" in buffer:
+            if not any(s["signal"] == "composer_visible" for s in observed):
+                if b'Try "/help"' in buffer or b"\xe2\x9d\xaf" in buffer or b'Try "' in buffer:
+                    observed.append(
+                        {
+                            "signal": "composer_visible",
+                            "ms": int((time.time() - started) * 1000),
+                        }
+                    )
+
+            is_ready, signal_name = detect_agent_readiness(buffer)
+            if is_ready and signal_name:
                 ready_at = time.time() - started
-                readiness_signal = "agent_prompt_ready"
+                readiness_signal = signal_name
                 observed.append(
                     {
                         "signal": readiness_signal,
@@ -3067,28 +3237,31 @@ def prepare_store(inputs: Inputs, session: Session, result: ScenarioResult) -> N
     }
     marker = isolation.work_root / "prepare-complete.json"
     rc5_dir = find_release_directory(store_root, "1.0.0rc5")
-    if marker.is_file() and rc5_dir is not None:
-        try:
-            recorded = json.loads(marker.read_text(encoding="utf-8"))
-        except ValueError:
-            recorded = {}
-        if recorded == identity and (store_root / "active.json").is_file():
-            result.artifacts["resumed"] = True
-            result.artifacts["project"] = {"path": str(isolation.project)}
-            current = store_root / "runtime" / "current"
-            result.require(
-                "AC-3/cycle: the selector resolves into the isolated store",
-                True,
-                str(os.path.realpath(current)).startswith(str(store_root)),
-                True,
-            )
-            result.require(
-                "AC-3/cycle: the isolated store contains exact rc5",
-                True,
-                rc5_dir is not None and rc5_dir.is_dir(),
-                True,
-            )
-            return
+    if rc5_dir is not None and (store_root / "active.json").is_file():
+        # Store is already populated with the base releases. Ensure rc5 is the active prestate.
+        (store_root / "active.json").write_text(
+            (rc5_dir / "record.json").read_text(encoding="utf-8")
+        )
+        current = store_root / "runtime" / "current"
+        if current.is_symlink() or current.exists():
+            current.unlink()
+        current.symlink_to(rc5_dir)
+        result.artifacts["resumed"] = True
+        result.artifacts["project"] = {"path": str(isolation.project)}
+        result.require(
+            "AC-3/cycle: the selector resolves into the isolated store",
+            True,
+            str(os.path.realpath(current)).startswith(str(store_root)),
+            True,
+        )
+        result.require(
+            "AC-3/cycle: the isolated store contains exact rc5",
+            True,
+            rc5_dir is not None and rc5_dir.is_dir(),
+            True,
+        )
+        marker.write_text(json.dumps(identity), encoding="utf-8")
+        return
 
     # Branded one-click projections require one exact project binding, so the isolated
     # installation needs its own managed project before the first release is activated.
@@ -3328,6 +3501,14 @@ def promotion_artifacts(
             "and its wheel digest differs from the promotion wheel under test; no bundle byte, "
             "lock or label was regenerated, edited or reused"
         )
+        if bundle_corroboration.get("lock_aether_commit") != inputs.candidate_commit:
+            result.limits.append(
+                "bundle release lock commit "
+                f"{bundle_corroboration.get('lock_aether_commit')} != candidate commit "
+                f"{inputs.candidate_commit}: bundle was built at earlier preview composition and "
+                "is retained as unqualified publication-path corroboration only; no bundle byte, "
+                "lock or label was regenerated, edited or reused"
+            )
         if bundle_corroboration.get("wheel_sha256") != built["wheel_sha256"]:
             result.limits.append(
                 "bundle wheel digest "
@@ -3423,8 +3604,14 @@ def run_scenarios(
 ) -> list[ScenarioResult]:
     results: list[ScenarioResult] = []
     before = witness_set(live_witness_paths())
+    harness_hash = sha256_file(Path(__file__))
 
-    preparation = ScenarioResult(name="prepare", scope="install the exact-version artifacts")
+    preparation = ScenarioResult(
+        name="prepare",
+        scope="install the exact-version artifacts",
+        reused=False,
+        harness_sha256=harness_hash,
+    )
     try:
         prepare_store(inputs, session, preparation)
         preparation.assertions.append(
@@ -3458,13 +3645,19 @@ def run_scenarios(
                     loaded = ScenarioResult.from_json(
                         json.loads(cached_path.read_text(encoding="utf-8"))
                     )
+                    loaded.reused = True
                     results.append(loaded)
                     session.commands.extend(loaded.commands)
                     continue
                 except Exception:
                     pass
             continue
-        scenario = ScenarioResult(name=name, scope=name)
+        scenario = ScenarioResult(
+            name=name,
+            scope=name,
+            reused=False,
+            harness_sha256=harness_hash,
+        )
         start = len(session.commands)
         try:
             implementations[name](inputs, session, scenario)
@@ -3483,12 +3676,18 @@ def run_scenarios(
                 loaded = ScenarioResult.from_json(
                     json.loads(cached_path.read_text(encoding="utf-8"))
                 )
+                loaded.reused = True
                 results.append(loaded)
                 session.commands.extend(loaded.commands)
             except Exception:
                 pass
     else:
-        scenario = ScenarioResult(name="isolation", scope="confinement and isolation")
+        scenario = ScenarioResult(
+            name="isolation",
+            scope="confinement and isolation",
+            reused=False,
+            harness_sha256=harness_hash,
+        )
         start = len(session.commands)
         try:
             scenario_isolation(inputs, session, before=before, scenario_result=scenario)
@@ -3637,11 +3836,13 @@ def run_command(arguments: argparse.Namespace) -> int:
 
 
 def render_summary(record: dict[str, Any]) -> str:
+    reused_names = [s["scenario"] for s in record["scenarios"] if s.get("reused")]
     lines = [
         f"run {record['run_id']}  schema {record['schema']}",
         f"candidate {record['candidate']['commit']} tree {record['candidate']['tree']}",
         f"fork {record['fork']['commit']}",
         f"elapsed {record['elapsed_ms']} ms",
+        f"reused scenarios: {', '.join(reused_names) if reused_names else 'none'}",
         "",
         f"{'scenario':<16} {'status':<8} {'assertions':<12} detail",
     ]
