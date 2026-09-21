@@ -455,7 +455,7 @@ Fields not named by `contracts/observation-event.schema.json` are rejected becau
 ### 9.5 Authority and resilience
 
 - **OBS-FR-025**: The observer MUST be read-only with respect to Kanban, SessionDB, canonical artifacts, credentials, and effect gates.
-- **OBS-FR-026**: Collector, reducer, or CLI-query failure MUST NOT block legitimate contract work.
+- **OBS-FR-026**: Collector, reducer, or CLI-query failure MUST NOT block legitimate contract work. A read failure caused by a currently held maintenance lock or an unfinished catch-up pass MUST be reported as the bounded retryable codes `STATE_BUSY` (native `AETHER-OBSERVE-BUSY`) or `CATCHUP_INCOMPLETE` (native `AETHER-OBSERVE-CATCHUP-INCOMPLETE`), MUST NOT be presented as a successful, fresh or empty summary, and MUST succeed once the contention clears; genuinely unreadable, schema-invalid, or privacy-refused state remains fail-closed as `STATE_UNREADABLE` (native `AETHER-OBSERVE-STATE-UNREADABLE`) with no raw exception, path, payload, or lock-owner detail exposed.
 - **OBS-FR-027**: Degraded collection MUST produce a visible coverage gap at the next available durable write; summaries with gaps MUST NOT claim exact completeness.
 - **OBS-FR-028**: Collection, reduction, and CLI query MUST perform no outbound or non-loopback network request. The 1.0 observer exposes no network listener.
 - **OBS-FR-029**: An observer purge affects only Aether observation events/read models and cannot delete native Kanban, SessionDB, logs, projects, or canonical artifacts.
@@ -604,6 +604,15 @@ aether observe [REF] [--project PATH] [--since SUMMARY_ID] [--watch] [--json]
 - `--watch` and `--json` are mutually exclusive. Since the stable JSON contract emits
   exactly one envelope, the combination returns one bounded `WATCH_JSON_UNSUPPORTED`
   error envelope instead of changing `--json` into an undocumented NDJSON stream.
+- Under concurrent capture the read distinguishes retryable contention from genuine
+  unreadability: `STATE_BUSY` (native `AETHER-OBSERVE-BUSY`) for a currently held
+  maintenance lock, `CATCHUP_INCOMPLETE` (native `AETHER-OBSERVE-CATCHUP-INCOMPLETE`)
+  for an ingestion pass that ended before every retained event was ingested, and
+  `STATE_UNREADABLE` (native `AETHER-OBSERVE-STATE-UNREADABLE`) for genuinely
+  unreadable, schema-invalid, or privacy-refused state. The first two are retryable,
+  are never reported as a successful, fresh or empty summary, and succeed once the
+  contention clears; the third stays fail-closed. No raw exception, path, payload, or
+  lock-owner detail escapes.
 - `--json` emits the standard Aether CLI envelope and, for a resolved summary, its
   `data` is exactly `{ "state": "summary", "summary": <observation-summary> }`.
 - With no open trace, JSON and human output are projections of the same empty state:

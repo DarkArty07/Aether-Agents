@@ -30,10 +30,11 @@ The bare command validates project identity and launches Morfeo into the active 
 ### Verification
 - [tests/test_aether_tui_launcher.py](../../tests/test_aether_tui_launcher.py)
 - [tests/test_observation_lifecycle.py](../../tests/test_observation_lifecycle.py)
+- [tests/test_observation_usage_guidance.py](../../tests/test_observation_usage_guidance.py)
 
 ### Notes / current limits
 
-Bare aether validates project identity and launches Morfeo into the active release-owned TUI; --json emits a non-mutating launch plan. Reserved arguments are rejected and --resume latest is passed through.
+Bare aether validates project identity and launches Morfeo into the active release-owned TUI; --json emits a non-mutating launch plan. Project selection stays exact and explicit (--project PATH, then AETHER_PROJECT_ROOT with precedence over the current directory, then a verified AETHER_PROJECT_ID, then the current or nearest initialized directory, then the single registered project) with a bounded ambiguity error instead of name/recency inference; empty or relative identities fail visibly. Reserved arguments are rejected and --resume latest is passed through. Activation installs the matching branded Aether (fresh) and Continue Aether (--resume latest) desktop and Windows Terminal actions, and Aether never writes a personal shell preference.
 
 ## `cli.doctor`
 
@@ -132,23 +133,28 @@ Reads a deterministic contract-observation brief without mutating authoritative 
 - [tests/test_observation_batch_replay_regression.py](../../tests/test_observation_batch_replay_regression.py)
 - [tests/test_observation_cli_plugin.py](../../tests/test_observation_cli_plugin.py)
 - [tests/test_observation_ingest_scale.py](../../tests/test_observation_ingest_scale.py)
+- [tests/test_observation_query_parity.py](../../tests/test_observation_query_parity.py)
 - [tests/test_observation_reducer.py](../../tests/test_observation_reducer.py)
 
 ### Notes / current limits
 
-Catch-up commits resumable event batches and bounds ingestion/maintenance-lock waiting. Incomplete catch-up is unavailable, never a complete summary. Active release 1.0.0rc3-8987f650c027ad09 qualified the original large #417 trace: status completed in 19.266s then 15.598s, changes in 15.576s, post-reactivation status in 34.655s then 23.495s, watch emitted its baseline, and native status/changes/diagnose tool responses remained within configured bounds. This is installation-local evidence, not public release or cross-platform qualification.
+Catch-up commits resumable event batches and bounds ingestion/maintenance-lock waiting. A bounded read failure caused by a held maintenance lock or an unfinished catch-up pass is reported as the retryable STATE_BUSY or CATCHUP_INCOMPLETE, never as a complete or fresh summary, and succeeds once the contention clears; genuine unreadable/schema/privacy failures stay fail-closed as STATE_UNREADABLE. Active release 1.0.0rc3-8987f650c027ad09 qualified the original large #417 trace: status completed in 19.266s then 15.598s, changes in 15.576s, post-reactivation status in 34.655s then 23.495s, watch emitted its baseline, and native status/changes/diagnose tool responses remained within configured bounds. This is installation-local evidence, not public release or cross-platform qualification.
 
 ## `cli.reconcile`
 
-**Status:** `unsupported`
+**Status:** `partial`
 
-The public command name is reserved but currently returns an explicit unsupported result.
+Reconciles the managed projections and selector of the already active, authenticated release against that release's own authoritative record; every other mode stays explicitly unsupported.
 
 ### Surfaces
 - `cli.command.aether.reconcile`
+- `cli.option.aether.reconcile.--dry-run`
 - `cli.option.aether.reconcile.--json`
+- `cli.option.aether.reconcile.--to`
+- `cli.option.aether.reconcile.--yes`
 
 ### Current documentation
+- [docs/guides/lifecycle.md](../guides/lifecycle.md)
 - [docs/reference/cli.md](cli.md)
 - [docs/reference/limitations-and-troubleshooting.md](limitations-and-troubleshooting.md)
 
@@ -158,13 +164,16 @@ The public command name is reserved but currently returns an explicit unsupporte
 
 ### Implementation
 - [src/aether_agents/cli.py](../../src/aether_agents/cli.py)
+- [src/aether_agents/lifecycle.py](../../src/aether_agents/lifecycle.py)
 
 ### Verification
+- [tests/test_lifecycle_projections.py](../../tests/test_lifecycle_projections.py)
 - [tests/test_observation_lifecycle.py](../../tests/test_observation_lifecycle.py)
+- [tests/test_observation_usage_guidance.py](../../tests/test_observation_usage_guidance.py)
 
 ### Notes / current limits
 
-Manager/product mismatch reconciliation is not implemented in the current CLI build.
+Only the bounded `--to active` mode is implemented. Without `--yes` (or with `--dry-run`) it plans only and changes nothing; with `--yes` it repairs the already active, authenticated release's managed projections and is idempotent. It never selects another release, installs a package, edits a release record, or restarts a service where read-only reconciliation suffices. `--to installed` and a missing `--to` are refused with `UNSUPPORTED_RECONCILE_MODE`, and an unauthenticated legacy active release is refused with `RECONCILE_REFUSED` before any byte changes. Manager/product mismatch staging for a direct package-manager change therefore remains unimplemented.
 
 ## `cli.rollback`
 
@@ -180,6 +189,7 @@ Selects a previously coherent staged release with planning and confirmation path
 - `cli.option.aether.rollback.--yes`
 
 ### Current documentation
+- [docs/guides/lifecycle.md](../guides/lifecycle.md)
 - [docs/guides/policy-and-recovery.md](../guides/policy-and-recovery.md)
 - [docs/reference/cli.md](cli.md)
 
@@ -894,6 +904,7 @@ The observer plugin records bounded metadata and offers a curated Morfeo read to
 ### Implementation
 - [src/aether_agents/observation/brief.py](../../src/aether_agents/observation/brief.py)
 - [src/aether_agents/observation/capture/hermes_plugin.py](../../src/aether_agents/observation/capture/hermes_plugin.py)
+- [src/aether_agents/observation/capture/retained_index.py](../../src/aether_agents/observation/capture/retained_index.py)
 - [src/aether_agents/resources/profiles/morfeo/SOUL.md](../../src/aether_agents/resources/profiles/morfeo/SOUL.md)
 - [src/aether_agents/resources/profiles/morfeo/config.yaml](../../src/aether_agents/resources/profiles/morfeo/config.yaml)
 
@@ -901,11 +912,13 @@ The observer plugin records bounded metadata and offers a curated Morfeo read to
 - [tests/test_observation_brief_tool.py](../../tests/test_observation_brief_tool.py)
 - [tests/test_observation_cli_plugin.py](../../tests/test_observation_cli_plugin.py)
 - [tests/test_observation_packaging.py](../../tests/test_observation_packaging.py)
+- [tests/test_observation_passive_startup.py](../../tests/test_observation_passive_startup.py)
+- [tests/test_observation_query_parity.py](../../tests/test_observation_query_parity.py)
 - [tests/test_observation_usage_guidance.py](../../tests/test_observation_usage_guidance.py)
 
 ### Notes / current limits
 
-The entry point and provider-free behavior are tested. Active release 1.0.0rc3-8987f650c027ad09 qualified the managed-profile plugin on the original large #417 trace: status completed in 19.266s then 15.598s, changes in 15.576s, post-reactivation status in 34.655s then 23.495s, watch emitted its baseline, and native status/changes/diagnose tool envelopes remained within configured bounds. This remains installation-local evidence rather than public release or cross-platform qualification.
+The entry point and provider-free behavior are tested. Registration and synchronous native hooks install hooks/tools and record bounded events without replaying retained journal history or holding the maintenance lock; retained bindings restore asynchronously through the plugin-owned worker with one validated index per catch-up snapshot, and an event is never attributed to a guessed trace: unresolved, stale or contradictory coverage is reported plainly instead. Under contention the native tool returns the bounded retryable AETHER-OBSERVE-BUSY or AETHER-OBSERVE-CATCHUP-INCOMPLETE and genuine unreadable state stays fail-closed. Active release 1.0.0rc3-8987f650c027ad09 qualified the managed-profile plugin on the original large #417 trace: status completed in 19.266s then 15.598s, changes in 15.576s, post-reactivation status in 34.655s then 23.495s, watch emitted its baseline, and native status/changes/diagnose tool envelopes remained within configured bounds. This remains installation-local evidence rather than public release or cross-platform qualification.
 
 ## `policy.edge-effect-guard`
 

@@ -60,10 +60,14 @@ aether init [PATH] [--name NAME] [--forge local|github] [--hermes-project ID] [-
 ### `aether`
 
 ```text
-aether [--project PATH] [--json]
+aether [--project PATH] [--resume latest] [--json]
 ```
 
 Validates setup, active release, project identity, service readiness, and Morfeo profile. An explicit invocation may visibly start the Aether user service if it is stopped. It then launches Morfeo in the selected project. It never initializes a project implicitly.
+
+Project selection is exact and never inferred from a display name, session recency, board default, checkout recency, or approximate path. The precedence is: (1) an explicit `--project PATH`; (2) `AETHER_PROJECT_ROOT`, which also takes precedence over the current directory; (3) a verified `AETHER_PROJECT_ID` whose registry entry and portable marker agree; (4) the current directory or its nearest initialized parent; (5) only when none of the above applies, the single registered project. An empty or relative identity fails visibly instead of falling back to the current directory; a directory that is not an initialized root, a registry/marker disagreement, and an identity conflict are errors. Several registered projects with no explicit selection return a bounded ambiguity error rather than a picker or a guess. `--resume latest` continues the selected project's latest session and does not select a project.
+
+Activation also installs the same two forms as branded desktop entries (`Aether` for a fresh session, `Continue Aether` for `--resume latest`) and, on WSL hosts, as Windows Terminal fragments, each targeting the stable `runtime/current` entry with the exact project root.
 
 `--json` validates and reports the launch plan but does not replace an interactive TUI with a JSON conversation.
 
@@ -143,6 +147,8 @@ aether reconcile [--to installed|active] [--dry-run] [--yes] [--json]
 
 Resolves a manager/product mismatch caused by an external package-manager change. It either stages the product matching the installed manager or restores the manager/product relationship to the active release. It never activates an unverified mixed set.
 
+Build-level scope (bounded, recorded under `oc_b5926701207812e8@v1`): only the `--to active` mode is implemented. It reconciles the managed projections and selector of the **already active, authenticated** release against that release's own authoritative record; the preview without `--yes` (or with `--dry-run`) is non-mutating, the applied run is idempotent, and nothing outside that release's own managed projections is touched. The command never selects another release, installs a package, edits a release record, or restarts a service where read-only reconciliation suffices. `--to installed` remains explicitly unsupported (`UNSUPPORTED_RECONCILE_MODE`) and MUST NOT be approximated by the `--to active` path. An active release that cannot prove authentication — for example a pre-schema-3 record or one without an installed-file fingerprint — is refused before any mutation (`RECONCILE_REFUSED`) as an unsupported legacy route rather than repaired from unverified bytes.
+
 ### `aether uninstall`
 
 ```text
@@ -163,6 +169,7 @@ aether observe [REF] [--project PATH] [--since SUMMARY_ID] [--watch] [--json]
 - `--since SUMMARY_ID` emphasizes deterministic semantic changes from a previous summary. If summary schema/reducer versions lack a declared normalization path, it reports comparison incompatibility instead of manufacturing a diff; fingerprint-key rotation alone is not a configuration change.
 - `--watch` refreshes only when the summary ID, verdict, priority findings, coverage state, or next gate changes; it never tails raw journal events. It performs incremental ingestion, checks no faster than once per second, backs off to at most five seconds while unchanged, resets after a detected change, and never full-replays the journal on each check.
 - `--watch` and `--json` are mutually exclusive. The stable `--json` contract emits exactly one envelope and does not silently become an NDJSON stream; the invalid combination returns one `WATCH_JSON_UNSUPPORTED` error envelope.
+- Read failures distinguish retryable contention from genuine unreadability with fixed public codes. A currently held maintenance lock returns `STATE_BUSY` (native `AETHER-OBSERVE-BUSY`) and an unfinished ingestion pass within its bounded budget returns `CATCHUP_INCOMPLETE` (native `AETHER-OBSERVE-CATCHUP-INCOMPLETE`); both are retryable, neither is presented as a successful, fresh or empty summary, and the same read succeeds once the contention clears. Genuinely unreadable, schema-invalid, or privacy-refused state remains fail-closed as `STATE_UNREADABLE` (native `AETHER-OBSERVE-STATE-UNREADABLE`). No raw exception, filesystem path, payload, or lock-owner detail is exposed.
 - For a resolved summary, `--json` sets the standard envelope's `data` object to
   `{"state":"summary","summary":{...}}`, where `summary` is exactly one normative
   observation-summary instance.

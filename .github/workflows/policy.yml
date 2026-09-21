@@ -74,6 +74,7 @@ jobs:
           .aether/objective-contracts/oc_a578f1815b1eeee9/v1.md
           .aether/objective-contracts/oc_a63ccc67b95411eb/v1.md
           .aether/objective-contracts/oc_a7a3cff05e82c148/v1.md
+          .aether/objective-contracts/oc_b5926701207812e8/v1.md
           .aether/objective-contracts/oc_b8865f5129d60535/v1.md
           .aether/objective-contracts/oc_ba23edf6f74b7b43/v1.md
           .aether/objective-contracts/oc_c0abec2179f6b09c/v1.md
@@ -280,6 +281,7 @@ jobs:
           src/aether_agents/observation/capture/__init__.py
           src/aether_agents/observation/capture/journal.py
           src/aether_agents/observation/capture/projectors.py
+          src/aether_agents/observation/capture/retained_index.py
           src/aether_agents/observation/checkpoint.py
           src/aether_agents/observation/context.py
           src/aether_agents/observation/contracts.py
@@ -355,9 +357,11 @@ jobs:
           tests/test_observation_journal_storage.py
           tests/test_observation_lifecycle.py
           tests/test_observation_packaging.py
+          tests/test_observation_passive_startup.py
           tests/test_observation_path_confinement.py
           tests/test_observation_performance.py
           tests/test_observation_qualification.py
+          tests/test_observation_query_parity.py
           tests/test_observation_reducer.py
           tests/test_policy_hooks.py
           tests/test_projection_transition_runner.py

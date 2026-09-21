@@ -75,9 +75,15 @@ when the compact observation and one targeted source can answer the question.
 - Partial, unknown or stale coverage remains labeled. Do not manufacture a progress
   percentage or completion claim from absent counters. If the owner requests a card-count
   percentage, disclose the denominator and distinguish it from effort/time completion.
-- On an unreadable/schema/privacy error, report the exact sanitized code. Do not call
-  the same failing reduction repeatedly or describe it as database corruption without
-  evidence. The tool can wrap a summary-validation failure as state unreadable.
+- On an unreadable/schema/privacy error, report the exact sanitized code. Two codes are
+  retryable contention rather than corruption: `AETHER-OBSERVE-BUSY` (the maintenance lock
+  is currently held) and `AETHER-OBSERVE-CATCHUP-INCOMPLETE` (this ingestion pass ended
+  before every retained event was digested). Retry them after the contending writer or the
+  next pass finishes; a settled snapshot still succeeds normally, and the equivalent CLI
+  codes are `STATE_BUSY` and `CATCHUP_INCOMPLETE`. `AETHER-OBSERVE-STATE-UNREADABLE` stays a
+  genuine failure. Do not call the same failing reduction repeatedly or describe it as
+  database corruption without evidence. The tool can wrap a summary-validation failure as
+  state unreadable.
 - Record a reproducible product defect according to repository policy and fall back to
   the minimum exact Kanban/artifact evidence. Do not disable privacy guards, drop keys,
   rewrite stored summaries, rebuild state, or switch projects merely to get a result.

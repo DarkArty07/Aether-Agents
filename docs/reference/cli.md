@@ -13,7 +13,7 @@ This reference describes the parser currently implemented by `aether`, not the l
 | `aether monitor` | Controls and reads the Telegram Monitor: state, owned native hourly job, next cut, coverage gaps, last report and delivery outcomes. | `status`, `on`, `off`, `history`; `--json` on every action; `history --limit N` |
 | `aether doctor` | Inspects candidate lifecycle coherence without importing Hermes. | `--project PATH`, `--json` |
 
-Top-level `aether [--project PATH] [--json]` validates project identity and launches Morfeo into the active release-owned TUI using packaged manager code without importing Hermes or requiring checkout scripts. Top-level `--json` emits a non-mutating launch plan containing exact sorted keys (`command`, `cwd`, `hermes_executable`, `hermes_home`, `project_id`, `repo_root`, `required_toolsets`, `result`, `tui_dir`). Reserved binding overrides (`--in`, `--profile`, `--tui`, `--cli`, `--toolsets`, `-t`, `-p`, `--safe-mode`, `--ignore-user-config`, `--ignore-rules`) are rejected; `--resume` (such as `--resume latest`) is passed through.
+Top-level `aether [--project PATH] [--json]` validates project identity and launches Morfeo into the active release-owned TUI using packaged manager code without importing Hermes or requiring checkout scripts. Project selection is exact and never inferred from a name or recent activity: an explicit `--project PATH` wins, then `AETHER_PROJECT_ROOT` (which also outranks the current directory), then a verified `AETHER_PROJECT_ID`, then the current or nearest initialized parent directory, and finally the single registered project; several registered projects with no explicit selection produce a bounded ambiguity error. Empty or relative identity values fail visibly. `--resume latest` continues the project's latest session; the installed desktop and Windows Terminal `Aether` and `Continue Aether` actions launch the same two forms. See [Getting started](../getting-started.md#launch-aether-in-an-initialized-project). Top-level `--json` emits a non-mutating launch plan containing exact sorted keys (`command`, `cwd`, `hermes_executable`, `hermes_home`, `project_id`, `repo_root`, `required_toolsets`, `result`, `tui_dir`). Reserved binding overrides (`--in`, `--profile`, `--tui`, `--cli`, `--toolsets`, `-t`, `-p`, `--safe-mode`, `--ignore-user-config`, `--ignore-rules`) are rejected; `--resume` (such as `--resume latest`) is passed through.
 
 ### `init` details
 
@@ -55,6 +55,7 @@ These commands have tested local candidate behavior, but their registry status i
 | `aether setup` | `--wheel PATH` (required), `--hermes-checkout PATH` (required), `--release-lock PATH` (required), `--dry-run`, `--yes`, `--json` |
 | `aether update` | `[VERSION]`, `--prerelease`, `--wheel PATH`, `--hermes-checkout PATH`, `--release-lock PATH`, `--dry-run`, `--yes`, `--json`; local-candidate route: `--local`, `--aether-checkout PATH`, `--aether-commit SHA`, `--fork-checkout PATH`, `--fork-commit SHA` |
 | `aether rollback` | `[VERSION]`, `--dry-run`, `--yes`, `--json` |
+| `aether reconcile` | `--to active` (required for a supported mode), `--dry-run`, `--yes`, `--json` |
 | `aether uninstall` | `--purge`, `--export PATH`, `--dry-run`, `--yes`, `--json` |
 
 `setup` accepts only locally supplied wheel/check-out/lock inputs. `update` and `rollback` can plan or select staged candidates. `uninstall --export` reports `EXPORT_NOT_IMPLEMENTED`; `--purge` requires `--yes`. See [Policy and recovery](../guides/policy-and-recovery.md).
@@ -84,6 +85,29 @@ https://github.com/DarkArty07/aether-hermes`); the retired `transitional_fork` m
 for new preparation. This page documents tested local candidate behavior — it is not a claim
 of a published, installed or released channel.
 
+### `reconcile --to active`
+
+`aether reconcile --to active` is the bounded repair surface for the **already active,
+authenticated** release. It reconciles the managed projections and selector of that release
+against its own authoritative active record; it never selects another release, installs a
+package, edits a release record, or restarts a service where read-only reconciliation
+suffices.
+
+```bash
+aether reconcile --to active --json            # plan only: mismatches, no mutation
+aether reconcile --to active --dry-run --json  # same non-mutating preview
+aether reconcile --to active --yes --json      # apply the reconciliation
+```
+
+Without `--yes` (or with `--dry-run`) the command reports the current mismatches and changes
+nothing; the plan result is `planned` when a mismatch exists and `no_change` otherwise, and a
+`CONFIRMATION_REQUIRED` warning asks for `--yes`. With `--yes` it repairs the managed
+projections, reports the reconciled count, and is idempotent on a second run. `--to installed`
+and a missing `--to` are refused with `UNSUPPORTED_RECONCILE_MODE` (exit 3), and an active
+release that cannot prove authentication — for example a legacy record without an installed-file
+fingerprint or a pre-schema-3 record — is refused with `RECONCILE_REFUSED` before any byte
+changes, as an unsupported legacy route.
+
 ## Optional project knowledge
 
 `aether knowledge` requires a subcommand. It does not activate Hermes profiles or start an MCP server. All subcommands accept `--json`. Project-scoped operator commands accept required `--project-id UUID`, optional `--role morfeo|supervisor|implementer` (default `morfeo`) and `--workspace PATH` for a verified attached worktree. These operator selectors are not exposed as model-tool arguments.
@@ -108,7 +132,7 @@ Knowledge commands return JSON objects with `ok`, typed errors and action-specif
 
 ## Explicitly unsupported commands
 
-`aether start`, `aether stop`, `aether restart`, `aether status`, and `aether reconcile` are parser-visible placeholders. They return an explicit unsupported result rather than managing a service or mixed runtime state. The detailed limitation record is in [limitations and troubleshooting](limitations-and-troubleshooting.md).
+`aether start`, `aether stop`, `aether restart`, and `aether status` are parser-visible placeholders. They return an explicit unsupported result rather than managing a service or mixed runtime state. `aether reconcile` is parser-visible for its bounded `--to active` mode only; `--to installed` and a missing `--to` return the same explicit unsupported result. The detailed limitation record is in [limitations and troubleshooting](limitations-and-troubleshooting.md).
 
 ## Exit and output behavior
 
