@@ -51,8 +51,8 @@ This unit delivers the six required outcomes of the RC6-LIFE specification:
    - Preview (`--dry-run` or without `--yes`) is non-mutating: every managed byte on disk is identical before and after.
    - Authorized execution (`--yes`) reconciles only the already-active, authenticated release: does not select another release, does not install packages, does not restart services when read-only reconciliation suffices.
    - Unsupported modes (`--to installed` or omitting `--to active`) refuse explicitly with code 3 (`UNSUPPORTED_RECONCILE_MODE`).
-   - Existing CLI messages pointing operators at `aether reconcile --to active` are now fully functional.
-   - Tested in `tests/test_lifecycle_projections.py::test_reconcile_to_active_surface`.
+   - *Correction (RC6-LIFE-2)*: An earlier revision claimed that CLI messages pointing operators at `aether reconcile --to active` were fully functional, but RC6-QUAL (`t_a99c2b55`) discovered that `_STATEFUL_COMMANDS` in `src/aether_agents/cli.py` omitted `"reconcile"`. As a result, entry-point invocations (launcher `<data>/runtime/current/venv/bin/aether`, release runtime `venv/bin/aether`, or public uv tool `aether`) ran `_run_reconcile` in the invoking process rather than dispatching to the manager, failing authority proof with `RECONCILE_REFUSED: executing process is not the active manager`. RC6-LIFE-2 (`t_6438f8d9`) fixed this wiring gap by adding `"reconcile"` to `_STATEFUL_COMMANDS` and routing entry points to the authenticated active manager subprocess.
+   - Tested in `tests/test_lifecycle_projections.py::test_reconcile_to_active_surface` and `::test_reconcile_to_active_dispatches_to_active_manager_environment`.
 
 6. **Safe refusal of unsupported legacy routes**:
    - An active release that cannot authenticate itself (e.g. legacy rc3 lacking `installed_file_fingerprint` or build identity) is refused before mutation under `aether reconcile --to active`.
@@ -72,24 +72,31 @@ This unit delivers the six required outcomes of the RC6-LIFE specification:
 | Fail-closed target projection preparation | AC-2, L2 | `test_unavailable_target_projection_plan_refuses_before_any_mutation` | PASS: an unavailable target plan aborts the transition; active record bytes, selector, launcher, desktop and unit hashes identical; no service restart; no target-side promotion | `tests/test_lifecycle_projections.py:1765`, `src/aether_agents/lifecycle.py:6129`, `src/aether_agents/lifecycle.py:7328` |
 | Byte-exact compensation | AC-1, L1 | `test_transition_compensation_restores_byte_exact_previous_record_bytes` | PASS: exact previously captured active-record bytes restored (SHA-256 match); selector symlink paired; no reserialization through the failing class | `tests/test_lifecycle_projections.py:1342` |
 | Target-owned projections | AC-2, L2 | `test_reconcile_repairs_rc4_wrong_projection`, `tests/test_hermes_gateway_service.py` | PASS: target determines projection bytes; parent validates allowlisted destinations and digests; brand-agnostic version discriminator; service restart avoided when read-only suffices | `tests/test_lifecycle_projections.py:1511`, `src/aether_agents/lifecycle.py:3881` |
-| Bounded reconcile surface | AC-2, L2 | `test_reconcile_to_active_surface` | PASS: `--dry-run` leaves every byte unchanged; `--yes` repairs active projections; idempotent on second run (`no_change`); `--to installed` exits 3 | `tests/test_lifecycle_projections.py:1449`, `src/aether_agents/cli.py:800` |
-| Safe legacy route refusal | AC-2, L2 | `test_legacy_route_refusal_before_mutation` | PASS: rc3 active release refuses before mutation with `RECONCILE_REFUSED`; witnessed hashes byte-identical before/after | `tests/test_lifecycle_projections.py:1585` |
-| Verification isolation | #439 lessons | `test_disposable_lane_cannot_reach_the_operator_unit_or_systemctl` | PASS: disposable store resolves confined roots and a disabled controller; operator destination witnesses unchanged | `tests/test_lifecycle_projections.py:1133` |
-| Regression / Focused suite | AC-1, AC-2 | `uv run --frozen pytest -q tests/test_lifecycle_projections.py tests/test_tui_projections.py tests/test_hermes_gateway_service.py tests/test_observation_lifecycle.py` | PASS: **153 passed** (150 pre-existing + 3 new nodes) | Terminal log, this revision |
-| Code quality / Formatting / Types | AC-1, AC-2 | `uv run --frozen ruff check src/aether_agents tests scripts` && `uv run --frozen ruff format --check src/aether_agents tests scripts` && `uv run --frozen mypy src/aether_agents` | PASS: Ruff clean, 175 files already formatted, mypy clean (68 source files) | Terminal log, this revision |
-| Public-artifact hygiene | shared decision 9 | `uv run --frozen python scripts/check_public_artifacts.py` | PASS: tracked surface scan passed; no operator-local paths, secrets or session content | Terminal log, this revision |
+|| Bounded reconcile surface | AC-2, L2 | `test_reconcile_to_active_surface` | PASS: `--dry-run` leaves every byte unchanged; `--yes` repairs active projections; idempotent on second run (`no_change`); `--to installed` exits 3 | `tests/test_lifecycle_projections.py:1449`, `src/aether_agents/cli.py:800` |
+|| Safe legacy route refusal | AC-2, L2 | `test_legacy_route_refusal_before_mutation` | PASS: rc3 active release refuses before mutation with `RECONCILE_REFUSED`; witnessed hashes byte-identical before/after | `tests/test_lifecycle_projections.py:1585` |
+|| Reconcile entry-point manager dispatch | AC-2, L2 | `test_reconcile_to_active_dispatches_to_active_manager_environment` | PASS: entry point running outside active manager dispatches `reconcile --to active` to active manager interpreter; preview and `--yes` apply verified | `tests/test_lifecycle_projections.py:1880`, `src/aether_agents/cli.py:43` |
+|| Reconcile refusal when no active manager | AC-2, L2 | `test_reconcile_refuses_when_no_active_manager` | PASS: returns exit 4 with `ACTIVE_MANAGER_AUTHORITY_REQUIRED` when target is None | `tests/test_lifecycle_projections.py:1970`, `src/aether_agents/cli.py:273` |
+|| Reconcile unsupported mode before bootstrap | AC-2, L2 | `test_reconcile_unsupported_mode_without_active_manager` | PASS: `--to installed` and missing `--to` return exit 3 with `UNSUPPORTED_RECONCILE_MODE` before dispatch | `tests/test_lifecycle_projections.py:1997`, `src/aether_agents/cli.py:946` |
+|| Reconcile recursion guard for stale manager | AC-2, L2 | `test_reconcile_stale_managed_manager_refuses_recursion` | PASS: stale managed manager refuses recursion with exit 4 (`ACTIVE_MANAGER_AUTHORITY_REQUIRED`) | `tests/test_lifecycle_projections.py:2022`, `src/aether_agents/cli.py:254` |
+|| Verification isolation | #439 lessons | `test_disposable_lane_cannot_reach_the_operator_unit_or_systemctl` | PASS: disposable store resolves confined roots and a disabled controller; operator destination witnesses unchanged | `tests/test_lifecycle_projections.py:1133` |
+|| Regression / Focused suite | AC-1, AC-2 | `uv run --frozen pytest -q tests/test_lifecycle_projections.py tests/test_tui_projections.py tests/test_hermes_gateway_service.py tests/test_observation_lifecycle.py` | PASS: **157 passed** (150 pre-existing + 3 pass-2 + 4 pass-3 nodes) | Terminal log, this revision |
+|| Code quality / Formatting / Types | AC-1, AC-2 | `uv run --frozen ruff check src/aether_agents tests scripts` && `uv run --frozen ruff format --check src/aether_agents tests scripts` && `uv run --frozen mypy src/aether_agents` | PASS: Ruff clean, 175 files already formatted, mypy clean (68 source files) | Terminal log, this revision |
+|| Public-artifact hygiene | shared decision 9 | `uv run --frozen python scripts/check_public_artifacts.py` | PASS: tracked surface scan passed; no operator-local paths, secrets or session content | Terminal log, this revision |
 
 ### Oracle discipline (which nodes are decisive RED)
 
-- **Decisive RED nodes** (verified to fail on the previous candidate `f426c829` with real fixtures, all three failing as `DID NOT RAISE IntegrityError`):
-  - `test_target_runner_answers_only_from_the_target_release_not_the_invoking_directory` — the hostile-cwd block is the reproduced spoof.
-  - `test_unavailable_target_projection_plan_refuses_before_any_mutation` — the swallowed plan previously produced a completed transition with source-owned projections.
-  - `test_unreadable_target_record_refuses_instead_of_synthesizing_a_pointer` — the previous `asdict(record)` fallback returned a source-shaped payload instead of refusing.
-  - Plus the earlier pass's RED set: the frozen-rc3 target-shape node, both reconcile nodes and the legacy refusal (reproduced at base `d2874c2f` by the Supervisor: `4 failed, 2 passed`).
+- **Decisive RED nodes**:
+  - `test_reconcile_to_active_dispatches_to_active_manager_environment` (RC6-LIFE-2 pass 3): verified to fail at base `e9595d2e` with `assert 4 == 0` and stdout `RECONCILE_REFUSED: no active release to reconcile` because `_STATEFUL_COMMANDS` omitted `"reconcile"`, bypassing `_dispatch_stateful_to_active` and running `_run_reconcile` in-process where active manager authority failed.
+  - `test_target_runner_answers_only_from_the_target_release_not_the_invoking_directory` (pass 2): failed on candidate `f426c829` as `DID NOT RAISE IntegrityError` (hostile-cwd spoof).
+  - `test_unavailable_target_projection_plan_refuses_before_any_mutation` (pass 2): failed on candidate `f426c829` as `DID NOT RAISE IntegrityError` (swallowed plan).
+  - `test_unreadable_target_record_refuses_instead_of_synthesizing_a_pointer` (pass 2): failed on candidate `f426c829` as `DID NOT RAISE IntegrityError` (`asdict(record)` fallback).
+  - Pass 1 RED set: frozen-rc3 target-shape node, both reconcile nodes and legacy refusal (reproduced at base `d2874c2f`: `4 failed, 2 passed`).
 - **Non-RED oracles (preservation, not defect reproductions)**:
-  - `test_transition_compensation_restores_byte_exact_previous_record_bytes` is a preservation oracle: the byte-exact restore path already existed; this node pins it against regression.
-  - `test_incompatible_or_malformed_target_refuses_with_zero_byte_change` passes at base through `_read_release`/`ReleaseRecord.from_json` key rejection rather than through target-side validation; it documents refusal semantics, not the target boundary.
-- **Fixture boundary disclosed**: `test_reconcile_to_active_surface` and `test_legacy_route_refusal_before_mutation` monkeypatch `LifecycleManager.executing_active_manager` / `cli._lifecycle_manager`, so the *manager authentication gate itself* is mocked in those nodes; the real CLI refusal path was additionally exercised in an isolated HOME/XDG store (Supervisor run 15) and remains RC6-QUAL's live qualification. The three new nodes use real fixtures only: real `activate_existing`/`_prepare_target_projections_subprocess`/`_validate_target_record_subprocess` calls against a synthetic release whose manager environment materializes the target's own code inside the release tree.
+  - `test_transition_compensation_restores_byte_exact_previous_record_bytes` is a preservation oracle.
+  - `test_incompatible_or_malformed_target_refuses_with_zero_byte_change` documents refusal semantics.
+- **Fixture boundary disclosed**:
+  - `test_reconcile_to_active_surface` and `test_reconcile_repairs_rc4_wrong_projection` monkeypatch `LifecycleManager.executing_active_manager` / `cli._lifecycle_manager`, testing manager-internal reconciliation in-process. This monkeypatch was why the wiring gap survived in earlier passes.
+  - `test_reconcile_to_active_dispatches_to_active_manager_environment` exercises the real dispatch path without mocking `executing_active_manager`, verifying that entry points running outside the manager dispatch to the authenticated manager environment.
 
 ---
 
@@ -184,3 +191,89 @@ The import-provenance rule must accept a genuinely installed release, not only t
 
 - every release's manager environment is Python 3.13, so `-P` and `-s` are supported by the interpreters this transition drives;
 - `aether_agents.__file__` resolves to `<live-data-root>/releases/<release-id>/manager/lib/python3.13/site-packages/aether_agents/__init__.py` for `1.0.0rc3-*`, `1.0.0rc4-*` and `1.0.0rc5-*` alike — inside each release's own tree, so the runner's provenance assertion accepts them and no live byte was written by the probe.
+
+---
+
+## 8. Third pass — RC6-LIFE-2 (`t_6438f8d9`): Active manager dispatch wiring for `aether reconcile --to active`
+
+### Confirmed defect and reproduction
+
+During RC6-QUAL (`t_a99c2b55`), qualification revealed that `_STATEFUL_COMMANDS = ("setup", "update", "rollback", "uninstall")` in `src/aether_agents/cli.py` omitted `"reconcile"`. Although `_dispatch_stateful_to_active` contained a reconcile-specific branch at line 261, `main()` never dispatched reconcile invocations because `reconcile` was not member of `_STATEFUL_COMMANDS`. Consequently, entry-point invocations (the projected launcher `<data>/runtime/current/venv/bin/aether`, the release runtime `venv/bin/aether`, or the public uv tool `aether`) fell through to `_run_reconcile` in the invoking process. Since the invoking process is not the active manager, `manager.executing_active_manager()` raised `IntegrityError: executing process is not the active manager`, returning exit code 4 with `RECONCILE_REFUSED`.
+
+This wiring gap went undetected in passes 1 and 2 because `test_reconcile_to_active_surface` monkeypatched `executing_active_manager` and `_lifecycle_manager`, satisfying authority checks in-process without exercising the entry-point dispatch path.
+
+### Decisive RED receipt
+
+`tests/test_lifecycle_projections.py::test_reconcile_to_active_dispatches_to_active_manager_environment` exercises the entry-point dispatch path without monkeypatching `executing_active_manager`. It sets up an isolated store with an authenticated active release record and a manager probe script (`probe_python`). When `cli_main(["reconcile", "--to", "active", "--json"])` is invoked from outside the active manager, the test asserts that dispatch routes execution to `probe_python`, writing a witness receipt and returning exit code 0 (`result: planned`).
+
+- **Command**: `uv run --frozen pytest tests/test_lifecycle_projections.py -k "test_reconcile_to_active_dispatches_to_active_manager_environment"`
+- **Revision**: `e9595d2e97aa85f2e0d7e4a501215865c0ab06ca` (unpatched base)
+- **Observed Result**: `FAILED: assert 4 == 0`.
+  Captured stdout: `{"changed":false,"command":"reconcile","data":{},"errors":[{"code":"RECONCILE_REFUSED","message":"no active release to reconcile"}],"manager_version":"1.0.0rc5","result":"error","schema_version":1,"warnings":[]}`.
+  Witness file was not created because dispatch was never invoked.
+
+### Changes implemented
+
+1. **Declared stateful command**: Added `"reconcile"` to `_STATEFUL_COMMANDS = ("setup", "update", "rollback", "uninstall", "reconcile")` in `src/aether_agents/cli.py`.
+2. **Early parse guard for unsupported modes**: In `main()`, if `args.command == "reconcile"` and `getattr(args, "to", None) != "active"`, control routes immediately to `_run_reconcile(args)` before dispatch. This returns exit code 3 (`UNSUPPORTED_RECONCILE_MODE`) with zero change, avoiding unnecessary subprocess spawning and functioning consistently before or after bootstrap.
+3. **Execution context and non-recursive loop guard**: In `_dispatch_stateful_to_active`:
+   - If the executing process is already the authenticated active manager (`executing_active_manager()` succeeds), returns `None` so the command runs in-process.
+   - If the process is a stale managed manager (`executing_manager_is_release_scoped()` is true), refuses recursion with exit code 4 (`ACTIVE_MANAGER_AUTHORITY_REQUIRED`).
+   - If `active_manager_dispatch_target()` raises `IntegrityError` (e.g. unauthenticated legacy release lacking an installed-file fingerprint), emits `RECONCILE_REFUSED` with exit code 4, satisfying obligation (4) and preserving `test_legacy_route_refusal_before_mutation`.
+   - If `target is None` (uninitialized product), retains the existing reconcile branch returning `ACTIVE_MANAGER_AUTHORITY_REQUIRED` with exit code 4.
+     *Design choice rationale*: For condition (5), returning `ACTIVE_MANAGER_AUTHORITY_REQUIRED` at the entry-point dispatch boundary matches how other stateful commands (`rollback`, `uninstall`) report the absence of an active release manager before product bootstrap, providing consistent remediation guidance (`aether setup`, etc.) from the entry point.
+   - Otherwise, dispatches via `subprocess.run([str(manager_python), "-m", "aether_agents.cli", *args_list], env=environment)` in a clean environment.
+
+### Entry-point route receipts (generic paths)
+
+1. **Preview route** (`--dry-run` or no `--yes`):
+   ```text
+   $ aether reconcile --to active --json
+   {"schema_version": 1, "command": "reconcile", "result": "planned", "changed": false, "manager_version": "1.0.0rc6", "active_version": "1.0.0-rc.6", "warnings": [{"code": "CONFIRMATION_REQUIRED", "message": "Re-run reconcile with --yes to apply projections."}], "errors": [], "data": {"mode": "active", "active_release_id": "<active_id>", "mismatches": [...], "projections_reconciled": 0}}
+   -> exit 0
+   ```
+2. **Apply route** (`--yes`):
+   ```text
+   $ aether reconcile --to active --yes --json
+   {"schema_version": 1, "command": "reconcile", "result": "changed", "changed": true, "manager_version": "1.0.0rc6", "active_version": "1.0.0-rc.6", "warnings": [], "errors": [], "data": {"mode": "active", "active_release_id": "<active_id>", "mismatches": [], "projections_reconciled": 1, "recovered": {...}}}
+   -> exit 0
+   ```
+3. **Idempotency** (subsequent `--yes`):
+   ```text
+   $ aether reconcile --to active --yes --json
+   {"schema_version": 1, "command": "reconcile", "result": "no_change", "changed": false, "manager_version": "1.0.0rc6", "active_version": "1.0.0-rc.6", "warnings": [], "errors": [], "data": {"mode": "active", "active_release_id": "<active_id>", "mismatches": [], "projections_reconciled": 0, "recovered": {...}}}
+   -> exit 0
+   ```
+4. **Unsupported modes** (`--to installed` or missing `--to`):
+   ```text
+   $ aether reconcile --to installed --json
+   {"schema_version": 1, "command": "reconcile", "result": "unsupported", "changed": false, "manager_version": "1.0.0rc6", "active_version": null, "warnings": [], "errors": [{"code": "UNSUPPORTED_RECONCILE_MODE", "message": "'aether reconcile --to installed' is part of the A1 manager contract and is not implemented in this build; use 'aether reconcile --to active'"}], "data": {}}
+   -> exit 3
+   ```
+5. **Unauthenticated legacy release** (no installed-file fingerprint):
+   ```text
+   $ aether reconcile --to active --yes --json
+   {"schema_version": 1, "command": "reconcile", "result": "error", "changed": false, "manager_version": "1.0.0rc6", "active_version": null, "warnings": [], "errors": [{"code": "RECONCILE_REFUSED", "message": "active release <id> cannot prove authentication; unsupported legacy route"}], "data": {}}
+   -> exit 4
+   ```
+6. **No active manager** (uninitialized product):
+   ```text
+   $ aether reconcile --to active --json
+   {"schema_version": 1, "command": "reconcile", "result": "error", "changed": false, "manager_version": "1.0.0rc6", "active_version": null, "warnings": [], "errors": [{"code": "ACTIVE_MANAGER_AUTHORITY_REQUIRED", "message": "no active manager can authorize reconciliation; unsupported legacy route or uninitialized product"}], "data": {"remediation": ["aether doctor", "aether reconcile --to active", "aether rollback"]}}
+   -> exit 4
+   ```
+
+### Verification after RC6-LIFE-2
+
+| Check | Command | Observed result |
+|---|---|---|
+| Focused suite | `uv run --frozen python scripts/run_tests.py -- -q tests/test_lifecycle_projections.py tests/test_tui_projections.py tests/test_hermes_gateway_service.py tests/test_observation_lifecycle.py` | **157 passed** in 174.46 s |
+| Decisive RED node (reproduced) | `uv run --frozen pytest tests/test_lifecycle_projections.py -k "test_reconcile_to_active_dispatches_to_active_manager_environment"` | FAILED on `e9595d2e` (`assert 4 == 0`), PASS on this revision |
+| Static quality | `ruff check`, `ruff format --check`, `mypy src/aether_agents`, `python scripts/check_public_artifacts.py` | All clean: ruff clean, 175 files formatted, mypy clean (68 files), artifact path scan passed |
+
+### Residual limits
+
+- **WSL2 Windows Terminal paths**: Handled within test fixtures with mock paths; live WSL qualification belongs to RC6-QUAL.
+- **End-to-end multi-interpreter qualification**: The qualification harness exercises live cross-release transitions; this unit provides the verified CLI dispatch mechanics.
+- **Live activation/cutover**: Owned by RC6-CLOSE.
+

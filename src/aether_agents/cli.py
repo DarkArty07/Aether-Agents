@@ -40,7 +40,7 @@ _UNSUPPORTED_COMMANDS = (
 )
 
 _STDOUT_RESULTS = ("ready", "changed", "no_change", "planned")
-_STATEFUL_COMMANDS = ("setup", "update", "rollback", "uninstall")
+_STATEFUL_COMMANDS = ("setup", "update", "rollback", "uninstall", "reconcile")
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -247,9 +247,28 @@ def _dispatch_stateful_to_active(
     from aether_agents.lifecycle import IntegrityError, _isolated_subprocess_environment
 
     manager = _lifecycle_manager()
+    if hasattr(manager, "executing_active_manager"):
+        try:
+            executing = manager.executing_active_manager()
+        except (IntegrityError, OSError) as mismatch:
+            if getattr(manager, "executing_manager_is_release_scoped", lambda: False)():
+                return _manager_authority_error(command, str(mismatch), json_mode=json_mode)
+        else:
+            if executing is not None:
+                return None
+
     try:
         target = manager.active_manager_dispatch_target()
     except (IntegrityError, OSError) as error:
+        if command == "reconcile":
+            envelope = Envelope(
+                command=command,
+                result="error",
+                manager_version=product_version(),
+                failure_kind="integrity_failure",
+            )
+            envelope.fail("RECONCILE_REFUSED", str(error))
+            return _emit(envelope, json_mode=json_mode, human=f"error: {error}")
         return _manager_authority_error(command, str(error), json_mode=json_mode)
     if target is None:
         if command == "setup":
@@ -271,14 +290,6 @@ def _dispatch_stateful_to_active(
             json_mode=json_mode,
         )
     active, manager_python = target
-    try:
-        executing = manager.executing_active_manager()
-    except (IntegrityError, OSError) as mismatch:
-        if manager.executing_manager_is_release_scoped():
-            return _manager_authority_error(command, str(mismatch), json_mode=json_mode)
-    else:
-        if executing.release_id == active.release_id:
-            return None
 
     environment = _isolated_subprocess_environment()
     if any(name.startswith(("PYTHON", "UV_", "PIP_")) for name in environment):
@@ -934,6 +945,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     if args.command in _STATEFUL_COMMANDS:
+        if args.command == "reconcile" and getattr(args, "to", None) != "active":
+            return _run_reconcile(args)
         dispatched = _dispatch_stateful_to_active(
             args_list,
             command=args.command,
