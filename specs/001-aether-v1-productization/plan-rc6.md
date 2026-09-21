@@ -103,6 +103,16 @@ Before live promotion require independent approval of the mixed-version fixture 
 
 Readiness, source/TUI digests, actual pre/post config hashes, unchanged unrelated services, session/board identity continuity and accepted expected new records are separate witnesses. Do not equate all user-state bytes with immutability while the system is running. No secret or session content in public evidence. Prior structural/semantic Graphify evidence may be reused at unchanged code identity; refresh the final revision as its canonical procedure requires, reporting pending/cancelled honestly without a semantic-model retry campaign.
 
+## Unattended execution and origin-session preservation
+
+The owner reaffirmed unattended execution within this objective. Routine technical and execution decisions stay delegated to Morfeo and Supervisor; this is not authority to expand scope, weaken acceptance, widen credentials or bypass a protected edge. The following operating disposition applies to the remaining execution without changing the finalized contract or its pre-live gates.
+
+- Preserve the originating TUI throughout the unattended window, including after a new candidate canary is ready. Do not close, restart or signal it, its terminal shell, or its process group. End only purpose-created canary processes by their exact verified handles. Retain the release files used by the originating process.
+- Every authorized interrupting step must run from a durable runner independent of BOTH the originating TUI and the gateway process trees/cgroups. Persist phase, exact identities, prestate, results and fallback instructions in private evidence before starting. Verify that the runner is actually independent; a background child of the TUI or gateway is not sufficient.
+- The pre-interruption notice is informational for an already-authorized operation, not a new requirement to wait for an owner reply. Do not start cutover until isolation, exact-version qualification, review, merge and fallback gates pass. If the supported transition cannot preserve the origin session, defer that live effect with a precise blocker rather than forcing the session closed; continue safe independent work.
+- After interruption or redispatch, inspect the actual selected release, durable phase/exit receipts and transition journal before resuming. A missing PID or a delayed notification does not authorize replaying an update or rollback. Existing single-window and single-qualified-fallback limits remain unchanged.
+- Send unresolved implementation/design questions to Morfeo through the existing collaboration route. Escalate to the owner only for authority or product decisions not already delegated, or a protected-edge/runtime failure that cannot be resolved within the existing boundaries. The seven-hour checkpoint still reports exact progress without killing healthy work or silently adding scope.
+
 ## Convergence and closeout
 
 Use parallel implementation where responsibilities are disjoint; keep shared lifecycle/serializer/projection changes in one owning unit. Supervisor determines the minimal task graph, with documentation and qualification supporting—not duplicating—implementation. No new boards/contracts for ordinary rework, no synthetic observer adoption campaign, no permanent watcher, no issue-backlog cleanup.
