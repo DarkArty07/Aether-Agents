@@ -14,8 +14,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -190,6 +192,52 @@ def _aether_identity(version: str) -> dict[str, object]:
     }
 
 
+def _materialize_packaged_resources(package: Path) -> None:
+    """Copy the normative bytes the release wheel force-includes as package resources.
+
+    An installed release reads its observation schemas from ``resources/schemas``
+    inside its own package.  A bare copy of the source tree does not carry them, so an
+    emulated install has to reproduce the wheel's mapping instead of falling back to
+    the checkout's ``specs/`` copy.
+    """
+
+    repo_root = Path(__file__).resolve().parents[1]
+    build = tomllib.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
+    mapping = build["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]
+    for source, destination in mapping.items():
+        if not destination.startswith("aether_agents/"):
+            continue
+        target = package.parent / destination
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(repo_root / source, target)
+
+
+def _materialize_manager_environment(release: Path) -> None:
+    """Give one synthetic release the manager environment an installed release has.
+
+    Projections are owned by the selected release's own code, so the fixture provides
+    the package inside the release tree rather than reaching into the test checkout.
+    """
+
+    site_packages = release / "manager" / "site-packages"
+    installed_package = site_packages / "aether_agents"
+    if not installed_package.is_dir():
+        shutil.copytree(Path(lifecycle.__file__).parent, installed_package)
+    _materialize_packaged_resources(installed_package)
+    python = release / "manager" / "bin" / "python"
+    python.parent.mkdir(parents=True, exist_ok=True)
+    python.write_text(
+        f"#!{sys.executable}\n"
+        "import os, sys\n"
+        f"import_root = {str(site_packages)!r}\n"
+        "environment = dict(os.environ)\n"
+        "environment['PYTHONPATH'] = import_root\n"
+        "os.execvpe(sys.executable, [sys.executable, *sys.argv[1:]], environment)\n",
+        encoding="utf-8",
+    )
+    python.chmod(0o700)
+
+
 def _record_with_tui(
     store: ReleaseStore,
     release_id: str,
@@ -228,6 +276,7 @@ def _record_with_tui(
         tui_dir.mkdir(parents=True, exist_ok=True)
         entry = tui_dir / "entry.js"
         entry.write_bytes(b"console.log('tui');\n")
+    _materialize_manager_environment(release)
     return record
 
 
@@ -237,6 +286,15 @@ def _publish_record(manager: LifecycleManager, record: ReleaseRecord) -> None:
     payload = {field: getattr(record, field) for field in record.__dataclass_fields__}
     _atomic_json(manager.store.release_path(record.release_id) / "record.json", payload)
     _atomic_json(manager.store.active_pointer, payload)
+
+
+def _install_record(manager: LifecycleManager, record: ReleaseRecord) -> None:
+    """Publish one release record without selecting it as the active release."""
+
+    from aether_agents.lifecycle import _atomic_json
+
+    payload = {field: getattr(record, field) for field in record.__dataclass_fields__}
+    _atomic_json(manager.store.release_path(record.release_id) / "record.json", payload)
 
 
 # --------------------------------------------------------------------------- tests
@@ -586,6 +644,7 @@ def test_projection_failure_restores_prior_opaque_state(
     prior_target = spec1.runtime_current.resolve()
 
     record2 = _record_with_tui(manager.store, "1.0.0rc4-" + "2" * 16)
+    _install_record(manager, record2)
     spec2 = manager.projection_spec(record2)
 
     # Force failure on service projection
