@@ -11,6 +11,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import tomllib
 from collections.abc import Sequence
 from pathlib import Path
@@ -290,7 +291,7 @@ def _resolve_component_paths(repo: Path) -> tuple[Path, Path, Path]:
 
 
 def _probe_venv_interpreter(python_path: Path, target_venvs: Sequence[Path]) -> bool:
-    """Verify in an isolated subprocess that python_path reports sys.prefix and purelib inside target_venvs."""
+    """Verify in an isolated subprocess that python_path reports sys.prefix and purelib inside the same target venv."""
     probe_code = (
         "import sys, sysconfig\n"
         "print(sys.prefix)\n"
@@ -299,13 +300,23 @@ def _probe_venv_interpreter(python_path: Path, target_venvs: Sequence[Path]) -> 
     env = {
         k: v for k, v in os.environ.items() if k in ("PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP")
     }
+    probe_cwd: Path | str
+    try:
+        if python_path.parent.is_dir():
+            probe_cwd = python_path.parent
+        else:
+            probe_cwd = tempfile.gettempdir()
+    except OSError:
+        probe_cwd = tempfile.gettempdir()
+
     try:
         proc = subprocess.run(
-            [os.fspath(python_path), "-c", probe_code],
+            [os.fspath(python_path), "-I", "-c", probe_code],
             capture_output=True,
             text=True,
             timeout=5,
             env=env,
+            cwd=probe_cwd,
         )
     except (OSError, subprocess.TimeoutExpired):
         return False
@@ -317,25 +328,36 @@ def _probe_venv_interpreter(python_path: Path, target_venvs: Sequence[Path]) -> 
     if len(lines) < 2:
         return False
 
-    reported_prefix = Path(lines[0]).resolve()
-    reported_purelib = Path(lines[1]).resolve()
+    raw_prefix = Path(lines[0])
+    raw_purelib = Path(lines[1])
+    try:
+        reported_prefix = raw_prefix.resolve()
+    except OSError:
+        reported_prefix = raw_prefix
+    try:
+        reported_purelib = raw_purelib.resolve()
+    except OSError:
+        reported_purelib = raw_purelib
 
-    resolved_targets: list[Path] = []
-    for t in target_venvs:
+    for target in target_venvs:
         try:
-            resolved_targets.append(t.resolve())
+            target_resolved = target.resolve()
         except OSError:
-            resolved_targets.append(t)
+            target_resolved = target
 
-    prefix_ok = any(
-        reported_prefix == target or reported_prefix.is_relative_to(target)
-        for target in resolved_targets
-    )
-    purelib_ok = any(
-        reported_purelib == target or reported_purelib.is_relative_to(target)
-        for target in resolved_targets
-    )
-    return prefix_ok and purelib_ok
+        prefix_ok = (
+            raw_prefix == target
+            or raw_prefix.is_relative_to(target)
+            or reported_prefix == target_resolved
+            or reported_prefix.is_relative_to(target_resolved)
+        )
+        purelib_ok = raw_purelib.is_relative_to(target) or reported_purelib.is_relative_to(
+            target_resolved
+        )
+        if prefix_ok and purelib_ok:
+            return True
+
+    return False
 
 
 def _resolve_target_python(hermes: Path, runtime_root: Path | None = None) -> Path:
@@ -361,10 +383,6 @@ def _resolve_target_python(hermes: Path, runtime_root: Path | None = None) -> Pa
     if runtime_root is not None:
         target_venvs.append(runtime_root / "current" / "venv")
         target_venvs.append(runtime_root / "venv")
-    try:
-        target_venvs.append(data_root() / "runtime" / "current" / "venv")
-    except Exception:
-        pass
 
     resolved_targets: list[Path] = []
     for t in target_venvs:

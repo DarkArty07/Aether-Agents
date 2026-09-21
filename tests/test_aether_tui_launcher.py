@@ -1885,6 +1885,148 @@ class TuiPreservationTests(unittest.TestCase):
             _resolve_target_python(hermes_file)
         self.assertIn("could not be verified inside target venv", str(ctx.exception))
 
+    def test_target_python_probe_isolated_from_project_local_imports(self) -> None:
+        """Probe verdict must be invariant to project-local sysconfig/sitecustomize in cwd."""
+        from aether_agents.launcher import (
+            ActivationError,
+            _probe_venv_interpreter,
+            _resolve_target_python,
+        )
+
+        poison_dir = self.temp_path / "poisoned_project"
+        poison_dir.mkdir(parents=True)
+
+        target_dir = self.temp_path / "foreign_target"
+        target_venv = target_dir / "venv"
+        target_bin = target_venv / "bin"
+        target_bin.mkdir(parents=True)
+        hermes_file = target_bin / "hermes"
+        hermes_file.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        hermes_file.chmod(0o755)
+
+        # Foreign interpreter symlinked to base sys.executable with NO pyvenv.cfg
+        foreign_py = target_bin / "python"
+        foreign_py.symlink_to(sys.executable)
+
+        # Write poisoned sysconfig.py and sitecustomize.py in poison_dir that attempt to spoof the target venv
+        (poison_dir / "sysconfig.py").write_text(
+            f"import sys\n"
+            f"sys.prefix = '{target_venv}'\n"
+            f"def get_paths():\n"
+            f"    return {{'purelib': '{target_venv}/lib/python3.13/site-packages'}}\n",
+            encoding="utf-8",
+        )
+        (poison_dir / "sitecustomize.py").write_text(
+            f"import sys\nsys.prefix = '{target_venv}'\n",
+            encoding="utf-8",
+        )
+
+        orig_cwd = os.getcwd()
+        try:
+            os.chdir(poison_dir)
+            # 1. Foreign interpreter must be rejected despite poisoned cwd
+            self.assertFalse(_probe_venv_interpreter(foreign_py, [target_venv]))
+            with self.assertRaises(ActivationError):
+                _resolve_target_python(hermes_file)
+
+            # 2. Legitimate venv must pass even from poisoned cwd
+            valid_dir = self.temp_path / "valid_release"
+            valid_venv = valid_dir / "venv"
+            valid_bin = valid_venv / "bin"
+            valid_bin.mkdir(parents=True)
+            (valid_venv / "pyvenv.cfg").write_text(
+                f"home = {sys.base_prefix}/bin\ninclude-system-site-packages = false\nversion = {sys.version.split()[0]}\n",
+                encoding="utf-8",
+            )
+            valid_hermes = valid_bin / "hermes"
+            valid_hermes.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            valid_hermes.chmod(0o755)
+            valid_py = valid_bin / "python"
+            valid_py.symlink_to(sys.executable)
+
+            resolved = _resolve_target_python(valid_hermes)
+            self.assertEqual(resolved, valid_py)
+            self.assertTrue(_probe_venv_interpreter(valid_py, [valid_venv]))
+        finally:
+            os.chdir(orig_cwd)
+
+    def test_target_python_rejects_cross_release_fallback_via_ambient_root(self) -> None:
+        """When selected target has no interpreter, do not fall back to ambient release venv."""
+        from aether_agents.launcher import ActivationError, _resolve_target_python
+
+        # Ambient release in XDG_DATA_HOME
+        data_home = self.temp_path / "fake_xdg_data"
+        ambient_venv = data_home / "aether" / "runtime" / "releases" / "other-1.0.0rc5" / "venv"
+        ambient_bin = ambient_venv / "bin"
+        ambient_bin.mkdir(parents=True)
+        (ambient_venv / "pyvenv.cfg").write_text(
+            f"home = {sys.base_prefix}/bin\ninclude-system-site-packages = false\nversion = {sys.version.split()[0]}\n",
+            encoding="utf-8",
+        )
+        (ambient_bin / "python").symlink_to(sys.executable)
+        current_dir = data_home / "aether" / "runtime" / "current"
+        current_dir.mkdir(parents=True)
+        (current_dir / "venv").symlink_to(ambient_venv)
+
+        # Selected target store with hermes but NO python
+        selected_dir = self.temp_path / "selected_store"
+        selected_venv = selected_dir / "venv"
+        selected_bin = selected_venv / "bin"
+        selected_bin.mkdir(parents=True)
+        selected_hermes = selected_bin / "hermes"
+        selected_hermes.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        selected_hermes.chmod(0o755)
+
+        old_xdg = os.environ.get("XDG_DATA_HOME")
+        os.environ["XDG_DATA_HOME"] = str(data_home)
+        try:
+            with self.assertRaises(ActivationError) as ctx:
+                _resolve_target_python(selected_hermes)
+            self.assertIn("could not be verified inside target venv", str(ctx.exception))
+        finally:
+            if old_xdg is not None:
+                os.environ["XDG_DATA_HOME"] = old_xdg
+            else:
+                os.environ.pop("XDG_DATA_HOME", None)
+
+    def test_target_python_rejects_split_corroboration_across_independent_roots(self) -> None:
+        """Probe and resolver must reject an interpreter reporting prefix in root A and purelib in root B."""
+        from aether_agents.launcher import (
+            ActivationError,
+            _probe_venv_interpreter,
+            _resolve_target_python,
+        )
+
+        root_a = self.temp_path / "split_root_a" / "venv"
+        root_b = self.temp_path / "split_root_b" / "venv"
+        root_a_bin = root_a / "bin"
+        root_a_bin.mkdir(parents=True)
+        root_b.mkdir(parents=True)
+
+        hermes_file = root_a_bin / "hermes"
+        hermes_file.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        hermes_file.chmod(0o755)
+
+        stub_py = root_a_bin / "python"
+        # Split script: prefix in root_a, purelib in root_b
+        split_script = (
+            f"#!{sys.executable}\n"
+            "import sys\n"
+            "if '-c' in sys.argv:\n"
+            f"    print('{root_a}')\n"
+            f"    print('{root_b}/lib/python3.13/site-packages')\n"
+            "    sys.exit(0)\n"
+            "sys.exit(0)\n"
+        )
+        stub_py.write_text(split_script, encoding="utf-8")
+        stub_py.chmod(0o755)
+
+        # Both roots present in target_venvs, but neither contains both prefix and purelib
+        self.assertFalse(_probe_venv_interpreter(stub_py, [root_a, root_b]))
+        with self.assertRaises(ActivationError) as ctx:
+            _resolve_target_python(hermes_file)
+        self.assertIn("could not be verified inside target venv", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
