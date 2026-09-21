@@ -55,13 +55,27 @@ def _resolve_retained_binding(
 
 def _current_segment_stats(
     paths: ObservationPaths,
+    *,
+    verify_archives: bool = True,
 ) -> tuple[list[tuple[SegmentRef, int, int, int]], bool]:
     """Stat every eligible retained segment without reading journal content.
 
-    Quarantined segments are excluded.  An archive whose manifest cannot be verified,
-    or a segment that cannot be stated, marks the view incomplete so no caller mistakes
-    a partial enumeration for the authoritative retained set.  An enumeration failure
-    raises, exactly as it does for a full validation.
+    ``verify_archives`` is set only by the asynchronous validation path, which
+    independently re-verifies an archived pair before trusting it as retained
+    evidence.  The pre-emission coverage check passes ``False``, because verifying an
+    archive means reading its manifest, hashing the compressed bytes, decompressing
+    the gzip and re-validating every archived event -- exactly the history work the
+    retained index exists to keep off synchronous callers.  A stat-only enumeration
+    still detects every change that matters for coverage: an archive that appears,
+    grows, is replaced, is truncated or disappears changes the stat signature, and an
+    in-place rewrite changes size and mtime.  An archive whose manifest became
+    unreadable while its bytes stayed identical still carries exactly the events the
+    validated snapshot read, so its contribution to the absence verdict is unchanged.
+
+    Quarantined segments are excluded.  A segment that cannot be stated marks the view
+    incomplete so no caller mistakes a partial enumeration for the authoritative
+    retained set.  An enumeration failure raises, exactly as it does for a full
+    validation.
     """
     segments = list_segments(paths)
     stats: list[tuple[SegmentRef, int, int, int]] = []
@@ -69,7 +83,7 @@ def _current_segment_stats(
     for segment in segments:
         if segment.state == "quarantine":
             continue
-        if segment.state == "archive":
+        if segment.state == "archive" and verify_archives:
             try:
                 from aether_agents.observation.retention import verify_archive
 
@@ -176,13 +190,14 @@ class RetainedIndex:
     ) -> bool:
         """Return whether the validated snapshot still covers the live retained evidence.
 
-        Stat-only: no journal content is read and no lock is taken, so a synchronous
-        native hook may call it.  A segment that another producer added, appended to,
-        replaced, truncated or removed after validation makes the snapshot's ``absent``
-        verdict unusable as proof -- that producer may already have attributed the same
-        task, and publishing a second claim would make the conflict destroy both.  The
-        caller keeps such an intent pending for the asynchronous validated emission
-        path instead.
+        Stat-only: no journal or archive content is read, no manifest is re-verified,
+        nothing is decompressed and no lock is taken, so a synchronous native hook may
+        call it.  A segment that another producer added, appended to, replaced,
+        truncated or removed after validation makes the snapshot's ``absent`` verdict
+        unusable as proof -- that producer may already have attributed the same task,
+        and publishing a second claim would make the conflict destroy both.  The caller
+        keeps such an intent pending for the asynchronous validated emission path
+        instead.
 
         Segments owned by ``own_epoch`` are this process's own writer: its appends and
         rotations are tracked as pending intents here, so they do not invalidate the
@@ -191,7 +206,7 @@ class RetainedIndex:
         if self._snapshot_state != "validated":
             return False
         try:
-            current_stats, complete = _current_segment_stats(paths)
+            current_stats, complete = _current_segment_stats(paths, verify_archives=False)
         except Exception:
             return False
         if not complete:

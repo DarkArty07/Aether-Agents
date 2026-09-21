@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import secrets
 import threading
+from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
 from time import perf_counter
@@ -32,6 +33,7 @@ from aether_agents.observation.capture.collector import Collector
 from aether_agents.observation.capture.journal import (
     JournalWriter,
     list_segments,
+    parse_segment_name,
     read_segment,
 )
 
@@ -50,6 +52,8 @@ from aether_agents.observation.contracts import (
     canonical_json_bytes,
 )
 from aether_agents.observation.identity import correlation_token
+from aether_agents.observation.locking import ProjectLockTimeout, project_lock
+from aether_agents.observation.retention import compact_segment, verify_archive
 from aether_agents.paths import ObservationPaths
 
 
@@ -645,13 +649,22 @@ def test_own_producer_appends_keep_a_validated_verdict_usable(
         project_id=PROJECT_ID, trace_id=own_trace, epoch=collector.producer_epoch
     ).unit("work_unit.bound", "reported", 32.0, task_ref=task_ref, relation="root")
     observer = object.__new__(hermes_plugin._Observer)
-    assert observer._emit_binding_durable(
+    observer._reconciler = hermes_plugin._NativeReconciliationWorker(observer)
+    assert not observer._emit_binding_durable(
         collector,
         trace_id=own_trace,
         task_ref=task_ref,
         relation="root",
         event=binding_event,
     )
+    assert _retained_unit_claims(paths, task_ref) == [], (
+        "the synchronous hook path never publishes a durable claim"
+    )
+    assert index.binding_state(task_ref) == "pending"
+
+    # The worker publishes it from its own validated snapshot, serialized against
+    # cooperating emitters.
+    observer._flush_pending_binding_events(collector)
     assert _retained_unit_claims(paths, task_ref) == [(own_trace, "work_unit.bound")]
 
     # A foreign segment appearing after validation stops covering, so the next claim
@@ -674,3 +687,345 @@ def test_own_producer_appends_keep_a_validated_verdict_usable(
     index.refresh(paths)
     assert index.get_binding(task_ref) == (own_trace, "root")
     assert index.get_binding("t_5a17e003") == (own_trace, "implementation")
+
+
+#: A hook-path bound well under the measured base cost of the archived corpus built
+#: below (3 archived segments x 400 events cost ~1.2 s of hashing, decompression and
+#: re-validation), and still generous for a loaded machine.
+_ARCHIVE_HOOK_BOUND_S = 0.25
+
+
+def _build_archived_corpus(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    archives: int = 3,
+    events_per_archive: int = 400,
+) -> ObservationPaths:
+    """Build a retained corpus whose whole history lives in verified archives.
+
+    Every archive is produced by the production compaction path from a closed segment
+    with its own producer epoch, so the cost this regression measures is real
+    ``verify_archive`` work: compressed-byte hashing, gzip decompression, and schema,
+    sequence and privacy validation of every archived event.
+    """
+    _, paths = _setup_project(tmp_path / "archived-hook", monkeypatch)
+    for archive_index in range(archives):
+        epoch = f"prd_{secrets.token_hex(16)}"
+        factory = EventFactory(epoch=epoch)
+        writer = JournalWriter(paths=paths, producer_epoch=epoch)
+        writer.open()
+        for event_index in range(events_per_archive):
+            event = factory.unit(
+                "work_unit.bound",
+                "reported",
+                100.0 + event_index,
+                task_ref=f"t_{archive_index:02x}{event_index:06x}",
+                relation="child",
+            )
+            assert writer.append(event).accepted
+        closed = writer.close()
+        assert closed is not None
+        segment = parse_segment_name(closed)
+        assert segment is not None and segment.state == "closed"
+        result = compact_segment(paths, segment)
+        assert verify_archive(result.manifest_path).ok
+    return paths
+
+
+def _count_archive_content_reads(monkeypatch: pytest.MonkeyPatch, counts: dict[str, int]) -> None:
+    """Instrument the two content-reading seams of archived-history verification."""
+    from aether_agents.observation import retention as retention_module
+
+    original_verify = retention_module.verify_archive
+    original_read = retention_module._read_gzip_segment
+
+    def counting_verify(manifest_path: Path) -> Any:
+        counts["verify_archive"] += 1
+        return original_verify(manifest_path)
+
+    def counting_read(compressed: bytes) -> Any:
+        counts["read_gzip_segment"] += 1
+        return original_read(compressed)
+
+    monkeypatch.setattr(retention_module, "verify_archive", counting_verify)
+    monkeypatch.setattr(retention_module, "_read_gzip_segment", counting_read)
+
+
+@pytest.mark.skipif(
+    RetainedIndex is None, reason="retained index is absent on the base RED revision"
+)
+def test_hook_binding_path_reads_no_archived_history_and_stays_bounded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A synchronous hook publishes nothing and reads no archived history.
+
+    The retained corpus is entirely archived, so the accepted tip's stat-only coverage
+    check had to hash, decompress and re-validate every archive before a hook could
+    publish: this harness measures ~1.2 s and three ``verify_archive`` calls per claim on
+    ``00be3b17``.  A hook keeps the intent pending instead, and the reconciliation worker
+    publishes it afterwards from its own validated snapshot.
+    """
+    paths = _build_archived_corpus(tmp_path, monkeypatch)
+    collector = Collector(paths=paths, runtime_fingerprint="3" * 64)
+    collector.start(None)
+    index = get_retained_index(paths)
+    index.refresh(paths)
+    assert index.snapshot_state == "validated"
+    archived = [segment for segment in list_segments(paths) if segment.state == "archive"]
+    assert len(archived) == 3
+
+    counts = {"verify_archive": 0, "read_gzip_segment": 0}
+    _count_archive_content_reads(monkeypatch, counts)
+
+    task_ref = "t_a2c00001"
+    claim_trace = "ctr_9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a"
+    claim_event = EventFactory(
+        project_id=PROJECT_ID, trace_id=claim_trace, epoch=collector.producer_epoch
+    ).unit("work_unit.bound", "reported", 900.0, task_ref=task_ref, relation="root")
+    observer = object.__new__(hermes_plugin._Observer)
+    observer._reconciler = hermes_plugin._NativeReconciliationWorker(observer)
+
+    start = perf_counter()
+    published = observer._emit_binding_durable(
+        collector,
+        trace_id=claim_trace,
+        task_ref=task_ref,
+        relation="root",
+        event=claim_event,
+    )
+    elapsed = perf_counter() - start
+
+    assert counts == {"verify_archive": 0, "read_gzip_segment": 0}, (
+        f"hook read archived history: {counts} in {elapsed:.3f}s over"
+        f" {len(archived)} archived segments"
+    )
+    assert elapsed < _ARCHIVE_HOOK_BOUND_S, (
+        f"hook binding path took {elapsed:.3f}s on a {len(archived)}x400 archived corpus"
+    )
+    assert published is False, "a hook must not publish a durable claim"
+    assert _retained_unit_claims(paths, task_ref) == []
+    assert index.binding_state(task_ref) == "pending"
+
+    # The worker's own coverage pass and emission stay stat-only as well.
+    observer._flush_pending_binding_events(collector)
+    assert _retained_unit_claims(paths, task_ref) == [(claim_trace, "work_unit.bound")]
+    assert counts == {"verify_archive": 0, "read_gzip_segment": 0}
+    collector.stop()
+
+
+def _cooperating_durable_emit(
+    paths: ObservationPaths,
+    task_ref: str,
+    trace_id: str,
+    *,
+    timeout_s: float | None,
+) -> str:
+    """One cooperating durable claim in base ``d2874c2f``'s read+emit order.
+
+    The base emitter held ``project_lock(paths, "native-binding")`` across its retained
+    read *and* its append, so a second cooperating emitter serializes behind it and
+    refuses instead of appending a contradictory claim.  The lock, the retained read and
+    the emit are production code; only this composition is test-local, because the
+    accepted tip moved absence-based emission into the reconciliation worker.
+    """
+    try:
+        with project_lock(paths, "native-binding", timeout_s=timeout_s):
+            if hermes_plugin._retained_binding(paths, task_ref) is not None:
+                return "refused"
+            emitter = Collector(paths=paths, runtime_fingerprint="3" * 64)
+            emitter.start(None)
+            try:
+                event = EventFactory(
+                    project_id=PROJECT_ID,
+                    trace_id=trace_id,
+                    epoch=emitter.producer_epoch,
+                ).unit("work_unit.bound", "reported", 61.0, task_ref=task_ref, relation="root")
+                accepted = emitter.emit(event).accepted
+            finally:
+                emitter.stop()
+            return "emitted" if accepted else "emit_failed"
+    except ProjectLockTimeout:
+        return "serialized_out"
+
+
+@pytest.mark.skipif(
+    RetainedIndex is None, reason="retained index is absent on the base RED revision"
+)
+def test_cooperating_emitters_serialize_absence_based_durable_emission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A cooperating emitter cannot interleave with the worker's verdict->append window.
+
+    The hook keeps an absence-based intent pending; a cooperating emitter then runs
+    *inside* the window between the worker's coverage verdict and its append.  On the
+    accepted tip ``00be3b17`` that window is unprotected, so the cooperating claim lands
+    and the worker appends a second, contradictory claim: two retained claims for one task
+    and no resolution.  Here the window is serialized by the project lock the pre-fix
+    production emitter used, so the cooperating emitter cannot append, exactly one durable
+    claim results, and a later cooperating emitter for the same task is refused instead of
+    creating a conflict.
+    """
+    _, paths = _setup_project(tmp_path / "cooperating-binding", monkeypatch)
+    task_ref = "t_c0000001"
+    hook_trace = "ctr_77777777777777777777777777777777"
+    first_rival_trace = "ctr_88888888888888888888888888888888"
+    second_rival_trace = "ctr_99999999999999999999999999999999"
+    collector = Collector(paths=paths, runtime_fingerprint="3" * 64)
+    collector.start(None)
+    index = get_retained_index(paths)
+    observer = object.__new__(hermes_plugin._Observer)
+    observer._reconciler = hermes_plugin._NativeReconciliationWorker(observer)
+
+    # 1. The production hook path keeps the absence-based intent pending.
+    hook_event = EventFactory(
+        project_id=PROJECT_ID, trace_id=hook_trace, epoch=collector.producer_epoch
+    ).unit("work_unit.bound", "reported", 51.0, task_ref=task_ref, relation="root")
+    assert not observer._emit_binding_durable(
+        collector,
+        trace_id=hook_trace,
+        task_ref=task_ref,
+        relation="root",
+        event=hook_event,
+    )
+    assert index.binding_state(task_ref) == "pending"
+    assert _retained_unit_claims(paths, task_ref) == []
+
+    # 2. The worker validated the task as absent before its emission cycle.
+    index.refresh(paths)
+    assert index.binding_state(task_ref) == "pending"
+
+    # 3. Interleave a cooperating emitter into the verdict -> append window.
+    verdict_taken = threading.Event()
+    interleave_done = threading.Event()
+    original_covers = RetainedIndex.snapshot_covers_disk
+
+    def paused_covers(
+        self: RetainedIndex, value: ObservationPaths, *args: Any, **kwargs: Any
+    ) -> bool:
+        verdict = original_covers(self, value, *args, **kwargs)
+        verdict_taken.set()
+        assert interleave_done.wait(timeout=5.0), "cooperating emitter never completed"
+        return verdict
+
+    monkeypatch.setattr(RetainedIndex, "snapshot_covers_disk", paused_covers)
+    outcomes: list[str] = []
+
+    def cooperating_emitter() -> None:
+        assert verdict_taken.wait(timeout=5.0)
+        try:
+            outcomes.append(
+                _cooperating_durable_emit(paths, task_ref, first_rival_trace, timeout_s=0.3)
+            )
+        finally:
+            interleave_done.set()
+
+    thread = threading.Thread(target=cooperating_emitter, name="cooperating-emitter")
+    thread.start()
+    observer._flush_pending_binding_events(collector)
+    thread.join(timeout=5.0)
+    assert not thread.is_alive()
+
+    claims = _retained_unit_claims(paths, task_ref)
+    assert claims == [(hook_trace, "work_unit.bound")], (
+        "exactly one durable claim must result"
+        f" (cooperating emitter: {outcomes}, retained claims: {claims})"
+    )
+    assert outcomes and outcomes[0] in {"serialized_out", "refused"}, (
+        f"the cooperating emitter appended inside the window: {outcomes}"
+    )
+
+    # 4. A cooperating emitter for the same task preserves the existing attribution.
+    assert (
+        _cooperating_durable_emit(paths, task_ref, second_rival_trace, timeout_s=None) == "refused"
+    )
+    assert _retained_unit_claims(paths, task_ref) == [(hook_trace, "work_unit.bound")]
+
+    # 5. The retained resolution keeps the winning attribution and stays resolvable.
+    index.refresh(paths)
+    assert index.get_binding(task_ref) == (hook_trace, "root")
+    assert index.binding_state(task_ref) == "verified"
+    collector.stop()
+
+
+def _recording_project_lock(original: Any, recorded: list[str]) -> Any:
+    """Wrap ``project_lock`` so the test can see which locks the code under test takes."""
+
+    @contextmanager
+    def wrapper(value: ObservationPaths, name: str, **kwargs: Any) -> Any:
+        recorded.append(name)
+        with original(value, name, **kwargs):
+            yield
+
+    return wrapper
+
+
+@pytest.mark.skipif(
+    RetainedIndex is None, reason="retained index is absent on the base RED revision"
+)
+def test_worker_emission_publishes_validated_absence_claims_once_under_the_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The worker publishes from its validated snapshot, under the project lock.
+
+    The same production entry point a synchronous hook uses keeps its intent pending and
+    takes no maintenance lock there; the reconciliation worker -- which validated the
+    snapshot at its own cadence -- publishes immediately inside the ``native-binding``
+    project lock and marks the intent emitted, so its later flush appends nothing twice.
+    """
+    _, paths = _setup_project(tmp_path / "worker-binding", monkeypatch)
+    hook_task = "t_w0rker02"
+    worker_task = "t_w0rker01"
+    hook_trace = "ctr_d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0"
+    worker_trace = "ctr_d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1"
+    collector = Collector(paths=paths, runtime_fingerprint="3" * 64)
+    collector.start(None)
+    index = get_retained_index(paths)
+    index.refresh(paths)
+    assert index.binding_state(hook_task) == "absent"
+    assert index.binding_state(worker_task) == "absent"
+    observer = object.__new__(hermes_plugin._Observer)
+    observer._reconciler = hermes_plugin._NativeReconciliationWorker(observer)
+
+    def claim_event(trace_id: str, task_ref: str, seconds: float) -> dict[str, Any]:
+        return EventFactory(
+            project_id=PROJECT_ID, trace_id=trace_id, epoch=collector.producer_epoch
+        ).unit("work_unit.bound", "reported", seconds, task_ref=task_ref, relation="root")
+
+    recorded: list[str] = []
+    monkeypatch.setattr(
+        hermes_plugin,
+        "project_lock",
+        _recording_project_lock(project_lock, recorded),
+        raising=False,
+    )
+
+    # The synchronous hook path publishes nothing and waits for no maintenance lock.
+    assert not observer._emit_binding_durable(
+        collector,
+        trace_id=hook_trace,
+        task_ref=hook_task,
+        relation="root",
+        event=claim_event(hook_trace, hook_task, 71.0),
+    )
+    assert _retained_unit_claims(paths, hook_task) == []
+    assert recorded == []
+
+    # The worker publishes the same validated absence immediately, serialized.
+    assert observer._emit_binding_durable(
+        collector,
+        trace_id=worker_trace,
+        task_ref=worker_task,
+        relation="root",
+        event=claim_event(worker_trace, worker_task, 72.0),
+        from_worker=True,
+    )
+    assert _retained_unit_claims(paths, worker_task) == [(worker_trace, "work_unit.bound")]
+    assert recorded == ["native-binding"]
+
+    # The flush publishes the hook's intent, and appends nothing a second time.
+    observer._flush_pending_binding_events(collector)
+    assert _retained_unit_claims(paths, hook_task) == [(hook_trace, "work_unit.bound")]
+    assert _retained_unit_claims(paths, worker_task) == [(worker_trace, "work_unit.bound")]
+    assert recorded == ["native-binding", "native-binding"]
+    collector.stop()
