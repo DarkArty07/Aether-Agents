@@ -1951,8 +1951,19 @@ class TuiPreservationTests(unittest.TestCase):
             os.chdir(orig_cwd)
 
     def test_target_python_rejects_cross_release_fallback_via_ambient_root(self) -> None:
-        """When selected target has no interpreter, do not fall back to ambient release venv."""
-        from aether_agents.launcher import ActivationError, _resolve_target_python
+        """A launcher run from another release's venv must not bind that release's interpreter.
+
+        Exercises the ``sys.executable`` fallback branch with the ambient release's interpreter as
+        the running one (``sys.executable`` patched to it), which is exactly the observed
+        cross-release fallback path. The ambient interpreter is a usable venv interpreter (positive
+        control below), so failing closed here is attributable to accepted venvs being derived from
+        the selected target alone, not to a broken probe.
+        """
+        from aether_agents.launcher import (
+            ActivationError,
+            _probe_venv_interpreter,
+            _resolve_target_python,
+        )
 
         # Ambient release in XDG_DATA_HOME
         data_home = self.temp_path / "fake_xdg_data"
@@ -1963,7 +1974,8 @@ class TuiPreservationTests(unittest.TestCase):
             f"home = {sys.base_prefix}/bin\ninclude-system-site-packages = false\nversion = {sys.version.split()[0]}\n",
             encoding="utf-8",
         )
-        (ambient_bin / "python").symlink_to(sys.executable)
+        ambient_python = ambient_bin / "python"
+        ambient_python.symlink_to(sys.executable)
         current_dir = data_home / "aether" / "runtime" / "current"
         current_dir.mkdir(parents=True)
         (current_dir / "venv").symlink_to(ambient_venv)
@@ -1977,11 +1989,17 @@ class TuiPreservationTests(unittest.TestCase):
         selected_hermes.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         selected_hermes.chmod(0o755)
 
+        # Positive control: the ambient interpreter verifies inside its own venv, so the assertion
+        # below cannot pass merely because the ambient release is unusable.
+        self.assertTrue(_probe_venv_interpreter(ambient_python, [ambient_venv]))
+
         old_xdg = os.environ.get("XDG_DATA_HOME")
         os.environ["XDG_DATA_HOME"] = str(data_home)
         try:
-            with self.assertRaises(ActivationError) as ctx:
-                _resolve_target_python(selected_hermes)
+            # The launcher process itself runs from the ambient release venv (defect setup).
+            with patch.object(sys, "executable", str(ambient_python)):
+                with self.assertRaises(ActivationError) as ctx:
+                    _resolve_target_python(selected_hermes)
             self.assertIn("could not be verified inside target venv", str(ctx.exception))
         finally:
             if old_xdg is not None:
