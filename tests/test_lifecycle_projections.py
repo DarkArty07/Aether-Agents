@@ -1874,3 +1874,172 @@ def test_unreadable_target_record_refuses_instead_of_synthesizing_a_pointer(
     (release / "record.json").symlink_to(elsewhere)
     with pytest.raises(IntegrityError, match="no immutable record"):
         store._target_active_payload(record)
+
+
+def test_reconcile_to_active_dispatches_to_active_manager_environment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The entry-point invocation of reconcile --to active reaches the active manager.
+
+    Regression for RC6-LIFE-2: verify that an entry point running outside the active
+    manager dispatches reconcile --to active to the authenticated manager environment
+    rather than running locally and failing authority proof.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    controller = RecordingServiceController()
+    manager = _activation_manager(tmp_path, monkeypatch, controller=controller)
+    store = manager.store
+    active_rec = _record(store, "1.0.0rc6-" + "6" * 16)
+    _install_record(manager, active_rec)
+
+    probe_python = tmp_path / "manager-bin-python"
+    witness_file = tmp_path / "probe_witness.json"
+    probe_python.write_text(
+        f"#!{sys.executable}\n"
+        "import sys, json\n"
+        f"witness = {str(witness_file)!r}\n"
+        "with open(witness, 'w', encoding='utf-8') as f:\n"
+        "    json.dump({'executable': sys.executable, 'argv': sys.argv[1:]}, f)\n"
+        "is_yes = '--yes' in sys.argv\n"
+        "envelope = {\n"
+        "    'schema_version': 1,\n"
+        "    'command': 'reconcile',\n"
+        "    'result': 'changed' if is_yes else 'planned',\n"
+        "    'changed': is_yes,\n"
+        "    'manager_version': '1.0.0rc6',\n"
+        "    'active_version': '1.0.0-rc.6',\n"
+        "    'warnings': [] if is_yes else [{'code': 'CONFIRMATION_REQUIRED', 'message': 'Re-run with --yes'}],\n"
+        "    'errors': [],\n"
+        "    'data': {\n"
+        "        'mode': 'active',\n"
+        f"        'active_release_id': '{active_rec.release_id}',\n"
+        "        'mismatches': [] if is_yes else ['desktop_projection_mismatch'],\n"
+        "        'projections_reconciled': 1 if is_yes else 0,\n"
+        "    },\n"
+        "}\n"
+        "print(json.dumps(envelope))\n"
+        "sys.exit(0)\n",
+        encoding="utf-8",
+    )
+    probe_python.chmod(0o755)
+
+    from aether_agents.cli import main as cli_main
+
+    monkeypatch.setattr("aether_agents.cli._lifecycle_manager", lambda: manager)
+    monkeypatch.setattr(
+        manager, "active_manager_dispatch_target", lambda: (active_rec, probe_python)
+    )
+
+    # 1. Preview without --yes dispatches to active manager and reports planned
+    exit_code = cli_main(["reconcile", "--to", "active", "--json"])
+    assert exit_code == 0
+    assert witness_file.is_file()
+    witness_data = json.loads(witness_file.read_text(encoding="utf-8"))
+    assert witness_data["argv"] == [
+        "-m",
+        "aether_agents.cli",
+        "reconcile",
+        "--to",
+        "active",
+        "--json",
+    ]
+    out = json.loads(capsys.readouterr().out)
+    assert out["command"] == "reconcile"
+    assert out["result"] == "planned"
+    assert out["changed"] is False
+
+    # 2. Preview with --dry-run dispatches to active manager
+    assert cli_main(["reconcile", "--to", "active", "--dry-run", "--json"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["result"] == "planned"
+    assert out["changed"] is False
+
+    # 3. Apply with --yes dispatches to active manager and applies
+    assert cli_main(["reconcile", "--to", "active", "--yes", "--json"]) == 0
+    witness_data = json.loads(witness_file.read_text(encoding="utf-8"))
+    assert "--yes" in witness_data["argv"]
+    out = json.loads(capsys.readouterr().out)
+    assert out["result"] == "changed"
+    assert out["changed"] is True
+    assert out["data"]["projections_reconciled"] == 1
+
+
+def test_reconcile_refuses_when_no_active_manager(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Reconcile refuses with code 4 when no active manager exists."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    manager = _activation_manager(tmp_path, monkeypatch)
+
+    from aether_agents.cli import main as cli_main
+
+    monkeypatch.setattr("aether_agents.cli._lifecycle_manager", lambda: manager)
+    monkeypatch.setattr(manager, "active_manager_dispatch_target", lambda: None)
+    monkeypatch.setattr(
+        manager,
+        "executing_active_manager",
+        lambda: (_ for _ in ()).throw(IntegrityError("no active manager")),
+    )
+
+    exit_code = cli_main(["reconcile", "--to", "active", "--json"])
+    assert exit_code == 4
+    out = json.loads(capsys.readouterr().out)
+    assert out["result"] == "error"
+    assert out["errors"][0]["code"] == "ACTIVE_MANAGER_AUTHORITY_REQUIRED"
+    assert "no active manager can authorize reconciliation" in out["errors"][0]["message"]
+
+
+def test_reconcile_unsupported_mode_without_active_manager(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Unsupported modes refuse with code 3 even before product bootstrap."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    manager = _activation_manager(tmp_path, monkeypatch)
+
+    from aether_agents.cli import main as cli_main
+
+    monkeypatch.setattr("aether_agents.cli._lifecycle_manager", lambda: manager)
+    monkeypatch.setattr(manager, "active_manager_dispatch_target", lambda: None)
+
+    assert cli_main(["reconcile", "--to", "installed", "--json"]) == 3
+    out = json.loads(capsys.readouterr().out)
+    assert out["result"] == "unsupported"
+    assert out["errors"][0]["code"] == "UNSUPPORTED_RECONCILE_MODE"
+
+    assert cli_main(["reconcile", "--json"]) == 3
+    out = json.loads(capsys.readouterr().out)
+    assert out["result"] == "unsupported"
+    assert out["errors"][0]["code"] == "UNSUPPORTED_RECONCILE_MODE"
+
+
+def test_reconcile_stale_managed_manager_refuses_recursion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A stale managed manager refuses with code 4 instead of recursively dispatching."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    manager = _activation_manager(tmp_path, monkeypatch)
+
+    from aether_agents.cli import main as cli_main
+
+    monkeypatch.setattr("aether_agents.cli._lifecycle_manager", lambda: manager)
+    monkeypatch.setattr(manager, "executing_manager_is_release_scoped", lambda: True)
+    monkeypatch.setattr(
+        manager,
+        "executing_active_manager",
+        lambda: (_ for _ in ()).throw(IntegrityError("stale managed manager")),
+    )
+
+    exit_code = cli_main(["reconcile", "--to", "active", "--json"])
+    assert exit_code == 4
+    out = json.loads(capsys.readouterr().out)
+    assert out["result"] == "error"
+    assert out["errors"][0]["code"] == "ACTIVE_MANAGER_AUTHORITY_REQUIRED"
+    assert "stale managed manager" in out["errors"][0]["message"]
