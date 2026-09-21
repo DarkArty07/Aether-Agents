@@ -15,6 +15,8 @@ CLI_REFERENCE = ROOT / "docs/reference/cli.md"
 LIFECYCLE_GUIDE = ROOT / "docs/guides/lifecycle.md"
 LIMITATIONS = ROOT / "docs/reference/limitations-and-troubleshooting.md"
 OBSERVATION_GUIDE = ROOT / "docs/guides/observation.md"
+CAPABILITY_REGISTRY = ROOT / "docs/capabilities.toml"
+GENERATED_REFERENCE = ROOT / "docs/reference/capabilities.md"
 
 
 def test_project_skill_is_discovered_without_identity_hardcoding() -> None:
@@ -138,7 +140,7 @@ def test_documented_project_selection_precedence_matches_the_implemented_resolve
     monkeypatch.setenv("AETHER_PROJECT_ROOT", str(alpha))
     assert launcher._resolve_project(None) == (alpha, "11111111-1111-4111-8111-111111111111")
 
-    # Empty and relative identities fail visibly instead of falling back to cwd.
+    # An empty or relative AETHER_PROJECT_ROOT is refused instead of falling back to cwd.
     monkeypatch.setenv("AETHER_PROJECT_ROOT", "")
     with pytest.raises(launcher.ActivationError, match="must not be empty"):
         launcher._resolve_project(None)
@@ -151,6 +153,12 @@ def test_documented_project_selection_precedence_matches_the_implemented_resolve
 
     # (4) The current directory selects its own initialized project.
     assert launcher._resolve_project(None) == (beta, "22222222-2222-4222-8222-222222222222")
+
+    # (3b) A relative --project PATH is resolved against the working directory (only
+    # an empty value is refused), which is why the documented split names the exact
+    # value that fails per surface. See the identity-split guidance oracle below.
+    monkeypatch.chdir(tmp_path)
+    assert launcher._resolve_project("alpha") == (alpha, "11111111-1111-4111-8111-111111111111")
 
     # (5) The sole registered project resolves only when nothing else applies.
     monkeypatch.chdir(tmp_path)
@@ -177,6 +185,23 @@ def test_documented_launch_and_shell_default_guidance_states_the_implemented_beh
         "functions -e aether",
     ):
         assert required in guide, required
+
+    # The optional project default is taught in its own right, with generic paths
+    # and its matching removal command, next to the executable shortcut.
+    shell_section = guide.split("### Optional personal shell defaults", 1)[1]
+    shell_section = shell_section.split("\n## ", 1)[0]
+    for required in (
+        "takes precedence over the current directory",
+        "export AETHER_PROJECT_ROOT='/path/to/an/initialized/project'",
+        "unset AETHER_PROJECT_ROOT",
+        "set -gx AETHER_PROJECT_ROOT /path/to/an/initialized/project",
+        "set -e AETHER_PROJECT_ROOT",
+        "never writes a personal shell preference",
+        "alias aether='/path/to/aether/runtime/current/venv/bin/aether'",
+        "/path/to/aether/runtime/current/venv/bin/aether $argv",
+    ):
+        assert required in shell_section, required
+    assert "/home/" not in guide and "/Users/" not in guide
 
     # Aether itself never writes a personal shell preference: no product source
     # references a personal shell configuration file.
@@ -206,6 +231,18 @@ def test_documented_recovery_surfaces_and_transient_codes_match_the_implementati
         "aether rollback [VERSION] [--dry-run] [--yes] [--json]",
     ):
         assert required in lifecycle, required
+
+    # The recovery preamble must not deny the rollback surface's own release
+    # switch, and it must keep the refusals that are true of all three surfaces.
+    assert "None of them selects a different release" not in lifecycle
+    for required in (
+        "installs a package, acquires credentials, or rolls user state backward",
+        "`aether rollback` is the one surface that selects a different release",
+        "switches the product-owned runtime, launcher and service pointers",
+        "or to the explicitly named one",
+        "Observation journals, key epochs and other user state continue forward unchanged",
+    ):
+        assert required in lifecycle, required
     for required in ("STATE_BUSY", "CATCHUP_INCOMPLETE", "STATE_UNREADABLE"):
         assert required in observation, required
         assert required in limitations, required
@@ -221,3 +258,49 @@ def test_documented_recovery_surfaces_and_transient_codes_match_the_implementati
         "AETHER-OBSERVE-STATE-UNREADABLE",
     ):
         assert f'"{code}"' in brief_source, code
+
+
+def test_documented_identity_value_split_matches_the_implemented_resolver(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every identity surface states which value is refused and which is resolved."""
+
+    surfaces = {
+        "docs/getting-started.md": GETTING_STARTED.read_text(encoding="utf-8"),
+        "docs/reference/cli.md": CLI_REFERENCE.read_text(encoding="utf-8"),
+        "docs/capabilities.toml": CAPABILITY_REGISTRY.read_text(encoding="utf-8"),
+        "docs/reference/capabilities.md": GENERATED_REFERENCE.read_text(encoding="utf-8"),
+    }
+    for name, text in surfaces.items():
+        flat = text.replace("`", "")
+        for required in (
+            "an empty --project value is refused",
+            "a relative --project PATH is resolved against the current working directory",
+            "AETHER_PROJECT_ROOT must be an absolute path",
+            "AETHER_PROJECT_ID must be a canonical UUID",
+        ):
+            assert required in flat, (name, required)
+        assert "empty or relative identities fail visibly" not in flat, name
+
+    # That split is the one the real resolver implements.
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.delenv("AETHER_HERMES_ROOT", raising=False)
+    monkeypatch.delenv("AETHER_PROJECT_ROOT", raising=False)
+    monkeypatch.delenv("AETHER_PROJECT_ID", raising=False)
+
+    from aether_agents.observation.context import ProjectRegistry
+
+    project_id = "11111111-1111-4111-8111-111111111111"
+    project = _initialized_project(tmp_path / "alpha", project_id, "alpha")
+    assert ProjectRegistry().register(project_id, project, "alpha")
+
+    monkeypatch.chdir(tmp_path)
+    # A relative --project PATH resolves against the working directory...
+    assert launcher._resolve_project("alpha") == (project, project_id)
+    # ...an empty --project value is refused...
+    with pytest.raises(launcher.ActivationError, match="project path must not be empty"):
+        launcher._resolve_project("")
+    # ...and AETHER_PROJECT_ROOT must be absolute.
+    monkeypatch.setenv("AETHER_PROJECT_ROOT", "relative/project")
+    with pytest.raises(launcher.ActivationError, match="must be an absolute path"):
+        launcher._resolve_project(None)
