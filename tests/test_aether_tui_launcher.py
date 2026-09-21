@@ -1045,6 +1045,8 @@ class TuiPreservationTests(unittest.TestCase):
         env["HERMES_SESSION_KEY"] = "stale-session-key"
         env["HERMES_UI_SESSION_ID"] = "stale-ui-session-id"
         env["HERMES_CWD"] = "/tmp/stale-cwd"
+        env["TERMINAL_CWD"] = "/tmp/stale-terminal-cwd"
+        env["MESSAGING_CWD"] = "/tmp/stale-messaging-cwd"
         env["HERMES_BIN"] = "/tmp/stale-bin/hermes"
         env["VIRTUAL_ENV"] = "/opt/stale-backend/venv"
         env["_HERMES_GATEWAY"] = "1"
@@ -1147,6 +1149,8 @@ class TuiPreservationTests(unittest.TestCase):
         self.assertNotIn("HERMES_SESSION_KEY", received_env)
         self.assertNotIn("HERMES_UI_SESSION_ID", received_env)
         self.assertNotIn("HERMES_CWD", received_env)
+        self.assertNotIn("TERMINAL_CWD", received_env)
+        self.assertNotIn("MESSAGING_CWD", received_env)
         self.assertNotIn("HERMES_BIN", received_env)
         self.assertNotIn("VIRTUAL_ENV", received_env)
         self.assertNotIn("_HERMES_GATEWAY", received_env)
@@ -1263,6 +1267,8 @@ class TuiPreservationTests(unittest.TestCase):
         self.assertNotIn("HERMES_SESSION_KEY", received_env)
         self.assertNotIn("HERMES_UI_SESSION_ID", received_env)
         self.assertNotIn("HERMES_CWD", received_env)
+        self.assertNotIn("TERMINAL_CWD", received_env)
+        self.assertNotIn("MESSAGING_CWD", received_env)
         self.assertNotIn("HERMES_BIN", received_env)
         self.assertNotIn("VIRTUAL_ENV", received_env)
         self.assertNotIn("_HERMES_GATEWAY", received_env)
@@ -1651,6 +1657,8 @@ class TuiPreservationTests(unittest.TestCase):
                 self.assertNotIn("HERMES_SESSION_KEY", rec_fresh)
                 self.assertNotIn("HERMES_UI_SESSION_ID", rec_fresh)
                 self.assertNotIn("HERMES_CWD", rec_fresh)
+                self.assertNotIn("TERMINAL_CWD", rec_fresh)
+                self.assertNotIn("MESSAGING_CWD", rec_fresh)
                 self.assertNotIn("HERMES_BIN", rec_fresh)
                 self.assertNotIn("VIRTUAL_ENV", rec_fresh)
                 self.assertNotIn("_HERMES_GATEWAY", rec_fresh)
@@ -1808,7 +1816,140 @@ class TuiPreservationTests(unittest.TestCase):
         self.assertEqual(rec.get("HERMES_PYTHON_SRC_ROOT"), str(self.hermes_source_dir.resolve()))
         self.assertNotIn("HERMES_RPC_SOCKET", rec)
         self.assertNotIn("HERMES_TUI_GATEWAY_URL", rec)
+        self.assertNotIn("HERMES_CWD", rec)
+        self.assertNotIn("TERMINAL_CWD", rec)
+        self.assertNotIn("MESSAGING_CWD", rec)
         self.assertNotIn("VIRTUAL_ENV", rec)
+
+    def test_regression_contaminated_parent_cannot_override_project_cwd_with_terminal_or_messaging_cwd(
+        self,
+    ) -> None:
+        """Reproduction oracle: contaminated parent TERMINAL_CWD/MESSAGING_CWD must not steer session root."""
+        stub_out_fresh = self.temp_path / "stub_cwd_fresh.json"
+        env_fresh = self._make_contaminated_env(stub_out_fresh)
+        env_fresh["PYTHONPATH"] = str(ROOT / "src")
+        env_fresh["TERMINAL_CWD"] = "/tmp/stale-terminal-foreign-cwd"
+        env_fresh["MESSAGING_CWD"] = "/tmp/stale-messaging-foreign-cwd"
+
+        res_fresh = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aether_agents.launcher",
+                "--project",
+                str(self.project_dir),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env_fresh,
+        )
+        self.assertEqual(res_fresh.returncode, 0, res_fresh.stderr)
+        self.assertTrue(stub_out_fresh.is_file())
+        data_fresh = json.loads(stub_out_fresh.read_text(encoding="utf-8"))
+        rec_fresh = data_fresh["environ"]
+
+        self.assertNotIn("TERMINAL_CWD", rec_fresh)
+        self.assertNotIn("MESSAGING_CWD", rec_fresh)
+        self.assertNotIn("HERMES_CWD", rec_fresh)
+        self.assertEqual(data_fresh["cwd"], str(self.project_dir.resolve()))
+        self.assertEqual(rec_fresh.get("PWD"), str(self.project_dir.resolve()))
+
+        # Resume continuation launch
+        stub_out_resume = self.temp_path / "stub_cwd_resume.json"
+        env_resume = self._make_contaminated_env(stub_out_resume)
+        env_resume["PYTHONPATH"] = str(ROOT / "src")
+        env_resume["TERMINAL_CWD"] = "/tmp/stale-terminal-foreign-cwd"
+        env_resume["MESSAGING_CWD"] = "/tmp/stale-messaging-foreign-cwd"
+
+        res_resume = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aether_agents.launcher",
+                "--project",
+                str(self.project_dir),
+                "--resume",
+                "latest",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env_resume,
+        )
+        self.assertEqual(res_resume.returncode, 0, res_resume.stderr)
+        self.assertTrue(stub_out_resume.is_file())
+        data_resume = json.loads(stub_out_resume.read_text(encoding="utf-8"))
+        rec_resume = data_resume["environ"]
+
+        self.assertNotIn("TERMINAL_CWD", rec_resume)
+        self.assertNotIn("MESSAGING_CWD", rec_resume)
+        self.assertNotIn("HERMES_CWD", rec_resume)
+        self.assertEqual(data_resume["cwd"], str(self.project_dir.resolve()))
+        self.assertEqual(rec_resume.get("PWD"), str(self.project_dir.resolve()))
+
+        # 3. Legitimate terminal.cwd in config.yaml matching project is accepted
+        cfg_file = self.profile_dir / "config.yaml"
+        original_cfg = cfg_file.read_text(encoding="utf-8")
+        try:
+            cfg_file.write_text(
+                original_cfg + f"terminal:\n  cwd: {self.project_dir}\n",
+                encoding="utf-8",
+            )
+            stub_out_legit = self.temp_path / "stub_cwd_legit.json"
+            env_legit = self._make_contaminated_env(stub_out_legit)
+            env_legit["PYTHONPATH"] = str(ROOT / "src")
+            env_legit["TERMINAL_CWD"] = "/tmp/stale-terminal-foreign-cwd"
+            env_legit["MESSAGING_CWD"] = "/tmp/stale-messaging-foreign-cwd"
+
+            res_legit = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aether_agents.launcher",
+                    "--project",
+                    str(self.project_dir),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env_legit,
+            )
+            self.assertEqual(res_legit.returncode, 0, res_legit.stderr)
+            self.assertTrue(stub_out_legit.is_file())
+            data_legit = json.loads(stub_out_legit.read_text(encoding="utf-8"))
+            rec_legit = data_legit["environ"]
+            self.assertNotIn("TERMINAL_CWD", rec_legit)
+            self.assertNotIn("MESSAGING_CWD", rec_legit)
+            self.assertNotIn("HERMES_CWD", rec_legit)
+            self.assertEqual(data_legit["cwd"], str(self.project_dir.resolve()))
+            self.assertEqual(rec_legit.get("PWD"), str(self.project_dir.resolve()))
+            self.assertIn(
+                "cwd:", (Path(rec_legit["HERMES_HOME"]) / "config.yaml").read_text(encoding="utf-8")
+            )
+
+            # 4. Contradictory terminal.cwd in config.yaml is visibly refused
+            cfg_file.write_text(
+                original_cfg + "terminal:\n  cwd: /tmp/foreign-contradictory-dir\n",
+                encoding="utf-8",
+            )
+            res_contra = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aether_agents.launcher",
+                    "--project",
+                    str(self.project_dir),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env_legit,
+            )
+            self.assertEqual(res_contra.returncode, 2)
+            self.assertIn("contradicts selected project", res_contra.stderr)
+        finally:
+            cfg_file.write_text(original_cfg, encoding="utf-8")
 
     def test_target_python_supports_regular_file_executable_stub_secondary_case(self) -> None:
         """Secondary case: regular-file executable stub inside release venv is accepted if probe passes."""

@@ -1,13 +1,13 @@
 # RC6-LAUNCH — Inherited Transport Selector Scrubbing and Packaged Launch Evidence (rc6)
 
-**Unit**: RC6-LAUNCH (`t_fb74d205`), role Implementer, worktree branch
-`aether-agents-2/t_fb74d205-rc6-launch-scrub-inherited-transport-sel`.
+**Unit**: RC6-LAUNCH (`t_fb74d205`) and continuation RC6-LAUNCH-2 (`t_b0975e1c`), role Implementer, worktree branch
+`aether-agents-2/t_b0975e1c-rc6-launch-2-scrub-inherited-terminal_cw`.
 **Authority**: Objective Contract `oc_b5926701207812e8@v1`
 (SHA-256 `e7164c83862b747c7868706799c08ea63151ca388aa2dc2b1b89a40be33b01fc`), base commit
-`d2874c2f3fc839a82fbaa96ece6edebab3856298`, material design
+`c79f5b147ae0c4f52c606978ff0bf3e82c5096fb` (accepted RC6-LAUNCH tip on base `d2874c2f3fc839a82fbaa96ece6edebab3856298`), material design
 `specs/001-aether-v1-productization/plan-rc6.md` §U1, and Supervisor breakdown with shared decisions 1–10
 (`specs/001-aether-v1-productization/tasks-rc6.md` at `adc57c2b`). Never edited the contract.
-**Delivered scope**: contract U1 (code half), D1; acceptance obligation AC-6 (code half); breakdown unit RC6-LAUNCH.
+**Delivered scope**: contract U1 (code half), D1; acceptance obligation AC-6 (code half); breakdown units RC6-LAUNCH and RC6-LAUNCH-2.
 **Unit compatibility conclusion**: `patch`.
 
 ---
@@ -17,7 +17,7 @@
 1. **Scrubbing inherited transport selectors and stale paths**:
    - `src/aether_agents/launcher.py` scrubs transport selectors and stale active-session transport paths
      from `os.environ` before executing the Hermes TUI child process via `os.execve(executable, command, environment)`:
-     - Transport selectors: `HERMES_PYTHON`, `HERMES_PYTHON_SRC_ROOT`, `HERMES_BIN`, `HERMES_CWD`, `_HERMES_GATEWAY`.
+     - Transport selectors: `HERMES_PYTHON`, `HERMES_PYTHON_SRC_ROOT`, `HERMES_BIN`, `HERMES_CWD`, `TERMINAL_CWD`, `MESSAGING_CWD`, `_HERMES_GATEWAY`.
      - Stale socket/RPC/gateway paths: `HERMES_RPC_SOCKET`, `HERMES_RPC_DIR`, `HERMES_RPC_TOKEN`,
        `HERMES_TUI_GATEWAY_URL`, `HERMES_TUI_SIDECAR_URL`, `HERMES_GATEWAY_SESSION`, `HERMES_GATEWAY_*`.
      - Stale active-session transport files and ids: `HERMES_TUI_ACTIVE_SESSION_FILE`, `HERMES_SESSION_ID`,
@@ -29,7 +29,7 @@
    - Preserves unrelated provider credentials (e.g. `CUSTOM_CREDENTIAL_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`)
      and model configuration (e.g. `HERMES_MODEL`, `HERMES_INFERENCE_MODEL`).
 
-3. **Binding target release identities after scrubbing**:
+2. **Binding target release identities after scrubbing**:
    - `HERMES_PYTHON`: resolves to the active release's absolute lexical Python interpreter path
      (`<target_venv>/bin/python` or `python3`), preserving the venv symlink without leaf dereference to
      the base interpreter. Proved via a bounded isolated subprocess probe (`python -I -c ...` executed with
@@ -65,9 +65,19 @@
    - Pre/post file-type and SHA-256 inventories of locked `hermes-source` match bit-for-bit across launches, with zero
      npm/build artefacts generated.
 
+6. **Scrubbing inherited modern cwd selectors and verifying project alignment (RC6-LAUNCH-2)**:
+   - `src/aether_agents/launcher.py` scrubs `TERMINAL_CWD` and `MESSAGING_CWD` in `keys_to_drop`, closing the asymmetry
+     where `HERMES_CWD` was dropped while the modern runtime selectors were inherited by the target Hermes process.
+   - Ambient parent `TERMINAL_CWD` and `MESSAGING_CWD` are removed before `os.execve`, ensuring the fresh TUI/session
+     reports the resolved project root as its cwd and does not steer into a foreign directory.
+   - Preserves operator configuration bytes and the native runtime config bridge (`apply_terminal_config_to_env`).
+   - Profile configuration is verified against the selected project: if `terminal.cwd` in `config.yaml` is set and
+     resolves to the project root, launch proceeds; if `terminal.cwd` contradicts the resolved project, `inspect_activation`
+     visibly refuses with `ActivationError` (exit code 2), preventing silent misdirection of the session.
+
 ---
 
-## 2. Contaminated environment construction
+## 2. Contaminated environment construction and defect reproduction
 
 The test suite constructs the contaminated parent environment via `_make_contaminated_env()` in
 `tests/test_aether_tui_launcher.py`:
@@ -85,6 +95,8 @@ env["HERMES_SESSION_ID"] = "stale-session-123"
 env["HERMES_SESSION_KEY"] = "stale-session-key"
 env["HERMES_UI_SESSION_ID"] = "stale-ui-session-id"
 env["HERMES_CWD"] = "/tmp/stale-cwd"
+env["TERMINAL_CWD"] = "/tmp/stale-terminal-cwd"
+env["MESSAGING_CWD"] = "/tmp/stale-messaging-cwd"
 env["HERMES_BIN"] = "/tmp/stale-bin/hermes"
 env["VIRTUAL_ENV"] = "/opt/stale-backend/venv"
 env["_HERMES_GATEWAY"] = "1"
@@ -102,13 +114,34 @@ env["HERMES_CRON_JOB"] = "stale-cron"
 env["CUSTOM_CREDENTIAL_KEY"] = "retained-secret"
 ```
 
-Reproduction verification:
-- Prior to the fix, `HERMES_PYTHON`, `HERMES_PYTHON_SRC_ROOT`, `HERMES_RPC_SOCKET`, `HERMES_CWD`, `HERMES_BIN`,
-  and `VIRTUAL_ENV` leaked directly into the child process environment, causing nested/successor launches to bind
-  to the old backend.
-- After the fix, `test_regression_contaminated_parent_cannot_select_old_backend` explicitly asserts that the child's
-  `HERMES_PYTHON` and `HERMES_PYTHON_SRC_ROOT` do NOT match the stale parent values, but instead match the active release
-  target paths, and that all stale transport sockets and URLs are absent.
+### Confirmed defect (RC6-LAUNCH-2)
+
+Supervisor review of RC6-QUAL (run 46) reproduced end-to-end that the initial RC6-LAUNCH scrub
+dropped `HERMES_CWD` but missed the modern cwd selectors `TERMINAL_CWD` and `MESSAGING_CWD`.
+The maintained fork sets both spellings on the same line (`hermes_cli/main.py:2556-2557`), while the shipped
+product and runtime gateway read `TERMINAL_CWD` as the workspace cwd (`hermes_cli/config.py:3377`,
+`config_defaults.py:4617`, `tui_gateway/server.py:1610/2530`). Consequently, the initial scrub blocked the
+legacy spelling but let the modern one through into `/proc/<pid>/environ`, steering the fresh TUI's
+session cwd to the ambient foreign directory rather than the resolved project root.
+
+### Implementer RED reproduction re-run
+
+On base commit `c79f5b147ae0c4f52c606978ff0bf3e82c5096fb`, executed the dedicated launch exec path regression:
+- Command: `uv run --frozen python scripts/run_tests.py -- -k "test_regression_contaminated_parent_cannot_override_project_cwd_with_terminal_or_messaging_cwd"`
+- Observed result:
+  ```
+  FAILED tests/test_aether_tui_launcher.py::TuiPreservationTests::test_regression_contaminated_parent_cannot_override_project_cwd_with_terminal_or_messaging_cwd
+  AssertionError: 'TERMINAL_CWD' unexpectedly found in {'... TERMINAL_CWD': '/tmp/stale-terminal-foreign-cwd', ...}
+  ```
+- Result: RED confirmed. The hostile ambient `TERMINAL_CWD` and `MESSAGING_CWD` leaked into the target environment.
+
+### Post-fix verification
+
+With `TERMINAL_CWD` and `MESSAGING_CWD` added to `keys_to_drop` and `_configured_terminal_cwd` project alignment validation:
+- Fresh and `--resume latest` launches strip `TERMINAL_CWD`, `MESSAGING_CWD`, and `HERMES_CWD`.
+- Child executable process cwd and `PWD` match the resolved project root `str(self.project_dir.resolve())`.
+- Legitimate `terminal.cwd` in `config.yaml` matching the project root is accepted and preserved for the runtime config bridge.
+- Contradictory `terminal.cwd` in `config.yaml` is visibly refused with `ActivationError` (code 2), preventing silent misrouting.
 
 ---
 
@@ -117,6 +150,7 @@ Reproduction verification:
 | Requirement / Clause | Verification check | Observed result | Evidence status |
 |---|---|---|---|
 | AC-6: Scrub inherited transport selectors | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_regression_contaminated_parent_cannot_select_old_backend` | PASS: child does not inherit stale `HERMES_PYTHON`, `HERMES_PYTHON_SRC_ROOT`, `HERMES_RPC_SOCKET`, `HERMES_TUI_GATEWAY_URL`, or `VIRTUAL_ENV` | Direct |
+| AC-6: Scrub inherited modern cwd selectors (TERMINAL_CWD, MESSAGING_CWD) | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_regression_contaminated_parent_cannot_override_project_cwd_with_terminal_or_messaging_cwd` | PASS: child does not inherit contaminated `TERMINAL_CWD` or `MESSAGING_CWD`, child cwd and PWD match resolved project root in fresh and resume launches, legitimate project-matching config is accepted and preserved, and contradictory `terminal.cwd` is visibly refused with `ActivationError` | Direct |
 | AC-6: Bind target interpreter and source root after scrubbing | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_launch_scrubs_inherited_transport_and_binds_target_in_clean_and_contaminated_envs` | PASS: child receives exact target `HERMES_PYTHON`, `HERMES_PYTHON_SRC_ROOT`, `HERMES_TUI_DIR`, `HERMES_HOME`, `AETHER_PROJECT_ID`, `PWD` in both clean and contaminated envs; `_assert_bound_target_python` confirms lexical path and subprocess probe `sys.prefix`/`purelib` match release venv | Direct |
 | AC-6: Symlink venv interpreter preserved without leaf dereference | `tests/test_aether_tui_launcher.py::TuiPreservationTests::_assert_bound_target_python` in all launch tests | PASS: `HERMES_PYTHON` equals lexical `<target_venv>/bin/python` symlink and differs from dereferenced base interpreter; subprocess probe confirms `sys.prefix` equals target venv | Direct |
 | AC-6: Secondary case regular-file executable stub | `tests/test_aether_tui_launcher.py::TuiPreservationTests::test_target_python_supports_regular_file_executable_stub_secondary_case` | PASS: regular file executable inside target venv passing probe is accepted and returns lexical path | Direct |
@@ -155,9 +189,10 @@ Reproduction verification:
     `test_target_python_probe_isolated_from_project_local_imports`,
     `test_target_python_rejects_cross_release_fallback_via_ambient_root` (positive control proving the
     ambient interpreter verifies inside its own venv, with `sys.executable` patched to it so the
-    resolver's fallback branch is genuinely exercised), and
-    `test_target_python_rejects_split_corroboration_across_independent_roots`, and updated all launch tests to assert target venv confinement.
-  - Focused test suite execution: `tests/test_aether_tui_launcher.py` (36 passed, 13 subtests passed).
+    resolver's fallback branch is genuinely exercised),
+    `test_target_python_rejects_split_corroboration_across_independent_roots`,
+    and `test_regression_contaminated_parent_cannot_override_project_cwd_with_terminal_or_messaging_cwd`, and updated all launch tests to assert target venv confinement and modern cwd selector scrubbing.
+  - Focused test suite execution: `tests/test_aether_tui_launcher.py` (37 passed, 13 subtests passed).
 - **Reused evidence**:
   - Unchanged projection spec generator tests (`tests/test_tui_projections.py`, `tests/test_lifecycle_projections.py`),
     reused from rc5 at unchanged code identity.
@@ -183,6 +218,10 @@ Manifest lines to add to `.github/workflows/policy.yml`: **none**.
   If an installed release venv is damaged (e.g. missing interpreter or unresolvable purelib), the launcher fails closed
   with `ActivationError` (exit code 2) rather than silently executing with a foreign or ambient interpreter.
   Live canary qualification in RC6-QUAL and RC6-CLOSE exercises the end-to-end launch on real release trees.
+- **Residue observation**: In disposable launcher qualification lanes, launching the full TUI front-end can spawn a
+  background `tui_gateway` server process that remains active after the interactive TUI process terminates.
+  Test suites use subprocess isolation with short-lived stubs to avoid process leaks; manual and qualification test lanes
+  should actively monitor and clean lingering background gateway processes.
 - **Environment limits**:
   - Full mixed-version qualification (`scripts/qualify_mixed_version_lifecycle.py`) and live canary activation
     belong to downstream units RC6-QUAL and RC6-CLOSE.

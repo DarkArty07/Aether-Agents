@@ -119,6 +119,24 @@ def _top_level_toolsets(config: Path) -> set[str]:
     return toolsets
 
 
+def _configured_terminal_cwd(config: Path) -> str | None:
+    """Read optional terminal.cwd from config.yaml without PyYAML."""
+    in_terminal = False
+    for raw_line in config.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if raw_line and not raw_line[0].isspace():
+            in_terminal = line.startswith("terminal:")
+            continue
+        if in_terminal and line.startswith("cwd:"):
+            val = line.split(":", 1)[1].split("#", 1)[0].strip().strip("'\"")
+            if val and val not in {"", ".", "./", "auto", "cwd"}:
+                return val
+            return None
+    return None
+
+
 def _validate_extra_args(args: Sequence[str]) -> None:
     for arg in args:
         option = arg.split("=", 1)[0]
@@ -543,6 +561,14 @@ def inspect_activation(
     if missing:
         raise ActivationError("missing required Morfeo toolsets: " + ", ".join(missing))
 
+    configured_terminal_cwd = _configured_terminal_cwd(config)
+    if configured_terminal_cwd is not None:
+        expanded_terminal_cwd = Path(os.path.expanduser(configured_terminal_cwd)).resolve()
+        if expanded_terminal_cwd != repo.resolve():
+            raise ActivationError(
+                f"Morfeo terminal.cwd ({configured_terminal_cwd}) contradicts selected project ({repo})"
+            )
+
     repo = repo.resolve()
     profile = profile.resolve()
     hermes = hermes.resolve()
@@ -626,6 +652,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         or k == "HERMES_PROFILE"
         or k == "HERMES_BIN"
         or k == "HERMES_CWD"
+        or k == "TERMINAL_CWD"
+        or k == "MESSAGING_CWD"
         or k == "HERMES_PYTHON"
         or k == "HERMES_PYTHON_SRC_ROOT"
         or k == "_HERMES_GATEWAY"
