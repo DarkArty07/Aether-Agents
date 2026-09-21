@@ -2,6 +2,10 @@
 
 **Unit**: RC6-LAUNCH (`t_fb74d205`) and continuation RC6-LAUNCH-2 (`t_b0975e1c`), role Implementer, worktree branch
 `aether-agents-2/t_b0975e1c-rc6-launch-2-scrub-inherited-terminal_cw`.
+**Continuation**: RC6-LAUNCH-3 (`t_92029d03`), role Implementer, worktree branch
+`aether-agents-2/t_92029d03-rc6-launch-3-interpret-terminal.cwd-with`, base = accepted RC6-LAUNCH-2 tip
+`4668a6ac5f5d1e19b20194c71a997d3bca5f5e1a`. Sections 1–6 are the LAUNCH / LAUNCH-2 receipt; section 7 is the
+RC6-LAUNCH-3 continuation receipt.
 **Authority**: Objective Contract `oc_b5926701207812e8@v1`
 (SHA-256 `e7164c83862b747c7868706799c08ea63151ca388aa2dc2b1b89a40be33b01fc`), base commit
 `c79f5b147ae0c4f52c606978ff0bf3e82c5096fb` (accepted RC6-LAUNCH tip on base `d2874c2f3fc839a82fbaa96ece6edebab3856298`), material design
@@ -226,3 +230,151 @@ Manifest lines to add to `.github/workflows/policy.yml`: **none**.
   - Full mixed-version qualification (`scripts/qualify_mixed_version_lifecycle.py`) and live canary activation
     belong to downstream units RC6-QUAL and RC6-CLOSE.
   - Base `policy.yml` manifest reconciliation belongs to RC6-DOCS / RC6-INT.
+
+---
+
+## 7. RC6-LAUNCH-3 — `terminal.cwd` interpreted with the config grammar (`t_92029d03`)
+
+**Base**: accepted RC6-LAUNCH-2 tip `4668a6ac5f5d1e19b20194c71a997d3bca5f5e1a` (detached worktree re-checked out at
+that revision; the dispatcher-created branch had started from the main tip and was reset to the named accepted tip).
+**Surface used**: `src/aether_agents/launcher.py`, `tests/test_aether_tui_launcher.py`, this file. The public CLI,
+report keys, scrub list, `lifecycle.py`, docs and other units' tests were not touched.
+
+### 7.1 Defect: a line scanner cannot establish "verified absence"
+
+The U1 alignment gate in `inspect_activation` refuses only when a configured `terminal.cwd` is *seen* to contradict
+the selected project. `_configured_terminal_cwd` recognised one textual shape (`terminal:` followed by an indented
+`cwd:` line) and stripped everything after `#`, so for any other valid form its `None` meant "not seen" rather than
+"no contradictory cwd" — the gate's non-refusal did not mean what the gate exists to certify.
+
+Reproductions before this change, labelled by author:
+
+| Author | Probe | Observed |
+|---|---|---|
+| design steward | synthetic config files read by the helper, `yaml.safe_load` as the reference interpretation | `terminal: {cwd: /tmp/foreign}` → helper `None`, YAML `/tmp/foreign`; `cwd: "/tmp/project#one"` → helper `/tmp/project`, YAML `/tmp/project#one`; block-style control agreed |
+| Supervisor | the same table at helper level, plus an end-to-end probe on a disposable qualification lane (real PTY, RC6-LAUNCH-2 code) | the launcher did not refuse the flow-style probe, while the block-style control refused with exit 2 (`contradicts selected project`); `TERMINAL_CWD=/tmp/flow-foreign-dir` reached both the node TUI and its `tui_gateway` child — the consumer's own config bridge honoured exactly the contradiction the gate silently passed |
+| this unit (RC6-LAUNCH-3) | helper table re-measured against both readers (§7.3) and an end-to-end RED receipt (§7.4) | both divergences reproduced; the base reader additionally returned the *string* `null` for `cwd: null` (a false refusal the consumer never asked for) |
+
+### 7.2 Mechanism change
+
+`_configured_terminal_cwd` now parses the profile config with the config grammar's own interpreter and reads
+`terminal.cwd` from the parsed mapping. The line scanner and its `without PyYAML` docstring are deleted; no new
+special case was added. The import is lazy, inside the helper, so module import stays as light as before for
+`aether --version` and manager-side imports.
+
+The consumer's interpretation, read read-only from the materialized `hermes-source/` of the locally installed
+release (accepted maintained-fork source, not a second authority):
+
+- `utils.py:767-771` — `_get_fast_yaml_loader()` returns `yaml.CSafeLoader`, falling back to `yaml.SafeLoader`.
+- `utils.py:774-782` — `fast_safe_load(stream)` is `yaml.load(stream, Loader=…)`, documented as "behaviour is
+  identical everywhere — only the speed differs".
+- `hermes_cli/config.py:330` `import yaml`; `:3123` `read_raw_config()`; `:3186-3194` documented semantics
+  (missing file → `{}`; unparseable YAML or other I/O errors → raises; non-dict root → `{}`).
+- `hermes_cli/config.py:3434` `apply_terminal_config_to_env`; `:3486-3487` skips `cwd` values in
+  `{".", "auto", "cwd"}`; `:3491` `os.path.expanduser`; `:3492-3493` writes the bridge variable;
+  `:2198` reads `terminal_cfg.get("cwd", ".")`.
+
+Semantics preserved, unchanged in `inspect_activation`: a configured value that resolves (after `~` expansion) to
+the selected project is accepted and its config bytes are left untouched; a value that resolves elsewhere is
+refused visibly with the existing `ActivationError` (exit 2, same message); absent key, `null`, `.`, `./`, `auto`,
+`cwd` and empty stay unconstrained; the LAUNCH-2 `TERMINAL_CWD`/`MESSAGING_CWD` scrub is untouched.
+
+### 7.3 Reader re-measurement (helper level, this unit)
+
+Same probe script executed against the base tree (`4668a6ac`) and the candidate tree; reference column is
+`yaml.safe_load` of the same document. `/tmp/…` fixture values only.
+
+| config document | base reader | candidate reader | YAML reference |
+|---|---|---|---|
+| `terminal: {cwd: /tmp/foreign}` | `None` (not seen) | `/tmp/foreign` | `/tmp/foreign` |
+| `terminal:` + `cwd: "/tmp/project#one"` | `/tmp/project` (truncated) | `/tmp/project#one` | `/tmp/project#one` |
+| block style `cwd: /tmp/selected` (control) | `/tmp/selected` | `/tmp/selected` | `/tmp/selected` |
+| `cwd: null` | `"null"` (string → would refuse) | `None` | `None` |
+| `cwd: .` | `None` | `None` | `.` (runtime sentinel) |
+| key absent | `None` | `None` | `None` |
+| unparseable document containing a `cwd:` line | `/tmp/broken` (read from a broken document) | `None` (abstains, §7.5) | `YAMLError: ParserError` |
+
+Loader equivalence: for the flow-style, quoted-`#` and unparseable documents, `yaml.safe_load` and the consumer's
+call shape `yaml.load(stream, Loader=CSafeLoader)` return identical results (including `YAMLError: ParserError` on
+the unparseable document), so the gate now reads the document the same way the runtime does.
+
+Read-only witness: the live Morfeo profile's `terminal.cwd` still falls in the runtime's no-explicit-cwd sentinel
+set, so the gate abstains for it exactly as before. No launch was performed against the live profile/installation.
+
+### 7.4 RED receipt and post-fix verification
+
+- **RED** — disposable detached worktree at `4668a6ac5f5d1e19b20194c71a997d3bca5f5e1a`, only the two new test nodes
+  copied in from the candidate; every `HERMES_KANBAN_*` variable unset and a throwaway `TMPDIR`.
+  Command: `uv run --frozen python scripts/run_tests.py -- -q
+  "tests/test_aether_tui_launcher.py::TuiPreservationTests::test_regression_flow_style_terminal_cwd_is_interpreted_by_the_config_grammar"
+  "tests/test_aether_tui_launcher.py::TuiPreservationTests::test_regression_quoted_terminal_cwd_with_hash_is_compared_faithfully"`.
+  Observed: `2 failed in 1.09s` — `AssertionError: 0 != 2 :` for the flow-style node (the launcher launched instead
+  of refusing) and `AssertionError: 0 != 2 :` for the quoted-`#` node (the contradictory value was truncated to the
+  selected project and accepted). RED confirmed for both required regressions.
+- **GREEN** — same command on the candidate: both nodes pass. Full focused suite on the candidate:
+  `40 passed, 13 subtests passed` (37 passed + 13 subtests at the base tip). The installed-wheel lane passes too.
+- Static gates on the candidate: `ruff check` clean, `ruff format --check` 175 files formatted, `mypy` clean
+  (68 files), `python scripts/check_public_artifacts.py` passed. `python scripts/check_documentation.py` — carried
+  as a lineage artifact on unit branches — also ran here and passed (exit 0), so nothing was left unrun.
+- No real launch was exercised by this unit: the fixture suite launches the stub runtime, and the base-tree probe
+  used the same fixture. No `tui_gateway` residue was produced and no live store, release tree or owner profile was
+  written.
+
+### 7.5 Boundary: an unreadable or unparseable config
+
+Chosen posture: an unparseable profile config is **not** a launcher refusal class. The helper reports "no explicit
+cwd" for it and the launch proceeds unchanged, so the runtime's own load semantics decide (per
+`hermes_cli/config.py:3186-3194`: unparseable YAML raises there, and callers that prefer fail-open, last-known-good
+or warn behaviour already carry that handling). Reasons: (a) a document the product's own grammar rejects cannot
+describe a session either — the runtime raises for those same bytes, so the gate's abstention cannot leave a
+contradictory cwd running; (b) inventing a launcher-level refusal would add a failure class the canonical design
+never specified and would pre-empt the runtime's own diagnostics for the operator. Verified by the third regression
+node (exempt forms accepted, unparseable config accepted by the launcher) and by the loader-equivalence probe.
+
+An *unreadable* config is unchanged and fail-closed: the required-toolsets scan reads the same file first and
+`main()` already maps `OSError`/`UnicodeError` to exit 2, which is the pre-existing behavior this unit did not
+alter.
+
+### 7.6 Boundary and residual risk carried by this change
+
+- **Launcher-environment dependency on PyYAML.** The gate now needs a YAML interpreter in the launcher's own
+  environment. The supported launch entry point is the projected `aether` console script inside the release
+  runtime venv (`lifecycle.py:6590` `exec "$AETHER_RUNTIME_ROOT/venv/bin/aether"`, also the Desktop/WSL
+  projections), and that environment carries PyYAML through the Hermes dependency closure — the installed rc5
+  release's `runtime/lib/python3.13/site-packages` contains `yaml`, and `artifacts/hermes-requirements.txt` pins
+  `pyyaml==6.0.3`. Measured counter-case: a wheel-only venv (`uv venv` + `uv pip install <wheel>`) cannot import it
+  (`ModuleNotFoundError: No module named 'yaml'`), because the wheel declares `jsonschema` as its only runtime
+  dependency and PyYAML is a *development*-group dependency of this repository. With the mechanism applied and the
+  wheel-lane fixture untouched, three installed-wheel lanes failed with exactly that import error — recorded, not
+  hidden. The fixture in the focused suite therefore installs `PyYAML>=6.0` beside the wheel and models the real
+  launch closure member (comment in the fixture cites it). Declaring PyYAML in the *wheel's* runtime dependency
+  metadata, and the matching release-lock / observer-requirements digest flow, is a packaging change outside this
+  unit's surface: raised for the Supervisor instead of absorbed here. The failure mode is loud (import error), never
+  a silent gate abstention.
+- **`_top_level_toolsets` remains a line scanner** for the required-toolsets *presence* check. Deliberate
+  non-change, out of this unit's scope: that check fails closed (a form it cannot read reports the toolset as
+  missing and refuses), so it cannot produce the silent-pass defect corrected here. Flagged for the Supervisor.
+- **Comparison semantics unchanged**: the change is *which value* is compared (`Path(...).resolve()` after `~`
+  expansion), not how it is compared; quoting inside a YAML document is resolved by the grammar before comparison.
+- **Isolation limit of the gate run**: the focused suite's own fixtures provide the throwaway HOME/XDG data+state/
+  registry and build the environment of every subprocess they launch, so the gate was run with every
+  `HERMES_KANBAN_*` routing variable unset and a throwaway `TMPDIR`, but with the developer `HOME`/uv cache still
+  in place for the tooling itself.
+
+### 7.7 Requirement → verification mapping (this unit)
+
+| Obligation | Verification check | Observed result | Evidence status |
+|---|---|---|---|
+| Flow-style contradictory `terminal.cwd` is refused with the existing error | `…::test_regression_flow_style_terminal_cwd_is_interpreted_by_the_config_grammar` (RED at `4668a6ac`) | PASS: exit 2, `contradicts selected project`, configured value echoed; no launch | Direct |
+| Flow-style cwd naming the selected project is accepted and preserved | same node, second case | PASS: exit 0, child `cwd`/`PWD` = resolved project, config bytes unchanged, no ambient selector in the child | Direct |
+| Quoted value containing `#` is compared faithfully | `…::test_regression_quoted_terminal_cwd_with_hash_is_compared_faithfully` (RED at `4668a6ac`) | PASS: `<project>#one` refused as contradictory; a project whose own path contains `#` is accepted when named exactly | Direct |
+| Exempt forms and unparseable config never turn into a launcher refusal | `…::test_regression_unconstrained_cwd_values_and_unparseable_config_never_refuse` | PASS: `null`, `.`, `auto`, `""`, absent key accepted; unparseable document leaves the launch to the runtime | Direct |
+| Accepted semantics from RC6-LAUNCH-2 preserved | existing launch suites (block-style match/contradiction, contaminated parent scrub, fresh/resume, non-mutating `--json`) | PASS: 40 passed, 13 subtests passed | Direct |
+| Gate/static checks | focused suite, `ruff check`, `ruff format --check`, `mypy src/aether_agents`, `check_public_artifacts.py` | PASS: 40 passed / 13 subtests; ruff clean; 175 files formatted; mypy clean (68 files); artifact scan passed | Direct |
+| No live or remote effect | live witnesses read after the runs | No push/PR/merge/tag/release/activation/service restart/issue mutation. Witnesses: the live Morfeo profile `config.yaml` unchanged (only read), the live project registry unchanged, and no file in the active release tree newer than this run's start; the only state written during the window belongs to the running worker sessions and the live runtime itself. No `tui_gateway` process was started or killed by this unit | Direct |
+
+### 7.8 Manifest lines
+
+No tracked non-`specs/` file was added, renamed or removed: `src/aether_agents/launcher.py` and
+`tests/test_aether_tui_launcher.py` are modified existing files and this evidence file is under `specs/`.
+Manifest lines to add to `.github/workflows/policy.yml`: **none**.

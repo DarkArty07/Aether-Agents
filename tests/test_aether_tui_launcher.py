@@ -856,8 +856,21 @@ class TuiPreservationTests(unittest.TestCase):
             capture_output=True,
         )
         python_bin = venv_path / "bin" / "python"
+        # ``config.yaml`` is interpreted by the launcher with the config grammar's own
+        # reader (PyYAML), which every real launch environment supplies through the
+        # release runtime closure: ``artifacts/hermes-requirements.txt`` in an installed
+        # release pins ``pyyaml``.  This synthetic wheel-only venv models that closure
+        # member, not just the wheel's own metadata.
         subprocess.run(
-            ["uv", "pip", "install", "--python", str(python_bin), str(wheel)],
+            [
+                "uv",
+                "pip",
+                "install",
+                "--python",
+                str(python_bin),
+                str(wheel),
+                "PyYAML>=6.0",
+            ],
             check=True,
             capture_output=True,
         )
@@ -1948,6 +1961,166 @@ class TuiPreservationTests(unittest.TestCase):
             )
             self.assertEqual(res_contra.returncode, 2)
             self.assertIn("contradicts selected project", res_contra.stderr)
+        finally:
+            cfg_file.write_text(original_cfg, encoding="utf-8")
+
+    def _run_packaged_launcher(
+        self, project: Path, stub_out: Path
+    ) -> subprocess.CompletedProcess[str]:
+        """Run the packaged launcher module against a fixture project in a contaminated env."""
+        env = self._make_contaminated_env(stub_out)
+        env["PYTHONPATH"] = str(ROOT / "src")
+        return subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aether_agents.launcher",
+                "--project",
+                str(project),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+
+    def _create_project_dir(self, name: str, project_id: str) -> Path:
+        """Create an additional fixture project that is deliberately not in the registry."""
+        project = self.temp_path / name
+        project.mkdir(parents=True)
+        (project / "AGENTS.md").write_text("fixture\n", encoding="utf-8")
+        (project / ".aether").mkdir()
+        (project / ".aether" / "project.toml").write_text(
+            "\n".join(
+                (
+                    "schema_version = 1",
+                    f'project_id = "{project_id}"',
+                    'name = "Aether launcher fixture"',
+                    'initialized_by = "1.0.0"',
+                    'forge = "local"',
+                    'contract_root = "specs"',
+                    'default_branch = "main"',
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
+        return project
+
+    def test_regression_flow_style_terminal_cwd_is_interpreted_by_the_config_grammar(
+        self,
+    ) -> None:
+        """A flow-style ``terminal: {cwd: ...}`` binding must be interpreted, not skipped.
+
+        The gate's non-refusal has to mean "no contradictory configured cwd", never
+        "the reader did not recognise this form".
+        """
+        cfg_file = self.profile_dir / "config.yaml"
+        original_cfg = cfg_file.read_text(encoding="utf-8")
+        try:
+            # 1. Flow-style contradictory cwd is visibly refused before launch
+            cfg_file.write_text(
+                original_cfg + "terminal: {cwd: /tmp/flow-foreign-dir}\n",
+                encoding="utf-8",
+            )
+            stub_out_flow = self.temp_path / "stub_cwd_flow_foreign.json"
+            res_flow = self._run_packaged_launcher(self.project_dir, stub_out_flow)
+            self.assertEqual(res_flow.returncode, 2, res_flow.stderr)
+            self.assertIn("contradicts selected project", res_flow.stderr)
+            self.assertIn("/tmp/flow-foreign-dir", res_flow.stderr)
+            self.assertFalse(stub_out_flow.is_file())
+
+            # 2. Flow-style cwd naming the selected project is accepted and preserved
+            cfg_file.write_text(
+                original_cfg + f'terminal: {{cwd: "{self.project_dir}"}}\n',
+                encoding="utf-8",
+            )
+            flow_cfg_text = cfg_file.read_text(encoding="utf-8")
+            stub_out_match = self.temp_path / "stub_cwd_flow_match.json"
+            res_match = self._run_packaged_launcher(self.project_dir, stub_out_match)
+            self.assertEqual(res_match.returncode, 0, res_match.stderr)
+            self.assertTrue(stub_out_match.is_file())
+            data_match = json.loads(stub_out_match.read_text(encoding="utf-8"))
+            self.assertEqual(data_match["cwd"], str(self.project_dir.resolve()))
+            self.assertEqual(data_match["environ"].get("PWD"), str(self.project_dir.resolve()))
+            # Native config bridge input is untouched, so the runtime sees the same bytes.
+            self.assertEqual(cfg_file.read_text(encoding="utf-8"), flow_cfg_text)
+            # Ambient selectors are still scrubbed regardless of the configured binding.
+            self.assertNotIn("TERMINAL_CWD", data_match["environ"])
+            self.assertNotIn("MESSAGING_CWD", data_match["environ"])
+        finally:
+            cfg_file.write_text(original_cfg, encoding="utf-8")
+
+    def test_regression_quoted_terminal_cwd_with_hash_is_compared_faithfully(self) -> None:
+        """Quoting and ``#`` are grammar, not decoration: the compared cwd is never truncated."""
+        cfg_file = self.profile_dir / "config.yaml"
+        original_cfg = cfg_file.read_text(encoding="utf-8")
+        try:
+            # 1. A quoted contradictory value ending in ``#one`` stays contradictory.
+            #    A truncating reader would have matched the selected project and launched.
+            cfg_file.write_text(
+                original_cfg + f'terminal:\n  cwd: "{self.project_dir}#one"\n',
+                encoding="utf-8",
+            )
+            stub_out_truncated = self.temp_path / "stub_cwd_hash_truncated.json"
+            res_truncated = self._run_packaged_launcher(self.project_dir, stub_out_truncated)
+            self.assertEqual(res_truncated.returncode, 2, res_truncated.stderr)
+            self.assertIn("contradicts selected project", res_truncated.stderr)
+            self.assertIn("#one", res_truncated.stderr)
+            self.assertFalse(stub_out_truncated.is_file())
+
+            # 2. A selected project whose own path contains ``#`` is accepted when the
+            #    configured value names it exactly.
+            hashed_project = self._create_project_dir(
+                "project#one", "22027989-a08f-41cd-a82c-54ff1bfb6b03"
+            )
+            cfg_file.write_text(
+                original_cfg + f'terminal:\n  cwd: "{hashed_project}"\n',
+                encoding="utf-8",
+            )
+            stub_out_hashed = self.temp_path / "stub_cwd_hash_accepted.json"
+            res_hashed = self._run_packaged_launcher(hashed_project, stub_out_hashed)
+            self.assertEqual(res_hashed.returncode, 0, res_hashed.stderr)
+            self.assertTrue(stub_out_hashed.is_file())
+            data_hashed = json.loads(stub_out_hashed.read_text(encoding="utf-8"))
+            self.assertEqual(data_hashed["cwd"], str(hashed_project.resolve()))
+            self.assertEqual(data_hashed["environ"].get("PWD"), str(hashed_project.resolve()))
+        finally:
+            cfg_file.write_text(original_cfg, encoding="utf-8")
+
+    def test_regression_unconstrained_cwd_values_and_unparseable_config_never_refuse(self) -> None:
+        """Values that mean "no explicit cwd", and a document the loader cannot parse.
+
+        The exempt forms are the runtime's own sentinels (``hermes_cli.config`` skips
+        ``.``/``auto``/``cwd`` and treats ``null``/absent as unset).  An unparseable
+        document is deliberately *not* a launcher refusal class: the runtime raises or
+        applies its own documented handling for those same bytes.
+        """
+        cfg_file = self.profile_dir / "config.yaml"
+        original_cfg = cfg_file.read_text(encoding="utf-8")
+        try:
+            exempt_forms = (
+                "terminal:\n  cwd: null\n",
+                "terminal:\n  cwd: .\n",
+                "terminal:\n  cwd: auto\n",
+                'terminal:\n  cwd: ""\n',
+                "terminal:\n  backend: local\n",
+            )
+            for index, form in enumerate(exempt_forms):
+                cfg_file.write_text(original_cfg + form, encoding="utf-8")
+                stub_out_exempt = self.temp_path / f"stub_cwd_exempt_{index}.json"
+                res_exempt = self._run_packaged_launcher(self.project_dir, stub_out_exempt)
+                self.assertEqual(res_exempt.returncode, 0, f"{form!r} -> {res_exempt.stderr}")
+                self.assertTrue(stub_out_exempt.is_file(), form)
+
+            cfg_file.write_text(
+                original_cfg + "terminal:\n  cwd: /tmp/broken\n  cwd: [unclosed\n",
+                encoding="utf-8",
+            )
+            stub_out_broken = self.temp_path / "stub_cwd_unparseable.json"
+            res_broken = self._run_packaged_launcher(self.project_dir, stub_out_broken)
+            self.assertEqual(res_broken.returncode, 0, res_broken.stderr)
+            self.assertTrue(stub_out_broken.is_file())
         finally:
             cfg_file.write_text(original_cfg, encoding="utf-8")
 

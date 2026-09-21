@@ -119,22 +119,43 @@ def _top_level_toolsets(config: Path) -> set[str]:
     return toolsets
 
 
+_NO_EXPLICIT_TERMINAL_CWD = frozenset({"", ".", "./", "auto", "cwd"})
+
+
 def _configured_terminal_cwd(config: Path) -> str | None:
-    """Read optional terminal.cwd from config.yaml without PyYAML."""
-    in_terminal = False
-    for raw_line in config.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if raw_line and not raw_line[0].isspace():
-            in_terminal = line.startswith("terminal:")
-            continue
-        if in_terminal and line.startswith("cwd:"):
-            val = line.split(":", 1)[1].split("#", 1)[0].strip().strip("'\"")
-            if val and val not in {"", ".", "./", "auto", "cwd"}:
-                return val
-            return None
-    return None
+    """Read optional ``terminal.cwd`` with the config grammar's own interpreter.
+
+    ``config.yaml`` is a YAML document, and the runtime that consumes it interprets
+    it that way (``hermes_cli.config`` loads it through PyYAML's safe loader).  The
+    alignment gate therefore has to read the same document the runtime reads:
+    flow-style mappings, quoting and ``#`` handling are decided by the grammar, not
+    by the textual shape of a line, so a line scanner can only report "not seen" for
+    forms it does not recognise instead of the *verified absence* the gate needs.
+
+    ``None`` means "no explicit cwd is configured": the key is absent, ``null``, or
+    one of the sentinels the runtime itself treats as unset.  A document the loader
+    cannot parse is reported the same way rather than as a new launcher-level
+    refusal class — the runtime raises its own error for those same bytes, and that
+    is the error the operator must see.
+    """
+    import yaml  # type: ignore[import-untyped]  # PyYAML ships no inline stubs
+
+    try:
+        document = yaml.safe_load(config.read_text(encoding="utf-8"))
+    except yaml.YAMLError:
+        return None
+    if not isinstance(document, dict):
+        return None
+    terminal = document.get("terminal")
+    if not isinstance(terminal, dict):
+        return None
+    configured = terminal.get("cwd")
+    if configured is None:
+        return None
+    value = configured if isinstance(configured, str) else str(configured)
+    if value.strip() in _NO_EXPLICIT_TERMINAL_CWD:
+        return None
+    return value
 
 
 def _validate_extra_args(args: Sequence[str]) -> None:
