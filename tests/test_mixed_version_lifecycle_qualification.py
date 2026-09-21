@@ -435,3 +435,27 @@ def test_project_paths_stay_inside_the_work_root(entry: Any, tmp_path: Path) -> 
     )
     assert isolation.project.is_relative_to(isolation.work_root)
     assert isolation.second_project.is_relative_to(isolation.work_root)
+
+
+def test_scenario_result_roundtrip_from_json(entry: Any) -> None:
+    scenario = entry.ScenarioResult(name="launch", scope="launch-scope")
+    scenario.check("AC-7/launch", "ready", "ready", "ready")
+    scenario.artifacts["pty"] = {"agent_ready_ms": 4500, "corpus_scale": {"events": 25}}
+    encoded = scenario.to_json()
+    decoded = entry.ScenarioResult.from_json(encoded)
+    assert decoded.name == scenario.name
+    assert decoded.scope == scenario.scope
+    assert decoded.status == "passed"
+    assert len(decoded.assertions) == 1
+    assert decoded.assertions[0].ok is True
+    assert decoded.artifacts["pty"]["agent_ready_ms"] == 4500
+
+
+def test_seed_observation_corpus_populates_store(entry: Any, tmp_path: Path) -> None:
+    isolation = entry.Isolation(
+        work_root=tmp_path / "work", receipts_root=tmp_path / "receipts", run_id="unit"
+    )
+    scale = entry.seed_observation_corpus(isolation, "11111111-1111-4111-8111-111111111111")
+    assert scale["segments"] >= 1
+    assert scale["events"] >= 20
+    assert scale["digest"] is not None

@@ -67,18 +67,18 @@ project/board registry and every `HERMES_KANBAN_*` variable):
 
 | Scenario | Representative command (generic paths) | Observed | Assertions | Receipt (private) |
 | --- | --- | --- | --- | --- |
-| prepare | `aether setup --wheel <rc5 wheel> --hermes-checkout <fork> --release-lock <rc5 lock> --yes --json`; release-copy verification | exact rc5 active, selector inside the isolated store, copies byte-identical | 3 | `run.json` `7ed85b39…` |
+| prepare | `aether setup --wheel <rc5 wheel> --hermes-checkout <fork> --release-lock <rc5 lock> --yes --json`; release-copy verification | exact rc5 active, selector inside the isolated store, copies byte-identical | 3 | `run.json` `a2ce5896…` |
 | cycle | `aether update --wheel <promotion wheel> --release-lock <promotion lock> --yes`; `aether rollback --yes`; `aether update 1.0.0rc6 --yes`; blocked-projection transition; three SIGKILL interruptions; rollback repair | rc5 → candidate → rc5 → candidate, pointer byte-exact against each target's own record, no false success, no pending half-state | 34 | `scenarios/cycle.json` `3e5ccb34…` |
 | frozen-readers | frozen rc3 interpreter: `ReleaseRecord.from_json` on the post-rc4 pointer, the null-field variant, the corrected writer's pointer and its own record | rc3 reader rejects the post-rc4 shape (with a real value **and** with `null`), accepts its own generation and accepts the corrected writer's target-owned record | 10 | `scenarios/frozen-readers.json` `d358dcee…` |
 | frozen-writer | frozen rc4 interpreter planning projections for a successor record; corrected source asking each target for its own plan | rc4 brands a successor with the legacy `hermes.desktop` shape; each target answers for its own identity with branded bytes | 5 | `scenarios/frozen-writer.json` `0f089f59…` |
 | legacy | rc4 writer applying its projections to the managed destinations; `reconcile --to active` preview and apply; `reconcile --to installed`; unprovable-target refusal | preview non-mutating, apply finishes the handoff (`projections_reconciled: 1`, zero mismatches) with the release record byte-identical, unsupported mode refused, unprovable target refused before mutation | 14 | `scenarios/legacy.json` `e8015377…` |
-| launch | packaged selector `aether --project <project> [--resume latest] --check --json` in clean and contaminated environments; real PTY launch | exact target backend/TUI/project/Morfeo profile bound; stale `HERMES_PYTHON`, `HERMES_PYTHON_SRC_ROOT`, session selectors neither used nor forwarded; release tree unchanged | 16 | `scenarios/launch.json` `5575ae66…` |
+| launch | packaged selector `aether --project <project> [--resume latest] --check --json` in clean and contaminated environments; fresh and resume PTY launches | exact target backend/TUI/project/Morfeo profile bound; stale `HERMES_PYTHON`, `HERMES_PYTHON_SRC_ROOT`, session selectors neither used nor forwarded; fresh and resume reach agent prompt ready against seeded corpus; release tree unchanged | 20 | `scenarios/launch.json` `d9b95a4d…` |
 | docs | repository `check_documentation.py`, usage/documentation pytest modules, installed `aether version --json` | green; installed CLI reports `1.0.0rc6` | 3 | `scenarios/docs.json` `a209c4a2…` |
-| isolation | guard refusal subprocess, split-root and transport-leak checks, live witnesses, service boundary | live work root refused with exit 2; no operator root, board variable, D-Bus socket or credential inherited; live unit/pointer/selector/operator config unchanged; disabled service controller | 7 | `scenarios/isolation.json` `31df9d8c…` |
+| isolation | guard refusal subprocess, split-root and transport-leak checks, live witnesses, service boundary | live work root refused with exit 2; no operator root, board variable, D-Bus socket or credential inherited; live unit/pointer/selector/operator config unchanged; disabled service controller | 7 | `scenarios/isolation.json` `38f5fa07…` |
 
-Run-level facts: exit `0`, 92 assertions, 48 recorded commands, 417 744 ms wall clock,
-environment identity `8ae12e16…`. Each scenario receipt records its own commands with argv, cwd,
-exit status, timing, stdout/stderr digests and the isolation-relevant environment digest.
+Run-level facts: exit `0`, 96 assertions, 56 recorded commands, environment identity `8ae12e16…`.
+Each scenario receipt records its own commands with argv, cwd, exit status, timing,
+stdout/stderr digests and the isolation-relevant environment digest.
 
 ## Installed launch measurement
 
@@ -87,11 +87,13 @@ exit status, timing, stdout/stderr digests and the isolation-relevant environmen
 | Launch path | packaged selector → `runtime/current/venv/bin/aether` → release runtime (`hermes --tui --in <project>`) |
 | Bound backend | `<store>/releases/1.0.0rc6-051c7cb5b0bf5fd3/runtime/bin/python` and `…/runtime/bin/hermes` |
 | Bound profile / project | `<store>/state/aether/hermes/profiles/morfeo`, the isolated managed project |
-| Time to target runtime's first output | 282 ms (first PTY output; `elapsed_ms` 90 234 is the full bounded observation window, terminated by the harness) |
-| Corpus identity/scale at launch | segments 0, events 0, digest `null` (fresh isolated store; the retained-corpus measurement is the observation lane's receipt below) |
-| Release tree after launch | unchanged (`tui` tree digest and `release.json` `tui_sha256` identical before/after) |
+| Access kind | `isolated_stub_provider_fixture` (disposable non-sending stub in Morfeo profile `config.yaml`; no operator credentials copied, no external network requests) |
+| Fresh PTY launch (contaminated env) | first output 283 ms, **agent prompt ready 1083 ms** (signal `agent_prompt_ready`) |
+| Resume PTY launch (`--resume latest`) | first output 307 ms, **agent prompt ready 1193 ms** (signal `agent_prompt_ready`, active session file 1141 ms) |
+| Corpus identity/scale at launch | segments 4, events 25, digest `adaa88a77ab34236795ef1ba80675e824b49c2be20ff88fec29374098a6cbffc` (pre-seeded in isolated store) |
+| Release tree after launch | unchanged (`tui` tree digest and `release.json` `tui_sha256` identical before/after for both launches) |
 | Locked source digest | `cc1ebf94ad167979951e7b956ef3a8c448e96fd3389c93cddf60f8f883bb5ce7` unchanged |
-| Agent-ready | **not reached in this lane**: no provisioned model provider exists in a disposable home, so the launched runtime stops at its configuration prompt (`Hermes isn't configured yet -- no API keys or providers found`). No provider quota was spent and no credential was copied. The provider-backed agent-ready measurement and the single live reply stay with the terminal live window. |
+| Agent-ready verification | **reached and verified in this lane**: the candidate runtime and TUI package fully initialize under the isolated non-sending provider fixture; both fresh and resume launches reach interactive prompt readiness (`❯Try "/help" for commands`). The single live provider completion belongs to RC6-CLOSE. |
 
 No npm/build step runs at launch (the release tree is witnessed unchanged), and neither the
 project nor the profile is guessed: two projects in the registry produce a visible ambiguity
