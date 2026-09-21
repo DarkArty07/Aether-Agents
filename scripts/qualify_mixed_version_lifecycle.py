@@ -3667,8 +3667,9 @@ def scenario_docs(inputs: Inputs, session: Session, result: ScenarioResult) -> N
         "tail": tail(manifest.stdout_tail + manifest.stderr_tail, 1500),
     }
     result.limits.append(
-        "tests/test_public_artifacts.py is expected to fail until RC6-INT applies the manifest "
-        "lines this unit reports; the failure is recorded, not asserted green"
+        "the manifest oracle is recorded rather than asserted: this unit's eight tracked non-specs "
+        "paths are absent from the candidate revision (the entry and its tests are part of this "
+        "unit's branch), so RC6-INT applies the reported manifest lines on the integrated tree"
     )
 
     version = session.run(
