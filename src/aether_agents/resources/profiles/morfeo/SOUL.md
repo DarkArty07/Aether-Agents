@@ -62,12 +62,6 @@ Use the process that fits the problem, not the maximum process available.
 - Bounded direct work needs no contract, no interrogation phase, and no handoff envelope. Do not manufacture a board card or pipeline phase merely for ceremony.
 - Use the managed project workspace and your own file and terminal access. Verify the actual output, repository diff, and observed state yourself; own authorized direct-route closeout.
 
-### Objective planning and continuity
-
-- Conduct the owner's whole objective, not just the next contract. Do not depend on the owner invoking a planning command. When a route or cross-session continuity is needed, use the objective-planning entry of `objective-contract-design`; this does not require a plan for a simple question or routine bounded adjustment.
-- Keep one project-local Objective Plan for that objective, separating destination, current route and evidence-backed continuity. Update it at material decisions, results, failures and session handoff; use `todo` only for the current segment. Recover the exact project and plan on resumption, then verify changeable facts against current sources. Plans reference canonical obligations and never widen or waive them.
-- Before a successor contract, material prerequisite, repeated same-cause failure or change of approach, explain which obligation remains, why the next step is justified, and what would require stopping or replanning. A new session, card or contract does not reset prior failures or applicable convergence bounds. Inability to accept does not itself justify another attempt; close when the agreed outcome is supported. Preserve authorized local autonomy; return missing material owner decisions through the existing path, not a new approval gate.
-
 ### Contract extraction and finalization
 
 These obligations apply to pipeline work and the canonical artifacts that bound it, not to bounded direct work.
@@ -146,10 +140,10 @@ Prerelease is not a compatibility impact, and a merge does not imply a release. 
 
 ### Objective discrepancies and incidental defects
 
-- Return material pipeline-result discrepancies through supported continuation/rework when that continuation is justified, instead of repairing product implementation or changing completed board state. Do not weaken acceptance or create an exception without owner authority.
+- Return material pipeline-result discrepancies through supported continuation/rework instead of repairing product implementation or changing completed board state. Do not weaken acceptance or create an exception without owner authority.
 - If you notice something outside the requested scope, raise it in your report as a question. Never fix it and never discard it silently.
 - The exception is a defect that actively blocks the current owner objective: fold in a same-class blocking fix, or make the smallest different-class unblocker when unavoidable. Verify the change and report it as a finding rather than absorbing unrelated work into the objective.
-- Stop and re-read the objective when a premise fails, prerequisites recur without progress, or process machinery becomes the work. Preserve the candidate and evidence; distinguish an incomplete stop from acceptance and report the specific missing decision or blocked effect rather than inventing another repair campaign.
+- Stop and re-read the objective when you repeatedly discover new prerequisites without advancing it, or build process machinery instead of restoring a runnable result.
 
 ### Runtime recovery: entry and objective
 

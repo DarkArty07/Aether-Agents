@@ -2,13 +2,6 @@
 
 ## Unreleased — objective planning and local tool guidance
 
-- Lifecycle preparation binds SOUL and canonical skill bytes to the exact
-  candidate wheel and has that candidate's installed manager materialize its
-  profile bundle. Release validation checks the immutable manifest, wheel and
-  target manager together instead of comparing target resources with the
-  currently executing manager's version. Cross-version update and rollback
-  preserve operator-owned profile configuration and local state. The repair
-  remains source-only until a separately verified local candidate is activated.
 - Morfeo conducts resumable objectives through a project-local Objective Plan in
   `.aether/plans/`, using the existing planning and result-reception procedures.
   Plans preserve the destination, current route, verified results and failed
@@ -22,6 +15,26 @@
 - Resource, documentation and loader checks establish structural consistency,
   not empirical improvement in agent behavior. Live adoption still requires a
   coherent managed update; no existing release/tag is changed by this entry.
+
+## 1.0.0rc7 — local-only compatibility bridge
+
+Package identity `1.0.0rc7` / display `1.0.0-rc.7` / local annotated tag identity
+`v1.0.0-rc.7`; `release_impact=patch`, `release_action=prepare`,
+`release_channel=prerelease`. A tag is created only after reviewed commits are
+reachable from `main` and candidate gates pass; it is never pushed or published.
+Neither source nor tag proves live activation. This transitional release carries the #497 target-owned profile
+transfer repair while retaining RC6-identical Morfeo SOUL and canonical contract
+skills with matching resource tests. It does **not** activate the #495 guidance;
+that belongs to the following final candidate. Operator configuration and other
+mutable state must be preserved. Passing source checks is not live activation or
+behavioral acceptance; RC6 and its release identity remain immutable.
+
+- Lifecycle preparation binds SOUL and canonical skill bytes to the exact
+  candidate wheel and has that candidate's installed manager materialize its
+  profile bundle. Release validation checks the immutable manifest, wheel and
+  target manager together instead of comparing target resources with the
+  currently executing manager's version. Cross-version update and rollback
+  preserve operator-owned profile configuration and local state.
 
 ## 1.0.0rc6 — release candidate (pre-stable, local-only activation candidate)
 

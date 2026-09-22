@@ -4,9 +4,12 @@ Aether is a multi-agent software-engineering product built on [Hermes Agent](htt
 
 This index is navigation only and routes reader questions to the appropriate guide, reference, or authority artifact. For the complete reader-facing placement and conflict-resolution map across all artifact classes, see [Authority and artifact ownership](authority.md).
 
-The executable Hermes source for the current local-only `1.0.0rc6` candidate is Aether's
-maintained fork `DarkArty07/aether-hermes` branch `aether-main`, bound by release-lock
-`schema_version` 4 source mode `maintained_fork` and installed through `aether update`.
+This source tree defines a local-only `1.0.0rc7` compatibility bridge with the
+#497 updater fix and RC6-compatible Morfeo resources; it does not prove the
+selected installation. Consult `aether doctor` and a verified cutover receipt.
+The executable Hermes source is
+Aether's maintained fork `DarkArty07/aether-hermes` branch `aether-main`, bound
+by release-lock `schema_version` 4 `maintained_fork` and installed through `aether update`.
 In the historical rc3 qualification, active release `1.0.0rc3-8987f650c027ad09` was
 locally selected from Aether merge `d8ff984c67bfc147ac9c83cf8a34a72edc27c8df` and
 maintained-fork commit `aed6591a69f453a1867b73628603e7b53ba40ffc`; `aether doctor`

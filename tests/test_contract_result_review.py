@@ -64,19 +64,3 @@ def test_contract_result_review_distinguishes_early_advice_from_final_acceptance
     skill = _text(path)
     assert "Early advice is not final result acceptance" in skill
     assert "Such intermediate advice remains advisory" in skill
-
-
-def test_reception_separates_nonacceptance_from_further_execution() -> None:
-    """Assert disposition guidance, not behavioral convergence or live activation."""
-    skill = _text(RESOURCES / "skills/contract-result-review/SKILL.md")
-    for phrase in (
-        "### Continuation or stop",
-        "Inability to accept does not itself justify another attempt",
-        "Accept and finish",
-        "Justified correction",
-        "Stop incomplete",
-        "product, verification/oracle, or coordination failure",
-        "review-round number",
-        "do not change a completed board state",
-    ):
-        assert phrase in skill

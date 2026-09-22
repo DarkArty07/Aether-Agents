@@ -1,7 +1,7 @@
 ---
 name: objective-contract-design
-description: Use when Morfeo plans objectives or pipeline contracts.
-version: 0.2.0
+description: Use when Morfeo designs a pipeline contract.
+version: 0.1.0
 author: Morfeo (Aether role), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -21,8 +21,7 @@ and decomposition, and Implementer retains reversible unit-local judgement.
 
 ## When to Use
 
-- Use the objective-planning entry below when work needs a route or cross-session continuity, including a planning-only request. It is not required for a simple question or routine bounded adjustment.
-- Use the full contract procedure when Morfeo designs, checks or supersedes a pipeline Objective Contract.
+- Use when Morfeo designs, checks or supersedes a pipeline Objective Contract.
 - Use for resolving a contract defect returned by Supervisor at its owning artifact.
 - Do not require a contract or this full procedure for bounded direct work.
 - Do not use to decompose tasks, implement a product, or certify your own independent review.
@@ -38,50 +37,7 @@ through native discovery. Preserve brownfield guidance and confirm the actual Pr
 Resolve testing standard, authority and convergence bounds explicitly from the owner
 or their delegated project policy; a skill does not supply universal defaults.
 
-## Objective planning and continuity
-
-This entry does not require a contract or authorize execution. Honor a planning-only
-request. For authorized work, missing material intent is resolved before execution;
-do not add routine confirmation gates to an already delegated route.
-
-1. Resolve the project and objective explicitly, not by global recency, display name
-   or an unrelated cwd. Reuse the exact plan when continuing. Do not initialize a
-   project merely to save a plan; surface an ambiguous binding instead.
-2. Maintain one `.aether/plans/<objective-slug>.md` in that project. Keep it local and
-   ignored by default, subject to the project's accepted privacy/versioning policy;
-   do not silently publish it, rewrite ignore rules or migrate historical plans.
-   This Aether convention takes precedence over a generic planning skill's default
-   location. Reuse an appropriate existing objective plan rather than duplicating it.
-3. Use the following compact outline, omitting empty ceremony:
-
-   - **Stable destination:** requested outcome, scope/exclusions, preservation and
-     closure evidence; reference the canonical owners of accepted obligations.
-   - **Current route:** independently useful milestones, necessary dependencies,
-     related contracts and current approach. Do not prescribe every future task.
-   - **Operational continuity:** current disposition, exact project/plan identity,
-     last material update, verified results with producer/revision, failed approaches
-     and reasons, untried ideas marked unverified, questions, and next step or stop.
-
-   This is not a new source of authority and does not replace technical `plan.md`,
-   finalized contracts or native board state. A worker's executable obligations must
-   not depend on private notes. `todo` tracks the current segment, not the whole scope.
-4. Update at material decisions, milestones, failures and session handoff, not every
-   tool call and not only when the owner asks to save. Reread before editing to avoid
-   overwriting concurrent changes. On resumption, reconcile changeable facts against
-   current artifacts/Git/board evidence without repeating resolved investigation.
-5. Before a successor handoff, material prerequisite, repeated same-cause failure or
-   change of approach, identify the unmet obligation, new evidence for continuing,
-   and what would require stopping or replanning. Classify the next step as an agreed
-   milestone, bounded correction, invalidated premise or separate objective. A new
-   session, card or contract does not reset prior failures or convergence bounds.
-   Preserve an incomplete result when continuation is unjustified; do not waive
-   acceptance, absorb unrelated work or require the owner to supervise every command.
-
 ## Procedure
-
-The following full extraction procedure applies to pipeline handoffs only. If an
-Objective Plan exists, locate the contract's milestone there before proceeding;
-one handoff still uses exactly one finalized Objective Contract.
 
 1. **Inspect before prescribing.** With `read_file`, `search_files` and `terminal`,
    locate the actual implementation, public interfaces, tests, dependencies and
@@ -124,10 +80,6 @@ one handoff still uses exactly one finalized Objective Contract.
    tool actions, and expected pass/fail observations. Mark unavailable capabilities honestly.
    Distinguish proposed checks from executed results and unit checks from integrated
    acceptance; do not impose test-first or live calls unless the resolved standard does.
-   Check the representative starting state and decisive oracle before expensive
-   qualification. Distinguish a product defect, a verification/oracle defect, and a
-   coordination failure. Preserve useful failure evidence and reuse the reviewed
-   method at closure rather than casually rebuilding the instrumentation.
 8. **Check contradictions before finalizing.** Compare scope, deliverables, acceptance,
    authority, dependencies, preservation and expected test effects. A real-flow test
    cannot also require its own board/session records never to change. Preservation
