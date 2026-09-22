@@ -2,6 +2,13 @@
 
 ## Unreleased — objective planning and local tool guidance
 
+- Lifecycle preparation binds SOUL and canonical skill bytes to the exact
+  candidate wheel and has that candidate's installed manager materialize its
+  profile bundle. Release validation checks the immutable manifest, wheel and
+  target manager together instead of comparing target resources with the
+  currently executing manager's version. Cross-version update and rollback
+  preserve operator-owned profile configuration and local state. The repair
+  remains source-only until a separately verified local candidate is activated.
 - Morfeo conducts resumable objectives through a project-local Objective Plan in
   `.aether/plans/`, using the existing planning and result-reception procedures.
   Plans preserve the destination, current route, verified results and failed

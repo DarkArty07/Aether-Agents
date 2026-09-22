@@ -103,6 +103,14 @@ same routine closeout only for an authorized direct route.
 
 ## Managed runtime projections and release-owned TUI
 
+During release preparation, the exact installed candidate manager materializes
+the package-owned SOUL and canonical skill resources from its own wheel. The
+coordinator checks the wheel, release lock, bundle paths and digests; the
+authenticated target manager checks resource parity with its own package.
+On update or rollback, the selected release's bundle owns those resources,
+while operator configuration, learned skills and memory remain local. A green
+source test does not itself activate a release.
+
 Active release installation (`aether update`) provisions release-owned runtime projections:
 
 1. **Release-owned TUI asset**: The prebuilt TUI (`ui-tui`) is built once from the exact maintained-fork commit in a disposable workspace, hash-bound outside `hermes-source` under `<release>/tui/`, and exposed at `runtime/current/tui`. `HERMES_TUI_DIR` is set to this release-owned directory across launcher, update, and rollback. Runtime launch never runs `npm` or builds assets in place. Gateway service operation does not depend on `HERMES_TUI_DIR`.
