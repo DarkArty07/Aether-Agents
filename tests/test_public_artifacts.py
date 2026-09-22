@@ -32,6 +32,7 @@ ACCEPTED_PACKAGE_IDENTITIES = (
     "1.0.0rc5",
     "1.0.0rc6",
     "1.0.0rc7",
+    "1.0.0rc8",
     "2.30.4",
     "1.0.0.dev3",
 )
@@ -146,23 +147,27 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     assert "`docs/capabilities.toml`](docs/capabilities.toml)" in readme
     assert "sole current implementation-status and traceability registry" in readme
     assert "documented transitional downstream" in readme
-    # The wheel's METADATA embeds this portal. RC7 is a local bridge;
-    # neither its source nor its local tag proves #495 guidance or activation.
+    # The wheel's METADATA embeds this portal. RC8 contains #495 guidance,
+    # but neither source nor tag proves live activation or agent behavior.
+    assert "releases/tag/v1.0.0-rc.8" not in readme
     assert "releases/tag/v1.0.0-rc.7" not in readme
     assert "releases/tag/v1.0.0-rc.6" not in readme
     assert "releases/tag/v1.0.0-rc.5" not in readme
-    assert "`1.0.0rc7` / `1.0.0-rc.7`" in readme
-    assert "local annotated tag identity is `v1.0.0-rc.7`" in readme
-    assert "retains RC6-identical Morfeo SOUL and canonical contract skills" in readme
-    assert "does **not** deliver the #495 planning guidance" in readme
-    assert "neither this source nor a local tag proves what is installed" in readme
+    assert "`1.0.0rc8` / `1.0.0-rc.8`" in readme
+    assert "local annotated tag identity is `v1.0.0-rc.8`" in readme
+    assert "restores the new Morfeo SOUL and canonical contract skills" in readme
+    assert (
+        "neither this source nor a local tag proves what is installed or that agent behavior improved"
+        in readme
+    )
     assert "Query `aether doctor` for the active version" in readme
     assert "no tag is pushed and no GitHub/package publication is authorized" in readme
-    assert "earlier local tags remain immutable" in readme
+    assert "RC7 and earlier local tags remain immutable" in readme
     assert "releases/tag/v1.0.0-rc.1" in readme
     assert "published but rejected" in readme
     status = [line for line in readme.splitlines() if line.startswith("**Status:**")]
     assert len(status) == 1, f"expected exactly one status paragraph, found {len(status)}"
+    assert "releases/tag/v1.0.0-rc.8" not in status[0]
     assert "releases/tag/v1.0.0-rc.7" not in status[0]
     assert "releases/tag/v1.0.0-rc.6" not in status[0]
     assert "releases/tag/v1.0.0-rc.5" not in status[0]

@@ -143,9 +143,9 @@ def test_version_file_carries_the_objective_release_identity(tool: types.ModuleT
 
     package_version = (ROOT / "VERSION").read_text(encoding="ascii").strip()
     identity = tool.release_identity(package_version)
-    assert identity["package_version"] == "1.0.0rc7"
-    assert identity["semver"] == "1.0.0-rc.7"
-    assert identity["tag"] == "v1.0.0-rc.7"
+    assert identity["package_version"] == "1.0.0rc8"
+    assert identity["semver"] == "1.0.0-rc.8"
+    assert identity["tag"] == "v1.0.0-rc.8"
     assert identity["prerelease"] is True
 
 

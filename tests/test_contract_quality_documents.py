@@ -23,8 +23,8 @@ SKILLS = {
     "implementation-evidence": "Implementer",
 }
 SKILL_VERSIONS = {
-    "objective-contract-design": "0.1.0",
-    "contract-result-review": "0.1.0",
+    "objective-contract-design": "0.2.0",
+    "contract-result-review": "0.1.1",
     "supervisor-decomposition": "0.1.3",
     "implementation-evidence": "0.1.1",
 }
@@ -144,6 +144,52 @@ def test_review_return_cannot_silently_redefine_acceptance() -> None:
     assert "A board key alone never opts a task into Aether" in spec
     assert "Legacy exact-flow cycles without the snapshot remain supported" in spec
     assert "creates no magical fail-closed classification" in spec
+
+
+def test_objective_planning_is_project_local_and_not_another_authority() -> None:
+    """Instruction coverage only: no claim that an agent follows the procedure."""
+    skill = " ".join((RESOURCES / "skills/objective-contract-design/SKILL.md").read_text().split())
+    guide = " ".join((ROOT / "docs/guides/objective-plans.md").read_text().split())
+    for phrase in (
+        "## Objective planning and continuity",
+        ".aether/plans/<objective-slug>.md",
+        "Stable destination",
+        "Current route",
+        "Operational continuity",
+        "not a new source of authority",
+        "not required for a simple question or routine bounded adjustment",
+        "not by global recency",
+        "Do not initialize a project merely to save a plan",
+        "A new session, card or contract does not reset",
+        "same-cause failure",
+        "product defect, a verification/oracle defect, and a coordination failure",
+    ):
+        assert phrase in skill
+    for phrase in (
+        ".aether/plans/",
+        "local and ignored",
+        "not automatically carried into an independent new session",
+        "generic `/plan`",
+        "No new tool",
+    ):
+        assert phrase in guide
+    authority = (ROOT / "docs/authority.md").read_text()
+    assert "Objective Plans" in authority and ".aether/plans/" in authority
+    assert "objective-plans.md" in (ROOT / "AGENTS.md").read_text()
+
+
+def test_morfeo_owns_continuation_judgment_without_mandatory_plan_ceremony() -> None:
+    soul = " ".join((RESOURCES / "profiles/morfeo/SOUL.md").read_text().split())
+    for phrase in (
+        "### Objective planning and continuity",
+        "objective-contract-design",
+        "Do not depend on the owner invoking a planning command",
+        "does not require a plan for a simple question or routine bounded adjustment",
+        "next step is justified",
+        "A new session, card or contract does not reset",
+        "Inability to accept does not itself justify another attempt",
+    ):
+        assert phrase in soul
 
 
 def test_native_loader_reads_exact_documents_in_disposable_home(tmp_path: Path) -> None:

@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased — objective planning and local tool guidance
+## 1.0.0rc8 — local-only final instruction candidate
+
+Package identity `1.0.0rc8` / display `1.0.0-rc.8` / local annotated tag identity
+`v1.0.0-rc.8`; `release_impact=patch`, `release_action=prepare`,
+`release_channel=prerelease`. This candidate follows the RC7 compatibility
+bridge and restores the #495 Morfeo SOUL and canonical contract procedures.
+It is not a claim of live activation or empirically improved agent behavior;
+the selected runtime and state preservation require managed-cutover evidence.
+Neither tag is pushed or published, and stable/PyPI/WSL2 gates remain open.
 
 - Morfeo conducts resumable objectives through a project-local Objective Plan in
   `.aether/plans/`, using the existing planning and result-reception procedures.

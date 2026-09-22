@@ -1,7 +1,7 @@
 ---
 name: contract-result-review
 description: Use when Morfeo receives a completed contract result.
-version: 0.1.0
+version: 0.1.1
 author: Christopher, Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -86,11 +86,36 @@ proof of the rendered or running result. Use only the existing permitted tool su
    versus reused verification and remaining limits. Distinguish execution complete,
    objective accepted and publication/deployment authorized; do not invent a completion
    percentage. A clean result ends reception without another card or review loop. For
-   a material discrepancy, provide criterion, expected/observed result and reproducible
-   evidence to Supervisor via supported continuation/rework. Do not issue a same-card
+   a material discrepancy, decide continuation or stop below. When justified, provide
+   criterion, expected/observed result and reproducible evidence to Supervisor via
+   supported continuation/rework. Do not issue a same-card
    review verdict from an unclaimed or finished task, write the board DB, or take over
    product implementation. If the native path is unavailable, report the real blocker
    rather than inventing a parallel lifecycle.
+
+### Continuation or stop
+
+Inability to accept does not itself justify another attempt. Reconcile the result
+with the whole objective and its existing plan, if any, before authorizing a
+successor. Distinguish a product, verification/oracle, or coordination failure;
+failure of a test instrument alone does not establish a product defect.
+
+- **Accept and finish:** all material outcomes have support. Close without optional
+  improvements or an extra review. A completed milestone is not necessarily the
+  whole objective; continue only along the agreed route and existing authority.
+- **Justified correction:** identify the unmet criterion, new evidence, correction
+  boundary and stop/replan condition. Re-review changed behavior and affected
+  guarantees proportionately; reuse evidence only at an applicable revision. A
+  suggestion or review-round number does not create an acceptance obligation.
+- **Stop incomplete:** a premise is invalid, a same-cause retry lacks new evidence,
+  a required effect is unavailable, or applicable bounds are exhausted. Preserve
+  results, failure reasons and the exact decision needed through existing lifecycle
+  and continuity surfaces; do not change a completed board state or claim acceptance.
+  A new session or successor contract must not conceal the accumulated failure.
+
+Update the existing plan/evidence with the disposition; do not create another
+registry. Report real worker/artifact state, not an optimistic "last step" or ETA
+unsupported by the remaining dependencies. Missing owner authority remains missing.
 
 ### Collaboration comment lifecycle and reception distinction (illustrative)
 

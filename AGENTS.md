@@ -16,7 +16,7 @@ Executable Hermes source is Aether's maintained fork `DarkArty07/aether-hermes` 
 
 The RC6 bounded corrective objective is `oc_b5926701207812e8@v1`, designed in `specs/001-aether-v1-productization/plan-rc6.md`: finish mixed-version lifecycle compatibility, observer startup/native-query reliability and portable launcher guidance, then qualify one local candidate `1.0.0rc6` / `1.0.0-rc.6` / `v1.0.0-rc.6`. Its conclusions are `release_impact=patch` / `release_action=prepare` / `release_channel=prerelease`; the annotated tag remains local-only, never pushed. This is not stable `1.0.0`, PyPI publication or WSL2 qualification; #261 stays open. #485 is the owning objective issue, with #488 and #490 included and related launcher/service issues reconciled only against actual evidence. The failed rc5 contract `oc_a7a3cff05e82c148@v1` remains non-accepted history; operational recovery does not retroactively accept it. Exact frozen old readers/writers must be tested in isolation before live effects, and coherent rc5 is the only live fallback for this objective. Executable Hermes stays at maintained-fork merge `aed6591a69f453a1867b73628603e7b53ba40ffc` (`#450`+`#461`), with no fork change. Existing rc.2 through rc.5 tags and activation records remain immutable; the published-but-rejected rc1 (`oc_3397f9f05d780f8e@v1`) must not be activated. Automatic deployments to the existing Aether GitHub Pages site caused by reviewed green merges required by this objective remain authorized; no manual Pages dispatch, other target or unrelated deployment is authorized.
 
-Current owner-authorized local maintenance for #497/#495 is a two-candidate managed update. This source revision defines a pre-stable `1.0.0rc7` compatibility bridge with the #497 updater fix but RC6-identical Morfeo SOUL and canonical contract skills. Source or a local tag alone cannot establish qualification or active runtime selection; require reviewed Git evidence, exact-version isolation and a verified managed cutover before claiming activation. No tag is pushed or published. The following final candidate restores #495 guidance. These maintenance candidates do not accept the outstanding RC6 objective, qualify stable release or WSL2, or authorize unrelated runtime changes.
+Current owner-authorized local maintenance for #497/#495 is a two-candidate managed update. RC7 is the compatibility bridge with RC6-identical Morfeo SOUL and canonical contract skills; this `1.0.0rc8` source revision restores the #495 planning guidance and the #497 updater repair. For #487, the owner's accepted option B gives Hermes ownership of the complete main gateway unit; Aether verifies only its required service invariants, as reconciled in A1. Source or a local tag alone cannot establish qualification, active runtime selection or improved agent behavior: require reviewed Git evidence, exact-version isolation and a verified managed cutover. No tag is pushed or published. These maintenance candidates do not accept the outstanding RC6 objective, qualify stable release or WSL2, or authorize unrelated runtime changes.
 
 ## How Aether is built: borrow the thinking, write our own workflow
 
@@ -52,11 +52,14 @@ This principle is owned canonically by `specs/r0-design-governance/spec.md` and 
 
 ## Project guidance and canonical skills
 
-RC7 is an intermediate compatibility bridge: its Morfeo SOUL and canonical
-contract skills deliberately match RC6. The accepted Objective Plan guide at
-[`docs/guides/objective-plans.md`](docs/guides/objective-plans.md) describes the
-following candidate, not active bridge skill behavior. Keep any working plan
-local/ignored and do not infer behavioral adoption from bridge source alone.
+For objective planning and cross-session continuation, see
+[`docs/guides/objective-plans.md`](docs/guides/objective-plans.md) and the
+`objective-contract-design` canonical procedure's planning entry. Keep one local
+`.aether/plans/<objective-slug>.md` when a meaningful route or continuity is needed;
+do not select by recency, duplicate canonical obligations, or add plan ceremony to
+simple bounded work. Plans remain local/ignored unless publication is explicitly
+decided. A session or contract boundary does not reset failed approaches or the
+reasoning needed to justify continuation. Source instructions do not prove live adoption.
 
 Every project root has operating guidance. Morfeo establishes missing root `AGENTS.md`
 guidance only after inspecting the repository and confirming its constitution; `aether init`
