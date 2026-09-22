@@ -15,7 +15,7 @@ import threading
 from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
-from time import perf_counter
+from time import perf_counter, thread_time
 from types import SimpleNamespace
 from typing import Any
 
@@ -150,6 +150,7 @@ def test_registration_and_hot_hooks_complete_while_historical_reader_held_on_bar
 
     barrier_entered = threading.Event()
     barrier_release = threading.Event()
+    historical_reader_resumed = threading.Event()
 
     ctx = FakePluginContext()
     if RetainedIndex is None:
@@ -194,6 +195,7 @@ def test_registration_and_hot_hooks_complete_while_historical_reader_held_on_bar
     ) -> None:
         barrier_entered.set()
         barrier_release.wait(timeout=5.0)
+        historical_reader_resumed.set()
         original_refresh(self, p, *args, **kwargs)
 
     monkeypatch.setattr(RetainedIndex, "refresh", blocking_refresh)
@@ -211,7 +213,9 @@ def test_registration_and_hot_hooks_complete_while_historical_reader_held_on_bar
     # While historical reader is deliberately held on barrier, fire all hot hooks
     token = correlation_token(TRACE_ID, "hot-hook-unit")
 
-    start_hooks = perf_counter()
+    # The barrier proves the causal requirement. A wall clock also counts times
+    # when CI deschedules this thread, which is not time spent inside hot hooks.
+    start_hooks = thread_time()
     # 1. on_session_start
     if "on_session_start" in ctx.hooks:
         ctx.hooks["on_session_start"][0](session_id="hot-sess-1")
@@ -263,8 +267,9 @@ def test_registration_and_hot_hooks_complete_while_historical_reader_held_on_bar
             session_id="hot-sess-1",
         )
 
-    elapsed_hooks = perf_counter() - start_hooks
-    assert elapsed_hooks < 0.050, f"Hot hooks took {elapsed_hooks:.4f}s; must not wait for history"
+    elapsed_hooks = thread_time() - start_hooks
+    assert not historical_reader_resumed.is_set(), "Hot hooks waited for the historical reader"
+    assert elapsed_hooks < 0.050, f"Hot hooks used {elapsed_hooks:.4f}s of CPU"
 
     # Release historical reader barrier
     barrier_release.set()
