@@ -355,6 +355,7 @@ jobs:
           tests/test_hermes_editable.py
           tests/test_hermes_gateway_service.py
           tests/test_lifecycle_adoption.py
+          tests/test_lifecycle_profile_transfer.py
           tests/test_lifecycle_projections.py
           tests/test_mixed_version_lifecycle_qualification.py
           tests/test_tui_projections.py
