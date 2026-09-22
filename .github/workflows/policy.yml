@@ -116,7 +116,9 @@ jobs:
           docs/getting-started.md
           docs/guides/execution.md
           docs/guides/lifecycle.md
+          docs/guides/morfeo-tool-configuration.md
           docs/guides/objective-contracts.md
+          docs/guides/objective-plans.md
           docs/guides/observation.md
           docs/guides/policy-and-recovery.md
           docs/guides/project-initialization.md

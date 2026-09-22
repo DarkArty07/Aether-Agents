@@ -2,6 +2,11 @@
 
 Aether declares four public [Hermes plugin entry points](https://hermes-agent.nousresearch.com/docs/). Generic plugin installation, configuration, and toolset behavior remain documented by Hermes; this page covers the Aether-owned registration rules.
 
+For a user-selected tool recipe and its rationale across all three roles, read
+[Tool selection by role](../guides/morfeo-tool-configuration.md). The explanation
+belongs in Aether's documentation; the actual settings remain user-local. The
+guide neither changes installed profiles nor imposes a mandatory product preset.
+
 ## Default worker tool selection
 
 Supervisor and every Implementer instance are headless workers. Their portable
@@ -28,10 +33,12 @@ without printing, committing, or copying other credentials. Existing running age
 may retain their startup tool list; apply at the next natural worker start or an
 explicitly authorized controlled restart, preserving task/worktree state.
 
-Morfeo keeps its own interaction/tool selection. Browser automation, voice, image
-capabilities, models, reasoning, fallback routes, approvals, and SOUL documents are
-not changed by this adjustment. Runtime availability and real Exa results must be
-verified separately from portable resource tests.
+These packaged worker defaults are separate from a user's broader local tool
+selection, including browser, voice, and image capabilities. Morfeo keeps its own
+interaction/tool selection. The defaults described in this section do not change
+models, reasoning, fallback routes, approvals, or SOUL documents. Runtime
+availability and real Exa results must be verified separately from portable
+resource tests.
 
 ## Package entry points
 

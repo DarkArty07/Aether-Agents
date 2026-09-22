@@ -50,6 +50,15 @@ This principle is owned canonically by `specs/r0-design-governance/spec.md` and 
 
 ## Project guidance and canonical skills
 
+For objective planning and cross-session continuation, see
+[`docs/guides/objective-plans.md`](docs/guides/objective-plans.md) and the
+`objective-contract-design` canonical procedure's planning entry. Keep one local
+`.aether/plans/<objective-slug>.md` when a meaningful route or continuity is needed;
+do not select by recency, duplicate canonical obligations, or add plan ceremony to
+simple bounded work. Plans remain local/ignored unless publication is explicitly
+decided. A session or contract boundary does not reset failed approaches or the
+reasoning needed to justify continuation.
+
 Every project root has operating guidance. Morfeo establishes missing root `AGENTS.md`
 guidance only after inspecting the repository and confirming its constitution; `aether init`
 does not invent generic project content. Existing brownfield guidance is preserved and

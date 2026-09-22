@@ -7,6 +7,12 @@ review lifecycle.
 
 ## Per-contract execution board
 
+Morfeo relates contracts to the whole objective through its existing
+[Objective Plan](objective-plans.md), when one is needed. Session/contract changes
+do not erase prior failures or reset applicable convergence bounds. This local
+record is not another board or authority, and workers still receive complete
+executable obligations through their canonical handoff.
+
 `prepare_handoff` derives one deterministic execution-board identity from
 `(project_id, contract_id, version)` and resolves the exact project binding
 before returning success. The returned board and native Project identifiers are
