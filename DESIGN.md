@@ -190,6 +190,17 @@ R6 must therefore decide against that guidance and against Aether's chosen topol
 
 ## 10.1 Autonomous project stewardship and canonical procedures
 
+**Objective continuity (#495):** Morfeo conducts the owner's whole objective, not
+only the next executable contract. Where a route or cross-session continuity is
+needed, one local Objective Plan under `.aether/plans/` relates the requested
+destination, current milestones and evidence-backed continuation across sessions
+and contracts. It has broader planning scope, not superior normative authority:
+specifications and finalized Objective Contracts retain their existing ownership.
+R1 FR-116a/FR-121a and R2 §3.1 own the requirements. Acceptance, justified
+continuation and an honest incomplete stop are different decisions; missing
+acceptance does not automatically authorize more work. Simple bounded work gains
+no plan ceremony, and authorized execution gains no new routine approval gate.
+
 For an owner-authorized objective in an already provisioned project, Aether maintains one
 end-to-end stewardship contract. This is a responsibility alignment across the three
 existing roles, not a fourth lifecycle role, queue, workflow engine, state machine, or

@@ -287,11 +287,11 @@ id = "roles.portable-profile-bundle"
 status = "partial"
 summary = "The package carries portable Morfeo, Supervisor, and Implementer role resources with separate responsibilities and plugin configuration."
 surfaces = ["role.implementer", "role.morfeo", "role.supervisor"]
-documents = ["docs/product-boundary.md", "docs/roles-and-authority.md"]
-specifications = ["specs/r5-topology-and-isolation/spec.md", "specs/r10-security-and-authority/spec.md"]
+documents = ["docs/product-boundary.md", "docs/roles-and-authority.md", "docs/guides/objective-plans.md"]
+specifications = ["specs/r1-authority-and-interaction/spec.md", "specs/r2-contract-and-handoff/spec.md", "specs/r5-topology-and-isolation/spec.md", "specs/r10-security-and-authority/spec.md"]
 implementation = ["src/aether_agents/resources/profiles/implementer/SOUL.md", "src/aether_agents/resources/profiles/morfeo/SOUL.md", "src/aether_agents/resources/profiles/supervisor/SOUL.md"]
-verification = ["tests/test_objective_contracts.py", "tests/test_observation_lifecycle.py"]
-notes = "Portable resources are versioned candidate bytes; private live-profile activation is runtime evidence only, and clean installed-profile activation and public qualification remain pending."
+verification = ["tests/test_objective_contracts.py", "tests/test_observation_lifecycle.py", "tests/test_contract_quality_documents.py", "tests/test_contract_result_review.py"]
+notes = "Portable resources are versioned candidate bytes; private live-profile activation is runtime evidence only, and clean installed-profile activation and public qualification remain pending. Objective planning/continuity guidance is source-level procedure, not a new runtime tool or demonstrated behavioral efficacy."
 
 [[capabilities]]
 id = "skills.aether-canonical-resources"

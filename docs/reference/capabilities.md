@@ -987,11 +987,14 @@ The package carries portable Morfeo, Supervisor, and Implementer role resources 
 - `role.supervisor`
 
 ### Current documentation
+- [docs/guides/objective-plans.md](../guides/objective-plans.md)
 - [docs/product-boundary.md](../product-boundary.md)
 - [docs/roles-and-authority.md](../roles-and-authority.md)
 
 ### Owning specifications
+- [specs/r1-authority-and-interaction/spec.md](../../specs/r1-authority-and-interaction/spec.md)
 - [specs/r10-security-and-authority/spec.md](../../specs/r10-security-and-authority/spec.md)
+- [specs/r2-contract-and-handoff/spec.md](../../specs/r2-contract-and-handoff/spec.md)
 - [specs/r5-topology-and-isolation/spec.md](../../specs/r5-topology-and-isolation/spec.md)
 
 ### Implementation
@@ -1000,12 +1003,14 @@ The package carries portable Morfeo, Supervisor, and Implementer role resources 
 - [src/aether_agents/resources/profiles/supervisor/SOUL.md](../../src/aether_agents/resources/profiles/supervisor/SOUL.md)
 
 ### Verification
+- [tests/test_contract_quality_documents.py](../../tests/test_contract_quality_documents.py)
+- [tests/test_contract_result_review.py](../../tests/test_contract_result_review.py)
 - [tests/test_objective_contracts.py](../../tests/test_objective_contracts.py)
 - [tests/test_observation_lifecycle.py](../../tests/test_observation_lifecycle.py)
 
 ### Notes / current limits
 
-Portable resources are versioned candidate bytes; private live-profile activation is runtime evidence only, and clean installed-profile activation and public qualification remain pending.
+Portable resources are versioned candidate bytes; private live-profile activation is runtime evidence only, and clean installed-profile activation and public qualification remain pending. Objective planning/continuity guidance is source-level procedure, not a new runtime tool or demonstrated behavioral efficacy.
 
 ## `skills.aether-canonical-resources`
 

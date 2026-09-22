@@ -45,6 +45,8 @@ issue #261 stays open with those publication and platform gates outstanding. See
   See the same guide's experience, storage and tool sections, plus [Plugins and tools](reference/plugins-and-tools.md).
 
 ### Objective handoffs, execution, and lifecycle
+- **How does one objective keep its route, stop conditions and continuity across sessions and contracts?**
+  See [Objective Plans](guides/objective-plans.md).
 - **How are objective outcomes, acceptance criteria, and handoffs structured?**
   See [Objective Contracts](guides/objective-contracts.md).
 - **How do multi-agent task execution, worktree isolation, and review cycles operate?**
@@ -63,6 +65,8 @@ issue #261 stays open with those publication and platform gates outstanding. See
   See [CLI reference](reference/cli.md).
 - **What plugins and registered tools are included in Aether?**
   See [Plugins and tools](reference/plugins-and-tools.md).
+- **How can users choose tools for each role, and why does the documented recipe include or exclude them?**
+  See [Tool selection by role](guides/morfeo-tool-configuration.md), a user-selected local recipe rather than a mandatory product preset.
 - **What are the known current limits and safe diagnostic steps?**
   See [Limitations and troubleshooting](reference/limitations-and-troubleshooting.md).
 

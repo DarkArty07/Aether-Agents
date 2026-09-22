@@ -43,6 +43,20 @@ The table below maps each information class to its authoritative artifact, defin
 | **Evidence (Implemented behavior)** | Implemented behavior and reproducible runtime facts (Source code and direct execution) | Demonstrable behavior of the source code and observed direct execution facts | Normative intent or design authority (all evidence supports claims and cannot redefine intent) | Source code is public, portable; local direct execution output is private/local, transient evidence | Reveals what is implemented or observed and may expose drift, but all evidence supports claims and cannot redefine normative intent. |
 | **Reader explanation** | Reader-facing placement and conflict explanation (Derived: [`docs/authority.md`](authority.md)) | Explanatory reader guide mapping artifact ownership, non-ownership, and conflict resolution | Normative architectural decisions, stage requirements, or capability status (derived from `DESIGN.md` section 13) | Public, portable | Explains canonical relationships for readers without competing with normative owners. [`docs/index.md`](index.md) provides navigation only and owns no semantic project truth. |
 
+## Objective Plans and cross-session continuity
+
+An [Objective Plan](guides/objective-plans.md) at
+`.aether/plans/<objective-slug>.md` is a **local, derived** record of the owner's
+outcome, current route and operational continuity. Morfeo maintains it when the
+work needs planning or continuity. It may relate multiple contracts but cannot
+widen or waive any of their obligations. Current intent, stage specifications and
+finalized contracts keep their existing domains; native boards own execution state.
+
+Keep these operational plans local and ignored by default. Record accepted normative
+decisions in their owning canonical artifacts, not only in a plan. Publishing a plan
+requires a separate privacy/portability decision; it does not become public merely
+because the convention is documented here. R2 §3.1 owns this distinction.
+
 ## Derived project knowledge and role experiences
 
 The [005 specification](../specs/005-project-knowledge-graphify/spec.md) and R9 distinguish two local artifact classes from personal preferences and canonical procedures:

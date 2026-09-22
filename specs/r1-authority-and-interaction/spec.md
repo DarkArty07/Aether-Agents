@@ -4,6 +4,7 @@
 **Stage status**: done — reconciled 2026-08-26 for PD-71/PD-72/PD-74
 **Amended**: 2026-08-18 — PD-44 proportional direct execution accepted by Christopher
 **Amended**: 2026-08-26 — local reversibility remains ungated; spend/public/destructive edge effects use separate explicit authority
+**Amended**: 2026-09-22 — owner-approved objective continuity and continuation judgment (#495); behavioral efficacy remains for real-session observation
 **Decision authority**: Christopher  
 **Autonomous design delegate for this stage**: Hermes  
 **Future role owner**: Morfeo  
@@ -63,6 +64,7 @@ The quality of the entire system rests on Phase 1. There is no second chance to 
 - **FR-114**: **Every role** operates only with credentials and access the owner has already provisioned, and MUST NOT acquire, create, or widen them. This is a scope limit, not a confirmation step, and it applies per profile (PD-27).
 - **FR-115**: **No role** may delete or overwrite work it did not produce without an instruction that covers it.
 - **FR-116**: Runaway execution MUST be bounded by convergence and attempt limits in R7, since no spending or approval gate bounds it.
+- **FR-116a**: Morfeo MUST preserve the whole owner's objective across sessions and contracts when a route or durable continuity is needed. A new session, card or contract MUST NOT reset the applicable convergence bounds or erase failed approaches. A derived Objective Plan (R2 §3.1) supports this responsibility; simple questions and routine bounded adjustments require no plan ceremony.
 
 ### Delivery and acceptance
 
@@ -71,6 +73,7 @@ The quality of the entire system rests on Phase 1. There is no second chance to 
 - **FR-119**: Review is retrospective. The owner inspects finished, integrated work rather than approving it in advance.
 - **FR-120**: Completion is defined by solidity against the contract, not by elapsed time.
 - **FR-121**: `does not converge` MUST be a legitimate terminal outcome, not a system failure.
+- **FR-121a**: Inability to accept MUST NOT itself authorize another attempt. Before a successor handoff, material new prerequisite, repeated same-cause failure or change of approach, Morfeo MUST identify the unmet obligation, evidence for the proposed continuation, and the condition to stop or replan. A false premise or unjustified continuation requires preserving the result and reporting incompleteness, not silently expanding scope. A supported result ends the objective without optional improvements. Material intent/acceptance/authority decisions remain with the owner; this adds no routine confirmation gate and no new board state.
 - **FR-122**: The end-of-work report MUST include out-of-scope defects **any role** noticed, presented as a question about whether to fix them. Morfeo assembles the report from durable execution state; he does not author it from memory.
 - **FR-123**: **No role** may silently fix what it was not asked to fix, or silently discard what it noticed.
 - **FR-124**: Rejected work MUST be correctable by revision or reversal after the fact, since it was never gated before the fact.

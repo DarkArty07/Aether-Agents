@@ -4,6 +4,10 @@ An Objective Contract is Morfeo's durable, project-bound statement of one owner-
 
 ## Availability and scope
 
+An owner objective may span several contracts. Its [Objective Plan](objective-plans.md)
+keeps the route and continuity in the project; it cannot widen or waive contract
+obligations. Every individual pipeline handoff still uses one finalized contract.
+
 The `objective_contract` tool is registered only in a configured Morfeo profile. Supervisor and Implementer may inspect a finalized contract as evidence but do not author or modify it. Bounded direct Morfeo work does not need an Objective Contract or a ceremonial card.
 
 The tool accepts these actions:

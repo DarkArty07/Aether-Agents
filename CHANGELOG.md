@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased — objective planning and local tool guidance
+
+- Morfeo conducts resumable objectives through a project-local Objective Plan in
+  `.aether/plans/`, using the existing planning and result-reception procedures.
+  Plans preserve the destination, current route, verified results and failed
+  approaches without replacing canonical obligations or adding a workflow engine.
+- Continuation is distinguished from acceptance: a remaining defect does not by
+  itself justify another attempt, and a new session or contract does not reset
+  the objective's history or convergence boundaries. Simple bounded work remains
+  free of mandatory planning ceremony.
+- Documented the owner-selected tool recipe for all three roles. These are local
+  user choices, not new mandatory packaged tool or model defaults.
+- Resource, documentation and loader checks establish structural consistency,
+  not empirical improvement in agent behavior. Live adoption still requires a
+  coherent managed update; no existing release/tag is changed by this entry.
+
 ## 1.0.0rc6 — release candidate (pre-stable, local-only activation candidate)
 
 The release identity is package version `1.0.0rc6`, display version `1.0.0-rc.6`, annotated tag
