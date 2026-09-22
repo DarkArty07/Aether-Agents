@@ -444,6 +444,7 @@ def _write_release_lock(
     version: str,
     *,
     aether_wheel_sha256: str | None = None,
+    profile_bundle_sha256: str | None = None,
     hermes_checkout: Path | None = None,
     hermes_commit: str | None = None,
     hermes_tag: str | None = None,
@@ -497,7 +498,7 @@ def _write_release_lock(
         },
         "profile_bundle": {
             "version": "2",
-            "sha256": _profile_bundle_sha256(),
+            "sha256": profile_bundle_sha256 or _profile_bundle_sha256(),
             "roles": ["morfeo", "supervisor", "implementer"],
         },
     }
@@ -512,6 +513,7 @@ def _build_wheel(
     version: str,
     *,
     projection_schema: str = READ_MODEL_SCHEMA,
+    soul_marker: str | None = None,
 ) -> Path:
     """Build the current source at ``version`` without mutating the shared checkout."""
 
@@ -522,6 +524,9 @@ def _build_wheel(
         shutil.copy2(repository / name, source / name)
     (source / "VERSION").write_text(version + "\n", encoding="ascii")
     shutil.copytree(repository / "src", source / "src")
+    if soul_marker is not None:
+        soul = source / "src/aether_agents/resources/profiles/morfeo/SOUL.md"
+        soul.write_text(soul.read_text(encoding="utf-8") + soul_marker, encoding="utf-8")
     contracts_module = source / "src" / "aether_agents" / "observation" / "contracts.py"
     contracts_bytes = contracts_module.read_text(encoding="utf-8")
     contracts_module.write_text(
@@ -2062,14 +2067,14 @@ def test_prepare_release_installs_one_wheel_in_manager_and_exact_runtime(
     profile = release / "profiles" / "morfeo" / "config.yaml"
     expected_morfeo_profile = (expected_profiles / "morfeo" / "config.yaml").read_bytes()
     profile.write_bytes(expected_morfeo_profile + b"# drift\n")
-    with pytest.raises(IntegrityError, match="profile resource drift"):
+    with pytest.raises(IntegrityError, match="profile resource digest mismatch"):
         manager.validate_release(record.release_id)
     profile.write_bytes(expected_morfeo_profile)
 
     soul = release / "profiles" / "morfeo" / "SOUL.md"
     expected_morfeo_soul = (expected_profiles / "morfeo" / "SOUL.md").read_bytes()
     soul.write_bytes(expected_morfeo_soul + b"\n# drift\n")
-    with pytest.raises(IntegrityError, match="profile resource drift"):
+    with pytest.raises(IntegrityError, match="profile resource digest mismatch"):
         manager.validate_release(record.release_id)
     soul.write_bytes(expected_morfeo_soul)
 

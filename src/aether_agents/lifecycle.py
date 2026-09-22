@@ -3344,9 +3344,29 @@ try:
     except ValueError:
         _fail("TARGET_IMPORT_PROVENANCE_MISMATCH")
 
-    installed = store._read_release(release_id)
+    # A prepared release has an installed manager but no registered record yet.
+    installed = None if operation == "prepare_profile_bundle" else store._read_release(release_id)
 
-    if operation == "validate_record":
+    if operation == "prepare_profile_bundle":
+        manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+        digest = manager._materialize_profile_bundle(store.release_path(release_id))
+        response = {"status": "ok", "operation": operation, "release_id": release_id,
+                    "sha256": digest}
+
+    elif operation == "validate_profile_bundle":
+        release = store.release_path(release_id)
+        manifest = json.loads((release / "release.json").read_text(encoding="utf-8"))
+        if manifest.get("profile_bundle_sha256") != request.get("expected_sha256"):
+            _fail("PROFILE_BUNDLE_IDENTITY_MISMATCH")
+        manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+        method = manager._validate_profile_bundle
+        if "verify_local_resources" in inspect.signature(method).parameters:
+            method(release, manifest, verify_local_resources=True)
+        else:
+            method(release, manifest)
+        response = {"status": "ok", "operation": operation, "release_id": release_id}
+
+    elif operation == "validate_record":
         proposed_payload = request.get("proposed_record")
         if not isinstance(proposed_payload, dict):
             _fail("MISSING_PROPOSED_RECORD")
@@ -5193,7 +5213,16 @@ class LifecycleManager:
         for environment in (manager, runtime):
             marker = environment / "aether-wheel.sha256"
             self._write_durable(marker, (digest + "\n").encode("ascii"))
-        profile_bundle_sha256 = self._materialize_profile_bundle(stage)
+        if self._wheel_profile_bundle_sha256(staged_wheel) != validated_lock.profile_bundle_sha256:
+            raise IntegrityError("release lock wheel profile bundle digest mismatch")
+        profile_result = self._run_target_lifecycle_subprocess(
+            release_id, {"operation": "prepare_profile_bundle"}
+        )
+        profile_bundle_sha256 = profile_result.get("sha256")
+        if not isinstance(profile_bundle_sha256, str) or not _SHA256_RE.fullmatch(
+            profile_bundle_sha256
+        ):
+            raise IntegrityError("target profile bundle digest is invalid")
         if profile_bundle_sha256 != validated_lock.profile_bundle_sha256:
             raise IntegrityError("release lock profile bundle digest mismatch")
 
@@ -5546,7 +5575,7 @@ class LifecycleManager:
             "hermes": candidate.hermes_source().to_record(),
             "profile_bundle": {
                 "version": "2",
-                "sha256": self.profile_bundle_sha256(),
+                "sha256": self._wheel_profile_bundle_sha256(wheel),
                 "roles": list(_PROFILE_ROLES),
             },
         }
@@ -5583,6 +5612,58 @@ class LifecycleManager:
                     "sha256": _sha256(source),
                 }
                 for skill_name, source in self._skill_sources().items()
+            }
+            profiles[role] = {"resources": resources, "skills": skills}
+        manifest = {
+            "schema_version": 2,
+            "observer_entry_point": HERMES_BASELINE.observer_entry_point,
+            "roles": list(_PROFILE_ROLES),
+            "profiles": profiles,
+        }
+        encoded = (json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n").encode(
+            "utf-8"
+        )
+        return hashlib.sha256(encoded).hexdigest()
+
+    @staticmethod
+    def _wheel_profile_bundle_sha256(wheel: Path) -> str:
+        """Bind the local lock to the exact candidate wheel's canonical resources."""
+        prefix = "aether_agents/resources/"
+        expected = {
+            f"{prefix}profiles/{role}/{name}"
+            for role in _PROFILE_ROLES
+            for name in ("config.yaml", "SOUL.md")
+        }
+        expected.update(f"{prefix}skills/{skill}/SKILL.md" for skill in _CANONICAL_SKILLS)
+        try:
+            with zipfile.ZipFile(wheel) as archive:
+                names = [
+                    name
+                    for name in archive.namelist()
+                    if name.startswith((prefix + "profiles/", prefix + "skills/"))
+                ]
+                if len(names) != len(expected) or set(names) != expected:
+                    raise IntegrityError("candidate wheel profile resource set mismatch")
+                digests = {
+                    name: hashlib.sha256(archive.read(name)).hexdigest() for name in expected
+                }
+        except (OSError, zipfile.BadZipFile, KeyError) as error:
+            raise IntegrityError("candidate wheel profile resources are unreadable") from error
+        profiles = {}
+        for role in _PROFILE_ROLES:
+            resources = {
+                name: {
+                    "path": f"profiles/{role}/{name}",
+                    "sha256": digests[f"{prefix}profiles/{role}/{name}"],
+                }
+                for name in ("config.yaml", "SOUL.md")
+            }
+            skills = {
+                skill: {
+                    "path": f"profiles/{role}/skills/{skill}/SKILL.md",
+                    "sha256": digests[f"{prefix}skills/{skill}/SKILL.md"],
+                }
+                for skill in _CANONICAL_SKILLS
             }
             profiles[role] = {"resources": resources, "skills": skills}
         manifest = {
@@ -5717,7 +5798,13 @@ class LifecycleManager:
                 expected_active_release_id=expected,
             )
 
-    def _validate_profile_bundle(self, release: Path, release_manifest: dict[str, Any]) -> None:
+    def _validate_profile_bundle(
+        self,
+        release: Path,
+        release_manifest: dict[str, Any],
+        *,
+        verify_local_resources: bool = True,
+    ) -> None:
         manifest_path = release / "profile-bundle.json"
         if manifest_path.is_symlink() or not manifest_path.is_file():
             raise IntegrityError("managed profile bundle manifest is missing")
@@ -5780,7 +5867,7 @@ class LifecycleManager:
                 raise IntegrityError("managed profile contains unknown product bytes")
             if os.name == "posix" and stat.S_IMODE(role_root.stat().st_mode) != DIR_MODE:
                 raise IntegrityError("managed profile directory permissions mismatch")
-            for name, source in self._profile_sources(role).items():
+            for name in ("config.yaml", "SOUL.md"):
                 expected_path = f"profiles/{role}/{name}"
                 resource = resources.get(name)
                 if not isinstance(resource, dict) or set(resource) != {"path", "sha256"}:
@@ -5788,23 +5875,25 @@ class LifecycleManager:
                 if resource.get("path") != expected_path:
                     raise IntegrityError("managed profile path mismatch")
                 target = release / expected_path
-                if (
-                    source.is_symlink()
-                    or not source.is_file()
-                    or target.is_symlink()
-                    or not target.is_file()
-                ):
+                if target.is_symlink() or not target.is_file():
                     raise IntegrityError("managed profile resource is missing")
                 if os.name == "posix" and stat.S_IMODE(target.stat().st_mode) != FILE_MODE:
                     raise IntegrityError("managed profile resource permissions mismatch")
                 try:
-                    expected_bytes = read_private_bytes(source)
                     observed_bytes = read_private_bytes(target)
                 except (OSError, ValueError) as error:
                     raise IntegrityError("managed profile resource is unreadable") from error
-                if observed_bytes != expected_bytes:
-                    raise IntegrityError("managed profile resource drift")
-                digest = hashlib.sha256(expected_bytes).hexdigest()
+                if verify_local_resources:
+                    source = self._profile_source(role, name)
+                    if source.is_symlink() or not source.is_file():
+                        raise IntegrityError("managed profile resource is missing")
+                    try:
+                        expected_bytes = read_private_bytes(source)
+                    except (OSError, ValueError) as error:
+                        raise IntegrityError("managed profile resource is unreadable") from error
+                    if observed_bytes != expected_bytes:
+                        raise IntegrityError("managed profile resource drift")
+                digest = hashlib.sha256(observed_bytes).hexdigest()
                 if resource.get("sha256") != digest:
                     raise IntegrityError("managed profile resource digest mismatch")
             skills_root = role_root / "skills"
@@ -5814,7 +5903,7 @@ class LifecycleManager:
                 raise IntegrityError("managed profile skill directory permissions mismatch")
             if {child.name for child in skills_root.iterdir()} != set(_CANONICAL_SKILLS):
                 raise IntegrityError("managed profile skill directory set mismatch")
-            for skill_name, source in self._skill_sources().items():
+            for skill_name in _CANONICAL_SKILLS:
                 expected_path = f"profiles/{role}/skills/{skill_name}/SKILL.md"
                 resource = skills.get(skill_name)
                 if not isinstance(resource, dict) or set(resource) != {"path", "sha256"}:
@@ -5826,8 +5915,6 @@ class LifecycleManager:
                 if (
                     skill_dir.is_symlink()
                     or not skill_dir.is_dir()
-                    or source.is_symlink()
-                    or not source.is_file()
                     or target.is_symlink()
                     or not target.is_file()
                     or {child.name for child in skill_dir.iterdir()} != {"SKILL.md"}
@@ -5839,13 +5926,20 @@ class LifecycleManager:
                 ):
                     raise IntegrityError("managed profile skill permissions mismatch")
                 try:
-                    expected_bytes = read_private_bytes(source)
                     observed_bytes = read_private_bytes(target)
                 except (OSError, ValueError) as error:
                     raise IntegrityError("managed profile skill is unreadable") from error
-                if observed_bytes != expected_bytes:
-                    raise IntegrityError("managed profile skill resource drift")
-                digest = hashlib.sha256(expected_bytes).hexdigest()
+                if verify_local_resources:
+                    source = self._skill_source(skill_name)
+                    if source.is_symlink() or not source.is_file():
+                        raise IntegrityError("managed profile skill resource is missing")
+                    try:
+                        expected_bytes = read_private_bytes(source)
+                    except (OSError, ValueError) as error:
+                        raise IntegrityError("managed profile skill is unreadable") from error
+                    if observed_bytes != expected_bytes:
+                        raise IntegrityError("managed profile skill resource drift")
+                digest = hashlib.sha256(observed_bytes).hexdigest()
                 if resource.get("sha256") != digest:
                     raise IntegrityError("managed profile skill digest mismatch")
 
@@ -6016,9 +6110,11 @@ class LifecycleManager:
             or wheel_identity["observer"] != OBSERVER_ENTRY_POINT
         ):
             raise IntegrityError("staged wheel observation identity mismatch")
-        self._validate_profile_bundle(release, manifest)
+        self._validate_profile_bundle(release, manifest, verify_local_resources=False)
         if manifest.get("profile_bundle_sha256") != validated_lock.profile_bundle_sha256:
             raise IntegrityError("release lock profile bundle digest mismatch")
+        if self._wheel_profile_bundle_sha256(artifact) != validated_lock.profile_bundle_sha256:
+            raise IntegrityError("release wheel profile bundle digest mismatch")
         if record.tui_sha256 is not None:
             tui_entry = release / "tui" / "dist" / "entry.js"
             if (
@@ -6053,6 +6149,15 @@ class LifecycleManager:
             identities.append(identity)
         if identities[0] != identities[1]:
             raise IntegrityError("manager/runtime installed identity mismatch")
+        # The target's authenticated manager, not the currently executing manager,
+        # owns the exact SOUL/skill bytes. Old releases retain their original check.
+        self._run_target_lifecycle_subprocess(
+            release_id,
+            {
+                "operation": "validate_profile_bundle",
+                "expected_sha256": validated_lock.profile_bundle_sha256,
+            },
+        )
         hermes_version = self._installed_distribution_version(
             self._environment_python(release / "runtime"),
             HERMES_BASELINE.distribution,
