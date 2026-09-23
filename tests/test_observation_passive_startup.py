@@ -9,7 +9,9 @@ Satisfies:
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import secrets
 import sys
 import threading
@@ -76,17 +78,65 @@ class FakePluginContext:
         self.unload_callbacks.append(callback)
 
 
+def _witness_target() -> Path | None:
+    ambient = os.environ.get("HERMES_HOME")
+    return Path(ambient).resolve() if ambient else None
+
+
+def _capture_witness(path: Path | None) -> dict[str, tuple[int, str]]:
+    """Capture a content-and-size witness of the ambient profile directory or sentinel."""
+    if path is None or not path.exists():
+        return {}
+    witness: dict[str, tuple[int, str]] = {}
+    is_live_profile = (path / "aether-observer.json").exists() or (path / "profile.yaml").exists()
+    for p in path.rglob("*"):
+        if not p.is_file():
+            continue
+        rel = str(p.relative_to(path))
+        if is_live_profile:
+            # Under a live interactive or daemon profile, concurrent processes write state.db/wal, logs, etc.
+            # Witness the sensitive targets that unisolated test nodes touch (SOUL.md, cache/, config.yaml).
+            if not (rel == "SOUL.md" or rel.startswith("cache/") or rel == "config.yaml"):
+                continue
+        try:
+            witness[rel] = (p.stat().st_size, hashlib.sha256(p.read_bytes()).hexdigest())
+        except OSError:
+            pass
+    return witness
+
+
 def _setup_project(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[Path, ObservationPaths]:
+    # Discard any ambient dispatcher / kanban routing variables
+    for name in tuple(os.environ):
+        if name.startswith("HERMES_KANBAN_"):
+            monkeypatch.delenv(name, raising=False)
+
+    home = tmp_path / "home"
+    xdg_data = tmp_path / "xdg_data"
+    xdg_config = tmp_path / "xdg_config"
     state = tmp_path / "state"
+    xdg_cache = tmp_path / "xdg_cache"
+    temp_dir = tmp_path / "tmp"
+    hermes_home = tmp_path / "hermes" / "profiles" / "morfeo"
+
+    for d in (home, xdg_data, xdg_config, state, xdg_cache, temp_dir, hermes_home):
+        d.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(xdg_data))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_config))
+    monkeypatch.setenv("XDG_STATE_HOME", str(state))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(xdg_cache))
+    monkeypatch.setenv("TMPDIR", str(temp_dir))
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+    monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
+
     project = tmp_path / "project"
     marker = project / ".aether" / "project.toml"
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text(project_marker(PROJECT_ID), encoding="utf-8")
-    monkeypatch.setenv("XDG_STATE_HOME", str(state))
-    monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
-    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes" / "profiles" / "morfeo"))
     registry = ProjectRegistry()
     registry.register(PROJECT_ID, project, "test-passive")
     paths = ObservationPaths.for_project(PROJECT_ID, root=state)
@@ -1040,9 +1090,13 @@ def test_worker_emission_publishes_validated_absence_claims_once_under_the_lock(
 
 
 def test_pre_fix_category_normalizer_demonstrates_import_lock_cycle(
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """OBS-D-032 / OBS-FR-087: Pre-fix category normalizer demonstrably reaches the import/plugin lock cycle."""
+    witness_target = _witness_target()
+    witness_before = _capture_witness(witness_target)
+    _setup_project(tmp_path / "pre-fix-proj", monkeypatch)
+
     from hermes_cli.plugins import get_plugin_manager
 
     manager = get_plugin_manager()
@@ -1050,38 +1104,41 @@ def test_pre_fix_category_normalizer_demonstrates_import_lock_cycle(
     sys.modules.pop("model_tools", None)
 
     manager._discovery_lock.acquire()
-    t1_started = threading.Event()
-    t1_done = threading.Event()
+    try:
+        t1_started = threading.Event()
+        t1_done = threading.Event()
 
-    def run_t1() -> None:
-        t1_started.set()
-        import model_tools  # noqa: F401
+        def run_t1() -> None:
+            t1_started.set()
+            import model_tools  # noqa: F401
 
-        t1_done.set()
+            t1_done.set()
 
-    t1 = threading.Thread(target=run_t1)
-    t1.start()
-    assert t1_started.wait(timeout=2.0)
-    time.sleep(0.05)
+        t1 = threading.Thread(target=run_t1)
+        t1.start()
+        assert t1_started.wait(timeout=2.0)
+        time.sleep(0.05)
 
-    # Pre-fix category normalizer imported model_tools
-    t2_done = threading.Event()
+        # Pre-fix category normalizer imported model_tools
+        t2_done = threading.Event()
 
-    def pre_fix_attempt() -> None:
-        try:
-            from model_tools import get_toolset_for_tool  # type: ignore[import-not-found]
+        def pre_fix_attempt() -> None:
+            try:
+                from model_tools import get_toolset_for_tool  # type: ignore[import-not-found]
 
-            get_toolset_for_tool("kanban_create")
-        finally:
-            t2_done.set()
+                get_toolset_for_tool("kanban_create")
+            finally:
+                t2_done.set()
 
-    t2 = threading.Thread(target=pre_fix_attempt)
-    t2.start()
+        t2 = threading.Thread(target=pre_fix_attempt)
+        t2.start()
 
-    # Pre-fix demonstrably deadlocks: t2 cannot complete because t1 holds model_tools import lock
-    # and waits for manager._discovery_lock held by the test thread.
-    completed = t2_done.wait(timeout=0.3)
-    manager._discovery_lock.release()
+        # Pre-fix demonstrably deadlocks: t2 cannot complete because t1 holds model_tools import lock
+        # and waits for manager._discovery_lock held by the test thread.
+        completed = t2_done.wait(timeout=0.3)
+    finally:
+        manager._discovery_lock.release()
+
     t1.join(timeout=2.0)
     t2.join(timeout=2.0)
 
@@ -1089,12 +1146,20 @@ def test_pre_fix_category_normalizer_demonstrates_import_lock_cycle(
     assert t1_done.is_set()
     assert t2_done.is_set()
 
+    witness_after = _capture_witness(witness_target)
+    assert witness_before == witness_after, (
+        f"Ambient HERMES_HOME was modified: {witness_before} != {witness_after}"
+    )
+
 
 def test_candidate_observer_registration_avoids_model_tools_import_and_lock_cycle(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """OBS-D-032 / OBS-FR-087: Candidate observer registration never imports model_tools and avoids deadlock."""
+    witness_target = _witness_target()
+    witness_before = _capture_witness(witness_target)
     _setup_project(tmp_path / "race-proj", monkeypatch)
+
     from hermes_cli.plugins import get_plugin_manager
 
     manager = get_plugin_manager()
@@ -1102,35 +1167,38 @@ def test_candidate_observer_registration_avoids_model_tools_import_and_lock_cycl
     sys.modules.pop("model_tools", None)
 
     manager._discovery_lock.acquire()
-    t1_started = threading.Event()
-    t1_done = threading.Event()
+    try:
+        t1_started = threading.Event()
+        t1_done = threading.Event()
 
-    def run_t1() -> None:
-        t1_started.set()
-        import model_tools  # noqa: F401
+        def run_t1() -> None:
+            t1_started.set()
+            import model_tools  # noqa: F401
 
-        t1_done.set()
+            t1_done.set()
 
-    t1 = threading.Thread(target=run_t1)
-    t1.start()
-    assert t1_started.wait(timeout=2.0)
-    time.sleep(0.05)
+        t1 = threading.Thread(target=run_t1)
+        t1.start()
+        assert t1_started.wait(timeout=2.0)
+        time.sleep(0.05)
 
-    t2_done = threading.Event()
-    ctx = FakePluginContext(profile_name="morfeo")
+        t2_done = threading.Event()
+        ctx = FakePluginContext(profile_name="morfeo")
 
-    def candidate_register() -> None:
-        try:
-            hermes_plugin.register(ctx)
-        finally:
-            t2_done.set()
+        def candidate_register() -> None:
+            try:
+                hermes_plugin.register(ctx)
+            finally:
+                t2_done.set()
 
-    t2 = threading.Thread(target=candidate_register)
-    t2.start()
+        t2 = threading.Thread(target=candidate_register)
+        t2.start()
 
-    # Candidate must complete promptly without waiting on model_tools or deadlocking
-    completed = t2_done.wait(timeout=1.0)
-    manager._discovery_lock.release()
+        # Candidate must complete promptly without waiting on model_tools or deadlocking
+        completed = t2_done.wait(timeout=1.0)
+    finally:
+        manager._discovery_lock.release()
+
     t1.join(timeout=2.0)
     t2.join(timeout=2.0)
 
@@ -1139,14 +1207,26 @@ def test_candidate_observer_registration_avoids_model_tools_import_and_lock_cycl
     assert t2_done.is_set()
     assert "on_session_start" in ctx.hooks
 
+    witness_after = _capture_witness(witness_target)
+    assert witness_before == witness_after, (
+        f"Ambient HERMES_HOME was modified: {witness_before} != {witness_after}"
+    )
+
 
 def test_native_and_late_registered_tool_categories_match_registry_and_taxonomy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """OBS-D-032: Native registered and late-registered tool categories match the registry and taxonomy."""
-    from tools.registry import registry
-
+    witness_target = _witness_target()
+    witness_before = _capture_witness(witness_target)
     _, paths = _setup_project(tmp_path / "tax-proj", monkeypatch)
+
+    from tools.registry import discover_builtin_tools, registry
+
+    # Deterministically establish native registration in-process so this node
+    # passes standalone without depending on a sibling test importing model_tools.
+    discover_builtin_tools()
+
     ctx = FakePluginContext(profile_name="morfeo")
     hermes_plugin.register(ctx)
 
@@ -1205,16 +1285,23 @@ def test_native_and_late_registered_tool_categories_match_registry_and_taxonomy(
     assert "NATIVE_TOOL_CATEGORY_UNAVAILABLE" in reason_codes
     collector.stop()
 
+    witness_after = _capture_witness(witness_target)
+    assert witness_before == witness_after, (
+        f"Ambient HERMES_HOME was modified: {witness_before} != {witness_after}"
+    )
+
 
 def test_isolated_mcp_enabled_startup_and_single_early_turn_bounded(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """AC4 / OBS-FR-087: Isolated MCP-enabled startup completes within bounded time, and first turn processes once."""
+    witness_target = _witness_target()
+    witness_before = _capture_witness(witness_target)
+    _, paths = _setup_project(tmp_path / "mcp-startup-proj", monkeypatch)
+
     import hermes_cli.config as hermes_cfg
     from hermes_cli import mcp_startup
     from tools.registry import registry
-
-    _, paths = _setup_project(tmp_path / "mcp-startup-proj", monkeypatch)
 
     raw_config = {
         "mcp_servers": {
@@ -1303,3 +1390,8 @@ def test_isolated_mcp_enabled_startup_and_single_early_turn_bounded(
     start_ev, comp_ev = tool_events[0], tool_events[1]
     assert start_ev.get("tool", {}).get("category") == "mcp"
     assert comp_ev.get("tool", {}).get("category") == "mcp"
+
+    witness_after = _capture_witness(witness_target)
+    assert witness_before == witness_after, (
+        f"Ambient HERMES_HOME was modified: {witness_before} != {witness_after}"
+    )
