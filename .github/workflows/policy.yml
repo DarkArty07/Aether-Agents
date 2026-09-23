@@ -103,6 +103,7 @@ jobs:
           .aether/objective-contracts/oc_3397f9f05d780f8e/v1.md
           .aether/objective-contracts/oc_ff82ba151cdf3861/v1.md
           .aether/objective-contracts/oc_ff82ba151cdf3861/v2.md
+          .aether/objective-contracts/oc_ce1f17ebbb4968b4/v1.md
           .aether/project.toml
           .aether/skills/aether-observe/SKILL.md
           AGENTS.md
