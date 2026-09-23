@@ -1263,3 +1263,63 @@ def test_brownfield_preservation_with_dirty_state(
     assert (repo / "README.md").read_text(encoding="utf-8") == "brownfield\n"
     remotes = subprocess.run(("git", "remote", "-v"), cwd=repo, capture_output=True, text=True)
     assert "TestOrg/repo.git" in remotes.stdout
+
+
+def test_refuse_dangling_symlinked_gitignore(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A dangling symlink for .gitignore is refused before modification; target is not created."""
+    repo = _git_repository(tmp_path / "repo")
+    target = tmp_path / "nonexistent-ignore-target"
+    (repo / ".gitignore").symlink_to(target)
+
+    hermes_root = _hermes_home(tmp_path, [("p_exact", "repo", "Repo", repo)])
+    monkeypatch.setenv("AETHER_HERMES_ROOT", str(hermes_root))
+
+    # Real run refuses before any write
+    envelope = run_init(_args(repo), registry=registry)
+    assert envelope.result == "error"
+    assert envelope.errors[0].code == "AETHER-INIT-IGNORE-POLICY-UNSAFE"
+    assert (repo / ".gitignore").is_symlink()
+    assert not target.exists()
+
+    # Dry-run also refuses safely without creating target
+    dry_envelope = run_init(_args(repo, dry_run=True), registry=registry)
+    assert dry_envelope.result == "error"
+    assert dry_envelope.errors[0].code == "AETHER-INIT-IGNORE-POLICY-UNSAFE"
+    assert (repo / ".gitignore").is_symlink()
+    assert not target.exists()
+
+
+def test_refuse_symlinked_or_dangling_marker(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A symlinked or dangling symlinked marker is refused with AETHER-INIT-MARKER-UNSAFE."""
+    repo = _git_repository(tmp_path / "repo")
+    aether_dir = repo / ".aether"
+    aether_dir.mkdir(parents=True, exist_ok=True)
+    marker_path = aether_dir / "project.toml"
+
+    missing_target = tmp_path / "missing-marker.toml"
+    marker_path.symlink_to(missing_target)
+
+    hermes_root = _hermes_home(tmp_path, [("p_exact", "repo", "Repo", repo)])
+    monkeypatch.setenv("AETHER_HERMES_ROOT", str(hermes_root))
+
+    # Dangling symlink refusal
+    envelope = run_init(_args(repo), registry=registry)
+    assert envelope.result == "error"
+    assert envelope.errors[0].code == "AETHER-INIT-MARKER-UNSAFE"
+    assert marker_path.is_symlink()
+    assert not missing_target.exists()
+
+    # Live symlink refusal
+    marker_path.unlink()
+    live_target = tmp_path / "live-marker.toml"
+    live_target.write_text("name = 'live'\nproject_id = '01234567-89ab-cdef-0123-456789abcdef'\n")
+    marker_path.symlink_to(live_target)
+
+    envelope_live = run_init(_args(repo), registry=registry)
+    assert envelope_live.result == "error"
+    assert envelope_live.errors[0].code == "AETHER-INIT-MARKER-UNSAFE"
+    assert marker_path.is_symlink()

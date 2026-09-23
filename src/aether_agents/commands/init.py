@@ -157,14 +157,14 @@ def _read_existing_marker(marker_path: Path) -> dict[str, Any] | None:
 
     An unreadable or non-conforming marker is a refusal, never something to overwrite.
     """
-    if not marker_path.exists():
-        return None
-    if marker_path.is_symlink() or not marker_path.is_file():
+    if marker_path.is_symlink() or (marker_path.exists() and not marker_path.is_file()):
         raise InitError(
             "AETHER-INIT-MARKER-UNSAFE",
             "existing .aether/project.toml is not a regular file",
             failure_kind="integrity_failure",
         )
+    if not marker_path.exists():
+        return None
     try:
         marker = tomllib.loads(marker_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
@@ -413,6 +413,12 @@ def _render_marker(marker: dict[str, Any]) -> str:
 
 def _write_marker(marker_path: Path, marker: dict[str, Any]) -> None:
     """Atomically write the marker as ordinary tracked project content."""
+    if marker_path.is_symlink() or (marker_path.exists() and not marker_path.is_file()):
+        raise InitError(
+            "AETHER-INIT-MARKER-UNSAFE",
+            "existing .aether/project.toml is not a regular file",
+            failure_kind="integrity_failure",
+        )
     marker_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = marker_path.with_name(f".{marker_path.name}.{os.getpid()}.tmp")
     try:
@@ -485,13 +491,13 @@ def _apply_ignore_policy(root: Path) -> None:
         )
     path = root / ".gitignore"
     original: bytes | None = None
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        raise InitError(
+            "AETHER-INIT-IGNORE-POLICY-UNSAFE",
+            ".gitignore is not a regular file; refusing to modify it",
+            failure_kind="integrity_failure",
+        )
     if path.exists():
-        if path.is_symlink() or not path.is_file():
-            raise InitError(
-                "AETHER-INIT-IGNORE-POLICY-UNSAFE",
-                ".gitignore is not a regular file; refusing to modify it",
-                failure_kind="integrity_failure",
-            )
         original = path.read_bytes()
 
     separator = b"" if original is None or original.endswith(b"\n") else b"\n"
@@ -526,7 +532,7 @@ def _plan(root: Path, args: argparse.Namespace, registry: ProjectRegistry) -> di
     _check_cross_profile_path(root, profile_home)
 
     gitignore = root / ".gitignore"
-    if gitignore.exists() and (gitignore.is_symlink() or not gitignore.is_file()):
+    if gitignore.is_symlink() or (gitignore.exists() and not gitignore.is_file()):
         raise InitError(
             "AETHER-INIT-IGNORE-POLICY-UNSAFE",
             ".gitignore is not a regular file; refusing to modify it",

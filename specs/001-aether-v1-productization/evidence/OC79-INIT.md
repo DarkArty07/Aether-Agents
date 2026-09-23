@@ -124,10 +124,11 @@ Observed result:
 | AC2 / A1-FR-049 | Matching archived Project refused as visible identity conflict | `test_refuse_archived_exact_path_match` | Code `AETHER-INIT-HERMES-PROJECT-ARCHIVED`; no replacement created |
 | AC2 / A1-FR-046 | Subdirectory of a Git repository refused | `test_non_repository_and_subdirectory_are_refused` | Code `AETHER-INIT-NOT-REPOSITORY-ROOT` |
 | AC2 / A1-FR-046 | Path inside a Hermes profile directory refused | `test_refuse_cross_profile_path` | Code `AETHER-INIT-CROSS-PROFILE-PATH` |
-| AC2 / A1-FR-049 | Target runtime unavailable refuses before mutation | `test_missing_hermes_project_refuses_when_runtime_unavailable`, `test_refuse_when_target_runtime_unavailable` | Code `AETHER-INIT-HERMES-RUNTIME-UNAVAILABLE`; 0 mutations |
+| AC2 / A1-FR-049 | Target runtime unavailable refuses before mutation | `test_missing_hermes_project_refuses_when_runtime_unavailable` | Code `AETHER-INIT-HERMES-RUNTIME-UNAVAILABLE`; 0 mutations |
 | AC2 / A1-FR-049 | Corrupt `projects.db` refuses without modifying state | `test_refuse_when_projects_db_unreadable_or_corrupt` | Code `AETHER-INIT-HERMES-PROJECTS-UNAVAILABLE`; 0 mutations |
 | AC2 / A1-FR-049 | Schema-invalid `projects.db` refuses | `test_refuse_when_projects_db_schema_invalid` | Code `AETHER-INIT-HERMES-PROJECTS-UNREADABLE`; 0 mutations |
-| AC2 / A1-FR-049 | Symlinked `.gitignore` refused before modification | `test_refuse_symlinked_gitignore` | Code `AETHER-INIT-IGNORE-POLICY-UNSAFE`; symlink untouched |
+| AC2 / A1-FR-049 | Symlinked / dangling `.gitignore` refused before modification | `test_refuse_symlinked_gitignore`, `test_refuse_dangling_symlinked_gitignore` | Code `AETHER-INIT-IGNORE-POLICY-UNSAFE`; symlink untouched, target uncreated |
+| AC2 / A1-FR-049 | Symlinked / dangling marker refused before modification | `test_refuse_symlinked_or_dangling_marker` | Code `AETHER-INIT-MARKER-UNSAFE`; symlink untouched, target uncreated |
 | AC2 / A1-FR-049 | Conflicting live identity refused | `test_conflicting_live_identity_is_refused` | Code `AETHER-INIT-IDENTITY-CONFLICT` |
 | AC2 / A1-FR-048 | Brownfield governance, dirty state, remotes, branches preserved | `test_brownfield_preservation_with_dirty_state` | `AGENTS.md`, `dirty.txt`, `README.md`, remotes intact |
 | AC2 / A1-FR-049 | Interruption after native creation retries safely | `test_retry_after_interruption_following_native_creation` | Reuses created project; count remains 1; completes marker and registry |
