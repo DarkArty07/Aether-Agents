@@ -355,7 +355,7 @@ The cross-file oracle `tests/test_observation_usage_guidance.py` was executed di
 ```text
 $ uv run --frozen python scripts/run_tests.py -- tests/test_observation_usage_guidance.py -q
 .........                                                                [100%]
-9 passed in 0.17s
+9 passed in 0.19s
 ```
 
 **Result**: PASS unchanged (exit code 0, 9 passed).
@@ -371,7 +371,7 @@ The resolver changes do not invalidate the precedence assertions in `test_docume
    ............................................................. [ 37%]
    ...................................................................... [ 80%]
    ................................                                         [100%]
-   163 passed, 13 subtests passed in 40.10s
+   163 passed, 13 subtests passed in 41.86s
    Exit code: 0
    ```
 
