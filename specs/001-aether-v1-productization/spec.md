@@ -332,7 +332,7 @@ step MUST carry a concrete non-applicability reason in terminal evidence.
   project skill list.
 - **A1-FR-100**: A project MAY begin its first owner/Morfeo conversation without root
   `AGENTS.md`; that temporary onboarding condition is not an implementation-ready
-  exception. Before product execution or a pipeline handoff, the project MUST have
+  exception. Before implementation in that project or a pipeline handoff, the project MUST have
   accurate root `AGENTS.md` guidance. Morfeo establishes missing guidance after
   repository inspection and constitution confirmation;
   the role whose authorized change invalidates build, test, run, version, release,
