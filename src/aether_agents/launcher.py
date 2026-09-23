@@ -303,12 +303,19 @@ def _resolve_project(project_arg: str | Path | None = None) -> tuple[Path, str]:
                     f"explicit AETHER_PROJECT_ID {env_pid_raw} conflicts with project marker {project_id}"
                 )
 
-        if registry.knows(project_id):
-            registered = registry.project_path(project_id)
-            if registered is not None and registered.resolve() != repo:
-                raise ActivationError(
-                    f"project ID {project_id} conflicts with registered path: {registered}"
-                )
+        if not registry.knows(project_id):
+            raise ActivationError(
+                f"project {project_id} at {repo} is not registered in the project registry; run 'aether init' first"
+            )
+        registered = registry.project_path(project_id)
+        if registered is None or registered.resolve() != repo:
+            raise ActivationError(
+                f"project ID {project_id} conflicts with registered path: {registered}"
+            )
+        if not registry.verify_with_marker(project_id):
+            raise ActivationError(
+                f"project registry and portable marker do not agree for {project_id}"
+            )
 
         return repo, project_id
 

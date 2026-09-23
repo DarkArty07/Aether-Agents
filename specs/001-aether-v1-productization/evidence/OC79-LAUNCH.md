@@ -31,11 +31,12 @@
    - Multiple registered projects without an explicit selection continue to refuse with `ambiguous project identity`.
    - Empty registry without an explicit selection continues to refuse with `"no Aether project found and project registry is empty"`.
 
-3. **Exact Selection Preserved**:
-   - Explicit `--project PATH` (relative values normalize against invocation cwd, empty refused).
-   - `AETHER_PROJECT_ROOT` (absolute only, empty/relative refused).
-   - `AETHER_PROJECT_ID` (canonical UUID agreeing with marker and registry).
-   - Current directory or nearest initialized parent (verifying `.aether/project.toml` and exact-path registry agreement).
+3. **Exact Selection and Route (1) Registry Proof (A1-FR-043a)**:
+   - Explicit `--project PATH` and `AETHER_PROJECT_ROOT` now strictly prove `registry.knows(project_id)`, exact-path equality `registry.project_path(project_id) == repo`, and `registry.verify_with_marker(project_id)` before returning. An unregistered marker or path conflict fails closed with actionable guidance (`"run 'aether init' first"`).
+   - Relative `--project PATH` values normalize against invocation cwd; empty values are refused.
+   - `AETHER_PROJECT_ROOT` requires a non-empty absolute path; empty/relative values are refused.
+   - `AETHER_PROJECT_ID` requires a canonical UUID agreeing with marker and registry.
+   - Current directory or nearest initialized parent verifies `.aether/project.toml` and exact-path registry agreement.
    - No display-name, session-recency, board-default, or approximate-path inference.
 
 4. **Conversation Readiness is not a Model Reply**:
@@ -51,7 +52,7 @@
 | AC3 | Open without `AGENTS.md` and without commit | `test_launch_verified_unborn_root_without_agents_md_and_without_commit` | PASS |
 | AC3 | No sole-project fallback | `test_project_resolution_sole_registered_project` | PASS |
 | A1-FR-043 | Exact selection, no sole fallback | `test_project_resolution_sole_registered_project`, `test_observation_usage_guidance.py` | PASS |
-| A1-FR-043a | Verified route proof, missing `AGENTS.md` onboarding-only | `test_component_path_resolutions`, `test_launch_verified_unborn_root_without_agents_md_and_without_commit` | PASS |
+| A1-FR-043a | Verified route proof, missing `AGENTS.md` onboarding-only | `test_check_supports_separated_runtime_and_state_roots`, `test_project_resolution_explicit_route_refuses_unregistered_marker`, `test_launch_verified_unborn_root_without_agents_md_and_without_commit` | PASS |
 | A1-FR-100 | First conversation opens before `AGENTS.md` exists | `test_launch_verified_unborn_root_without_agents_md_and_without_commit` | PASS |
 | A1-SC-019 | Unborn empty root flow without first commit or `AGENTS.md` | `test_launch_verified_unborn_root_without_agents_md_and_without_commit` | PASS |
 
@@ -67,7 +68,7 @@ Executing the rewritten test against the pre-fix implementation where route (5) 
 $ uv run --frozen python scripts/run_tests.py -- tests/test_aether_tui_launcher.py -k test_project_resolution_sole_registered_project
 ============================= test session starts ==============================
 platform linux -- Python 3.13.15, pytest-9.1.1, pluggy-1.6.0
-rootdir: /home/darkarty/Desktop/agentes/aether/.worktrees/t_2e35f5cf
+rootdir: <repo-root>
 configfile: pyproject.toml
 plugins: anyio-4.14.2, cov-6.3.0
 collected 44 items / 43 deselected / 1 selected
@@ -104,7 +105,7 @@ FAILED tests/test_aether_tui_launcher.py::MorfeoTuiLauncherTests::test_project_r
 $ uv run --frozen python scripts/run_tests.py -- tests/test_aether_tui_launcher.py -k test_project_resolution_sole_registered_project
 ============================= test session starts ==============================
 platform linux -- Python 3.13.15, pytest-9.1.1, pluggy-1.6.0
-rootdir: /home/darkarty/Desktop/agentes/aether/.worktrees/t_2e35f5cf
+rootdir: <repo-root>
 configfile: pyproject.toml
 plugins: anyio-4.14.2, cov-6.3.0
 collected 45 items / 44 deselected / 1 selected
@@ -120,7 +121,7 @@ tests/test_aether_tui_launcher.py .                                      [100%]
 $ uv run --frozen python scripts/run_tests.py -- tests/test_aether_tui_launcher.py -k test_launch_verified_unborn_root_without_agents_md_and_without_commit
 ============================= test session starts ==============================
 platform linux -- Python 3.13.15, pytest-9.1.1, pluggy-1.6.0
-rootdir: /home/darkarty/Desktop/agentes/aether/.worktrees/t_2e35f5cf
+rootdir: <repo-root>
 configfile: pyproject.toml
 plugins: anyio-4.14.2, cov-6.3.0
 collected 45 items / 44 deselected / 1 selected
@@ -154,8 +155,8 @@ The resolver changes do not invalidate the precedence assertions in `test_docume
    $ uv run --frozen python scripts/run_tests.py -- tests/test_project_init.py tests/test_aether_tui_launcher.py tests/test_observation_cli_plugin.py tests/test_observation_passive_startup.py tests/test_observation_usage_guidance.py -q
    ............................................................. [ 37%]
    ...................................................................... [ 80%]
-   ...............................                                          [100%]
-   162 passed, 13 subtests passed in 42.82s
+   ................................                                         [100%]
+   163 passed, 13 subtests passed in 40.10s
    Exit code: 0
    ```
 

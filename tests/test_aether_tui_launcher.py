@@ -325,6 +325,11 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
             )
         )
         (project / ".aether" / "project.toml").write_text(sep_marker, encoding="utf-8")
+        self.registry.register(
+            "33333333-3333-4333-8333-333333333333",
+            project,
+            name="separated-project",
+        )
 
         profile.mkdir(parents=True)
         shutil.copy2(self.root / "home/profiles/morfeo/config.yaml", profile / "config.yaml")
@@ -675,6 +680,74 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
         with self.assertRaises(ActivationError) as ctx:
             inspect_activation(project=self.root)
         self.assertIn("conflicts with registered path", str(ctx.exception))
+
+    def test_project_resolution_explicit_route_refuses_unregistered_marker(self) -> None:
+        from aether_agents.launcher import ActivationError, inspect_activation
+
+        unreg_pid = "44444444-4444-4444-8444-444444444444"
+
+        # 1. With AGENTS.md: explicit --project and AETHER_PROJECT_ROOT fail closed
+        with_agents = Path(self.tempdir.name) / "unreg_with_agents"
+        with_agents.mkdir(parents=True)
+        (with_agents / "AGENTS.md").write_text("fixture\n", encoding="utf-8")
+        (with_agents / ".aether").mkdir()
+        (with_agents / ".aether" / "project.toml").write_text(
+            "\n".join(
+                (
+                    "schema_version = 1",
+                    f'project_id = "{unreg_pid}"',
+                    'name = "Unregistered fixture with AGENTS.md"',
+                    'initialized_by = "1.0.0"',
+                    'forge = "local"',
+                    'contract_root = "specs"',
+                    'default_branch = "main"',
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(ActivationError) as ctx:
+            inspect_activation(project=with_agents)
+        self.assertIn("is not registered in the project registry", str(ctx.exception))
+        self.assertIn("aether init", str(ctx.exception))
+
+        with patch.dict(os.environ, {"AETHER_PROJECT_ROOT": str(with_agents)}):
+            with self.assertRaises(ActivationError) as ctx:
+                inspect_activation()
+            self.assertIn("is not registered in the project registry", str(ctx.exception))
+            self.assertIn("aether init", str(ctx.exception))
+
+        # 2. Without AGENTS.md: missing AGENTS.md does not bypass unregistered marker refusal
+        without_agents = Path(self.tempdir.name) / "unreg_without_agents"
+        without_agents.mkdir(parents=True)
+        (without_agents / ".aether").mkdir()
+        (without_agents / ".aether" / "project.toml").write_text(
+            "\n".join(
+                (
+                    "schema_version = 1",
+                    f'project_id = "{unreg_pid}"',
+                    'name = "Unregistered fixture without AGENTS.md"',
+                    'initialized_by = "1.0.0"',
+                    'forge = "local"',
+                    'contract_root = "specs"',
+                    'default_branch = "main"',
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(ActivationError) as ctx:
+            inspect_activation(project=without_agents)
+        self.assertIn("is not registered in the project registry", str(ctx.exception))
+        self.assertIn("aether init", str(ctx.exception))
+
+        with patch.dict(os.environ, {"AETHER_PROJECT_ROOT": str(without_agents)}):
+            with self.assertRaises(ActivationError) as ctx:
+                inspect_activation()
+            self.assertIn("is not registered in the project registry", str(ctx.exception))
+            self.assertIn("aether init", str(ctx.exception))
 
     def test_project_resolution_via_verified_aether_project_id(self) -> None:
         from aether_agents.launcher import ActivationError, inspect_activation
@@ -2130,7 +2203,7 @@ class TuiPreservationTests(unittest.TestCase):
         )
 
     def _create_project_dir(self, name: str, project_id: str) -> Path:
-        """Create an additional fixture project that is deliberately not in the registry."""
+        """Create an additional fixture project registered in the isolated registry."""
         project = self.temp_path / name
         project.mkdir(parents=True)
         (project / "AGENTS.md").write_text("fixture\n", encoding="utf-8")
@@ -2149,6 +2222,12 @@ class TuiPreservationTests(unittest.TestCase):
                 )
             ),
             encoding="utf-8",
+        )
+        registry = ProjectRegistry(root=self.state_dir / "aether")
+        registry.register(
+            project_id,
+            project,
+            name=f"launcher-preserve-{name}",
         )
         return project
 
