@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import json
 import secrets
+import sys
 import threading
+import time
 from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
@@ -50,6 +52,7 @@ except ModuleNotFoundError:  # Base-revision RED harness: RC6 has no retained in
 from aether_agents.observation.context import ProjectRegistry
 from aether_agents.observation.contracts import (
     canonical_json_bytes,
+    fallback_tool_category,
 )
 from aether_agents.observation.identity import correlation_token
 from aether_agents.observation.locking import ProjectLockTimeout, project_lock
@@ -1034,3 +1037,269 @@ def test_worker_emission_publishes_validated_absence_claims_once_under_the_lock(
     assert _retained_unit_claims(paths, worker_task) == [(worker_trace, "work_unit.bound")]
     assert recorded == ["native-binding", "native-binding"]
     collector.stop()
+
+
+def test_pre_fix_category_normalizer_demonstrates_import_lock_cycle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """OBS-D-032 / OBS-FR-087: Pre-fix category normalizer demonstrably reaches the import/plugin lock cycle."""
+    from hermes_cli.plugins import get_plugin_manager
+
+    manager = get_plugin_manager()
+    manager._discovered = False
+    sys.modules.pop("model_tools", None)
+
+    manager._discovery_lock.acquire()
+    t1_started = threading.Event()
+    t1_done = threading.Event()
+
+    def run_t1() -> None:
+        t1_started.set()
+        import model_tools  # noqa: F401
+
+        t1_done.set()
+
+    t1 = threading.Thread(target=run_t1)
+    t1.start()
+    assert t1_started.wait(timeout=2.0)
+    time.sleep(0.05)
+
+    # Pre-fix category normalizer imported model_tools
+    t2_done = threading.Event()
+
+    def pre_fix_attempt() -> None:
+        try:
+            from model_tools import get_toolset_for_tool  # type: ignore[import-not-found]
+
+            get_toolset_for_tool("kanban_create")
+        finally:
+            t2_done.set()
+
+    t2 = threading.Thread(target=pre_fix_attempt)
+    t2.start()
+
+    # Pre-fix demonstrably deadlocks: t2 cannot complete because t1 holds model_tools import lock
+    # and waits for manager._discovery_lock held by the test thread.
+    completed = t2_done.wait(timeout=0.3)
+    manager._discovery_lock.release()
+    t1.join(timeout=2.0)
+    t2.join(timeout=2.0)
+
+    assert not completed, "Pre-fix normalizer unexpectedly bypassed the import/plugin lock cycle"
+    assert t1_done.is_set()
+    assert t2_done.is_set()
+
+
+def test_candidate_observer_registration_avoids_model_tools_import_and_lock_cycle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """OBS-D-032 / OBS-FR-087: Candidate observer registration never imports model_tools and avoids deadlock."""
+    _setup_project(tmp_path / "race-proj", monkeypatch)
+    from hermes_cli.plugins import get_plugin_manager
+
+    manager = get_plugin_manager()
+    manager._discovered = False
+    sys.modules.pop("model_tools", None)
+
+    manager._discovery_lock.acquire()
+    t1_started = threading.Event()
+    t1_done = threading.Event()
+
+    def run_t1() -> None:
+        t1_started.set()
+        import model_tools  # noqa: F401
+
+        t1_done.set()
+
+    t1 = threading.Thread(target=run_t1)
+    t1.start()
+    assert t1_started.wait(timeout=2.0)
+    time.sleep(0.05)
+
+    t2_done = threading.Event()
+    ctx = FakePluginContext(profile_name="morfeo")
+
+    def candidate_register() -> None:
+        try:
+            hermes_plugin.register(ctx)
+        finally:
+            t2_done.set()
+
+    t2 = threading.Thread(target=candidate_register)
+    t2.start()
+
+    # Candidate must complete promptly without waiting on model_tools or deadlocking
+    completed = t2_done.wait(timeout=1.0)
+    manager._discovery_lock.release()
+    t1.join(timeout=2.0)
+    t2.join(timeout=2.0)
+
+    assert completed, "Candidate registration deadlocked on the import/plugin lock cycle"
+    assert t1_done.is_set()
+    assert t2_done.is_set()
+    assert "on_session_start" in ctx.hooks
+
+
+def test_native_and_late_registered_tool_categories_match_registry_and_taxonomy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """OBS-D-032: Native registered and late-registered tool categories match the registry and taxonomy."""
+    from tools.registry import registry
+
+    _, paths = _setup_project(tmp_path / "tax-proj", monkeypatch)
+    ctx = FakePluginContext(profile_name="morfeo")
+    hermes_plugin.register(ctx)
+
+    normalizer, ref, is_native = hermes_plugin._resolve_category_normalizer()
+    assert is_native is True
+    assert ref == "hermes_cli.observability.shared_metrics_contract:tool_category"
+
+    # 1. Native registered tools
+    assert normalizer("kanban_create") == "planning"
+
+    # 2. Late-registered tools
+    late_mcp_tool = f"mcp_custom_tool_{secrets.token_hex(4)}"
+    late_web_tool = f"custom_web_tool_{secrets.token_hex(4)}"
+    registry.register(
+        name=late_mcp_tool,
+        toolset="mcp:context_server",
+        schema={"type": "object"},
+        handler=lambda: None,
+        override=True,
+    )
+    registry.register(
+        name=late_web_tool,
+        toolset="web",
+        schema={"type": "object"},
+        handler=lambda: None,
+        override=True,
+    )
+
+    assert normalizer(late_mcp_tool) == "mcp"
+    assert normalizer(late_web_tool) == "web"
+
+    # 3. Unregistered tool
+    assert normalizer("nonexistent_unregistered_tool") == "other"
+
+    # 4. Missing native capability stays visible NATIVE_TOOL_CATEGORY_UNAVAILABLE coverage gap
+    monkeypatch.setattr(
+        hermes_plugin,
+        "_resolve_category_normalizer",
+        lambda: (fallback_tool_category, None, False),
+    )
+    observer_degraded = hermes_plugin._Observer(ctx)
+    collector = Collector(paths=paths, runtime_fingerprint="0" * 64)
+    collector.start(None)
+    observer_degraded._emit_compatibility_diagnostics(collector, TRACE_ID)
+
+    gaps = [
+        event.get("coverage", {})
+        for event in [
+            json.loads(line.decode("utf-8"))
+            for s in list_segments(paths)
+            for line in read_segment(s.path).lines
+        ]
+        if event.get("event_type") == "coverage.gap"
+    ]
+    reason_codes = {gap.get("reason_code") for gap in gaps}
+    assert "NATIVE_TOOL_CATEGORY_UNAVAILABLE" in reason_codes
+    collector.stop()
+
+
+def test_isolated_mcp_enabled_startup_and_single_early_turn_bounded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC4 / OBS-FR-087: Isolated MCP-enabled startup completes within bounded time, and first turn processes once."""
+    import hermes_cli.config as hermes_cfg
+    from hermes_cli import mcp_startup
+    from tools.registry import registry
+
+    _, paths = _setup_project(tmp_path / "mcp-startup-proj", monkeypatch)
+
+    raw_config = {
+        "mcp_servers": {
+            "demo_server": {
+                "command": "python3",
+                "args": ["-c", "pass"],
+            }
+        }
+    }
+    monkeypatch.setattr(hermes_cfg, "read_raw_config", lambda: raw_config)
+    monkeypatch.setattr(hermes_cfg, "load_config", lambda: raw_config)
+
+    mcp_tool_name = "mcp__demo_server__echo"
+    registry.register(
+        name=mcp_tool_name,
+        toolset="mcp:demo_server",
+        schema={"type": "object"},
+        handler=lambda **_kw: "echo_result",
+        override=True,
+    )
+
+    start_time = perf_counter()
+    mcp_startup.start_background_mcp_discovery(
+        logger=SimpleNamespace(debug=lambda *_a, **_k: None, warning=lambda *_a, **_k: None),
+        thread_name="test-mcp-startup",
+    )
+
+    ctx = FakePluginContext(profile_name="morfeo")
+    hermes_plugin.register(ctx)
+
+    mcp_startup.wait_for_mcp_discovery(timeout=1.5)
+    elapsed = perf_counter() - start_time
+    assert elapsed < 5.0, f"MCP-enabled startup took {elapsed:.2f}s, exceeding bounded limit"
+
+    observer = ctx.unload_callbacks[-1].__self__
+    paths = observer._collector.paths
+    assert observer._collector.ensure_trace_opened(
+        TRACE_ID,
+        source_kind="aether_checkpoint",
+        source_hook="contract_persisted",
+    )
+    observer._activate_trace(observer._collector, TRACE_ID)
+
+    turn_id = f"trn_{secrets.token_hex(8)}"
+    call_id = f"call_{secrets.token_hex(8)}"
+
+    ctx.hooks["pre_api_request"][0](session_id="session-mcp-1", turn_id=turn_id)
+    ctx.hooks["post_api_request"][0](session_id="session-mcp-1", turn_id=turn_id, duration_ms=45)
+
+    ctx.hooks["pre_tool_call"][0](
+        tool_name=mcp_tool_name,
+        tool_call_id=call_id,
+        session_id="session-mcp-1",
+        turn_id=turn_id,
+        args={"text": "hello"},
+    )
+    ctx.hooks["post_tool_call"][0](
+        tool_name=mcp_tool_name,
+        tool_call_id=call_id,
+        session_id="session-mcp-1",
+        turn_id=turn_id,
+        status="success",
+        result="echo_result",
+        duration_ms=12,
+    )
+
+    ctx.hooks["on_session_end"][0](session_id="session-mcp-1")
+
+    for cb in ctx.unload_callbacks:
+        cb()
+
+    lines = [
+        json.loads(line.decode("utf-8"))
+        for s in list_segments(paths)
+        for line in read_segment(s.path).lines
+    ]
+    tool_events = [
+        e
+        for e in lines
+        if e.get("event_type") in ("tool.started", "tool.completed")
+        and e.get("tool", {}).get("name") == mcp_tool_name
+    ]
+    assert len(tool_events) == 2, (
+        f"Expected exactly one tool.started and one tool.completed, got {len(tool_events)}"
+    )
+    start_ev, comp_ev = tool_events[0], tool_events[1]
+    assert start_ev.get("tool", {}).get("category") == "mcp"
+    assert comp_ev.get("tool", {}).get("category") == "mcp"
