@@ -287,8 +287,6 @@ def _resolve_project(project_arg: str | Path | None = None) -> tuple[Path, str]:
                 raise ActivationError("AETHER_PROJECT_ROOT must not be empty")
             repo = repo_env.resolve()
 
-        if not (repo / "AGENTS.md").is_file():
-            raise ActivationError(f"Aether repository marker does not exist: {repo / 'AGENTS.md'}")
         project_id = _portable_project_id(repo)
 
         if "AETHER_PROJECT_ID" in os.environ:
@@ -334,11 +332,9 @@ def _resolve_project(project_arg: str | Path | None = None) -> tuple[Path, str]:
                 f"project registry and portable marker do not agree for {env_pid}"
             )
         repo = loc.resolve()
-        if not (repo / "AGENTS.md").is_file():
-            raise ActivationError(f"Aether repository marker does not exist: {repo / 'AGENTS.md'}")
         return repo, env_pid
 
-    # (3) Current repository marker or sole registered project only when registry and marker agree
+    # (3) Current repository marker or nearest parent only when registry and marker agree
     cursor = Path.cwd().resolve()
     repo_candidate: Path | None = None
     for candidate in (cursor, *cursor.parents):
@@ -355,10 +351,6 @@ def _resolve_project(project_arg: str | Path | None = None) -> tuple[Path, str]:
             and reg_path.resolve() == repo_candidate.resolve()
             and registry.verify_with_marker(marker_pid)
         ):
-            if not (repo_candidate / "AGENTS.md").is_file():
-                raise ActivationError(
-                    f"Aether repository marker does not exist: {repo_candidate / 'AGENTS.md'}"
-                )
             return repo_candidate, marker_pid
         raise ActivationError(
             f"project registry and repository marker do not agree for project {marker_pid}"
@@ -366,17 +358,10 @@ def _resolve_project(project_arg: str | Path | None = None) -> tuple[Path, str]:
 
     projects = registry._load()
     if len(projects) == 1:
-        sole_pid = next(iter(projects.keys()))
-        if not registry.verify_with_marker(sole_pid):
-            raise ActivationError(
-                f"project registry and marker do not agree for the sole registered project {sole_pid}"
-            )
-        loc = registry.project_path(sole_pid)
-        assert loc is not None
-        repo = loc.resolve()
-        if not (repo / "AGENTS.md").is_file():
-            raise ActivationError(f"Aether repository marker does not exist: {repo / 'AGENTS.md'}")
-        return repo, sole_pid
+        raise ActivationError(
+            "current directory is not an initialized Aether project; "
+            "run 'git init' and 'aether init' to initialize"
+        )
     if len(projects) == 0:
         raise ActivationError("no Aether project found and project registry is empty")
     raise ActivationError(
@@ -656,8 +641,6 @@ def inspect_activation(
     config = profile / "config.yaml"
     soul = profile / "SOUL.md"
 
-    if not (repo / "AGENTS.md").is_file():
-        raise ActivationError(f"Aether repository marker does not exist: {repo / 'AGENTS.md'}")
     if not profile.is_dir():
         raise ActivationError(f"Morfeo profile directory does not exist: {profile}")
     if not config.is_file():

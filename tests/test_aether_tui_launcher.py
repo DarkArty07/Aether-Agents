@@ -722,14 +722,16 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
     def test_project_resolution_sole_registered_project(self) -> None:
         from aether_agents.launcher import ActivationError, inspect_activation
 
-        pid = "12027989-a08f-41cd-a82c-54ff1bfb6b03"
         non_repo_dir = Path(self.tempdir.name) / "empty_dir"
         non_repo_dir.mkdir(parents=True)
 
+        # An unrelated uninitialized cwd must refuse with actionable guidance even
+        # when a sole project is registered (A1-FR-043 removes the sole-project fallback).
         with patch.object(Path, "cwd", return_value=non_repo_dir):
-            plan = inspect_activation()
-            self.assertEqual(plan["project_id"], pid)
-            self.assertEqual(plan["repo_root"], str(self.root.resolve()))
+            with self.assertRaises(ActivationError) as ctx:
+                inspect_activation()
+            self.assertIn("git init", str(ctx.exception))
+            self.assertIn("aether init", str(ctx.exception))
 
         # Add a second project -> ambiguous identity
         second_dir = Path(self.tempdir.name) / "second_project"
@@ -743,6 +745,68 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
             with self.assertRaises(ActivationError) as ctx:
                 inspect_activation()
             self.assertIn("ambiguous project identity", str(ctx.exception))
+
+    def test_launch_verified_unborn_root_without_agents_md_and_without_commit(self) -> None:
+        import subprocess
+
+        from aether_agents.launcher import inspect_activation
+        from aether_agents.launcher import main as launcher_main
+
+        unborn_pid = "33333333-3333-4333-8333-333333333333"
+        unborn_repo = Path(self.tempdir.name) / "unborn_project"
+        unborn_repo.mkdir(parents=True)
+
+        # 1. git init without any commit -> unborn repository
+        subprocess.run(["git", "init", "-q", "-b", "main", str(unborn_repo)], check=True)
+        # Verify it has no commits (HEAD does not resolve)
+        proc = subprocess.run(
+            ["git", "-C", str(unborn_repo), "rev-parse", "--verify", "HEAD"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(proc.returncode, 0)
+
+        # 2. Write portable project marker (.aether/project.toml), NO AGENTS.md
+        marker = unborn_repo / ".aether" / "project.toml"
+        marker.parent.mkdir(parents=True)
+        marker.write_text(
+            "\n".join(
+                (
+                    "schema_version = 1",
+                    f'project_id = "{unborn_pid}"',
+                    'name = "unborn-intake"',
+                    'initialized_by = "1.0.0"',
+                    'forge = "local"',
+                    'contract_root = "specs"',
+                    'default_branch = "main"',
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
+        self.assertFalse((unborn_repo / "AGENTS.md").exists())
+
+        # 3. Register in local project registry
+        self.registry.register(unborn_pid, unborn_repo, name="unborn-intake")
+
+        # 4. Copy isolated Morfeo home runtime fixtures so component paths resolve
+        shutil.copytree(self.root / "home", unborn_repo / "home")
+
+        # 5. Bare aether launch in cwd resolves project, binds Morfeo profile, ready
+        with patch.object(Path, "cwd", return_value=unborn_repo):
+            plan = inspect_activation()
+            self.assertEqual(plan["result"], "ready")
+            self.assertEqual(plan["project_id"], unborn_pid)
+            self.assertEqual(plan["repo_root"], str(unborn_repo.resolve()))
+
+            out_buf = io.StringIO()
+            with redirect_stdout(out_buf), patch.object(os, "execve"):
+                code = launcher_main(["--check", "--json"])
+                self.assertEqual(code, 0)
+            payload = json.loads(out_buf.getvalue())
+            self.assertEqual(payload["result"], "ready")
+            self.assertEqual(payload["project_id"], unborn_pid)
+            self.assertEqual(payload["repo_root"], str(unborn_repo.resolve()))
 
     def test_additional_error_and_flag_handling(self) -> None:
         from aether_agents.launcher import ActivationError, _absolute_env_path, inspect_activation
@@ -816,14 +880,13 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
         finally:
             marker.write_text(orig_marker, encoding="utf-8")
 
-        # Missing AGENTS.md
+        # Missing AGENTS.md is allowed on verified initialized projects (A1-FR-043a/100)
         agents = self.root / "AGENTS.md"
         agents_bak = agents.with_suffix(".bak")
         agents.rename(agents_bak)
         try:
-            with self.assertRaises(ActivationError) as ctx:
-                inspect_activation(project=self.root)
-            self.assertIn("Aether repository marker does not exist", str(ctx.exception))
+            plan = inspect_activation(project=self.root)
+            self.assertEqual(plan["result"], "ready")
         finally:
             agents_bak.rename(agents)
 
