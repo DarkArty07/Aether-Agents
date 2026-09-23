@@ -11,7 +11,7 @@ material design `specs/001-aether-v1-productization/plan.md` §4.6 / §10.1–10
 Never edited the canonical contract.
 **Delivered scope**: AC1, AC2; A1-FR-046/047/048/049/052; `plan.md` §10.1–10.2; `contracts/cli.md` section 2.
 **Unit compatibility conclusion**: `patch`.
-**Runtime provenance**: Hermes Agent `v0.20.1` (`2026.8.13`), install directory `/home/darkarty/.local/share/aether/releases/1.0.0rc8-1771b4f70a31bf70/hermes-source`, manager `aether 1.0.0rc8`.
+**Runtime provenance**: Hermes Agent `v0.20.1` (`2026.8.13`), install directory `<data-root>/releases/1.0.0rc8-1771b4f70a31bf70/hermes-source`, manager `aether 1.0.0rc8`.
 
 ---
 
@@ -43,7 +43,7 @@ Never edited the canonical contract.
    - When exactly one non-archived Project matches the repository root's exact primary path, `init` reuses it (`hermes_project_action: "reuse"`).
    - Re-running `init` on an already-initialized project is identity-preserving, does not duplicate native Projects, and returns `result: "no_change"` when no ignore policy fix is required.
 
-6. **Actionable, fail-closed refusal matrix** (all 24 emitted refusal codes):
+6. **Actionable, fail-closed diagnostic codes** (23 refusal codes and 1 success warning emitted by `init`):
    - `AETHER-INIT-PATH-INVALID`: target path does not exist or is not a directory.
    - `AETHER-INIT-NOT-A-GIT-REPOSITORY`: plain directory without Git; includes actionable guidance to run `git init`.
    - `AETHER-INIT-NOT-REPOSITORY-ROOT`: path is inside a Git repository but not its top-level root.
@@ -66,7 +66,7 @@ Never edited the canonical contract.
    - `AETHER-INIT-IGNORE-POLICY-UNWRITABLE`: `.gitignore` cannot be written or updated due to filesystem error.
    - `AETHER-INIT-IGNORE-POLICY-CONFLICT`: pre-existing ignore rules conflict and cannot be corrected by appending.
    - `AETHER-INIT-WORKTREES-CONFLICT`: `.worktrees` is tracked or staged in Git.
-   - `AETHER-INIT-PROJECT-RELOCATED`: registered project path is marked moved in registry and needs reconcile.
+   - `AETHER-INIT-PROJECT-RELOCATED` (warning): registered project path was moved to this location; emits warning notice on success (`result: "changed"`).
    - `AETHER-INIT-REGISTRY-WRITE-FAILED`: local Aether project registry write or update failed.
 
 7. **Brownfield preservation**:
@@ -82,8 +82,8 @@ Never edited the canonical contract.
 
 ### 2.0 Runtime verification environment
 
-- Runtime executable: `/home/darkarty/.local/share/aether/runtime/current/venv/bin/hermes`
-- Runtime release / version: Hermes Agent `v0.20.1` (`2026.8.13`), install directory `/home/darkarty/.local/share/aether/releases/1.0.0rc8-1771b4f70a31bf70/hermes-source`
+- Runtime executable: `<data-root>/runtime/current/venv/bin/hermes`
+- Runtime release / version: Hermes Agent `v0.20.1` (`2026.8.13`), install directory `<data-root>/releases/1.0.0rc8-1771b4f70a31bf70/hermes-source`
 - Manager version: `aether 1.0.0rc8`
 
 ### 2.1 Focused test lane
@@ -141,6 +141,7 @@ Observed result:
 | AC2 / A1-FR-049 | Symlinked / dangling `.gitignore` refused before modification | `test_refuse_symlinked_gitignore`, `test_refuse_dangling_symlinked_gitignore` | Code `AETHER-INIT-IGNORE-POLICY-UNSAFE`; symlink untouched, target uncreated |
 | AC2 / A1-FR-049 | Symlinked / dangling marker refused before modification | `test_refuse_symlinked_or_dangling_marker` | Code `AETHER-INIT-MARKER-UNSAFE`; symlink untouched, target uncreated |
 | AC2 / A1-FR-049 | Conflicting live identity refused | `test_conflicting_live_identity_is_refused` | Code `AETHER-INIT-IDENTITY-CONFLICT` |
+| AC2 / A1-FR-049 | Moved repository repoints stale registry binding | `test_moved_repository_repoints_the_stale_binding` | Warning `AETHER-INIT-PROJECT-RELOCATED`, `result: "changed"`, registry updated |
 | AC2 / A1-FR-048 | Brownfield governance, dirty state, remotes, branches preserved | `test_brownfield_preservation_with_dirty_state` | `AGENTS.md`, `dirty.txt`, `README.md`, remotes intact |
 | AC2 / A1-FR-049 | Interruption after native creation retries safely | `test_retry_after_interruption_following_native_creation` | Reuses created project; count remains 1; completes marker and registry |
 
