@@ -117,6 +117,17 @@ Observed result:
    ```
    Observed: `Success: no issues found in 69 source files` (exit code `0`).
 
+### 2.3 Environment and Kanban isolation witness
+
+The autouse fixture `isolate_environment` in `tests/test_project_init.py` enforces explicit isolation per test execution:
+- User home and XDG roots: `HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, and `XDG_CONFIG_HOME` are redirected to private directories under `tmp_path`.
+- Scratch directory: `TMPDIR` is explicitly redirected to `<tmp_path>/tmp`.
+- Ambient Hermes and Aether deployment roots: `HERMES_HOME`, `AETHER_HERMES_ROOT`, and `AETHER_RUNTIME_ROOT` are cleared; `AETHER_RUNTIME_ROOT` points to a fake test runtime root under `tmp_path`.
+- Kanban routing and board selectors: all inherited `HERMES_KANBAN_*` selectors (`HERMES_KANBAN_DB`, `HERMES_KANBAN_BOARD`, `HERMES_KANBAN_TASK`, `HERMES_KANBAN_RUN_ID`, `HERMES_KANBAN_WORKSPACE`, `HERMES_KANBAN_WORKSPACES_ROOT`, `HERMES_KANBAN_CLAIM_LOCK`, `HERMES_KANBAN_BRANCH`) are redirected to temporary destinations under `<tmp_path>/kanban`, and any other ambient `HERMES_KANBAN_*` variables are deleted.
+- Stand-in board snapshot witness: a disposable stand-in board `<tmp_path>/kanban/kanban.db` is seeded before each test; a full table/byte digest snapshot is captured prior to test execution and verified identical at teardown, ensuring no test write escapes to or pollutes a live board.
+- Effective roots boundary witness: `tmp_path` is asserted to enclose all resolved effective roots (`state_root()`, `data_root()`, `_resolve_profile_home(tmp_path)`, `HERMES_KANBAN_DB`, `HERMES_KANBAN_WORKSPACES_ROOT`, `TMPDIR`) both before test execution and at teardown.
+- Pre-existing live profile notice: 26 native rows with dead scratch paths created during early test runs sit in the operator's live Morfeo profile (`<state-root>/hermes/profiles/morfeo/projects.db`); preserved without unauthorized live mutation for terminal card (`t_6f2fc069`) / owner disposition.
+
 ---
 
 ## 3. Requirement to test oracle mapping

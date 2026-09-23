@@ -8,9 +8,13 @@ the read-only exact-path match is tested, not mocked.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
+import os
 import sqlite3
 import subprocess
 import tomllib
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -20,6 +24,7 @@ from aether_agents.commands import init as init_command
 from aether_agents.commands.init import run_init
 from aether_agents.objective_contracts import ObjectiveContractStore
 from aether_agents.observation.context import ProjectRegistry
+from aether_agents.paths import data_root, state_root
 from aether_agents.project_marker import validate_project_marker
 
 #: The published Aether RC ships this PEP 440 package version; the contract's display
@@ -139,19 +144,90 @@ sys.exit(1)
     return runtime
 
 
+def _standin_snapshot(path: Path) -> dict[str, object]:
+    """Byte digest plus per-table row counts and content digests for isolation witness."""
+    with sqlite3.connect(path) as connection:
+        tables = [
+            str(row[0])
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"
+            )
+        ]
+        counts: dict[str, int] = {}
+        digests: dict[str, str] = {}
+        for table in tables:
+            rows = [list(row) for row in connection.execute(f"SELECT * FROM {table}")]
+            counts[table] = len(rows)
+            payload = json.dumps(rows, sort_keys=True, ensure_ascii=True)
+            digests[table] = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return {
+        "bytes": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "counts": counts,
+        "digests": digests,
+    }
+
+
 @pytest.fixture(autouse=True)
-def isolate_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def isolate_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     fake_home = tmp_path / "user-home"
     fake_home.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("HOME", str(fake_home))
     monkeypatch.setenv("XDG_DATA_HOME", str(fake_home / ".local" / "share"))
     monkeypatch.setenv("XDG_STATE_HOME", str(fake_home / ".local" / "state"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(fake_home / ".config"))
+    fake_tmp = tmp_path / "tmp"
+    fake_tmp.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("TMPDIR", str(fake_tmp))
     monkeypatch.delenv("HERMES_HOME", raising=False)
     monkeypatch.delenv("AETHER_HERMES_ROOT", raising=False)
     monkeypatch.delenv("AETHER_RUNTIME_ROOT", raising=False)
     runtime = _runtime_root(tmp_path)
     monkeypatch.setenv("AETHER_RUNTIME_ROOT", str(runtime))
+
+    fake_kanban = tmp_path / "kanban"
+    fake_kanban.mkdir(parents=True, exist_ok=True)
+    fake_workspaces = fake_kanban / "workspaces"
+    fake_workspaces.mkdir(parents=True, exist_ok=True)
+    standin_board = fake_kanban / "kanban.db"
+    with sqlite3.connect(standin_board) as conn:
+        conn.execute("CREATE TABLE _standin (id INT PRIMARY KEY, canary TEXT)")
+        conn.execute("INSERT INTO _standin VALUES (1, 'witness')")
+        conn.commit()
+    standin_before = _standin_snapshot(standin_board)
+
+    kanban_selectors = {
+        "HERMES_KANBAN_DB": str(standin_board),
+        "HERMES_KANBAN_BOARD": "isolated-test-board",
+        "HERMES_KANBAN_TASK": "t_isolated_task",
+        "HERMES_KANBAN_RUN_ID": "0",
+        "HERMES_KANBAN_WORKSPACE": str(tmp_path / "workspace"),
+        "HERMES_KANBAN_WORKSPACES_ROOT": str(fake_workspaces),
+        "HERMES_KANBAN_CLAIM_LOCK": "isolated-claim-lock",
+        "HERMES_KANBAN_BRANCH": "isolated-branch",
+    }
+    for k, v in kanban_selectors.items():
+        monkeypatch.setenv(k, v)
+    for k in list(os.environ.keys()):
+        if k.startswith("HERMES_KANBAN_") and k not in kanban_selectors:
+            monkeypatch.delenv(k, raising=False)
+
+    tmp_resolved = tmp_path.resolve()
+    assert tmp_resolved in state_root().resolve().parents
+    assert tmp_resolved in data_root().resolve().parents
+    assert tmp_resolved in init_command._resolve_profile_home(tmp_path).resolve().parents
+    assert tmp_resolved in Path(os.environ["HERMES_KANBAN_DB"]).resolve().parents
+    assert tmp_resolved in Path(os.environ["HERMES_KANBAN_WORKSPACES_ROOT"]).resolve().parents
+    assert tmp_resolved in Path(os.environ["TMPDIR"]).resolve().parents
+
+    yield
+
+    assert _standin_snapshot(standin_board) == standin_before
+    assert tmp_resolved in state_root().resolve().parents
+    assert tmp_resolved in data_root().resolve().parents
+    assert tmp_resolved in init_command._resolve_profile_home(tmp_path).resolve().parents
+    assert tmp_resolved in Path(os.environ["HERMES_KANBAN_DB"]).resolve().parents
+    assert tmp_resolved in Path(os.environ["HERMES_KANBAN_WORKSPACES_ROOT"]).resolve().parents
+    assert tmp_resolved in Path(os.environ["TMPDIR"]).resolve().parents
 
 
 def _args(path: Path, **overrides: object) -> argparse.Namespace:
