@@ -15,7 +15,7 @@ Build Aether 1.0 as one product with two independently versioned but release-loc
 1. **Aether Manager** — the minimal `aether-agents` Python package on PyPI, exposing `aether` and managing setup, projects, service lifecycle, diagnosis, update, rollback, and uninstall.
 2. **Managed Hermes runtime** — the original `hermes-agent` distribution built from the maintained fork `DarkArty07/aether-hermes` branch `aether-main` selected by the lock's `maintained_fork` source mode, or from an exact public upstream source when `upstream` is deliberately selected. Hermes keeps its own distribution identity.
 
-The manager includes a release lock and a sanitized three-profile resource bundle. It installs the selected locked Hermes source into an Aether-owned versioned runtime, keeps user state in stable XDG locations, and maps each project identity to one local board/workspace boundary. The manager never vendors Hermes, embeds private runtime state, or replaces another Hermes installation.
+The manager includes a release lock and a sanitized three-profile resource bundle. It installs the selected locked Hermes source into an Aether-owned versioned runtime, keeps user state in stable XDG locations, and binds each portable project identity to an exact native Hermes Project; a separate board/workspace boundary is provisioned only for a concrete contract handoff. The manager never vendors Hermes, embeds private runtime state, or replaces another Hermes installation.
 
 The stable release is produced only after an RC installed from PyPI consumes the exact public Hermes source or artifact declared by its lock and passes deterministic plus owner-authorized live qualification on Linux native and WSL2.
 
@@ -31,7 +31,7 @@ The stable release is produced only after an RC installed from PyPI consumes the
 
 **Service**: systemd user service on supported Linux/WSL2, wrapping only the Aether-managed Hermes gateway/dispatcher.
 
-**Persistence**: XDG directories plus portable `.aether/project.toml`; one local board/workspace namespace per project UUID.
+**Persistence**: XDG directories plus portable `.aether/project.toml`; exact native Project mapping at initialization and isolated board/workspace namespace only at contract handoff.
 
 **Remote services**: GitHub, GitHub Actions, GitHub Pages, PyPI Trusted Publishing, and an owner-selected public Hermes provider for the live RC gate.
 
@@ -80,7 +80,7 @@ User machine
 ├── systemd user service
 └── N isolated projects
     ├── tracked identity + contracts
-    └── local board/workspaces/observations outside Git
+    └── local Project binding; board/workspaces/observations outside Git only when needed
 ```
 
 ### 4.2 Manager versus runtime
@@ -177,9 +177,11 @@ Updates may replace version-matched product-owned content after backup and drift
 
 `.aether/project.toml` is the portable marker and conforms to `project.schema.json`. It contains no absolute machine path, board database location, credential, or provider data.
 
-Local mapping resolves project UUID plus canonical repository identity to the local board/workspace root. A moved clone can be remapped explicitly; an identity collision must fail rather than attach to another project's state.
+Local mapping binds the portable UUID and canonical Git root to exactly one native Hermes Project in the selected managed Morfeo profile. A moved clone can be remapped explicitly; an identity collision must fail rather than attach to another project's state. Board/workspace isolation is provisioned only by the later exact contract handoff, not by a conversation or `init`.
 
-Greenfield `init` may create Git locally. Brownfield `init` must inspect existing constitution, governance, remotes, dirty state, ignore rules, and artifact conflicts. It prepares the minimum bootstrap but leaves project principles pending Morfeo/owner confirmation where none exist.
+The owner explicitly creates Git in a new folder before `init`; `init` accepts the unborn Git root but does not create Git, a commit, remote, constitution, guidance, board, or worker. It checks the native Project registry for zero/one/multiple exact non-archived primary-path matches. On zero, the Hermes-independent manager uses the selected runtime's supported `hermes project create` command under the selected Morfeo home, then verifies the resulting ID and exact primary path through the existing read-only native-registry lookup before writing the portable marker and local mapping. It never writes Hermes `projects.db` directly or imports Hermes into the manager; an unavailable target runtime refuses with an actionable error. One match is reused, multiple or conflicting matches are refused. `--dry-run` performs this preflight and reports prospective effects without invoking creation. A partial write failure retains the verified Project for idempotent reuse on retry, not automatic deletion of pre-existing/local user state. Brownfield `init` inspects and preserves constitution, governance, remotes, dirty state, ignore rules and identity conflicts.
+
+The launcher keeps exact project/registry/profile checks on every route. Missing root `AGENTS.md` on a verified initialized project is an onboarding condition, not permission to execute with unknown policy; the ordinary TUI opens for Morfeo to inspect and ask the owner about project intent, principles and testing standard. Uninitialized cwd never falls back to a different sole project. Morfeo writes accurate guidance only after confirmation and creates an initial commit only when an authorized later objective needs versioned artifacts or contract handoff. There is no automatic first-commit gate for conversation.
 
 ### 4.7 Service boundary
 
@@ -432,13 +434,11 @@ The existing canonical hook synchronization tests are retained and expanded for 
 
 ### 10.1 Greenfield
 
-- require explicit `aether init`;
-- validate supported filesystem and directory ownership;
-- create Git only when absent and directory state permits;
-- generate project UUID and portable marker;
-- prepare contract directories and constitution placeholder/process without deciding principles;
-- create local board/workspace mapping;
-- show all created paths and no remote effect.
+- the owner enters the folder and explicitly runs `git init`; `aether init` refuses a plain directory without Git and verifies the exact root, supported filesystem and ownership;
+- use the selected managed Morfeo profile and the supported native Hermes Project command to create one exact-path Project only when none exists; verify identity, reuse on retry and refuse ambiguity/conflict;
+- generate a portable UUID and marker plus only necessary ignore-policy changes; no constitution placeholder, generic `AGENTS.md`, default testing standard, commit, remote, board or worker;
+- let `aether` open the verified unborn repository for Morfeo's project-intake conversation; defer execution/worktrees until after owner-confirmed principles and any applicable Objective Contract;
+- display every local effect and the absence of remote effects; `--dry-run` remains free of writes.
 
 ### 10.2 Brownfield
 
@@ -450,7 +450,7 @@ The existing canonical hook synchronization tests are retained and expanded for 
 
 ### 10.3 Isolation regression
 
-Tests must operate two repositories simultaneously and prove distinct board DBs, workspace roots, sessions/memory scopes, and project mappings. Moving/cloning a project must require explicit local remapping and cannot attach silently to a different UUID.
+Tests operate two repositories simultaneously: before work they prove distinct portable/native identity and session/memory scope with no boards; after separate exact contract handoffs they prove distinct board DBs and workspace roots. Moving/cloning a project requires explicit local remapping and cannot attach silently to a different UUID. Negative cases include an unregistered cwd with a single other project, copied marker, mismatched or archived native Project, partial `init` failure/retry, and brownfield guidance preservation.
 
 ## 11. GitHub and portfolio surface
 
@@ -627,9 +627,9 @@ These are dependency phases, not implementation cards. Supervisor derives and li
 | Runtime integrity | locked download hash/provenance/metadata, clean wheel install, executable/version verification |
 | Profiles/policy | public allowlist, no private data, role config invariants, hook parity, update drift/backup/restore, and read-only-validation versus real gateway-lifecycle denial regression |
 | Service | generated unit inspection, user-only lifecycle, environment cleanup, readiness/failure, unrelated service safety |
-| Projects | empty/brownfield init, dirty tree preservation, UUID collision, moved clone, two-project isolation, WSL `/mnt/c` refusal |
+| Projects | owner `git init` followed by unborn-root `aether init` and first-conversation `aether` via the installed command; no premature commit/board/guidance; `--dry-run` purity, native exact-Project create/reuse/ambiguity, partial-failure retry, brownfield dirty-tree preservation, UUID collision, moved clone, two-project execution isolation, WSL `/mnt/c` refusal |
 | Update/recovery | failure injection before/after every transition boundary, manager mismatch, rollback without user-state rollback |
-| Contract observation | event/summary schema validation; exact product-owned completion authority, root/review/acceptance/invariant closure and semantic-delta invalidation; durable-reference-only causal step/wave/round reconstruction; deployed agent/unit and eligible-versus-running accounting; critical-path/queue/dependency/review/rework/capacity evidence; explicit task/run/review/acceptance graph; participant/action causality; exact tool totals and distinct run outcomes; missing-hook/unpaired-span/ID/heartbeat coverage; iteration/retry/loop/regression/reversion fixtures; blocked/review/crash/timeout/resume and no-premature-close tests; lifecycle-state separation; crash/restart/idempotence/atomic-ingest/pointer/compaction tests; CLI human/JSON summary parity; exact clean Hermes callback qualification; proof that deferred read surfaces are absent; controlled real full trace |
+| Contract observation | event/summary schema validation; exact product-owned completion authority, root/review/acceptance/invariant closure and semantic-delta invalidation; durable-reference-only causal step/wave/round reconstruction; deployed agent/unit and eligible-versus-running accounting; critical-path/queue/dependency/review/rework/capacity evidence; explicit task/run/review/acceptance graph; participant/action causality; exact tool totals and distinct run outcomes; missing-hook/unpaired-span/ID/heartbeat coverage; iteration/retry/loop/regression/reversion fixtures; blocked/review/crash/timeout/resume and no-premature-close tests; lifecycle-state separation; crash/restart/idempotence/atomic-ingest/pointer/compaction tests; CLI human/JSON summary parity; exact clean Hermes callback qualification; controlled concurrent MCP/plugin startup with native category parity and first-turn single delivery; proof that deferred read surfaces are absent; controlled real full trace |
 | Privacy | native malicious-payload projection before queue/log/journal/SQLite/summary/retry; source/build/docs/profile/release secret scans; local log redaction; observer allowlist/retention; no remote telemetry/network analytics or raw-content capture |
 | Docs/workflows | link/code-snippet/nav validation; action linting; release tag/version gates; OIDC permission review |
 | Platform | clean Ubuntu native, Ubuntu WSL2, Garuda/Arch dogfood |
