@@ -1,7 +1,8 @@
 """``aether init`` command implementation.
 
 Normative source: ``specs/001-aether-v1-productization/contracts/cli.md`` section 2
-(``aether init``) and ``specs/r13-synthesis-and-release/spec.md`` FR-1334.
+(``aether init``), ``specs/001-aether-v1-productization/plan.md`` §4.6 / §10.1–10.2,
+and ``specs/r13-synthesis-and-release/spec.md`` FR-1334.
 
 The command writes the portable ``.aether/project.toml`` marker validated against the
 canonical ``project.schema.json``, and maps that UUID to exactly one native Hermes
@@ -9,13 +10,15 @@ Project in the local Aether registry.
 
 Two boundaries are deliberate:
 
-* Hermes is never imported. The native Project is resolved by opening the documented
-  per-profile ``$HERMES_HOME/projects.db`` **read-only** and matching ``primary_path``
+* Hermes is never imported into manager code. The native Project is resolved by opening
+  the documented per-profile ``projects.db`` **read-only** and matching ``primary_path``
   exactly. Name, slug, cwd, and approximate-path matching are never used, because a
   real installation can hold several Projects sharing one human name.
-* Hermes state is never written. When no Project matches, ``init`` refuses and reports
-  the command the owner can run; creating a native Project is not this command's
-  authority.
+* When zero active and zero archived exact-path matches exist, the manager creates
+  exactly one native Project using the selected runtime's supported CLI
+  (``hermes project create <NAME> --primary <PATH>``) under the selected Morfeo profile
+  home, and verifies the returned ID and exact primary path through the read-only
+  native registry lookup before performing any file or registry mutations.
 """
 
 from __future__ import annotations
@@ -34,6 +37,7 @@ from typing import Any
 from aether_agents import product_version
 from aether_agents.lifecycle import display_version
 from aether_agents.observation.context import ProjectRegistry, canonical_project_id
+from aether_agents.paths import data_root, state_root
 from aether_agents.project_marker import ProjectMarkerValidationError, validate_project_marker
 from aether_agents.result import Envelope
 
@@ -118,7 +122,7 @@ def _repository_root(path: Path) -> Path:
     if top_level is None:
         raise InitError(
             "AETHER-INIT-NOT-A-GIT-REPOSITORY",
-            f"not a Git repository: {resolved}",
+            f"not a Git repository: {resolved}; run 'git init' first to initialize a repository",
             failure_kind="missing_prerequisite",
         )
     if Path(top_level).resolve() != resolved:
@@ -181,21 +185,122 @@ def _read_existing_marker(marker_path: Path) -> dict[str, Any] | None:
     return marker
 
 
-def _hermes_projects_db() -> Path:
-    """The documented per-profile Hermes projects database path."""
-    home = os.environ.get("HERMES_HOME")
-    return (Path(home) if home else Path.home() / ".hermes") / "projects.db"
-
-
-def _native_projects_for(root: Path) -> list[dict[str, str]]:
-    """Every non-archived native Hermes Project whose primary path is exactly ``root``."""
-    database = _hermes_projects_db()
-    if not database.is_file():
+def _absolute_env_path(name: str) -> Path | None:
+    """Return one explicit deployment path without guessing relative locations."""
+    if name not in os.environ:
+        return None
+    raw = os.environ.get(name, "").strip()
+    if not raw:
         raise InitError(
-            "AETHER-INIT-HERMES-PROJECTS-UNAVAILABLE",
-            f"Hermes projects database does not exist: {database}",
+            "AETHER-INIT-ENV-INVALID",
+            f"{name} must not be empty",
+            failure_kind="invalid_input",
+        )
+    path = Path(raw).expanduser()
+    if not path.is_absolute():
+        raise InitError(
+            "AETHER-INIT-ENV-INVALID",
+            f"{name} must be an absolute path",
+            failure_kind="invalid_input",
+        )
+    return path
+
+
+def _resolve_profile_home(root: Path) -> Path:
+    """Resolve the Morfeo profile home according to the pinned precedence."""
+    hermes_root = _absolute_env_path("AETHER_HERMES_ROOT")
+    if hermes_root is not None:
+        return hermes_root / "profiles" / "morfeo"
+    if (state_root() / "hermes" / "profiles" / "morfeo").is_dir():
+        return state_root() / "hermes" / "profiles" / "morfeo"
+    if (root / "home" / "profiles" / "morfeo").is_dir():
+        return root / "home" / "profiles" / "morfeo"
+    return state_root() / "hermes" / "profiles" / "morfeo"
+
+
+def _resolve_hermes_executable(root: Path) -> Path:
+    """Resolve the runtime hermes executable according to the pinned precedence."""
+    runtime_root = _absolute_env_path("AETHER_RUNTIME_ROOT")
+    if runtime_root is not None:
+        return runtime_root / "venv" / "bin" / "hermes"
+    if (data_root() / "runtime" / "current" / "venv" / "bin" / "hermes").is_file():
+        return data_root() / "runtime" / "current" / "venv" / "bin" / "hermes"
+    if (root / "home" / ".venv-hermes" / "bin" / "hermes").is_file():
+        return root / "home" / ".venv-hermes" / "bin" / "hermes"
+    return data_root() / "runtime" / "current" / "venv" / "bin" / "hermes"
+
+
+def _verify_runtime_executable(hermes_exe: Path) -> None:
+    """Verify that the target runtime executable resolves, exists, and executes."""
+    if not hermes_exe.is_file():
+        raise InitError(
+            "AETHER-INIT-HERMES-RUNTIME-UNAVAILABLE",
+            f"Hermes runtime executable does not exist: {hermes_exe}; "
+            "ensure the runtime is installed and accessible",
             failure_kind="missing_prerequisite",
         )
+    if not os.access(hermes_exe, os.X_OK):
+        raise InitError(
+            "AETHER-INIT-HERMES-RUNTIME-UNAVAILABLE",
+            f"Hermes runtime executable is not executable: {hermes_exe}",
+            failure_kind="missing_prerequisite",
+        )
+    try:
+        completed = subprocess.run(
+            (str(hermes_exe), "--version"),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+        if completed.returncode != 0:
+            raise InitError(
+                "AETHER-INIT-HERMES-RUNTIME-UNAVAILABLE",
+                f"Hermes runtime executable failed self-check: {hermes_exe}",
+                failure_kind="missing_prerequisite",
+            )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise InitError(
+            "AETHER-INIT-HERMES-RUNTIME-UNAVAILABLE",
+            f"Hermes runtime executable cannot be executed: {hermes_exe}",
+            failure_kind="missing_prerequisite",
+        ) from exc
+
+
+def _check_cross_profile_path(root: Path, profile_home: Path) -> None:
+    """Refuse paths located inside any Hermes profile directory."""
+    root_resolved = root.resolve()
+    profile_resolved = profile_home.resolve()
+    try:
+        if root_resolved == profile_resolved or root_resolved.is_relative_to(profile_resolved):
+            raise InitError(
+                "AETHER-INIT-CROSS-PROFILE-PATH",
+                f"path is located inside a Hermes profile directory: {root}; refusing cross-profile path",
+                failure_kind="invalid_input",
+            )
+        profiles_parent = profile_resolved.parent
+        if profiles_parent.name == "profiles" and (
+            root_resolved == profiles_parent or root_resolved.is_relative_to(profiles_parent)
+        ):
+            raise InitError(
+                "AETHER-INIT-CROSS-PROFILE-PATH",
+                f"path is located inside a Hermes profile directory: {root}; refusing cross-profile path",
+                failure_kind="invalid_input",
+            )
+    except (ValueError, OSError):
+        pass
+
+
+def _query_native_projects(
+    root: Path, profile_home: Path
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """Return ``(active_matches, archived_matches)`` from ``profile_home/projects.db``.
+
+    An absent per-profile ``projects.db`` counts as zero exact matches.
+    """
+    database = profile_home / "projects.db"
+    if not database.is_file():
+        return [], []
     try:
         connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
     except sqlite3.Error as exc:
@@ -206,7 +311,7 @@ def _native_projects_for(root: Path) -> list[dict[str, str]]:
         ) from exc
     try:
         rows = connection.execute(
-            "SELECT id, slug, primary_path FROM projects WHERE archived = 0"
+            "SELECT id, slug, primary_path, archived FROM projects"
         ).fetchall()
     except sqlite3.Error as exc:
         raise InitError(
@@ -217,8 +322,9 @@ def _native_projects_for(root: Path) -> list[dict[str, str]]:
     finally:
         connection.close()
 
-    matches: list[dict[str, str]] = []
-    for identifier, slug, primary_path in rows:
+    active: list[dict[str, str]] = []
+    archived: list[dict[str, str]] = []
+    for identifier, slug, primary_path, is_archived in rows:
         if not isinstance(primary_path, str) or not primary_path:
             continue
         try:
@@ -226,38 +332,62 @@ def _native_projects_for(root: Path) -> list[dict[str, str]]:
         except (OSError, RuntimeError, ValueError):
             continue
         if candidate == root:
-            matches.append({"id": str(identifier), "slug": str(slug)})
-    return matches
+            entry = {"id": str(identifier), "slug": str(slug)}
+            if is_archived:
+                archived.append(entry)
+            else:
+                active.append(entry)
+    return active, archived
 
 
-def _resolve_hermes_project(root: Path, requested: str | None) -> dict[str, str]:
-    """Bind exactly one native Hermes Project by exact primary-path match."""
-    matches = _native_projects_for(root)
-    if requested is not None:
-        selected = [entry for entry in matches if entry["id"] == requested]
-        if not selected:
-            raise InitError(
-                "AETHER-INIT-HERMES-PROJECT-PATH-MISMATCH",
-                f"Hermes Project '{requested}' does not have {root} as its exact primary path",
-                failure_kind="integrity_failure",
-            )
-        return selected[0]
-    if not matches:
+def _create_hermes_project(
+    root: Path, name: str, profile_home: Path, hermes_exe: Path
+) -> dict[str, str]:
+    """Create exactly one native Project in ``profile_home`` via the runtime CLI."""
+    profile_home.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ)
+    env["HERMES_HOME"] = str(profile_home)
+    env.pop("PYTHONPATH", None)
+    env.pop("PYTHONHOME", None)
+    completed = subprocess.run(
+        (str(hermes_exe), "project", "create", name, "--primary", str(root)),
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    if completed.returncode != 0:
+        err = completed.stderr.strip() or completed.stdout.strip()
         raise InitError(
-            "AETHER-INIT-HERMES-PROJECT-MISSING",
-            f"no non-archived Hermes Project has {root} as its exact primary path; "
-            f"create one with: hermes project create <NAME> --primary {root}",
-            failure_kind="missing_prerequisite",
+            "AETHER-INIT-HERMES-PROJECT-CREATE-FAILED",
+            f"failed to create native Hermes project for {root}: {err}",
+            failure_kind="runtime_failure",
         )
-    if len(matches) > 1:
-        identifiers = ", ".join(sorted(entry["id"] for entry in matches))
+    match = re.search(r"\b(p_[a-zA-Z0-9_-]+)\b", completed.stdout)
+    returned_id = match.group(1) if match else None
+
+    # Readback verification through the read-only native registry lookup
+    active, _ = _query_native_projects(root, profile_home)
+    if not active:
         raise InitError(
-            "AETHER-INIT-HERMES-PROJECT-AMBIGUOUS",
-            f"several Hermes Projects claim {root} as their exact primary path "
-            f"({identifiers}); re-run with --hermes-project ID",
+            "AETHER-INIT-HERMES-PROJECT-VERIFY-FAILED",
+            f"native Hermes Project was created but readback verification found no match for {root}",
             failure_kind="integrity_failure",
         )
-    return matches[0]
+    if len(active) > 1:
+        raise InitError(
+            "AETHER-INIT-HERMES-PROJECT-AMBIGUOUS",
+            f"multiple native Hermes Projects found for {root} after creation",
+            failure_kind="integrity_failure",
+        )
+    project = active[0]
+    if returned_id is not None and project["id"] != returned_id:
+        raise InitError(
+            "AETHER-INIT-HERMES-PROJECT-VERIFY-FAILED",
+            f"native Hermes Project id mismatch: created {returned_id} but read back {project['id']}",
+            failure_kind="integrity_failure",
+        )
+    return project
 
 
 def _render_marker(marker: dict[str, Any]) -> str:
@@ -392,6 +522,17 @@ def _apply_ignore_policy(root: Path) -> None:
 
 def _plan(root: Path, args: argparse.Namespace, registry: ProjectRegistry) -> dict[str, Any]:
     """Compute the full init decision without writing anything."""
+    profile_home = _resolve_profile_home(root)
+    _check_cross_profile_path(root, profile_home)
+
+    gitignore = root / ".gitignore"
+    if gitignore.exists() and (gitignore.is_symlink() or not gitignore.is_file()):
+        raise InitError(
+            "AETHER-INIT-IGNORE-POLICY-UNSAFE",
+            ".gitignore is not a regular file; refusing to modify it",
+            failure_kind="integrity_failure",
+        )
+
     tracked_worktrees = _tracked_worktrees_paths(root)
     if tracked_worktrees is not None:
         raise InitError(
@@ -402,7 +543,57 @@ def _plan(root: Path, args: argparse.Namespace, registry: ProjectRegistry) -> di
         )
     marker_path = root / ".aether" / "project.toml"
     existing = _read_existing_marker(marker_path)
-    native = _resolve_hermes_project(root, args.hermes_project)
+
+    active_matches, archived_matches = _query_native_projects(root, profile_home)
+    if archived_matches:
+        archived_id = archived_matches[0]["id"]
+        raise InitError(
+            "AETHER-INIT-HERMES-PROJECT-ARCHIVED",
+            f"an archived Hermes Project ({archived_id}) claims {root} as its exact primary path; "
+            "refusing conflicting archived identity",
+            failure_kind="integrity_failure",
+        )
+
+    native_plan: dict[str, Any]
+    if args.hermes_project is not None:
+        selected = [entry for entry in active_matches if entry["id"] == args.hermes_project]
+        if not selected:
+            raise InitError(
+                "AETHER-INIT-HERMES-PROJECT-PATH-MISMATCH",
+                f"Hermes Project '{args.hermes_project}' does not have {root} as its exact primary path",
+                failure_kind="integrity_failure",
+            )
+        native_plan = {
+            "action": "reuse",
+            "id": selected[0]["id"],
+            "slug": selected[0]["slug"],
+        }
+    elif len(active_matches) > 1:
+        identifiers = ", ".join(sorted(entry["id"] for entry in active_matches))
+        raise InitError(
+            "AETHER-INIT-HERMES-PROJECT-AMBIGUOUS",
+            f"several Hermes Projects claim {root} as their exact primary path "
+            f"({identifiers}); re-run with --hermes-project ID",
+            failure_kind="integrity_failure",
+        )
+    elif len(active_matches) == 1:
+        native_plan = {
+            "action": "reuse",
+            "id": active_matches[0]["id"],
+            "slug": active_matches[0]["slug"],
+        }
+    else:
+        # Zero active and zero archived matches -> prospective creation
+        hermes_exe = _resolve_hermes_executable(root)
+        _verify_runtime_executable(hermes_exe)
+        name = args.name or root.name
+        native_plan = {
+            "action": "create",
+            "id": None,
+            "slug": None,
+            "name": name,
+            "hermes_exe": hermes_exe,
+        }
 
     if existing is not None:
         project_id = canonical_project_id(existing.get("project_id"))
@@ -414,9 +605,6 @@ def _plan(root: Path, args: argparse.Namespace, registry: ProjectRegistry) -> di
             )
         registered = registry.project_path(project_id)
         if registered is not None and registered.resolve() != root:
-            # The UUID is already bound elsewhere. Only a stale binding may be re-pointed:
-            # if the other location still carries this identity, both are live and the
-            # conflict is real.
             if registered.is_dir() and (registered / ".aether" / "project.toml").is_file():
                 raise InitError(
                     "AETHER-INIT-IDENTITY-CONFLICT",
@@ -428,7 +616,8 @@ def _plan(root: Path, args: argparse.Namespace, registry: ProjectRegistry) -> di
                 "action": "reregister",
                 "project_id": project_id,
                 "marker": existing,
-                "native": native,
+                "native": native_plan,
+                "profile_home": profile_home,
                 "previous_path": str(registered),
             }
         if registered is None:
@@ -436,13 +625,15 @@ def _plan(root: Path, args: argparse.Namespace, registry: ProjectRegistry) -> di
                 "action": "register",
                 "project_id": project_id,
                 "marker": existing,
-                "native": native,
+                "native": native_plan,
+                "profile_home": profile_home,
             }
         return {
             "action": "none",
             "project_id": project_id,
             "marker": existing,
-            "native": native,
+            "native": native_plan,
+            "profile_home": profile_home,
         }
 
     name = args.name or root.name
@@ -451,9 +642,6 @@ def _plan(root: Path, args: argparse.Namespace, registry: ProjectRegistry) -> di
         "schema_version": 1,
         "project_id": str(uuid.uuid4()),
         "name": name,
-        # The distribution version is PEP 440 (``1.0.0rc1``) while the canonical schema
-        # constrains this portable field to SemVer, so the marker records the release's
-        # display identity (``1.0.0-rc.1``) through the product's single converter.
         "initialized_by": display_version(product_version()),
         "forge": forge,
         "contract_root": "specs",
@@ -475,7 +663,8 @@ def _plan(root: Path, args: argparse.Namespace, registry: ProjectRegistry) -> di
         "action": "create",
         "project_id": marker["project_id"],
         "marker": marker,
-        "native": native,
+        "native": native_plan,
+        "profile_home": profile_home,
     }
 
 
@@ -493,16 +682,20 @@ def run_init(args: argparse.Namespace, *, registry: ProjectRegistry | None = Non
         return envelope
 
     action = plan["action"]
+    native_plan = plan["native"]
+    profile_home = plan["profile_home"]
     marker_path = root / ".aether" / "project.toml"
     ignore_fix_required = not _ignore_policy_satisfied(root)
+
     envelope.data = {
         "project_id": plan["project_id"],
         "project_path": str(root),
         "name": plan["marker"]["name"],
         "forge": plan["marker"]["forge"],
         "marker_path": str(marker_path),
-        "hermes_project_id": plan["native"]["id"],
-        "hermes_project_slug": plan["native"]["slug"],
+        "hermes_project_action": native_plan["action"],
+        "hermes_project_id": native_plan["id"],
+        "hermes_project_slug": native_plan["slug"],
         "ignore_policy": "update" if ignore_fix_required else "already_correct",
     }
 
@@ -511,7 +704,25 @@ def run_init(args: argparse.Namespace, *, registry: ProjectRegistry | None = Non
         envelope.data["action"] = action
         return envelope
 
-    if action == "none" and not ignore_fix_required:
+    # Create the native Hermes Project if one does not exist
+    if native_plan["action"] == "create":
+        try:
+            created_project = _create_hermes_project(
+                root, plan["marker"]["name"], profile_home, native_plan["hermes_exe"]
+            )
+        except InitError as error:
+            envelope.result = "error"
+            envelope.failure_kind = error.failure_kind
+            envelope.fail(error.code, error.message)
+            return envelope
+        native_id = created_project["id"]
+        native_slug = created_project["slug"]
+        envelope.data["hermes_project_id"] = native_id
+        envelope.data["hermes_project_slug"] = native_slug
+    else:
+        native_id = native_plan["id"]
+
+    if action == "none" and not ignore_fix_required and native_plan["action"] == "reuse":
         envelope.result = "no_change"
         return envelope
 
@@ -532,7 +743,7 @@ def run_init(args: argparse.Namespace, *, registry: ProjectRegistry | None = Non
         plan["project_id"],
         root,
         name=str(plan["marker"]["name"]),
-        hermes_project_id=plan["native"]["id"],
+        hermes_project_id=native_id,
     ):
         envelope.result = "error"
         envelope.failure_kind = "runtime_failure"
