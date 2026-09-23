@@ -6,6 +6,7 @@
 (SHA-256 `0b685dbfd7deb68e1b526a76b71d057d021f9bbf3984fff8c398ccd62ba9cca6`), base commit
 `004c5f076da9e7be4fd64e4bc2adc60e21d4a2f6`, Supervisor breakdown
 `specs/001-aether-v1-productization/tasks-oc79.md` (committed at `f71a3677` on the root branch).
+**Delivered commit**: `9a8a31c5c2f27195ed9c84eeae5d9e8e974a4c71` (evidence-artifact delta on top of `25a20942baa9686fa4edc498740b8d0263bb1112`, which carries the behaviour change).
 **Delivered scope**: AC3; A1-FR-043, A1-FR-043a, A1-FR-100, A1-SC-018/019; `contracts/cli.md` launch section.
 **Unit compatibility conclusion**: `patch`.
 
@@ -60,9 +61,27 @@
 
 ## 3. Decisive RED / GREEN Evidence
 
-### Red: Sole-Project Node against Pre-fix Source
+All three transcripts below were produced at the reviewed candidate commit
+`25a20942baa9686fa4edc498740b8d0263bb1112` (review round 2). The RED pairings swap
+`src/aether_agents/launcher.py` for the pre-fix base revision
+`004c5f076da9e7be4fd64e4bc2adc60e21d4a2f6` (sha256 `2805eec2…`) while keeping the
+delivered test file in place. Provenance asserted on each run:
 
-Executing the rewritten test against the pre-fix implementation where route (5) silently fell back to the sole registered project:
+```text
+c619171b6c5c9442759ddff4f50704e48340b1ef96ec6037bf4a17d5adb81255  src/aether_agents/launcher.py   (candidate)
+2805eec234259f1d112a0fbb383851ba32094df30b512c24d5e074a6b5ff7213  /tmp/oc79_prefix_launcher.py    (pre-fix, swapped in for RED)
+2805eec234259f1d112a0fbb383851ba32094df30b512c24d5e074a6b5ff7213  src/aether_agents/launcher.py   (verified in place during RED)
+c619171b6c5c9442759ddff4f50704e48340b1ef96ec6037bf4a17d5adb81255  src/aether_agents/launcher.py   (restored after RED)
+RED_EXIT=1  RED_EXIT2=1            # pytest exit codes for both RED pairings
+```
+
+`rootdir:` lines are quoted as `<repo-root>` to keep this public evidence file free of
+operator paths.
+
+### 3.1 Red: Rewritten Sole-Project Node against Pre-fix Source
+
+At the pre-fix source the rewritten node proves the removed fallback: the unrelated
+uninitialized cwd does not raise, so `assertRaises(ActivationError)` fails.
 
 ```text
 $ uv run --frozen python scripts/run_tests.py -- tests/test_aether_tui_launcher.py -k test_project_resolution_sole_registered_project
@@ -71,7 +90,7 @@ platform linux -- Python 3.13.15, pytest-9.1.1, pluggy-1.6.0
 rootdir: <repo-root>
 configfile: pyproject.toml
 plugins: anyio-4.14.2, cov-6.3.0
-collected 44 items / 43 deselected / 1 selected
+collected 46 items / 45 deselected / 1 selected
 
 tests/test_aether_tui_launcher.py F                                      [100%]
 
@@ -82,10 +101,10 @@ self = <test_aether_tui_launcher.MorfeoTuiLauncherTests testMethod=test_project_
 
     def test_project_resolution_sole_registered_project(self) -> None:
         from aether_agents.launcher import ActivationError, inspect_activation
-
+    
         non_repo_dir = Path(self.tempdir.name) / "empty_dir"
         non_repo_dir.mkdir(parents=True)
-
+    
         # An unrelated uninitialized cwd must refuse with actionable guidance even
         # when a sole project is registered (A1-FR-043 removes the sole-project fallback).
         with patch.object(Path, "cwd", return_value=non_repo_dir):
@@ -93,13 +112,13 @@ self = <test_aether_tui_launcher.MorfeoTuiLauncherTests testMethod=test_project_
                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 E           AssertionError: ActivationError not raised
 
-tests/test_aether_tui_launcher.py:731: AssertionError
+tests/test_aether_tui_launcher.py:804: AssertionError
 =========================== short test summary info ============================
 FAILED tests/test_aether_tui_launcher.py::MorfeoTuiLauncherTests::test_project_resolution_sole_registered_project
-======================= 1 failed, 43 deselected in 0.47s =======================
+======================= 1 failed, 45 deselected in 0.47s =======================
 ```
 
-### Green: Sole-Project Node on Candidate
+### 3.2 Green: Rewritten Sole-Project Node on Candidate
 
 ```text
 $ uv run --frozen python scripts/run_tests.py -- tests/test_aether_tui_launcher.py -k test_project_resolution_sole_registered_project
@@ -108,14 +127,24 @@ platform linux -- Python 3.13.15, pytest-9.1.1, pluggy-1.6.0
 rootdir: <repo-root>
 configfile: pyproject.toml
 plugins: anyio-4.14.2, cov-6.3.0
-collected 45 items / 44 deselected / 1 selected
+collected 46 items / 45 deselected / 1 selected
 
 tests/test_aether_tui_launcher.py .                                      [100%]
 
-======================= 1 passed, 44 deselected in 0.48s =======================
+======================= 1 passed, 45 deselected in 0.23s =======================
 ```
 
-### Green: Positive Case for Verified Unborn Root without `AGENTS.md` and without Commit
+### 3.3 Green: Positive Case for Verified Unborn Root without `AGENTS.md` and without Commit
+
+The node creates a real `git init` repository with no commit (verified via
+`git rev-parse --verify HEAD` returning non-zero), writes only
+`.aether/project.toml`, registers the project, and asserts `inspect_activation()`
+returns a launch plan. On the pre-fix source it fails at
+`src/aether_agents/launcher.py:359` with
+`Aether repository marker does not exist: .../unborn_project/AGENTS.md`, which pins
+A1-FR-100 (first conversation opens before `AGENTS.md` exists).
+
+Red on pre-fix source:
 
 ```text
 $ uv run --frozen python scripts/run_tests.py -- tests/test_aether_tui_launcher.py -k test_launch_verified_unborn_root_without_agents_md_and_without_commit
@@ -124,11 +153,189 @@ platform linux -- Python 3.13.15, pytest-9.1.1, pluggy-1.6.0
 rootdir: <repo-root>
 configfile: pyproject.toml
 plugins: anyio-4.14.2, cov-6.3.0
-collected 45 items / 44 deselected / 1 selected
+collected 46 items / 45 deselected / 1 selected
+
+tests/test_aether_tui_launcher.py F                                      [100%]
+
+=================================== FAILURES ===================================
+_ MorfeoTuiLauncherTests.test_launch_verified_unborn_root_without_agents_md_and_without_commit _
+
+self = <test_aether_tui_launcher.MorfeoTuiLauncherTests testMethod=test_launch_verified_unborn_root_without_agents_md_and_without_commit>
+
+    def test_launch_verified_unborn_root_without_agents_md_and_without_commit(self) -> None:
+        import subprocess
+    
+        from aether_agents.launcher import inspect_activation
+        from aether_agents.launcher import main as launcher_main
+    
+        unborn_pid = "33333333-3333-4333-8333-333333333333"
+        unborn_repo = Path(self.tempdir.name) / "unborn_project"
+        unborn_repo.mkdir(parents=True)
+    
+        # 1. git init without any commit -> unborn repository
+        subprocess.run(["git", "init", "-q", "-b", "main", str(unborn_repo)], check=True)
+        # Verify it has no commits (HEAD does not resolve)
+        proc = subprocess.run(
+            ["git", "-C", str(unborn_repo), "rev-parse", "--verify", "HEAD"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(proc.returncode, 0)
+    
+        # 2. Write portable project marker (.aether/project.toml), NO AGENTS.md
+        marker = unborn_repo / ".aether" / "project.toml"
+        marker.parent.mkdir(parents=True)
+        marker.write_text(
+            "\n".join(
+                (
+                    "schema_version = 1",
+                    f'project_id = "{unborn_pid}"',
+                    'name = "unborn-intake"',
+                    'initialized_by = "1.0.0"',
+                    'forge = "local"',
+                    'contract_root = "specs"',
+                    'default_branch = "main"',
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
+        self.assertFalse((unborn_repo / "AGENTS.md").exists())
+    
+        # 3. Register in local project registry
+        self.registry.register(unborn_pid, unborn_repo, name="unborn-intake")
+    
+        # 4. Copy isolated Morfeo home runtime fixtures so component paths resolve
+        shutil.copytree(self.root / "home", unborn_repo / "home")
+    
+        # 5. Bare aether launch in cwd resolves project, binds Morfeo profile, ready
+        with patch.object(Path, "cwd", return_value=unborn_repo):
+>           plan = inspect_activation()
+                   ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_aether_tui_launcher.py:870: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/aether_agents/launcher.py:653: in inspect_activation
+    repo, project_id = _resolve_project(project)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+project_arg = None
+
+    def _resolve_project(project_arg: str | Path | None = None) -> tuple[Path, str]:
+        """Resolve exact project binding according to LG-CLI decision 6."""
+        hermes_root = _absolute_env_path("AETHER_HERMES_ROOT")
+        registry = _registry(hermes_root)
+    
+        # (1) Explicit --project PATH or AETHER_PROJECT_ROOT
+        if project_arg is not None or "AETHER_PROJECT_ROOT" in os.environ:
+            if project_arg is not None:
+                if _is_empty_path(project_arg):
+                    raise ActivationError("project path must not be empty")
+                repo = Path(project_arg).expanduser().resolve()
+            else:
+                raw_root = os.environ.get("AETHER_PROJECT_ROOT", "").strip()
+                if not raw_root:
+                    raise ActivationError("AETHER_PROJECT_ROOT must not be empty")
+                repo_env = _absolute_env_path("AETHER_PROJECT_ROOT")
+                if repo_env is None:
+                    raise ActivationError("AETHER_PROJECT_ROOT must not be empty")
+                repo = repo_env.resolve()
+    
+            if not (repo / "AGENTS.md").is_file():
+                raise ActivationError(f"Aether repository marker does not exist: {repo / 'AGENTS.md'}")
+            project_id = _portable_project_id(repo)
+    
+            if "AETHER_PROJECT_ID" in os.environ:
+                env_pid_raw = os.environ.get("AETHER_PROJECT_ID", "").strip()
+                if not env_pid_raw:
+                    raise ActivationError("AETHER_PROJECT_ID must not be empty")
+                env_pid = canonical_project_id(env_pid_raw)
+                if env_pid is None:
+                    raise ActivationError(
+                        f"AETHER_PROJECT_ID {env_pid_raw} is not a valid canonical UUID"
+                    )
+                if env_pid != project_id:
+                    raise ActivationError(
+                        f"explicit AETHER_PROJECT_ID {env_pid_raw} conflicts with project marker {project_id}"
+                    )
+    
+            if registry.knows(project_id):
+                registered = registry.project_path(project_id)
+                if registered is not None and registered.resolve() != repo:
+                    raise ActivationError(
+                        f"project ID {project_id} conflicts with registered path: {registered}"
+                    )
+    
+            return repo, project_id
+    
+        # (2) Explicit verified AETHER_PROJECT_ID when registry and portable marker agree
+        if "AETHER_PROJECT_ID" in os.environ:
+            raw_pid = os.environ.get("AETHER_PROJECT_ID", "").strip()
+            if not raw_pid:
+                raise ActivationError("AETHER_PROJECT_ID must not be empty")
+            env_pid = canonical_project_id(raw_pid)
+            if env_pid is None:
+                raise ActivationError(f"AETHER_PROJECT_ID {raw_pid} is not a valid canonical UUID")
+            if not registry.knows(env_pid):
+                raise ActivationError(
+                    f"AETHER_PROJECT_ID {env_pid} is not registered in the project registry"
+                )
+            loc = registry.project_path(env_pid)
+            if loc is None or not loc.is_dir():
+                raise ActivationError(f"registered project path for {env_pid} does not exist: {loc}")
+            if not registry.verify_with_marker(env_pid):
+                raise ActivationError(
+                    f"project registry and portable marker do not agree for {env_pid}"
+                )
+            repo = loc.resolve()
+            if not (repo / "AGENTS.md").is_file():
+                raise ActivationError(f"Aether repository marker does not exist: {repo / 'AGENTS.md'}")
+            return repo, env_pid
+    
+        # (3) Current repository marker or sole registered project only when registry and marker agree
+        cursor = Path.cwd().resolve()
+        repo_candidate: Path | None = None
+        for candidate in (cursor, *cursor.parents):
+            if (candidate / ".aether" / "project.toml").is_file():
+                repo_candidate = candidate
+                break
+    
+        if repo_candidate is not None:
+            marker_pid = _portable_project_id(repo_candidate)
+            reg_path = registry.project_path(marker_pid)
+            if (
+                registry.knows(marker_pid)
+                and reg_path is not None
+                and reg_path.resolve() == repo_candidate.resolve()
+                and registry.verify_with_marker(marker_pid)
+            ):
+                if not (repo_candidate / "AGENTS.md").is_file():
+>                   raise ActivationError(
+                        f"Aether repository marker does not exist: {repo_candidate / 'AGENTS.md'}"
+                    )
+E                   aether_agents.launcher.ActivationError: Aether repository marker does not exist: /tmp/aether-tui-launcher-l0jmc9gy/unborn_project/AGENTS.md
+
+src/aether_agents/launcher.py:359: ActivationError
+=========================== short test summary info ============================
+FAILED tests/test_aether_tui_launcher.py::MorfeoTuiLauncherTests::test_launch_verified_unborn_root_without_agents_md_and_without_commit
+======================= 1 failed, 45 deselected in 0.45s =======================
+```
+
+Green on candidate:
+
+```text
+$ uv run --frozen python scripts/run_tests.py -- tests/test_aether_tui_launcher.py -k test_launch_verified_unborn_root_without_agents_md_and_without_commit
+============================= test session starts ==============================
+platform linux -- Python 3.13.15, pytest-9.1.1, pluggy-1.6.0
+rootdir: <repo-root>
+configfile: pyproject.toml
+plugins: anyio-4.14.2, cov-6.3.0
+collected 46 items / 45 deselected / 1 selected
 
 tests/test_aether_tui_launcher.py .                                      [100%]
 
-======================= 1 passed, 44 deselected in 0.48s =======================
+======================= 1 passed, 45 deselected in 0.47s =======================
 ```
 
 ---
@@ -181,11 +388,23 @@ The resolver changes do not invalidate the precedence assertions in `test_docume
    Exit code: 0
    ```
 
-5. **Git Diff Check**:
+5. **Git Diff Check (CI-range form)**:
+   The `.github/workflows/policy.yml` job checks the committed range, so the
+   range form is recorded here rather than the argument-less form, which is a
+   no-op once the work is committed:
    ```text
-   $ git diff --check
+   $ git diff --check 004c5f07...HEAD
    Exit code: 0
    ```
+
+6. **Public Artifact Privacy Gate**:
+   ```text
+   $ uv run --frozen python scripts/check_public_artifacts.py --root .
+   public artifact path scan passed: tracked surface + 0 artifact(s)
+   Exit code: 0
+   ```
+   `tests/test_public_artifacts.py::test_tracked_public_surface_contains_no_operator_paths`
+   passes (reported separately in round 2 verification).
 
 ---
 
