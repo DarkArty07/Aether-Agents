@@ -7,15 +7,12 @@
 `004c5f076da9e7be4fd64e4bc2adc60e21d4a2f6`, Supervisor breakdown
 `specs/001-aether-v1-productization/tasks-oc79.md` (committed at `f71a3677` on the root branch).
 **Behaviour revision**: `25a20942baa9686fa4edc498740b8d0263bb1112` — every command result below is
-reproduced against this revision. The delivered branch tip is one evidence-artifact delta above it
-(`git log --oneline -1`); this file never names the commit that contains it.
-**Behaviour revision**: `25a20942baa9686fa4edc498740b8d0263bb1112` — the RED/GREEN transcripts in
-§3 are reproduced against this revision, asserted by the recorded `src/aether_agents/launcher.py`
+reproduced against this revision, asserted by the recorded `src/aether_agents/launcher.py`
 sha256 `c619171b6c5c9442759ddff4f50704e48340b1ef96ec6037bf4a17d5adb81255` (pre-fix pairing
 `2805eec234259f1d112a0fbb383851ba32094df30b512c24d5e074a6b5ff7213`).
-A file cannot name the commit that contains it, so §3 is pinned to the behaviour revision and this
-header names the branch tip; every later commit touches only this artifact and is listed by
-`git log --oneline -4`.
+A file cannot name the commit that contains it, so identification rests on the behaviour revision
+rather than the branch tip; the tip is one evidence-artifact delta above it
+(`git log --oneline -6`).
 **Delivered scope**: AC3; A1-FR-043, A1-FR-043a, A1-FR-100, A1-SC-018/019; `contracts/cli.md` launch section.
 **Unit compatibility conclusion**: `patch`.
 
