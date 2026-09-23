@@ -6,7 +6,11 @@
 (SHA-256 `0b685dbfd7deb68e1b526a76b71d057d021f9bbf3984fff8c398ccd62ba9cca6`), base commit
 `004c5f076da9e7be4fd64e4bc2adc60e21d4a2f6`, Supervisor breakdown
 `specs/001-aether-v1-productization/tasks-oc79.md` (committed at `f71a3677` on the root branch).
-**Delivered commit**: `9a8a31c5c2f27195ed9c84eeae5d9e8e974a4c71` (evidence-artifact delta on top of `25a20942baa9686fa4edc498740b8d0263bb1112`, which carries the behaviour change).
+**Delivered commit**: `13c689b9fab890137bfda96c47008aedae874dbc` carries this evidence-artifact
+delta on top of `25a20942baa9686fa4edc498740b8d0263bb1112` (the behaviour change). Naming a commit
+inside the file cannot survive its own creation, so the line above names the commit that delivered
+this artifact and the immediate child commit corrects only this self-reference; the branch tip at
+delivery is the final revision (`git log -2 --oneline`).
 **Delivered scope**: AC3; A1-FR-043, A1-FR-043a, A1-FR-100, A1-SC-018/019; `contracts/cli.md` launch section.
 **Unit compatibility conclusion**: `patch`.
 
