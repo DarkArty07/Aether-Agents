@@ -6,8 +6,9 @@
 (SHA-256 `0b685dbfd7deb68e1b526a76b71d057d021f9bbf3984fff8c398ccd62ba9cca6`), base commit
 `004c5f076da9e7be4fd64e4bc2adc60e21d4a2f6`, Supervisor breakdown
 `specs/001-aether-v1-productization/tasks-oc79.md` (committed at `f71a3677` on the root branch).
-**Delivered tip**: `84fcb3ea4fc80eee1534a216c1407e3535b2692d` (evidence-artifact delta on top of
-`25a20942baa9686fa4edc498740b8d0263bb1112`, which carries the behaviour change).
+**Behaviour revision**: `25a20942baa9686fa4edc498740b8d0263bb1112` — every command result below is
+reproduced against this revision. The delivered branch tip is one evidence-artifact delta above it
+(`git log --oneline -1`); this file never names the commit that contains it.
 **Behaviour revision**: `25a20942baa9686fa4edc498740b8d0263bb1112` — the RED/GREEN transcripts in
 §3 are reproduced against this revision, asserted by the recorded `src/aether_agents/launcher.py`
 sha256 `c619171b6c5c9442759ddff4f50704e48340b1ef96ec6037bf4a17d5adb81255` (pre-fix pairing
