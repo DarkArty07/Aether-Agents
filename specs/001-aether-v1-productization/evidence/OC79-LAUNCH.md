@@ -80,7 +80,9 @@ RED_EXIT=1  RED_EXIT2=1            # pytest exit codes for both RED pairings
 ```
 
 `rootdir:` lines are quoted as `<repo-root>` to keep this public evidence file free of
-operator paths.
+operator paths. The quoted failure bodies are reproduced with their indentation and
+wording intact; only trailing whitespace on padding lines is trimmed so the file passes
+`git diff --check 004c5f07...HEAD` (exit 0).
 
 ### 3.1 Red: Rewritten Sole-Project Node against Pre-fix Source
 
@@ -105,10 +107,10 @@ self = <test_aether_tui_launcher.MorfeoTuiLauncherTests testMethod=test_project_
 
     def test_project_resolution_sole_registered_project(self) -> None:
         from aether_agents.launcher import ActivationError, inspect_activation
-    
+
         non_repo_dir = Path(self.tempdir.name) / "empty_dir"
         non_repo_dir.mkdir(parents=True)
-    
+
         # An unrelated uninitialized cwd must refuse with actionable guidance even
         # when a sole project is registered (A1-FR-043 removes the sole-project fallback).
         with patch.object(Path, "cwd", return_value=non_repo_dir):
@@ -168,14 +170,14 @@ self = <test_aether_tui_launcher.MorfeoTuiLauncherTests testMethod=test_launch_v
 
     def test_launch_verified_unborn_root_without_agents_md_and_without_commit(self) -> None:
         import subprocess
-    
+
         from aether_agents.launcher import inspect_activation
         from aether_agents.launcher import main as launcher_main
-    
+
         unborn_pid = "33333333-3333-4333-8333-333333333333"
         unborn_repo = Path(self.tempdir.name) / "unborn_project"
         unborn_repo.mkdir(parents=True)
-    
+
         # 1. git init without any commit -> unborn repository
         subprocess.run(["git", "init", "-q", "-b", "main", str(unborn_repo)], check=True)
         # Verify it has no commits (HEAD does not resolve)
@@ -185,7 +187,7 @@ self = <test_aether_tui_launcher.MorfeoTuiLauncherTests testMethod=test_launch_v
             text=True,
         )
         self.assertNotEqual(proc.returncode, 0)
-    
+
         # 2. Write portable project marker (.aether/project.toml), NO AGENTS.md
         marker = unborn_repo / ".aether" / "project.toml"
         marker.parent.mkdir(parents=True)
@@ -205,24 +207,24 @@ self = <test_aether_tui_launcher.MorfeoTuiLauncherTests testMethod=test_launch_v
             encoding="utf-8",
         )
         self.assertFalse((unborn_repo / "AGENTS.md").exists())
-    
+
         # 3. Register in local project registry
         self.registry.register(unborn_pid, unborn_repo, name="unborn-intake")
-    
+
         # 4. Copy isolated Morfeo home runtime fixtures so component paths resolve
         shutil.copytree(self.root / "home", unborn_repo / "home")
-    
+
         # 5. Bare aether launch in cwd resolves project, binds Morfeo profile, ready
         with patch.object(Path, "cwd", return_value=unborn_repo):
 >           plan = inspect_activation()
                    ^^^^^^^^^^^^^^^^^^^^
 
-tests/test_aether_tui_launcher.py:870: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_aether_tui_launcher.py:870:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 src/aether_agents/launcher.py:653: in inspect_activation
     repo, project_id = _resolve_project(project)
                        ^^^^^^^^^^^^^^^^^^^^^^^^^
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 project_arg = None
 
@@ -230,7 +232,7 @@ project_arg = None
         """Resolve exact project binding according to LG-CLI decision 6."""
         hermes_root = _absolute_env_path("AETHER_HERMES_ROOT")
         registry = _registry(hermes_root)
-    
+
         # (1) Explicit --project PATH or AETHER_PROJECT_ROOT
         if project_arg is not None or "AETHER_PROJECT_ROOT" in os.environ:
             if project_arg is not None:
@@ -245,11 +247,11 @@ project_arg = None
                 if repo_env is None:
                     raise ActivationError("AETHER_PROJECT_ROOT must not be empty")
                 repo = repo_env.resolve()
-    
+
             if not (repo / "AGENTS.md").is_file():
                 raise ActivationError(f"Aether repository marker does not exist: {repo / 'AGENTS.md'}")
             project_id = _portable_project_id(repo)
-    
+
             if "AETHER_PROJECT_ID" in os.environ:
                 env_pid_raw = os.environ.get("AETHER_PROJECT_ID", "").strip()
                 if not env_pid_raw:
@@ -263,16 +265,16 @@ project_arg = None
                     raise ActivationError(
                         f"explicit AETHER_PROJECT_ID {env_pid_raw} conflicts with project marker {project_id}"
                     )
-    
+
             if registry.knows(project_id):
                 registered = registry.project_path(project_id)
                 if registered is not None and registered.resolve() != repo:
                     raise ActivationError(
                         f"project ID {project_id} conflicts with registered path: {registered}"
                     )
-    
+
             return repo, project_id
-    
+
         # (2) Explicit verified AETHER_PROJECT_ID when registry and portable marker agree
         if "AETHER_PROJECT_ID" in os.environ:
             raw_pid = os.environ.get("AETHER_PROJECT_ID", "").strip()
@@ -296,7 +298,7 @@ project_arg = None
             if not (repo / "AGENTS.md").is_file():
                 raise ActivationError(f"Aether repository marker does not exist: {repo / 'AGENTS.md'}")
             return repo, env_pid
-    
+
         # (3) Current repository marker or sole registered project only when registry and marker agree
         cursor = Path.cwd().resolve()
         repo_candidate: Path | None = None
@@ -304,7 +306,7 @@ project_arg = None
             if (candidate / ".aether" / "project.toml").is_file():
                 repo_candidate = candidate
                 break
-    
+
         if repo_candidate is not None:
             marker_pid = _portable_project_id(repo_candidate)
             reg_path = registry.project_path(marker_pid)
