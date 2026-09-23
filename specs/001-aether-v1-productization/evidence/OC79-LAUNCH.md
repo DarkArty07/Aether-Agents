@@ -11,8 +11,9 @@ reproduced against this revision, asserted by the recorded `src/aether_agents/la
 sha256 `c619171b6c5c9442759ddff4f50704e48340b1ef96ec6037bf4a17d5adb81255` (pre-fix pairing
 `2805eec234259f1d112a0fbb383851ba32094df30b512c24d5e074a6b5ff7213`).
 A file cannot name the commit that contains it, so identification rests on the behaviour revision
-rather than the branch tip; the tip is one evidence-artifact delta above it
-(`git log --oneline -6`).
+rather than the branch tip; commits between the behaviour revision and the branch tip are
+documentation-only evidence updates (`git log --oneline 25a20942..HEAD`;
+`git diff --name-only 25a20942..HEAD` touches only this evidence file).
 **Delivered scope**: AC3; A1-FR-043, A1-FR-043a, A1-FR-100, A1-SC-018/019; `contracts/cli.md` launch section.
 **Unit compatibility conclusion**: `patch`.
 
@@ -61,6 +62,7 @@ rather than the branch tip; the tip is one evidence-artifact delta above it
 | A1-FR-043 | Exact selection, no sole fallback | `test_project_resolution_sole_registered_project`, `test_observation_usage_guidance.py` | PASS |
 | A1-FR-043a | Verified route proof, missing `AGENTS.md` onboarding-only | `test_check_supports_separated_runtime_and_state_roots`, `test_project_resolution_explicit_route_refuses_unregistered_marker`, `test_launch_verified_unborn_root_without_agents_md_and_without_commit` | PASS |
 | A1-FR-100 | First conversation opens before `AGENTS.md` exists | `test_launch_verified_unborn_root_without_agents_md_and_without_commit` | PASS |
+| A1-SC-018 | The onboarding path invents no guidance (guidance-establishment and closure verification belong to `OC79-DOCS`/`OC79-INT`) | `test_launch_verified_unborn_root_without_agents_md_and_without_commit` | PASS |
 | A1-SC-019 | Unborn empty root flow without first commit or `AGENTS.md` | `test_launch_verified_unborn_root_without_agents_md_and_without_commit` | PASS |
 
 ---
