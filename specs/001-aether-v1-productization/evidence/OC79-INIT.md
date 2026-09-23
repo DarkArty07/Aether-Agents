@@ -11,6 +11,7 @@ material design `specs/001-aether-v1-productization/plan.md` §4.6 / §10.1–10
 Never edited the canonical contract.
 **Delivered scope**: AC1, AC2; A1-FR-046/047/048/049/052; `plan.md` §10.1–10.2; `contracts/cli.md` section 2.
 **Unit compatibility conclusion**: `patch`.
+**Runtime provenance**: Hermes Agent `v0.20.1` (`2026.8.13`), install directory `/home/darkarty/.local/share/aether/releases/1.0.0rc8-1771b4f70a31bf70/hermes-source`, manager `aether 1.0.0rc8`.
 
 ---
 
@@ -42,18 +43,19 @@ Never edited the canonical contract.
    - When exactly one non-archived Project matches the repository root's exact primary path, `init` reuses it (`hermes_project_action: "reuse"`).
    - Re-running `init` on an already-initialized project is identity-preserving, does not duplicate native Projects, and returns `result: "no_change"` when no ignore policy fix is required.
 
-6. **Actionable, fail-closed refusal matrix**:
+6. **Actionable, fail-closed refusal matrix** (all 24 emitted refusal codes):
    - `AETHER-INIT-PATH-INVALID`: target path does not exist or is not a directory.
    - `AETHER-INIT-NOT-A-GIT-REPOSITORY`: plain directory without Git; includes actionable guidance to run `git init`.
    - `AETHER-INIT-NOT-REPOSITORY-ROOT`: path is inside a Git repository but not its top-level root.
    - `AETHER-INIT-CROSS-PROFILE-PATH`: path is located inside a Hermes profile directory.
    - `AETHER-INIT-FORGE-UNRESOLVED`: explicit `--forge github` without GitHub `origin` remote.
+   - `AETHER-INIT-ENV-INVALID`: empty or relative `AETHER_HERMES_ROOT` or `AETHER_RUNTIME_ROOT` environment override.
    - `AETHER-INIT-MARKER-UNSAFE`: existing `.aether/project.toml` is a symlink or non-regular file.
    - `AETHER-INIT-MARKER-UNREADABLE`: existing marker has invalid TOML syntax or cannot be read.
    - `AETHER-INIT-MARKER-INVALID`: existing marker does not conform to `project.schema.json`.
    - `AETHER-INIT-IDENTITY-CONFLICT`: project UUID already registered at a different live directory.
-   - `AETHER-INIT-HERMES-PROJECTS-UNAVAILABLE`: Hermes `projects.db` exists but cannot be opened read-only (corrupt SQLite).
-   - `AETHER-INIT-HERMES-PROJECTS-UNREADABLE`: Hermes `projects.db` lacks the required `projects` table.
+   - `AETHER-INIT-HERMES-PROJECTS-UNAVAILABLE`: Hermes `projects.db` exists but cannot be opened read-only (e.g. permission denied).
+   - `AETHER-INIT-HERMES-PROJECTS-UNREADABLE`: Hermes `projects.db` lacks required `projects` table or file is not a valid SQLite database.
    - `AETHER-INIT-HERMES-PROJECT-ARCHIVED`: an archived Project in `projects.db` matches the exact primary path.
    - `AETHER-INIT-HERMES-PROJECT-PATH-MISMATCH`: explicit `--hermes-project ID` does not have target path as exact primary path.
    - `AETHER-INIT-HERMES-PROJECT-AMBIGUOUS`: multiple non-archived Projects match the exact primary path.
@@ -61,8 +63,11 @@ Never edited the canonical contract.
    - `AETHER-INIT-HERMES-PROJECT-CREATE-FAILED`: `hermes project create` CLI invocation returned non-zero exit code.
    - `AETHER-INIT-HERMES-PROJECT-VERIFY-FAILED`: readback verification after CLI creation found no matching row or ID mismatch.
    - `AETHER-INIT-IGNORE-POLICY-UNSAFE`: `.gitignore` is a symlink or non-regular file.
-   - `AETHER-INIT-WORKTREES-CONFLICT`: `.worktrees` is tracked or staged in Git.
+   - `AETHER-INIT-IGNORE-POLICY-UNWRITABLE`: `.gitignore` cannot be written or updated due to filesystem error.
    - `AETHER-INIT-IGNORE-POLICY-CONFLICT`: pre-existing ignore rules conflict and cannot be corrected by appending.
+   - `AETHER-INIT-WORKTREES-CONFLICT`: `.worktrees` is tracked or staged in Git.
+   - `AETHER-INIT-PROJECT-RELOCATED`: registered project path is marked moved in registry and needs reconcile.
+   - `AETHER-INIT-REGISTRY-WRITE-FAILED`: local Aether project registry write or update failed.
 
 7. **Brownfield preservation**:
    - Existing governance (`AGENTS.md`), uncommitted changes, branches, remotes, and files are inspected and preserved intact.
@@ -75,6 +80,12 @@ Never edited the canonical contract.
 
 ## 2. Verification evidence
 
+### 2.0 Runtime verification environment
+
+- Runtime executable: `/home/darkarty/.local/share/aether/runtime/current/venv/bin/hermes`
+- Runtime release / version: Hermes Agent `v0.20.1` (`2026.8.13`), install directory `/home/darkarty/.local/share/aether/releases/1.0.0rc8-1771b4f70a31bf70/hermes-source`
+- Manager version: `aether 1.0.0rc8`
+
 ### 2.1 Focused test lane
 
 Command:
@@ -83,8 +94,8 @@ uv run --frozen python scripts/run_tests.py -- tests/test_project_init.py tests/
 ```
 Observed result:
 - Exit code: `0`
-- Counts: `173 passed, 13 subtests passed in 45.96s`
-- (Baseline was 161 passed; +12 net new test cases added in `tests/test_project_init.py`).
+- Counts: `175 passed, 13 subtests passed in 48.53s`
+- (Baseline was 161 passed; +14 net new test cases added in `tests/test_project_init.py`).
 
 ### 2.2 Static checks and typing
 
@@ -125,7 +136,7 @@ Observed result:
 | AC2 / A1-FR-046 | Subdirectory of a Git repository refused | `test_non_repository_and_subdirectory_are_refused` | Code `AETHER-INIT-NOT-REPOSITORY-ROOT` |
 | AC2 / A1-FR-046 | Path inside a Hermes profile directory refused | `test_refuse_cross_profile_path` | Code `AETHER-INIT-CROSS-PROFILE-PATH` |
 | AC2 / A1-FR-049 | Target runtime unavailable refuses before mutation | `test_missing_hermes_project_refuses_when_runtime_unavailable` | Code `AETHER-INIT-HERMES-RUNTIME-UNAVAILABLE`; 0 mutations |
-| AC2 / A1-FR-049 | Corrupt `projects.db` refuses without modifying state | `test_refuse_when_projects_db_unreadable_or_corrupt` | Code `AETHER-INIT-HERMES-PROJECTS-UNAVAILABLE`; 0 mutations |
+| AC2 / A1-FR-049 | Corrupt `projects.db` refuses without modifying state | `test_refuse_when_projects_db_unreadable_or_corrupt` | Code `AETHER-INIT-HERMES-PROJECTS-UNREADABLE`; 0 mutations |
 | AC2 / A1-FR-049 | Schema-invalid `projects.db` refuses | `test_refuse_when_projects_db_schema_invalid` | Code `AETHER-INIT-HERMES-PROJECTS-UNREADABLE`; 0 mutations |
 | AC2 / A1-FR-049 | Symlinked / dangling `.gitignore` refused before modification | `test_refuse_symlinked_gitignore`, `test_refuse_dangling_symlinked_gitignore` | Code `AETHER-INIT-IGNORE-POLICY-UNSAFE`; symlink untouched, target uncreated |
 | AC2 / A1-FR-049 | Symlinked / dangling marker refused before modification | `test_refuse_symlinked_or_dangling_marker` | Code `AETHER-INIT-MARKER-UNSAFE`; symlink untouched, target uncreated |
