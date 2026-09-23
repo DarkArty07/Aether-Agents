@@ -31,6 +31,8 @@ ACCEPTED_PACKAGE_IDENTITIES = (
     "1.0.0rc4",
     "1.0.0rc5",
     "1.0.0rc6",
+    "1.0.0rc7",
+    "1.0.0rc8",
     "2.30.4",
     "1.0.0.dev3",
 )
@@ -145,23 +147,28 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     assert "`docs/capabilities.toml`](docs/capabilities.toml)" in readme
     assert "sole current implementation-status and traceability registry" in readme
     assert "documented transitional downstream" in readme
-    # The portal must state the current release identity and the disposition of the
-    # predecessor candidates. It replaces the rc.5 assertions with the
-    # truthful local-only rc.6 identity and a truthfulness guard (no published rc.6 link
-    # and no stale published rc.5 link), because the status has to stay true of the artifact
-    # this README is embedded into (the wheel's `METADATA` long description) and must not
-    # carry a time-bound promise.
+    # The wheel's METADATA embeds this portal. RC8 contains #495 guidance,
+    # but neither source nor tag proves live activation or agent behavior.
+    assert "releases/tag/v1.0.0-rc.8" not in readme
+    assert "releases/tag/v1.0.0-rc.7" not in readme
     assert "releases/tag/v1.0.0-rc.6" not in readme
     assert "releases/tag/v1.0.0-rc.5" not in readme
-    assert "package version `1.0.0rc6`" in readme
-    assert "display version `1.0.0-rc.6`" in readme
-    assert "annotated tag `v1.0.0-rc.6`" in readme
-    assert "local-only candidate that is not pushed and not published" in readme
-    assert "local rc.2, rc.3, rc.4 and rc.5 tags and activation history remain immutable" in readme
+    assert "`1.0.0rc8` / `1.0.0-rc.8`" in readme
+    assert "local annotated tag identity is `v1.0.0-rc.8`" in readme
+    assert "restores the new Morfeo SOUL and canonical contract skills" in readme
+    assert (
+        "neither this source nor a local tag proves what is installed or that agent behavior improved"
+        in readme
+    )
+    assert "Query `aether doctor` for the active version" in readme
+    assert "no tag is pushed and no GitHub/package publication is authorized" in readme
+    assert "RC7 and earlier local tags remain immutable" in readme
     assert "releases/tag/v1.0.0-rc.1" in readme
-    assert "remains published and byte-immutable but rejected, and must not be activated" in readme
+    assert "published but rejected" in readme
     status = [line for line in readme.splitlines() if line.startswith("**Status:**")]
     assert len(status) == 1, f"expected exactly one status paragraph, found {len(status)}"
+    assert "releases/tag/v1.0.0-rc.8" not in status[0]
+    assert "releases/tag/v1.0.0-rc.7" not in status[0]
     assert "releases/tag/v1.0.0-rc.6" not in status[0]
     assert "releases/tag/v1.0.0-rc.5" not in status[0]
     assert "release_impact = patch" in status[0]
@@ -172,11 +179,8 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     assert "beta stabilization build, not a release candidate" not in readme
     assert "no release candidate has been published" not in readme
     assert "**not** stable `1.0.0`" in readme
-    assert "**not** a PyPI or other package-index publication" in readme
-    assert "**not** a WSL2 qualification result" in readme
-    assert (
-        "#261 therefore stays open with the stable, PyPI/OIDC and WSL2 gates outstanding" in readme
-    )
+    assert "a PyPI release or WSL2 qualification" in readme
+    assert "#261 remains open" in readme
     assert "remain explicit unsupported placeholders" in readme
     assert "`aether reconcile` supports only its bounded `--to active` form" in readme
     assert "Historical snapshot" in incomplete
