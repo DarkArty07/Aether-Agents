@@ -6,11 +6,15 @@
 (SHA-256 `0b685dbfd7deb68e1b526a76b71d057d021f9bbf3984fff8c398ccd62ba9cca6`), base commit
 `004c5f076da9e7be4fd64e4bc2adc60e21d4a2f6`, Supervisor breakdown
 `specs/001-aether-v1-productization/tasks-oc79.md` (committed at `f71a3677` on the root branch).
-**Delivered commit**: `13c689b9fab890137bfda96c47008aedae874dbc` carries this evidence-artifact
-delta on top of `25a20942baa9686fa4edc498740b8d0263bb1112` (the behaviour change). Naming a commit
-inside the file cannot survive its own creation, so the line above names the commit that delivered
-this artifact and the immediate child commit corrects only this self-reference; the branch tip at
-delivery is the final revision (`git log -2 --oneline`).
+**Delivered tip**: `84fcb3ea4fc80eee1534a216c1407e3535b2692d` (evidence-artifact delta on top of
+`25a20942baa9686fa4edc498740b8d0263bb1112`, which carries the behaviour change).
+**Behaviour revision**: `25a20942baa9686fa4edc498740b8d0263bb1112` — the RED/GREEN transcripts in
+§3 are reproduced against this revision, asserted by the recorded `src/aether_agents/launcher.py`
+sha256 `c619171b6c5c9442759ddff4f50704e48340b1ef96ec6037bf4a17d5adb81255` (pre-fix pairing
+`2805eec234259f1d112a0fbb383851ba32094df30b512c24d5e074a6b5ff7213`).
+A file cannot name the commit that contains it, so §3 is pinned to the behaviour revision and this
+header names the branch tip; every later commit touches only this artifact and is listed by
+`git log --oneline -4`.
 **Delivered scope**: AC3; A1-FR-043, A1-FR-043a, A1-FR-100, A1-SC-018/019; `contracts/cli.md` launch section.
 **Unit compatibility conclusion**: `patch`.
 
