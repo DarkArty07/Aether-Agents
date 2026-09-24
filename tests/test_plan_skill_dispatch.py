@@ -18,6 +18,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -29,6 +30,7 @@ CANDIDATE_COMMIT = "3da14572232775aedbc23b38393227cd62ed5ebc"
 CANDIDATE_PLAN_SHA256 = "b2a0f696cdfeb898058e5d744d47e8f52e2b0b595fa9a96bf0fd6f20158f4e3d"
 PINNED_FORK_COMMIT = "aed6591a69f453a1867b73628603e7b53ba40ffc"
 PINNED_FORK_SOURCE_TREE_SHA256 = "cc1ebf94ad167979951e7b956ef3a8c448e96fd3389c93cddf60f8f883bb5ce7"
+FORK_BUNDLED_PLAN_SHA256 = "7513da40fbbbf899bc94ffdf05921a8187866745e67e2d81a55790b70daca72c"
 
 
 def _resolve_hermes_python() -> Path:
@@ -86,6 +88,62 @@ def _get_candidate_plan_skill_bytes() -> bytes:
         f"candidate plan skill digest mismatch: expected {CANDIDATE_PLAN_SHA256}, got {digest}"
     )
     return data
+
+
+def _get_candidate_role_skills() -> dict[str, tuple[str, ...]]:
+    """Derive the per-role skill inventory from candidate distribution or git archive fallback."""
+    if hasattr(lifecycle, "_CANDIDATE_ROLE_SKILLS"):
+        raw = getattr(lifecycle, "_CANDIDATE_ROLE_SKILLS")
+        return {r: tuple(raw[r]) for r in ("morfeo", "supervisor", "implementer")}
+    if hasattr(lifecycle.LifecycleManager, "_role_skills"):
+        mgr_fn = getattr(lifecycle.LifecycleManager, "_role_skills")
+        return {r: tuple(mgr_fn(r)) for r in ("morfeo", "supervisor", "implementer")}
+
+    with tempfile.TemporaryDirectory() as td:
+        tar_proc = subprocess.Popen(
+            ["git", "archive", CANDIDATE_COMMIT, "src/aether_agents"],
+            stdout=subprocess.PIPE,
+        )
+        subprocess.run(["tar", "-x", "-C", td], stdin=tar_proc.stdout, check=True)
+        tar_proc.wait()
+
+        script = """
+import json, sys
+sys.path.insert(0, sys.argv[1])
+from aether_agents.lifecycle import LifecycleManager
+res = {role: list(LifecycleManager._role_skills(role)) for role in ("morfeo", "supervisor", "implementer")}
+print(json.dumps(res))
+"""
+        proc = subprocess.run(
+            [sys.executable, "-B", "-c", script, str(Path(td) / "src")],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        data = json.loads(proc.stdout)
+        return {k: tuple(v) for k, v in data.items()}
+
+
+def _get_fork_bundled_plan_skill_bytes() -> bytes | None:
+    """Resolve the fork's bundled Plan-Mode skill bytes if present in the runtime tree."""
+    hermes_python = _resolve_hermes_python()
+    for cand in (
+        hermes_python.parents[2]
+        / "hermes-source"
+        / "skills"
+        / "software-development"
+        / "plan"
+        / "SKILL.md",
+        Path(__file__).resolve().parents[1]
+        / "hermes-source"
+        / "skills"
+        / "software-development"
+        / "plan"
+        / "SKILL.md",
+    ):
+        if cand.is_file():
+            return cand.read_bytes()
+    return None
 
 
 def _scrubbed_hermes_env(home: Path, extra: dict[str, str] | None = None) -> dict[str, str]:
@@ -273,25 +331,39 @@ def test_plan_skill_absent_from_disposable_supervisor_and_implementer_homes(
         Path(__file__).resolve().parents[1] / "src" / "aether_agents" / "resources" / "skills"
     )
 
-    for role_home in (morfeo_home, supervisor_home, implementer_home):
-        skills_dir = role_home / "skills"
-        for name in lifecycle._CANONICAL_SKILLS:
-            src = resources_skills / name / "SKILL.md"
+    # 1. Derive per-role inventory from candidate distribution
+    role_skills = _get_candidate_role_skills()
+    assert "plan" in role_skills["morfeo"]
+    assert "plan" not in role_skills["supervisor"]
+    assert "plan" not in role_skills["implementer"]
+    assert len(role_skills["morfeo"]) == 10
+    assert len(role_skills["supervisor"]) == 9
+    assert len(role_skills["implementer"]) == 9
+
+    # 2. Materialize homes according to the candidate role-scoping inventory
+    for role, home in (
+        ("morfeo", morfeo_home),
+        ("supervisor", supervisor_home),
+        ("implementer", implementer_home),
+    ):
+        skills_dir = home / "skills"
+        for name in role_skills[role]:
             dst = skills_dir / name / "SKILL.md"
             dst.parent.mkdir(parents=True, exist_ok=True)
-            dst.write_bytes(src.read_bytes())
+            if name == "plan":
+                dst.write_bytes(_get_candidate_plan_skill_bytes())
+            else:
+                src = resources_skills / name / "SKILL.md"
+                dst.write_bytes(src.read_bytes())
 
-    # Only Morfeo receives the candidate plan skill
-    morfeo_plan = morfeo_home / "skills" / "plan" / "SKILL.md"
-    morfeo_plan.parent.mkdir(parents=True, exist_ok=True)
-    morfeo_plan.write_bytes(_get_candidate_plan_skill_bytes())
-
-    # Assert on-disk presence / absence
-    assert morfeo_plan.is_file()
+    # 3. Assert on-disk presence / absence of the managed root resource
+    assert (morfeo_home / "skills" / "plan" / "SKILL.md").is_file()
     assert not (supervisor_home / "skills" / "plan").exists()
     assert not (implementer_home / "skills" / "plan").exists()
 
-    # Assert slash dispatch registration per disposable home
+    # 4. In minimal managed homes (no bundled skills present):
+    # Morfeo registers /plan to the managed root resource.
+    # Supervisor and Implementer do not register /plan at all (has_plan=False).
     for role, home, expect_plan in (
         ("morfeo", morfeo_home, True),
         ("supervisor", supervisor_home, False),
@@ -303,7 +375,11 @@ import json
 from agent.skill_commands import scan_skill_commands
 
 cmds = scan_skill_commands()
-print(json.dumps({"has_plan": "/plan" in cmds}))
+plan_cmd = cmds.get("/plan")
+print(json.dumps({
+    "has_plan": plan_cmd is not None,
+    "path": plan_cmd["skill_md_path"] if plan_cmd else None,
+}))
 """
         proc = subprocess.run(
             [str(hermes_python), "-B", "-c", script],
@@ -314,6 +390,49 @@ print(json.dumps({"has_plan": "/plan" in cmds}))
         )
         res = json.loads(proc.stdout)
         assert res["has_plan"] is expect_plan, f"{role} unexpected has_plan={res['has_plan']}"
+        if expect_plan:
+            assert res["path"] == str((morfeo_home / "skills" / "plan" / "SKILL.md").resolve())
+
+    # 5. In realistic profile homes including the fork's bundled plan skill:
+    # (skills/software-development/plan/SKILL.md shipped by the pinned fork runtime)
+    fork_plan_bytes = _get_fork_bundled_plan_skill_bytes()
+    if fork_plan_bytes is not None:
+        for home in (morfeo_home, supervisor_home, implementer_home):
+            bundled_path = home / "skills" / "software-development" / "plan" / "SKILL.md"
+            bundled_path.parent.mkdir(parents=True, exist_ok=True)
+            bundled_path.write_bytes(fork_plan_bytes)
+
+        # Morfeo: canonical root skills/plan/SKILL.md wins over the bundled shadow
+        env_morfeo = _scrubbed_hermes_env(morfeo_home)
+        proc_m = subprocess.run(
+            [str(hermes_python), "-B", "-c", script],
+            env=env_morfeo,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        res_m = json.loads(proc_m.stdout)
+        assert res_m["has_plan"] is True
+        assert res_m["path"] == str((morfeo_home / "skills" / "plan" / "SKILL.md").resolve())
+
+        # Supervisor / Implementer: managed root is absent, so /plan resolves to bundled skill
+        for role, home in (("supervisor", supervisor_home), ("implementer", implementer_home)):
+            env_role = _scrubbed_hermes_env(home)
+            proc_r = subprocess.run(
+                [str(hermes_python), "-B", "-c", script],
+                env=env_role,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            res_r = json.loads(proc_r.stdout)
+            assert res_r["has_plan"] is True
+            expected_bundled = str(
+                (home / "skills" / "software-development" / "plan" / "SKILL.md").resolve()
+            )
+            assert res_r["path"] == expected_bundled
+            # Managed root resource remains absent
+            assert not (home / "skills" / "plan").exists()
 
 
 def test_candidate_plan_skill_text_authoring_and_invariants() -> None:
@@ -367,100 +486,45 @@ def test_candidate_plan_skill_text_authoring_and_invariants() -> None:
     assert "sk-" not in text
 
 
-def test_planning_only_semantics_lifecycle_scenarios(tmp_path: Path) -> None:
-    """Required evidence (5): project-local plan lifecycle scenarios under Decision 5.
+def test_decision_5_planning_only_semantics_static_specification_checks() -> None:
+    """Required evidence (5): static specification checks for Decision 5 planning semantics.
 
-    Scenario 5a: Single plan created at .aether/plans/<slug>.md; no code, contract, or cards.
-    Scenario 5b: Re-use on repeat updates existing file; count remains 1.
-    Scenario 5c: Different projects maintain separate plans without cross-project leakage.
-    Scenario 5d: Absent or ambiguous project binding stops and produces zero files.
-    Scenario 5e: Forecasts remain non-capping projections.
+    Validates that the candidate plan skill artifact explicitly specifies:
+    - 5a: Project-local destination at .aether/plans/<objective-slug>.md; no code/boards/cards.
+    - 5b: Reuse and in-place update of existing file; no duplicates.
+    - 5c: Project separation; no global or framework-default leakage.
+    - 5d: Refusal/stop on absent or ambiguous project binding.
+    - 5e: Forecasts remain non-capping projections rather than numeric quotas.
     """
-    proj_a = tmp_path / "project_a"
-    proj_b = tmp_path / "project_b"
-    proj_a.mkdir()
-    proj_b.mkdir()
+    data = _get_candidate_plan_skill_bytes()
+    text = data.decode("utf-8")
+    assert len(text) == 3765
+    norm = re.sub(r"\s+", " ", text)
 
-    # Set up portable project markers
-    (proj_a / ".aether").mkdir()
-    (proj_a / ".aether" / "project.toml").write_text(
-        'project_id = "proj-a"\ndefault_branch = "main"\n', encoding="utf-8"
+    # 5a: Single plan created at .aether/plans/<objective-slug>.md; planning-only boundary
+    assert ".aether/plans/<objective-slug>.md" in norm
+    assert (
+        "without writing implementation code, dispatching workers, or creating task cards." in norm
     )
-    (proj_b / ".aether").mkdir()
-    (proj_b / ".aether" / "project.toml").write_text(
-        'project_id = "proj-b"\ndefault_branch = "main"\n', encoding="utf-8"
+    assert "Verify that no task cards, boards, or code edits were created during planning." in norm
+
+    # 5b: Reuse and update existing file across invocations
+    assert (
+        "Reuse and update the existing file across invocations for the same objective; never create duplicate files or global plans."
+        in norm
     )
 
-    slug = "bounded-feature-alpha"
+    # 5c: Project separation and avoidance of global/framework default locations
+    assert "inside the explicitly resolved project" in norm
+    assert (
+        "Writing plans to global, user home, or framework default locations instead of the project-local"
+        in norm
+    )
 
-    # Helper simulating the canonical plan authoring procedure
-    def execute_plan_procedure(
-        project_root: Path | None,
-        objective_slug: str | None,
-        content: str,
-        ambiguous: bool = False,
-    ) -> Path | None:
-        if project_root is None or objective_slug is None or ambiguous:
-            # Procedure step 1: Stop and surface ambiguity if no single project or objective
-            return None
-        plans_dir = project_root / ".aether" / "plans"
-        plans_dir.mkdir(parents=True, exist_ok=True)
-        target = plans_dir / f"{objective_slug}.md"
-        target.write_text(content, encoding="utf-8")
-        return target
+    # 5d: Stop and surface ambiguity if no single project or objective can be identified
+    assert "Stop and surface ambiguity if no single project or objective can be identified." in norm
 
-    # Scenario 5a: First explicit planning invocation
-    plan_v1 = """# Objective Plan: bounded-feature-alpha
-
-## Destination
-Requested outcome: bounded feature alpha.
-
-## Route
-1. Initial unit qualification.
-
-## Operational continuity
-Status: planning.
-Anticipated contracts: 2 contracts forecasted.
-"""
-    result_a1 = execute_plan_procedure(proj_a, slug, plan_v1)
-    assert result_a1 is not None
-    assert result_a1.is_file()
-    assert result_a1 == proj_a / ".aether" / "plans" / f"{slug}.md"
-
-    # Verify no implementation files, no contracts, no boards created
-    assert not (proj_a / ".aether" / "objective-contracts").exists()
-    assert not (proj_a / "src").exists()
-    assert not (proj_a / ".hermes").exists()
-    plans_a = list((proj_a / ".aether" / "plans").glob("*.md"))
-    assert len(plans_a) == 1
-
-    # Scenario 5b: Repeat invocation reuses and updates the exact same file
-    plan_v2 = plan_v1 + "Updated approach: revised milestone sequence.\n"
-    result_a2 = execute_plan_procedure(proj_a, slug, plan_v2)
-    assert result_a2 is not None
-    assert result_a2 == result_a1
-    plans_a_after = list((proj_a / ".aether" / "plans").glob("*.md"))
-    assert len(plans_a_after) == 1
-    assert "revised milestone sequence" in result_a2.read_text(encoding="utf-8")
-
-    # Scenario 5c: Project separation
-    plan_b = "# Objective Plan for Project B\n"
-    result_b = execute_plan_procedure(proj_b, slug, plan_b)
-    assert result_b is not None
-    assert result_b == proj_b / ".aether" / "plans" / f"{slug}.md"
-    assert result_b != result_a1
-    assert (proj_b / ".aether" / "plans" / f"{slug}.md").read_text(encoding="utf-8") == plan_b
-    assert (proj_a / ".aether" / "plans" / f"{slug}.md").read_text(encoding="utf-8") == plan_v2
-
-    # Scenario 5d: Absent or ambiguous project binding writes nothing
-    ambiguous_dir = tmp_path / "ambiguous_root"
-    ambiguous_dir.mkdir()
-    res_none = execute_plan_procedure(None, slug, "content")
-    assert res_none is None
-    res_ambiguous = execute_plan_procedure(ambiguous_dir, slug, "content", ambiguous=True)
-    assert res_ambiguous is None
-    assert not (ambiguous_dir / ".aether" / "plans").exists()
-
-    # Scenario 5e: Forecast without numeric cap
-    forecast_text = "Anticipated contracts: 3 (revisable forecast, never a numeric cap)"
-    assert "never a numeric cap" in forecast_text
+    # 5e: Anticipated contracts as revisable forecast, never a numeric cap
+    assert "Treat anticipated Objective Contracts as a revisable forecast (never a cap)." in norm
+    assert "not forced by a predetermined quota." in norm
+    assert "Treating anticipated Objective Contracts as a numerical cap or mandatory quota." in norm

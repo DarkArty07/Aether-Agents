@@ -24,13 +24,20 @@ plan resource SHA-256 `b2a0f696cdfeb898058e5d744d47e8f52e2b0b595fa9a96bf0fd6f201
      `skills/plan/SKILL.md` (reviewed candidate bytes) and nested learned `skills/software-development/plan/SKILL.md`,
      `scan_skill_commands()` selects `/plan` mapped to the canonical root path, verifying the returned bytes match
      SHA-256 `b2a0f696cdfeb898058e5d744d47e8f52e2b0b595fa9a96bf0fd6f20158f4e3d`.
-  4. Role absence: disposable Supervisor and Implementer profile homes materialized without `plan` confirm that
-     `skills/plan` is strictly absent on disk and `/plan` is omitted from `scan_skill_commands()` registration.
-  5. Planning-only semantics (Decision 5): exercises project-local plan lifecycle at `.aether/plans/<objective-slug>.md`,
-     verifying single plan creation, zero implementation/contracts/boards created, idempotent repeat update, project
-     isolation, refusal when project binding is absent or ambiguous, and non-capping contract forecasts.
+  4. Role scoping and absence: derives per-role skill inventories from the candidate's own role-aware distribution
+     (`_CANDIDATE_ROLE_SKILLS` / `_role_skills`), confirming `morfeo` receives 10 skills (including `plan`) while
+     `supervisor` and `implementer` receive 9 skills (`plan` absent). Materializes disposable profile homes and
+     verifies that the managed root resource `skills/plan/SKILL.md` is strictly absent on disk in Supervisor and
+     Implementer. In a minimal home containing only managed Aether skills, `/plan` is omitted (`has_plan=False`) for
+     Supervisor and Implementer. In a realistic home containing the pinned fork's bundled Plan-Mode skill
+     (`skills/software-development/plan/SKILL.md`), `/plan` in Supervisor and Implementer resolves to the bundled skill,
+     while in Morfeo the canonical root resource `skills/plan/SKILL.md` wins over the bundled shadow.
+  5. Planning-only semantics (Decision 5): validates through static specification checks against the candidate `plan`
+     skill text that the procedure mandates project-local `.aether/plans/<objective-slug>.md`, single-file idempotence,
+     project separation, refusal on absent/ambiguous project binding, and non-capping contract forecasts. Behavioral
+     model turns are recorded as NOT PERFORMED under headless environment isolation.
 - `specs/plan-skill-productization/evidence/PLAN-NATIVE.md` (this file): evidence record detailing static checks,
-  native loader selection, role absence, collision check, lifecycle scenarios, and behavioural observation distinction.
+  native loader selection, role absence, collision check, lifecycle specification checks, and behavioural observation distinction.
 
 ## Verification actually run
 
@@ -52,9 +59,9 @@ tests/test_plan_skill_dispatch.py::test_plan_slash_command_collision_gate PASSED
 tests/test_plan_skill_dispatch.py::test_native_scan_skill_commands_selects_canonical_plan_over_nested_learned PASSED [ 50%]
 tests/test_plan_skill_dispatch.py::test_plan_skill_absent_from_disposable_supervisor_and_implementer_homes PASSED [ 66%]
 tests/test_plan_skill_dispatch.py::test_candidate_plan_skill_text_authoring_and_invariants PASSED [ 83%]
-tests/test_plan_skill_dispatch.py::test_planning_only_semantics_lifecycle_scenarios PASSED [100%]
+tests/test_plan_skill_dispatch.py::test_decision_5_planning_only_semantics_static_specification_checks PASSED [100%]
 
-============================== 6 passed in 4.05s ===============================
+============================== 6 passed in 4.34s ===============================
 ```
 
 Linter and formatting checks:
@@ -91,9 +98,9 @@ documentation validation passed
 | --- | --- | --- |
 | AC (d) / PS-009 (1) Selected runtime | `test_agent_skill_commands_imported_from_pinned_fork_tree` | `agent.skill_commands` imports from active release `hermes-source/agent/skill_commands.py`; `release-lock.json` binds commit `aed6591a69f453a1867b73628603e7b53ba40ffc`; tree digest equals `cc1ebf94ad167979951e7b956ef3a8c448e96fd3389c93cddf60f8f883bb5ce7` |
 | AC (d) / PS-009 (2) Native selection | `test_native_scan_skill_commands_selects_canonical_plan_over_nested_learned` | `scan_skill_commands()` returns `/plan` pointing to `<home>/skills/plan/SKILL.md` (not the nested learned path); bytes SHA-256 is `b2a0f696cdfeb898058e5d744d47e8f52e2b0b595fa9a96bf0fd6f20158f4e3d` |
-| AC (d) / PS-001 / US-PS-3 (3) Role absence | `test_plan_skill_absent_from_disposable_supervisor_and_implementer_homes` | Disposable Supervisor and Implementer homes lack `skills/plan` on disk; `scan_skill_commands()` registers `/plan` in Morfeo only, returning `has_plan=False` for Supervisor and Implementer |
+| AC (d) / PS-001 / US-PS-3 (3) Role absence | `test_plan_skill_absent_from_disposable_supervisor_and_implementer_homes` | Derived from candidate `_CANDIDATE_ROLE_SKILLS`: `morfeo` has 10 skills (incl. `plan`), `supervisor` has 9, `implementer` has 9. Managed root resource `skills/plan` is strictly absent on disk in Supervisor and Implementer. In minimal homes, `/plan` is absent (`has_plan=False`) for Supervisor and Implementer; in realistic homes with the pinned fork's bundled Plan-Mode skill, `/plan` resolves to the bundled skill in Supervisor and Implementer while Morfeo resolves to canonical root |
 | AC (d) / PS-009 (4) Collision gate | `test_plan_slash_command_collision_gate` | `COMMANDS` has no `plan` or `/plan`; `resolve_command('plan')` is `None`; collision gate does not block auto-registration |
-| AC (d) / US-PS-1 (5) Decision 5 Planning-only semantics | `test_planning_only_semantics_lifecycle_scenarios` | Scenarios 5a–5e pass: single file at `.aether/plans/<slug>.md`, no contracts/code/boards created, idempotent file reuse, project separation, stop-and-surface on ambiguity, forecast non-capping |
+| AC (d) / US-PS-1 (5) Decision 5 Planning-only semantics | `test_decision_5_planning_only_semantics_static_specification_checks` | Static specification checks pass: candidate skill mandates project-local `.aether/plans/<slug>.md`, single-file idempotence, project separation, stop-and-surface on ambiguity, and non-capping forecast; live behavioral model turn recorded as NOT PERFORMED |
 | US-PS-2 / Authoring standards | `test_candidate_plan_skill_text_authoring_and_invariants` | YAML frontmatter valid, description 49 chars (<= 60, ends in `.`, contains `Morfeo`), modern section order, no operator paths, no secrets |
 
 ## Detailed evidence by classification
@@ -104,7 +111,7 @@ The candidate `plan` resource bytes authored by `PLAN-CANDIDATE` (`3da1457223277
 
 - File path: `src/aether_agents/resources/skills/plan/SKILL.md`
 - Digest: SHA-256 `b2a0f696cdfeb898058e5d744d47e8f52e2b0b595fa9a96bf0fd6f20158f4e3d`
-- Line count: 75 lines, 2,868 characters
+- Line count: 75 lines, 3,765 characters
 - Frontmatter:
   - `name`: `plan`
   - `description`: `Author a project-local Objective Plan for Morfeo.` (49 chars <= 60, ends in `.`, contains `Morfeo`)
@@ -138,57 +145,52 @@ The candidate `plan` resource bytes authored by `PLAN-CANDIDATE` (`3da1457223277
 
 ### 3. Disposable profile role scoping and absence
 
-- Disposable profile homes materialized from candidate definitions:
-  - `morfeo`: 9 common canonical skills + `plan` (total 10)
-  - `supervisor`: 9 common canonical skills (`plan` absent)
-  - `implementer`: 9 common canonical skills (`plan` absent)
+- Role inventory derivation from candidate release distribution:
+  - Derived from candidate role scoping (`_CANDIDATE_ROLE_SKILLS` / `_role_skills`):
+    - `morfeo`: 9 common canonical skills + `plan` (total 10)
+    - `supervisor`: 9 common canonical skills (`plan` absent, total 9)
+    - `implementer`: 9 common canonical skills (`plan` absent, total 9)
 - Physical disk inspection:
   - `<morfeo>/skills/plan/SKILL.md`: present and matches candidate bytes
-  - `<supervisor>/skills/plan`: does not exist
-  - `<implementer>/skills/plan`: does not exist
-- Native slash registration inspection:
-  - `HERMES_HOME=<morfeo>`: `scan_skill_commands()` contains `/plan`
-  - `HERMES_HOME=<supervisor>`: `scan_skill_commands()` does not contain `/plan` (`has_plan=False`)
-  - `HERMES_HOME=<implementer>`: `scan_skill_commands()` does not contain `/plan` (`has_plan=False`)
+  - `<supervisor>/skills/plan`: does not exist (strictly absent)
+  - `<implementer>/skills/plan`: does not exist (strictly absent)
+- Native slash registration inspection across home configurations:
+  - In minimal managed homes (containing only Aether managed skills):
+    - `HERMES_HOME=<morfeo>`: `scan_skill_commands()` registers `/plan` pointing to `<morfeo>/skills/plan/SKILL.md`
+    - `HERMES_HOME=<supervisor>`: `scan_skill_commands()` does not contain `/plan` (`has_plan=False`)
+    - `HERMES_HOME=<implementer>`: `scan_skill_commands()` does not contain `/plan` (`has_plan=False`)
+  - In realistic profile homes (including the pinned fork's bundled Plan-Mode skill `skills/software-development/plan/SKILL.md`):
+    - `HERMES_HOME=<morfeo>`: canonical root `skills/plan/SKILL.md` wins over the bundled shadow; `/plan` resolves to `<morfeo>/skills/plan/SKILL.md`
+    - `HERMES_HOME=<supervisor>`: managed root resource `skills/plan` remains absent; `/plan` resolves to `<supervisor>/skills/software-development/plan/SKILL.md` (description: `Write a markdown plan to .hermes/plans/; no execution.`)
+    - `HERMES_HOME=<implementer>`: managed root resource `skills/plan` remains absent; `/plan` resolves to `<implementer>/skills/software-development/plan/SKILL.md` (description: `Write a markdown plan to .hermes/plans/; no execution.`)
 
-### 4. Planning-only lifecycle semantics (Decision 5)
+### 4. Planning-only semantics static specification checks (Decision 5)
 
-Deterministic scenario verification:
+No shipped Python module in `aether_agents` writes `.aether/plans` directly (`grep -rn 'aether/plans' src/aether_agents` returns 0 hits); rather, the planning procedure is executed by Morfeo under prompt guidance from `skills/plan/SKILL.md`. As behavioral model turns were not performed in this headless run, Decision 5 semantics are verified via static specification checks against the candidate `plan` skill artifact:
 
-- Scenario 5a (Project-local creation): Given project root `project_a` with `.aether/project.toml`, planning
-  for slug `bounded-feature-alpha` creates `.aether/plans/bounded-feature-alpha.md`. Exactly one plan file exists;
-  no `.aether/objective-contracts/` directory exists; no `src/` directory or code edits exist; no `.hermes/` board
-  or task cards exist.
-- Scenario 5b (Idempotent repeat): Invoking planning again for the same slug updates the existing file in place.
-  Total plan count remains 1; updated content is verified.
-- Scenario 5c (Project separation): Planning in `project_a` and `project_b` writes exclusively to their respective
-  `.aether/plans/` paths without cross-project leakage or global path creation.
-- Scenario 5d (Absent/ambiguous project binding): If project root is absent (`None`) or ambiguous (conflicting candidates),
-  the procedure stops and produces zero files.
-- Scenario 5e (Forecast not a cap): Projections in the plan represent revisable forecasts and do not impose a numeric quota.
+- 5a (Project-local creation): The skill procedure explicitly mandates keeping the plan at one stable `.aether/plans/<objective-slug>.md` inside the explicitly resolved project, and explicitly instructs to end after writing or updating the plan file without writing implementation code, dispatching workers, or creating task cards. Verification instructions require confirming no task cards, boards, or code edits were created during planning.
+- 5b (Idempotent repeat): The procedure explicitly instructs: "Reuse and update the existing file across invocations for the same objective; never create duplicate files or global plans."
+- 5c (Project separation): The procedure requires resolving the project root explicitly and warns in Pitfalls against writing plans to global, user home, or framework default locations instead of the project-local `.aether/plans/<objective-slug>.md` path.
+- 5d (Absent/ambiguous project binding): The procedure explicitly instructs: "Stop and surface ambiguity if no single project or objective can be identified."
+- 5e (Forecast not a cap): The procedure explicitly mandates: "Treat anticipated Objective Contracts as a revisable forecast (never a cap). Mark uncertainty honestly; new contracts are justified by remaining obligations, not forced by a predetermined quota." Pitfalls explicitly list: "Treating anticipated Objective Contracts as a numerical cap or mandatory quota."
 
 ### 5. Behavioural observation distinction
 
 - Real model turn: **NOT PERFORMED**.
-- Rationale: Under PD-71 and role authority boundaries, headless automated unit execution has no provisioned model
-  API credentials and is strictly prohibited from acquiring credentials, invoking remote models, or triggering live
-  gateway / agent sessions.
-- In accordance with task instructions, static file checks, native loader selection, role absence, and deterministic
-  scenario tests were executed in full and independently verified; behavioural model turns are recorded as not performed
-  due to headless environment isolation.
+- Rationale: Under PD-71 and role authority boundaries, headless automated unit execution has no provisioned model API credentials and is strictly prohibited from acquiring credentials, invoking remote models, or triggering live gateway / agent sessions.
+- In accordance with task instructions and review findings, static file checks, native loader selection, role absence, and specification checks were executed in full and independently verified; behavioural model turns are recorded as not performed due to headless environment isolation.
 
 ## Known red (composition-owned, not unit-owned)
 
-`tests/test_public_artifacts.py::test_canonical_base_manifest_matches_tracked_non_specs_files` fails
-in this isolated worktree because `tests/test_plan_skill_dispatch.py` is newly tracked while this worktree's
-copy of `.github/workflows/policy.yml` reflects the base commit `2e347ab3` (which does not yet include that line).
-`PLAN-CANDIDATE` (`t_e2c6f3bd`) added `tests/test_plan_skill_dispatch.py` to the heredoc in its branch. This oracle
-is composition-owned and passes on the composed integration revision.
+`tests/test_public_artifacts.py::test_canonical_base_manifest_matches_tracked_non_specs_files` fails in this isolated worktree due to base manifest inheritance:
+- At base commit `2e347ab3`, `.aether/objective-contracts/oc_c29c2b0ed38d5030/v1.md` was tracked but absent from the `.github/workflows/policy.yml` heredoc (base delta = 1; 448 tracked vs 447 in heredoc).
+- In this isolated worktree, `tests/test_plan_skill_dispatch.py` is additionally tracked without editing `policy.yml`, producing a delta of 2 (449 tracked vs 447 in heredoc).
+- `PLAN-CANDIDATE` (`t_e2c6f3bd`) added both lines to the `policy.yml` heredoc in commit `3da14572` (450 lines in heredoc vs 449 tracked in its branch, pre-registering this unit's test file).
+- This oracle is composition-owned, requires no repair in this unit, and passes on the composed integration revision.
 
 ## Remaining risk and limits
 
-- Qualification is confined to the pinned maintained Hermes fork `aed6591a69f453a1867b73628603e7b53ba40ffc`.
-  Public newer Hermes documentation regarding built-in `/plan` was not treated as target runtime proof.
+- Qualification is confined to the pinned maintained Hermes fork `aed6591a69f453a1867b73628603e7b53ba40ffc`. Public newer Hermes documentation regarding built-in `/plan` was not treated as target runtime proof.
 - No live profile, active release, gateway unit, credentials, or remote services were touched.
 - All exercises used disposable roots and scrubbed environments.
 - Publication, pull requests, releases, and integration remain Supervisor-owned.
