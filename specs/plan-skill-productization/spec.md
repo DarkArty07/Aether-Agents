@@ -1,6 +1,6 @@
 # Canonical project-local `/plan` for Morfeo (#504)
 
-**Status:** owner-approved objective; implementation and independent review pending. Scope corrected by owner: source merge, not historical release qualification.
+**Status:** owner-approved objective; candidate implementation independently reviewed; source merge in progress. Scope corrected by owner: source merge, not historical release qualification.
 **Decision owner:** project owner. **Route:** Morfeo design → Supervisor → Implementer(s).
 **Owning higher requirements:** R2-FR-204b–f, R1-FR-116a/121a, R5 role isolation, R7 convergence, `DESIGN.md` §10.
 **Technical design:** [plan.md](plan.md). **Validation:** [quickstart.md](quickstart.md).

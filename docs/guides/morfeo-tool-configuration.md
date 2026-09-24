@@ -97,9 +97,10 @@ search/extraction, files, and provisioned APIs for ordinary research, and report
 limit rather than route around the boundary through terminal-driven browsing.
 
 `todo` helps retain the current thread, but does not decide when the whole
-objective is complete. Likewise, `/plan` is a planning skill, not an execution
-lock. Neither is a proven cure for scope expansion or a reason to turn every
-request into a planning exercise.
+objective is complete. Likewise, `/plan` is a planning skill delivered only to
+Morfeo through the role-scoped release bundle (writing project-local plans to
+`.aether/plans/`), not an execution lock. Neither is a proven cure for scope
+expansion or a reason to turn every request into a planning exercise.
 
 ## Supervisor tool configuration
 

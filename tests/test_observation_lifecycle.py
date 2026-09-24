@@ -23,6 +23,7 @@ import tomllib
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from observation_helpers import PROJECT_ID, TRACE_ID, complete_trace, project_marker
@@ -386,7 +387,7 @@ def _profile_bundle_sha256() -> str:
     profiles: dict[str, dict[str, dict[str, dict[str, str]]]] = {}
     resources_root = Path(lifecycle.__file__).parent / "resources" / "profiles"
     skills_root = Path(lifecycle.__file__).parent / "resources" / "skills"
-    canonical_skills = (
+    common_skills = (
         "git-github-closeout",
         "semver-release",
         "canonical-skill-governance",
@@ -397,6 +398,11 @@ def _profile_bundle_sha256() -> str:
         "project-knowledge",
         "work-memory",
     )
+    role_skills = {
+        "morfeo": common_skills + ("plan",),
+        "supervisor": common_skills,
+        "implementer": common_skills,
+    }
     for role in ("morfeo", "supervisor", "implementer"):
         resources: dict[str, dict[str, str]] = {}
         for name in ("config.yaml", "SOUL.md"):
@@ -406,7 +412,7 @@ def _profile_bundle_sha256() -> str:
                 "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
             }
         skills: dict[str, dict[str, str]] = {}
-        for skill_name in canonical_skills:
+        for skill_name in role_skills[role]:
             source = skills_root / skill_name / "SKILL.md"
             skills[skill_name] = {
                 "path": f"profiles/{role}/skills/{skill_name}/SKILL.md",
@@ -965,10 +971,13 @@ def test_profile_bundle_contains_only_the_explicit_canonical_skill_allowlist(
         "project-knowledge",
         "work-memory",
     }
-    assert set(manifest["profiles"]["morfeo"]["skills"]) == expected_skills
+    assert set(manifest["profiles"]["morfeo"]["skills"]) == expected_skills | {"plan"}
+    assert set(manifest["profiles"]["supervisor"]["skills"]) == expected_skills
+    assert set(manifest["profiles"]["implementer"]["skills"]) == expected_skills
     for role in ("morfeo", "supervisor", "implementer"):
+        role_expected = expected_skills | {"plan"} if role == "morfeo" else expected_skills
         skills_root = stage / "profiles" / role / "skills"
-        assert {path.parent.name for path in skills_root.glob("*/SKILL.md")} == expected_skills
+        assert {path.parent.name for path in skills_root.glob("*/SKILL.md")} == role_expected
         assert not any(path.name == "private" for path in skills_root.rglob("*"))
 
 
@@ -4178,3 +4187,401 @@ def test_run_uv_forces_copy_link_mode(monkeypatch: pytest.MonkeyPatch, tmp_path:
     monkeypatch.setattr(lifecycle.subprocess, "run", fake_run)
     LifecycleManager._run_uv("--version", cwd=tmp_path)
     assert captured["env"]["UV_LINK_MODE"] == "copy"
+
+
+def _prepared_candidate_release(root: Path, version: str, payload: bytes) -> PreparedRelease:
+    prepared = _prepared_release(root, version, payload)
+    skills = Path(lifecycle.__file__).parent / "resources" / "skills"
+    morfeo_plan = prepared.stage / "profiles" / "morfeo" / "skills" / "plan" / "SKILL.md"
+    morfeo_plan.parent.mkdir(parents=True, exist_ok=True)
+    morfeo_plan.write_bytes((skills / "plan" / "SKILL.md").read_bytes())
+    return prepared
+
+
+def test_candidate_activation_delivers_plan_only_to_morfeo(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PS-006: candidate activation delivers plan to Morfeo only."""
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    prepared = _prepared_candidate_release(tmp_path / "r1", "1.0.0", b"wheel-one")
+    record = store.register(prepared)
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+
+    manager.activate_existing(
+        record.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+
+    morfeo_home = store.profile_home("morfeo")
+    supervisor_home = store.profile_home("supervisor")
+    implementer_home = store.profile_home("implementer")
+
+    source_plan = Path(lifecycle.__file__).parent / "resources" / "skills" / "plan" / "SKILL.md"
+    assert (morfeo_home / "skills" / "plan" / "SKILL.md").read_bytes() == source_plan.read_bytes()
+    assert not (supervisor_home / "skills" / "plan").exists()
+    assert not (implementer_home / "skills" / "plan").exists()
+
+    for role in ("morfeo", "supervisor", "implementer"):
+        for skill_name in lifecycle._CANONICAL_SKILLS:
+            target = store.profile_home(role) / "skills" / skill_name / "SKILL.md"
+            assert target.is_file()
+
+
+def test_first_install_adopts_pre_existing_exact_path_plan_with_backup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PS-008: pre-existing exact-path plan is backed up while nested learned plan is untouched."""
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    learned_plan = store.profile_home("morfeo") / "skills" / "plan" / "SKILL.md"
+    learned_plan.parent.mkdir(parents=True, exist_ok=True)
+    learned_plan.write_bytes(b"learned exact plan procedure\n")
+
+    nested_plan = (
+        store.profile_home("morfeo") / "skills" / "software-development" / "plan" / "SKILL.md"
+    )
+    nested_plan.parent.mkdir(parents=True, exist_ok=True)
+    nested_plan.write_bytes(b"nested learned plan procedure\n")
+
+    prepared = _prepared_candidate_release(tmp_path / "r1", "1.0.0", b"wheel-one")
+    record = store.register(prepared)
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+
+    manager.activate_existing(
+        record.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+
+    package_plan = Path(lifecycle.__file__).parent / "resources" / "skills" / "plan" / "SKILL.md"
+    assert learned_plan.read_bytes() == package_plan.read_bytes()
+    assert nested_plan.read_bytes() == b"nested learned plan procedure\n"
+
+    receipt = next((store.state_root / "migrations").glob("*-profile-adoption/receipt.json"))
+    payload = json.loads(receipt.read_text(encoding="utf-8"))
+    assert any(item["path"] == "morfeo/skills/plan/SKILL.md" for item in payload["backed_up"])
+    backup_item = next(
+        item for item in payload["backed_up"] if item["path"] == "morfeo/skills/plan/SKILL.md"
+    )
+    assert Path(backup_item["backup"]).read_bytes() == b"learned exact plan procedure\n"
+
+
+def test_rollback_removes_managed_plan_and_preserves_nested_learned_plan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PS-008: rollback from candidate to historical removes only managed plan."""
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    cand_prep = _prepared_candidate_release(tmp_path / "r2", "1.0.0", b"wheel-two")
+    cand_record = store.register(cand_prep)
+
+    hist_prep = _prepared_release(tmp_path / "r1", "0.9.0", b"wheel-one")
+    hist_record = store.register(hist_prep)
+
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    _allow_unit_manager_authority(manager, monkeypatch)
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+
+    manager.activate_existing(
+        cand_record.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+
+    nested_plan = (
+        store.profile_home("morfeo") / "skills" / "software-development" / "plan" / "SKILL.md"
+    )
+    nested_plan.parent.mkdir(parents=True, exist_ok=True)
+    nested_plan.write_bytes(b"nested learned plan procedure\n")
+
+    morfeo_plan = store.profile_home("morfeo") / "skills" / "plan" / "SKILL.md"
+    assert morfeo_plan.is_file()
+
+    manager.activate_existing(
+        hist_record.release_id,
+        transition_kind="rollback",
+        expected_active_release_id=cand_record.release_id,
+    )
+
+    assert not morfeo_plan.exists()
+    assert not (store.profile_home("morfeo") / "skills" / "plan").exists()
+    assert nested_plan.read_bytes() == b"nested learned plan procedure\n"
+
+
+def test_rollback_preserves_drifted_plan_skill_and_refuses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PS-008: drifted plan skill blocks rollback and is not deleted."""
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    cand_prep = _prepared_candidate_release(tmp_path / "r2", "1.0.0", b"wheel-two")
+    cand_record = store.register(cand_prep)
+
+    hist_prep = _prepared_release(tmp_path / "r1", "0.9.0", b"wheel-one")
+    hist_record = store.register(hist_prep)
+
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    _allow_unit_manager_authority(manager, monkeypatch)
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+
+    manager.activate_existing(
+        cand_record.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+
+    morfeo_plan = store.profile_home("morfeo") / "skills" / "plan" / "SKILL.md"
+    drifted_bytes = b"user customized plan skill that must survive\n"
+    morfeo_plan.write_bytes(drifted_bytes)
+
+    with pytest.raises(IntegrityError, match="canonical skill ownership evidence is mismatched"):
+        manager.activate_existing(
+            hist_record.release_id,
+            transition_kind="rollback",
+            expected_active_release_id=cand_record.release_id,
+        )
+
+    assert morfeo_plan.read_bytes() == drifted_bytes
+
+
+def test_profile_bundle_validation_accepts_only_two_exact_shapes(tmp_path: Path) -> None:
+    """PS-007: profile bundle validation accepts only historical and candidate shapes."""
+    manager = LifecycleManager(
+        store=ReleaseStore(tmp_path / "state" / "aether"),
+        python_executable=Path(sys.executable),
+    )
+
+    def _make_bundle(
+        skills_per_role: dict[str, list[str]], tag: str
+    ) -> tuple[Path, dict[str, Any]]:
+        stage = tmp_path / f"stage-{tag}"
+        stage.mkdir(parents=True, exist_ok=True)
+        if os.name == "posix":
+            stage.chmod(0o700)
+        profiles_root = stage / "profiles"
+        profiles_root.mkdir(parents=True, exist_ok=True)
+        if os.name == "posix":
+            profiles_root.chmod(0o700)
+        profiles: dict[str, Any] = {}
+        for role in ("morfeo", "supervisor", "implementer"):
+            role_dir = profiles_root / role
+            role_dir.mkdir(parents=True, exist_ok=True)
+            if os.name == "posix":
+                role_dir.chmod(0o700)
+            for name in ("config.yaml", "SOUL.md"):
+                rpath = role_dir / name
+                rpath.write_bytes(b"mock resource bytes\n")
+                if os.name == "posix":
+                    rpath.chmod(0o600)
+            skills_dir = role_dir / "skills"
+            skills_dir.mkdir(parents=True, exist_ok=True)
+            if os.name == "posix":
+                skills_dir.chmod(0o700)
+            skills: dict[str, Any] = {}
+            for sname in skills_per_role[role]:
+                sdir = skills_dir / sname
+                sdir.mkdir(parents=True, exist_ok=True)
+                if os.name == "posix":
+                    sdir.chmod(0o700)
+                sfile = sdir / "SKILL.md"
+                sfile.write_bytes(b"mock skill bytes\n")
+                if os.name == "posix":
+                    sfile.chmod(0o600)
+                skills[sname] = {
+                    "path": f"profiles/{role}/skills/{sname}/SKILL.md",
+                    "sha256": hashlib.sha256(b"mock skill bytes\n").hexdigest(),
+                }
+            resources = {
+                name: {
+                    "path": f"profiles/{role}/{name}",
+                    "sha256": hashlib.sha256(b"mock resource bytes\n").hexdigest(),
+                }
+                for name in ("config.yaml", "SOUL.md")
+            }
+            profiles[role] = {"resources": resources, "skills": skills}
+        manifest = {
+            "schema_version": 2,
+            "observer_entry_point": HERMES_BASELINE.observer_entry_point,
+            "roles": ["morfeo", "supervisor", "implementer"],
+            "profiles": profiles,
+        }
+        manifest_bytes = json.dumps(manifest).encode("utf-8")
+        manifest_path = stage / "profile-bundle.json"
+        manifest_path.write_bytes(manifest_bytes)
+        if os.name == "posix":
+            manifest_path.chmod(0o600)
+        release_manifest = {"profile_bundle_sha256": hashlib.sha256(manifest_bytes).hexdigest()}
+        return stage, release_manifest
+
+    historical = {
+        r: list(lifecycle._CANONICAL_SKILLS) for r in ("morfeo", "supervisor", "implementer")
+    }
+    hist_stage, hist_manifest = _make_bundle(historical, "hist")
+    manager._validate_profile_bundle(hist_stage, hist_manifest, verify_local_resources=False)
+
+    candidate = {
+        "morfeo": list(lifecycle._CANONICAL_SKILLS) + ["plan"],
+        "supervisor": list(lifecycle._CANONICAL_SKILLS),
+        "implementer": list(lifecycle._CANONICAL_SKILLS),
+    }
+    cand_stage, cand_manifest = _make_bundle(candidate, "cand")
+    manager._validate_profile_bundle(cand_stage, cand_manifest, verify_local_resources=False)
+
+    # Tamper 1: Supervisor gets plan
+    bad_sup = dict(candidate)
+    bad_sup["supervisor"] = list(lifecycle._CANONICAL_SKILLS) + ["plan"]
+    bad_stage, bad_manifest = _make_bundle(bad_sup, "bad_sup")
+    with pytest.raises(IntegrityError, match="managed profile skill evidence is malformed"):
+        manager._validate_profile_bundle(bad_stage, bad_manifest, verify_local_resources=False)
+
+    # Tamper 2: Extra bogus skill in Morfeo
+    bad_extra = dict(candidate)
+    bad_extra["morfeo"] = list(lifecycle._CANONICAL_SKILLS) + ["plan", "bogus-skill"]
+    bad_stage2, bad_manifest2 = _make_bundle(bad_extra, "bad_extra")
+    with pytest.raises(IntegrityError, match="managed profile skill evidence is malformed"):
+        manager._validate_profile_bundle(bad_stage2, bad_manifest2, verify_local_resources=False)
+
+
+def test_wheel_profile_bundle_sha256_rejects_duplicate_member(tmp_path: Path) -> None:
+    """_wheel_profile_bundle_sha256 rejects archives with duplicate canonical resources."""
+    wheel_path = tmp_path / "candidate-1.0.0-py3-none-any.whl"
+    prefix = "aether_agents/resources/"
+    with zipfile.ZipFile(wheel_path, "w") as archive:
+        for role in ("morfeo", "supervisor", "implementer"):
+            for name in ("config.yaml", "SOUL.md"):
+                archive.writestr(f"{prefix}profiles/{role}/{name}", b"mock resource\n")
+        for skill in lifecycle._CANONICAL_SKILLS:
+            archive.writestr(f"{prefix}skills/{skill}/SKILL.md", b"mock skill\n")
+        archive.writestr(f"{prefix}skills/{lifecycle._PLAN_SKILL}/SKILL.md", b"mock plan\n")
+
+    # Pristine wheel has 16 profile resources and succeeds
+    digest = LifecycleManager._wheel_profile_bundle_sha256(wheel_path)
+    assert len(digest) == 64
+
+    # Duplicate wheel has an appended duplicate entry for plan
+    dup_wheel_path = tmp_path / "duplicate-1.0.0-py3-none-any.whl"
+    dup_wheel_path.write_bytes(wheel_path.read_bytes())
+    with zipfile.ZipFile(dup_wheel_path, "a") as archive:
+        archive.writestr(f"{prefix}skills/{lifecycle._PLAN_SKILL}/SKILL.md", b"forged plan\n")
+
+    with pytest.raises(IntegrityError, match="candidate wheel profile resource set mismatch"):
+        LifecycleManager._wheel_profile_bundle_sha256(dup_wheel_path)
+
+
+def test_historical_release_preserves_pre_existing_learned_plan_in_morfeo(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PS-008: historical release preserves learned plan in Morfeo without unowned-skill refusal."""
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    morfeo_plan = store.profile_home("morfeo") / "skills" / "plan" / "SKILL.md"
+    morfeo_plan.parent.mkdir(parents=True, exist_ok=True)
+    learned_bytes = b"learned morfeo plan procedure that must survive\n"
+    morfeo_plan.write_bytes(learned_bytes)
+
+    hist_prep = _prepared_release(tmp_path / "r1", "0.9.0", b"wheel-one")
+    hist_record = store.register(hist_prep)
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    _allow_unit_manager_authority(manager, monkeypatch)
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+
+    manager.activate_existing(
+        hist_record.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+
+    assert morfeo_plan.is_file()
+    assert morfeo_plan.read_bytes() == learned_bytes
+
+
+def test_candidate_release_preserves_learned_plan_in_supervisor_and_implementer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PS-008 / Invariant 3: candidate preserves learned plan in Supervisor/Implementer."""
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    sup_plan = store.profile_home("supervisor") / "skills" / "plan" / "SKILL.md"
+    sup_plan.parent.mkdir(parents=True, exist_ok=True)
+    sup_bytes = b"supervisor learned plan procedure\n"
+    sup_plan.write_bytes(sup_bytes)
+
+    imp_plan = store.profile_home("implementer") / "skills" / "plan" / "SKILL.md"
+    imp_plan.parent.mkdir(parents=True, exist_ok=True)
+    imp_bytes = b"implementer learned plan procedure\n"
+    imp_plan.write_bytes(imp_bytes)
+
+    cand_prep = _prepared_candidate_release(tmp_path / "r1", "1.0.0", b"wheel-one")
+    cand_record = store.register(cand_prep)
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    _allow_unit_manager_authority(manager, monkeypatch)
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+
+    manager.activate_existing(
+        cand_record.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+
+    assert sup_plan.is_file()
+    assert sup_plan.read_bytes() == sup_bytes
+    assert imp_plan.is_file()
+    assert imp_plan.read_bytes() == imp_bytes
+
+
+def test_candidate_release_rejects_canonical_plan_bytes_in_unowned_role(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Invariant 3: unowned role containing package canonical plan bytes is refused."""
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    cand_prep = _prepared_candidate_release(tmp_path / "r1", "1.0.0", b"wheel-one")
+    cand_record = store.register(cand_prep)
+
+    package_plan = Path(lifecycle.__file__).parent / "resources" / "skills" / "plan" / "SKILL.md"
+    sup_plan = store.profile_home("supervisor") / "skills" / "plan" / "SKILL.md"
+    sup_plan.parent.mkdir(parents=True, exist_ok=True)
+    sup_plan.write_bytes(package_plan.read_bytes())
+
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    _allow_unit_manager_authority(manager, monkeypatch)
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+
+    with pytest.raises(IntegrityError, match="managed profile activation contains unowned skill"):
+        manager.activate_existing(
+            cand_record.release_id,
+            transition_kind="install",
+            expected_active_release_id=None,
+        )

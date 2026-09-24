@@ -78,6 +78,7 @@ jobs:
           .aether/objective-contracts/oc_b8865f5129d60535/v1.md
           .aether/objective-contracts/oc_ba23edf6f74b7b43/v1.md
           .aether/objective-contracts/oc_c0abec2179f6b09c/v1.md
+          .aether/objective-contracts/oc_c29c2b0ed38d5030/v1.md
           .aether/objective-contracts/oc_c53c85ffb6c24f69/v1.md
           .aether/objective-contracts/oc_c780a10d94b78d85/v1.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v1.md
@@ -327,6 +328,7 @@ jobs:
           src/aether_agents/resources/skills/objective-contract-design/SKILL.md
           src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md
           src/aether_agents/resources/skills/implementation-evidence/SKILL.md
+          src/aether_agents/resources/skills/plan/SKILL.md
           src/aether_agents/resources/lab
           src/aether_agents/resources/hermes-baseline.json
           src/aether_agents/result.py
@@ -375,6 +377,7 @@ jobs:
           tests/test_observation_qualification.py
           tests/test_observation_query_parity.py
           tests/test_observation_reducer.py
+          tests/test_plan_skill_dispatch.py
           tests/test_policy_hooks.py
           tests/test_projection_transition_runner.py
           tests/test_project_marker_validation.py
