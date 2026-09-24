@@ -4689,3 +4689,85 @@ def test_interrupted_update_recovery_preserves_learned_and_operator_bytes(
     assert nested.read_bytes() == b"nested learned plan procedure\n"
     assert operator_config.read_bytes() == b"operator: owned\n"
     manager._validate_profile_homes(store.active())
+
+
+def test_interrupted_update_recovery_refuses_drifted_candidate_skill_before_marker_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PS-008: retirement guard (lifecycle.py:4977) refuses drifted plan before markers update."""
+
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    hist_record = store.register(_prepared_release(tmp_path / "r1", "0.9.0", b"wheel-one"))
+    cand_record = store.register(
+        _prepared_candidate_release(tmp_path / "r2", "1.0.0", b"wheel-two")
+    )
+
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    _allow_unit_manager_authority(manager, monkeypatch)
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+
+    manager.activate_existing(
+        hist_record.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+
+    store.begin_transition(
+        kind="update",
+        from_release_id=hist_record.release_id,
+        to_release_id=cand_record.release_id,
+    )
+
+    real_atomic_json = lifecycle._atomic_json
+    interrupted = False
+
+    def failing_atomic_json(path: Path, payload: dict[str, Any]) -> None:
+        nonlocal interrupted
+        if path.name == "aether-observer.json" and not interrupted:
+            interrupted = True
+            raise RuntimeError("simulated crash before first marker write")
+        real_atomic_json(path, payload)
+
+    monkeypatch.setattr(lifecycle, "_atomic_json", failing_atomic_json)
+    with pytest.raises(RuntimeError, match="simulated crash before first marker write"):
+        manager._materialize_profile_homes(cand_record)
+    monkeypatch.setattr(lifecycle, "_atomic_json", real_atomic_json)
+
+    plan = store.profile_home("morfeo") / "skills" / "plan" / "SKILL.md"
+    cand_plan_bytes = manager._profile_bundle_resource_bytes(
+        cand_record,
+        "morfeo",
+        "skills/plan/SKILL.md",
+    )
+
+    # Precondition witnesses:
+    # 1. All three aether-observer.json markers still name the historical release.
+    for role in ("morfeo", "supervisor", "implementer"):
+        marker = manager._read_profile_activation_marker(store.profile_home(role), role)
+        assert marker == manager._profile_activation(hist_record, role)
+
+    # 2. store.active().release_id == historical.release_id.
+    active = store.active()
+    assert active is not None
+    assert active.release_id == hist_record.release_id
+
+    # 3. plan bytes == candidate package bytes.
+    assert plan.is_file()
+    assert plan.read_bytes() == cand_plan_bytes
+
+    drifted = b"operator edited plan before crash recovery ran\n"
+    plan.write_bytes(drifted)
+
+    with pytest.raises(IntegrityError, match="canonical skill ownership evidence is mismatched"):
+        manager.recover()
+
+    assert plan.is_file()
+    assert plan.read_bytes() == drifted
+    recovered_active = store.active()
+    assert recovered_active is not None
+    assert recovered_active.release_id == hist_record.release_id
