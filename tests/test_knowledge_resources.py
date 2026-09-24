@@ -51,6 +51,10 @@ def test_skills_are_canonical_procedures_with_valid_examples(name: str, tool: st
         assert "graph_worker.py" in text
         assert "greetings" in text.lower()
         assert "trivial" in text.lower()
+        assert "before repository content searches and answer-bearing source reads" in text
+        assert "unbound" in text.lower()
+        assert "unborn" in text.lower()
+        assert "degrade honestly" in text.lower()
 
 
 def test_qualification_catalog_matches_registered_schemas() -> None:
@@ -75,10 +79,13 @@ def test_role_resources_share_tools_and_are_opt_in(role: str, tmp_path: Path) ->
     if role == "morfeo":
         assert "first substantive request to understand a bound project" in soul
         assert "without waiting for the owner to name Graphify" in soul
+        assert "before repository content searches and answer-bearing source reads" in soul
         assert "narrow current-source inspection, never as proof of behavior" in soul
         assert "not a global order to query before every file read" in soul
         assert "promises no universal savings or obedience" in soul
         assert "greetings, trivial questions, or a directly supplied source" in soul
+        assert "degrade honestly" in soul.lower()
+        assert "unborn" in soul.lower()
 
         # Materialize candidate Morfeo profile (tracked SOUL + packaged skill) into a disposable profile home
         disposable_profile_home = tmp_path / "hermes_home" / "profiles" / "morfeo"
