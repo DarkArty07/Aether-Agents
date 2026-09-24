@@ -1,6 +1,6 @@
 # Canonical project-local `/plan` for Morfeo (#504)
 
-**Status:** owner-approved objective; implementation and independent review pending.
+**Status:** owner-approved objective; implementation and independent review pending. Scope corrected by owner: source merge, not historical release qualification.
 **Decision owner:** project owner. **Route:** Morfeo design → Supervisor → Implementer(s).
 **Owning higher requirements:** R2-FR-204b–f, R1-FR-116a/121a, R5 role isolation, R7 convergence, `DESIGN.md` §10.
 **Technical design:** [plan.md](plan.md). **Validation:** [quickstart.md](quickstart.md).
@@ -27,9 +27,9 @@ The plan may describe the purpose of expected Objective Contracts, marking uncer
 
 A fresh candidate wheel/sdist contains public sanitized `skills/plan/SKILL.md`; its authenticated role bundle and native Morfeo home contain identical bytes. Supervisor and Implementer retain the previous canonical skill inventory and must not load a new `plan`. The selected maintained Hermes fork resolves literal `/plan` to the Aether-owned Morfeo skill, including when the private learned skill with the same frontmatter name exists under a different local path. A future fork with built-in `/plan` must be detected and treated as incompatibility, not silently presented as qualified.
 
-### US-PS-4 — Previous releases and operator state remain usable
+### US-PS-4 — Package isolation and operator state
 
-The new manager accepts an authentic pre-`plan` profile bundle with its original exact inventory and a new profile bundle with `plan` only in Morfeo. It rejects missing, extra, forged, cross-role or mismatched resources; hashes/provenance are not weakened. Fresh install, old→new preparation, new→old rollback and failed-transition compensation are exercised in disposable roots. Managed `plan` bytes are removed on rollback only after ownership validation; unrelated learned skills (including an existing nested `plan`), operator-owned configuration, other profiles, sessions, and worktrees remain unchanged. If the selected installed predecessor cannot read the new wheel directly, its refusal is recorded and a separately qualified compatible transition is required **before any live update**; no shortcut through a manual profile edit or false release claim is permitted.
+The candidate's package/bundle contains `plan` only in Morfeo and rejects missing, extra, forged, cross-role or mismatched candidate resources without weakening existing guards. Disposable fresh-profile tests preserve unrelated learned skills (including a nested `plan`) and operator-owned config. The existing installed manager may reject a candidate wheel whose resource set changed; disclose that limit instead of claiming an update works. Historical release transitions, bridge qualification, compensation and rollback are **not** acceptance gates for this source-only merge: no installation or activation was requested. Do not touch currently installed profiles, other sessions or worktrees.
 
 ### US-PS-5 — Coherent public guidance and evidence
 
@@ -42,13 +42,13 @@ The Objective Plan guide, relevant canonical-skill/profiles documentation and ca
 - **PS-003:** The plan MUST live at one stable `.aether/plans/<objective-slug>.md` for that objective in its own project. Reinvocation MUST preserve prior decisions and failed approaches and refresh changeable evidence.
 - **PS-004:** Plans MUST identify outcome, scope/exclusions, closure and stop/replan conditions, route and attributed continuity without acting as a contract or board. Anticipated contract handoffs MAY be revised and MUST NOT become a numerical cap.
 - **PS-005:** The skill MUST refer to `objective-contract-design` for contract extraction and MUST NOT copy the generic Hermes microtask/TDD/commit/delegate recipe or prescribe another mandatory ceremony.
-- **PS-006:** Aether's wheel, sdist, role bundle, release identity and native activation MUST deliver the new canonical skill **only to Morfeo**; existing role skill inventories and ownership boundaries remain sound.
-- **PS-007:** Release validation and profile transitions MUST distinguish strict historical and new role inventories from the authenticated release evidence, rather than applying one current global list to all releases; malformed sets MUST still fail closed.
-- **PS-008:** Fresh install, prospective old→new migration, rollback, compensation and uninstall MUST preserve operator/private state and handle a same-name learned skill without unverified overwrites or selection ambiguity.
+- **PS-006:** Aether's candidate wheel, sdist, role bundle and disposable native profile materialization MUST deliver the new canonical skill **only to Morfeo**; existing role skill inventories and ownership boundaries remain sound. No live activation is authorized.
+- **PS-007:** Candidate package/bundle validation MUST enforce Morfeo's exact inventory and the unchanged exact inventories of Supervisor and Implementer. Malformed, duplicate, missing and cross-role candidate resources MUST fail closed; do not weaken existing integrity checks. Do not represent historical upgrades as qualified by candidate-only tests.
+- **PS-008:** Disposable fresh-profile loading and same-name learned-skill selection MUST preserve unrelated/operator state; no live profile overwrite or release transition is permitted. A later release/update/rollback objective owns historical transition qualification.
 - **PS-009:** The selected fork's native slash dispatch MUST select the canonical plan bytes for Morfeo; a built-in command collision MUST block qualification.
 - **PS-010:** Applicable R2 guidance, current-build documentation, capability registry, packaging/role tests and runnable verification MUST be updated together; documentation MUST NOT claim release or activation from a merge.
 - **PS-011:** Work happens in isolated worktrees/branches, retaining unrelated live profile/session/worktree/release state; PR/check/merge are normal reviewed source closeout, never a gateway restart or package publication.
 
 ## Acceptance and stopping
 
-Trace US-PS-1–5 and PS-001–011 through [quickstart.md](quickstart.md). A passing static resource check or even a green PR alone does not prove model behavior; report the exact scenarios exercised and remaining limits. Stop if exact Project identity is unresolved, the selected runtime no longer offers dynamic `/plan`, old-release compatibility cannot be shown in isolation, a protected effect would be needed, or the design would have to grant a new role/authority or broaden the objective. Report the incomplete state instead of manufacturing another release or permission exception.
+Trace US-PS-1–5 and PS-001–011 through [quickstart.md](quickstart.md). A passing static resource check or even a green PR alone does not prove model behavior or an upgrade path; report the exact scenarios exercised and remaining limits. Stop if exact Project identity is unresolved, the selected runtime no longer offers dynamic `/plan`, a protected effect would be needed, or the design would grant a new role/authority or broaden the objective. If the source merge is otherwise green, do not extend it into historical release qualification; report that separately as unqualified, without manufacturing another release or permission exception.
