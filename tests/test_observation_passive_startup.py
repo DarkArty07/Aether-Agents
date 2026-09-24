@@ -83,25 +83,95 @@ def _witness_target() -> Path | None:
     return Path(ambient).resolve() if ambient else None
 
 
+_UNSTABLE_WITNESS_PATHS: set[str] = set()
+
+
 def _capture_witness(path: Path | None) -> dict[str, tuple[int, str]]:
-    """Capture a content-and-size witness of the ambient profile directory or sentinel."""
+    """Capture a content-and-size witness of the ambient profile directory or sentinel.
+
+    Under live profile directories, candidate targets subject to unisolated mutations
+    (SOUL.md, config.yaml, cache/tool_discovery_cache.json, state.db, and direct root
+    files) are witnessed. To prevent false-RED from external concurrent writers churning
+    targets like tool_discovery_cache.json or state.db, candidate paths are stability-gated
+    across a short gap (70ms) at capture time; provably unstable paths are excluded.
+    """
     if path is None or not path.exists():
         return {}
     witness: dict[str, tuple[int, str]] = {}
     is_live_profile = (path / "aether-observer.json").exists() or (path / "profile.yaml").exists()
+    if not is_live_profile:
+        for p in path.rglob("*"):
+            if not p.is_file():
+                continue
+            rel = str(p.relative_to(path))
+            try:
+                witness[rel] = (p.stat().st_size, hashlib.sha256(p.read_bytes()).hexdigest())
+            except OSError:
+                pass
+        return witness
+
+    # Live profile: gather candidate targets that unisolated nodes touch
+    candidates: dict[str, Path] = {}
     for p in path.rglob("*"):
         if not p.is_file():
             continue
         rel = str(p.relative_to(path))
-        if is_live_profile:
-            # Under live profiles, concurrent processes churn state.db/wal, logs, and discovery cache.
-            # Witness the sensitive configuration/persona targets that unisolated tests touch.
-            if not (rel == "SOUL.md" or rel == "config.yaml"):
+        if rel in _UNSTABLE_WITNESS_PATHS:
+            continue
+        # Exclude background daemon logs and transient sqlite lock/WAL files
+        if (
+            rel.startswith("logs/")
+            or rel.startswith("sessions/")
+            or rel.startswith("cache/terminal-output/")
+            or rel.startswith("cache/blocked-scripts/")
+            or rel.startswith("cache/web/")
+            or rel.endswith(("-wal", "-shm", ".lock"))
+            or p.name.startswith(".tmp")
+            or (rel == "state.db" and (path / "state.db-wal").exists())
+        ):
+            continue
+        if (
+            rel in ("SOUL.md", "config.yaml", "state.db")
+            or rel.startswith("cache/")
+            or p.parent == path
+        ):
+            # Exclude ambient databases and daemon state files not touched by registry
+            if rel.endswith(".db") and rel != "state.db":
                 continue
+            if rel in (
+                "processes.json",
+                "channel_directory.json",
+                ".update_check",
+                ".restart_last_processed.json",
+            ):
+                continue
+            candidates[rel] = p
+
+    # Stability gate: sample all candidate paths twice across a short gap
+    st1: dict[str, tuple[int, int]] = {}
+    for rel, p in candidates.items():
         try:
-            witness[rel] = (p.stat().st_size, hashlib.sha256(p.read_bytes()).hexdigest())
+            st = p.stat()
+            st1[rel] = (st.st_size, st.st_mtime_ns)
         except OSError:
             pass
+
+    time.sleep(0.07)
+
+    for rel, p in candidates.items():
+        if rel not in st1:
+            continue
+        try:
+            st = p.stat()
+            st2 = (st.st_size, st.st_mtime_ns)
+            if st1[rel] != st2:
+                # Provably unstable target (active concurrent external writer), skip it
+                _UNSTABLE_WITNESS_PATHS.add(rel)
+                continue
+            witness[rel] = (st.st_size, hashlib.sha256(p.read_bytes()).hexdigest())
+        except OSError:
+            pass
+
     return witness
 
 
