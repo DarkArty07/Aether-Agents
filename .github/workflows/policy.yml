@@ -12,8 +12,10 @@ permissions:
 # A superseded pull-request run has no release value.  Cancel it as soon as a newer
 # commit lands on the same PR, while preserving every main-branch qualification run.
 concurrency:
-  group: repository-policy-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # PRs share their number and supersede older commits. Pushes have no PR number, so
+  # they fall back to their unique run id and can never cancel another main run.
+  group: repository-policy-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   impact:
