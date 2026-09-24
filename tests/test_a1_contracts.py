@@ -235,7 +235,7 @@ class CanonicalContractConsistencyTests(unittest.TestCase):
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         plan = A1_PLAN_PATH.read_text(encoding="utf-8")
 
-        self.assertEqual(schema["properties"]["schema_version"]["const"], 4)
+        self.assertEqual(schema["properties"]["schema_version"]["enum"], [4, 5])
         self.assertIn("release-lock schema is integer `4`", plan)
         self.assertNotIn("requires downstream fork coordinates unconditionally", plan)
 

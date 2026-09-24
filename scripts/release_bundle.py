@@ -41,6 +41,8 @@ AETHER_REPOSITORY = "https://github.com/DarkArty07/Aether-Agents"
 MAINTAINED_FORK_REPOSITORY = "https://github.com/DarkArty07/aether-hermes"
 MAINTAINED_FORK_BRANCH = "aether-main"
 RELEASE_LOCK_SCHEMA_VERSION = 4
+ACCEPTED_RELEASE_LOCK_SCHEMAS = (4, 5)
+ALLOWED_HERMES_EXTRAS = ("mcp",)
 HERMES_SOURCE_MODE = "maintained_fork"
 PROFILE_BUNDLE_VERSION = "2"
 PROFILE_ROLES = ("morfeo", "supervisor", "implementer")
@@ -98,6 +100,7 @@ class BundleError(RuntimeError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
+        self.message = message
 
 
 # --------------------------------------------------------------------------- utilities
@@ -957,17 +960,54 @@ def _lock_schema_path(aether_checkout: Path) -> Path:
     )
 
 
+def _declared_schema_versions(schema: dict[str, Any]) -> tuple[int, ...]:
+    """Return schema versions the repository contract accepts."""
+
+    declared = schema.get("properties", {}).get("schema_version", {})
+    const = declared.get("const")
+    if isinstance(const, int):
+        return (const,)
+    enum = declared.get("enum")
+    if isinstance(enum, list) and enum and all(isinstance(item, int) for item in enum):
+        return tuple(enum)
+    return ()
+
+
+def _canonical_hermes_extras(lock: dict[str, Any]) -> tuple[str, ...]:
+    """Schema 4 has no extras. Schema 5 accepts only the closed allowlist."""
+
+    schema_version = lock.get("schema_version")
+    hermes = lock.get("hermes")
+    if not isinstance(hermes, dict):
+        raise BundleError("lock-identity", "release lock hermes identity is missing")
+    extras = hermes.get("extras")
+    if schema_version == 4:
+        if "extras" in hermes:
+            raise BundleError("lock-identity", "schema 4 rejects hermes extras")
+        return ()
+    if schema_version != 5:
+        raise BundleError("lock-identity", "release lock schema_version is not accepted")
+    if extras != list(ALLOWED_HERMES_EXTRAS):
+        raise BundleError("lock-identity", "schema 5 hermes extras are not the closed allowlist")
+    return tuple(extras)
+
+
 def validate_lock(
     lock: dict[str, Any], *, aether_checkout: Path, allow_schema_drift: bool
 ) -> dict[str, Any]:
-    """Validate the pinned identity always, and the repository schema when it declares 4."""
+    """Validate the pinned identity always, and the repository schema when it can."""
 
     pinned: list[str] = []
     failures: list[str] = []
-    if lock["schema_version"] != RELEASE_LOCK_SCHEMA_VERSION:
-        failures.append("schema_version is not 4")
+    schema_version = lock["schema_version"]
+    if schema_version not in ACCEPTED_RELEASE_LOCK_SCHEMAS:
+        failures.append(f"schema_version is not one of {ACCEPTED_RELEASE_LOCK_SCHEMAS}")
     else:
-        pinned.append("schema_version=4")
+        pinned.append(f"schema_version={schema_version}")
+        try:
+            _canonical_hermes_extras(lock)
+        except BundleError as error:
+            failures.append(error.message)
     hermes = lock["hermes"]
     if hermes["source_mode"] != HERMES_SOURCE_MODE:
         failures.append(f"hermes.source_mode is {hermes['source_mode']!r}")
@@ -998,7 +1038,8 @@ def validate_lock(
             "lock-schema-missing", f"canonical release-lock schema absent: {schema_path}"
         )
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    declared = schema.get("properties", {}).get("schema_version", {}).get("const")
+    declared_versions = _declared_schema_versions(schema)
+    declared = declared_versions[0] if len(declared_versions) == 1 else None
     try:
         schema_label = schema_path.relative_to(aether_checkout).as_posix()
     except ValueError:
@@ -1007,8 +1048,12 @@ def validate_lock(
         "pinned_identity": pinned,
         "repository_schema": schema_label,
         "repository_schema_version": declared,
+        "accepted_schema_versions": list(declared_versions),
     }
-    if declared != RELEASE_LOCK_SCHEMA_VERSION:
+    if (
+        RELEASE_LOCK_SCHEMA_VERSION not in declared_versions
+        or schema_version not in declared_versions
+    ):
         reason = (
             f"the repository schema declares schema_version {declared!r}; the maintained-fork "
             "schema is supplied by the release-runtime unit and only exists after integration"
@@ -1241,19 +1286,27 @@ def clean_install(
 
     closure_root = materialize_fork_closure(hermes_archive, roots / "hermes-source")
     requirements = roots / "hermes-requirements.txt"
-    record(
-        "hermes-export",
-        uv(
-            "export",
-            "--frozen",
-            "--no-dev",
-            "--no-emit-project",
+    lock_payload = json.loads(lock_path.read_text(encoding="utf-8"))
+    hermes_extras = _canonical_hermes_extras(lock_payload)
+    export_arguments = [
+        "export",
+        "--frozen",
+        "--no-dev",
+        "--no-emit-project",
+    ]
+    for extra in hermes_extras:
+        export_arguments.extend(("--extra", extra))
+    export_arguments.extend(
+        (
             "--format",
             "requirements.txt",
             "--output-file",
             str(requirements),
-            cwd=closure_root,
-        ),
+        )
+    )
+    record(
+        "hermes-export",
+        uv(*export_arguments, cwd=closure_root),
         "install-failed",
     )
     record(

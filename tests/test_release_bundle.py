@@ -143,9 +143,9 @@ def test_version_file_carries_the_objective_release_identity(tool: types.ModuleT
 
     package_version = (ROOT / "VERSION").read_text(encoding="ascii").strip()
     identity = tool.release_identity(package_version)
-    assert identity["package_version"] == "1.0.0rc8"
-    assert identity["semver"] == "1.0.0-rc.8"
-    assert identity["tag"] == "v1.0.0-rc.8"
+    assert identity["package_version"] == "1.0.0rc9"
+    assert identity["semver"] == "1.0.0-rc.9"
+    assert identity["tag"] == "v1.0.0-rc.9"
     assert identity["prerelease"] is True
 
 
@@ -1134,7 +1134,8 @@ def test_release_lock_binds_the_pinned_maintained_fork_identity(
     # why the pair is only resolvable on the merged tree).
     applied = tool.validate_lock(lock, aether_checkout=ROOT, allow_schema_drift=False)
     assert applied["schema_validation"] == "applied"
-    assert applied["repository_schema_version"] == 4
+    assert applied["accepted_schema_versions"] == [4, 5]
+    assert applied["repository_schema_version"] is None
     assert applied["pinned_identity"] == [
         "schema_version=4",
         "hermes.source_mode=maintained_fork",
@@ -1144,7 +1145,8 @@ def test_release_lock_binds_the_pinned_maintained_fork_identity(
 
     recorded = tool.validate_lock(lock, aether_checkout=ROOT, allow_schema_drift=True)
     assert recorded["schema_validation"] == "applied"
-    assert recorded["repository_schema_version"] == 4
+    assert recorded["accepted_schema_versions"] == [4, 5]
+    assert recorded["repository_schema_version"] is None
     assert recorded["pinned_identity"] == applied["pinned_identity"]
 
     # Drift refusal stays covered: a repository whose canonical schema still declares the
