@@ -143,6 +143,27 @@ The candidate `plan` resource bytes authored by `PLAN-CANDIDATE` (`3da1457223277
     `seen_names` deduping skips it without overwriting the canonical mapping.
   - The resolved file bytes confirm exact SHA-256 match `b2a0f696cdfeb898058e5d744d47e8f52e2b0b595fa9a96bf0fd6f20158f4e3d`.
 
+#### Lane note added by integration (Supervisor repair, disclosed)
+
+The node above was originally written so that it demanded the literal directory leaf
+`hermes-source` from whatever interpreter resolved, and then unconditionally asserted the
+fork source-tree digest. That encoded a false identity for the repository's policy lane,
+which provisions only the authenticated **public** baseline checkout
+(`v2026.8.18` @ `e624e9fde561`, tree `69bde94fd581c8ef8118c30e1e8da1d09a72b7ac71e2a03fbece9c60e056062c`)
+on `AETHER_EXACT_HERMES_CHECKOUT` (`hermes-exact`) and never provisions the selected fork.
+Consequently `observation-qualification` failed on all three Pythons at
+`Enforce integrated coverage floor` before the coverage report could run.
+
+The integration repair keeps the fork obligation exactly as strong on the fork lane (release
+lock commit, `maintained_fork` source mode, and the recomputed fork tree digest) and makes the
+no-release-lock lane assert only what that lane can honestly prove: the imported
+`agent.skill_commands` really is the authenticated baseline checkout named by
+`AETHER_EXACT_HERMES_CHECKOUT`, verified with `verify_clean_checkout` plus digest agreement.
+A checkout that is neither the pinned fork nor the authenticated baseline now **fails closed**
+rather than silently passing. This is a bounded oracle correction, not a widening of the
+objective and not evidence that the fork claim was weakened: the fork claim is still asserted
+on the fork lane and was mutation-tested.
+
 ### 3. Disposable profile role scoping and absence
 
 - Role inventory derivation from candidate release distribution:

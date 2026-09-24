@@ -243,9 +243,8 @@ print(json.dumps(payload))
         checkout = lifecycle.verify_clean_checkout(Path(configured))
         assert checkout.clean is True
         assert hermes_source_path.resolve() == Path(configured).resolve()
-        assert (
-            lifecycle._tree_sha256(hermes_source_path)
-            == lifecycle._tree_sha256(Path(configured))
+        assert lifecycle._tree_sha256(hermes_source_path) == lifecycle._tree_sha256(
+            Path(configured)
         )
         return
 
