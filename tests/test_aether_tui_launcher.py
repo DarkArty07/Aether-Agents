@@ -325,6 +325,11 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
             )
         )
         (project / ".aether" / "project.toml").write_text(sep_marker, encoding="utf-8")
+        self.registry.register(
+            "33333333-3333-4333-8333-333333333333",
+            project,
+            name="separated-project",
+        )
 
         profile.mkdir(parents=True)
         shutil.copy2(self.root / "home/profiles/morfeo/config.yaml", profile / "config.yaml")
@@ -676,6 +681,74 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
             inspect_activation(project=self.root)
         self.assertIn("conflicts with registered path", str(ctx.exception))
 
+    def test_project_resolution_explicit_route_refuses_unregistered_marker(self) -> None:
+        from aether_agents.launcher import ActivationError, inspect_activation
+
+        unreg_pid = "44444444-4444-4444-8444-444444444444"
+
+        # 1. With AGENTS.md: explicit --project and AETHER_PROJECT_ROOT fail closed
+        with_agents = Path(self.tempdir.name) / "unreg_with_agents"
+        with_agents.mkdir(parents=True)
+        (with_agents / "AGENTS.md").write_text("fixture\n", encoding="utf-8")
+        (with_agents / ".aether").mkdir()
+        (with_agents / ".aether" / "project.toml").write_text(
+            "\n".join(
+                (
+                    "schema_version = 1",
+                    f'project_id = "{unreg_pid}"',
+                    'name = "Unregistered fixture with AGENTS.md"',
+                    'initialized_by = "1.0.0"',
+                    'forge = "local"',
+                    'contract_root = "specs"',
+                    'default_branch = "main"',
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(ActivationError) as ctx:
+            inspect_activation(project=with_agents)
+        self.assertIn("is not registered in the project registry", str(ctx.exception))
+        self.assertIn("aether init", str(ctx.exception))
+
+        with patch.dict(os.environ, {"AETHER_PROJECT_ROOT": str(with_agents)}):
+            with self.assertRaises(ActivationError) as ctx:
+                inspect_activation()
+            self.assertIn("is not registered in the project registry", str(ctx.exception))
+            self.assertIn("aether init", str(ctx.exception))
+
+        # 2. Without AGENTS.md: missing AGENTS.md does not bypass unregistered marker refusal
+        without_agents = Path(self.tempdir.name) / "unreg_without_agents"
+        without_agents.mkdir(parents=True)
+        (without_agents / ".aether").mkdir()
+        (without_agents / ".aether" / "project.toml").write_text(
+            "\n".join(
+                (
+                    "schema_version = 1",
+                    f'project_id = "{unreg_pid}"',
+                    'name = "Unregistered fixture without AGENTS.md"',
+                    'initialized_by = "1.0.0"',
+                    'forge = "local"',
+                    'contract_root = "specs"',
+                    'default_branch = "main"',
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(ActivationError) as ctx:
+            inspect_activation(project=without_agents)
+        self.assertIn("is not registered in the project registry", str(ctx.exception))
+        self.assertIn("aether init", str(ctx.exception))
+
+        with patch.dict(os.environ, {"AETHER_PROJECT_ROOT": str(without_agents)}):
+            with self.assertRaises(ActivationError) as ctx:
+                inspect_activation()
+            self.assertIn("is not registered in the project registry", str(ctx.exception))
+            self.assertIn("aether init", str(ctx.exception))
+
     def test_project_resolution_via_verified_aether_project_id(self) -> None:
         from aether_agents.launcher import ActivationError, inspect_activation
 
@@ -722,14 +795,16 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
     def test_project_resolution_sole_registered_project(self) -> None:
         from aether_agents.launcher import ActivationError, inspect_activation
 
-        pid = "12027989-a08f-41cd-a82c-54ff1bfb6b03"
         non_repo_dir = Path(self.tempdir.name) / "empty_dir"
         non_repo_dir.mkdir(parents=True)
 
+        # An unrelated uninitialized cwd must refuse with actionable guidance even
+        # when a sole project is registered (A1-FR-043 removes the sole-project fallback).
         with patch.object(Path, "cwd", return_value=non_repo_dir):
-            plan = inspect_activation()
-            self.assertEqual(plan["project_id"], pid)
-            self.assertEqual(plan["repo_root"], str(self.root.resolve()))
+            with self.assertRaises(ActivationError) as ctx:
+                inspect_activation()
+            self.assertIn("git init", str(ctx.exception))
+            self.assertIn("aether init", str(ctx.exception))
 
         # Add a second project -> ambiguous identity
         second_dir = Path(self.tempdir.name) / "second_project"
@@ -743,6 +818,68 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
             with self.assertRaises(ActivationError) as ctx:
                 inspect_activation()
             self.assertIn("ambiguous project identity", str(ctx.exception))
+
+    def test_launch_verified_unborn_root_without_agents_md_and_without_commit(self) -> None:
+        import subprocess
+
+        from aether_agents.launcher import inspect_activation
+        from aether_agents.launcher import main as launcher_main
+
+        unborn_pid = "33333333-3333-4333-8333-333333333333"
+        unborn_repo = Path(self.tempdir.name) / "unborn_project"
+        unborn_repo.mkdir(parents=True)
+
+        # 1. git init without any commit -> unborn repository
+        subprocess.run(["git", "init", "-q", "-b", "main", str(unborn_repo)], check=True)
+        # Verify it has no commits (HEAD does not resolve)
+        proc = subprocess.run(
+            ["git", "-C", str(unborn_repo), "rev-parse", "--verify", "HEAD"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(proc.returncode, 0)
+
+        # 2. Write portable project marker (.aether/project.toml), NO AGENTS.md
+        marker = unborn_repo / ".aether" / "project.toml"
+        marker.parent.mkdir(parents=True)
+        marker.write_text(
+            "\n".join(
+                (
+                    "schema_version = 1",
+                    f'project_id = "{unborn_pid}"',
+                    'name = "unborn-intake"',
+                    'initialized_by = "1.0.0"',
+                    'forge = "local"',
+                    'contract_root = "specs"',
+                    'default_branch = "main"',
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
+        self.assertFalse((unborn_repo / "AGENTS.md").exists())
+
+        # 3. Register in local project registry
+        self.registry.register(unborn_pid, unborn_repo, name="unborn-intake")
+
+        # 4. Copy isolated Morfeo home runtime fixtures so component paths resolve
+        shutil.copytree(self.root / "home", unborn_repo / "home")
+
+        # 5. Bare aether launch in cwd resolves project, binds Morfeo profile, ready
+        with patch.object(Path, "cwd", return_value=unborn_repo):
+            plan = inspect_activation()
+            self.assertEqual(plan["result"], "ready")
+            self.assertEqual(plan["project_id"], unborn_pid)
+            self.assertEqual(plan["repo_root"], str(unborn_repo.resolve()))
+
+            out_buf = io.StringIO()
+            with redirect_stdout(out_buf), patch.object(os, "execve"):
+                code = launcher_main(["--check", "--json"])
+                self.assertEqual(code, 0)
+            payload = json.loads(out_buf.getvalue())
+            self.assertEqual(payload["result"], "ready")
+            self.assertEqual(payload["project_id"], unborn_pid)
+            self.assertEqual(payload["repo_root"], str(unborn_repo.resolve()))
 
     def test_additional_error_and_flag_handling(self) -> None:
         from aether_agents.launcher import ActivationError, _absolute_env_path, inspect_activation
@@ -816,14 +953,13 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
         finally:
             marker.write_text(orig_marker, encoding="utf-8")
 
-        # Missing AGENTS.md
+        # Missing AGENTS.md is allowed on verified initialized projects (A1-FR-043a/100)
         agents = self.root / "AGENTS.md"
         agents_bak = agents.with_suffix(".bak")
         agents.rename(agents_bak)
         try:
-            with self.assertRaises(ActivationError) as ctx:
-                inspect_activation(project=self.root)
-            self.assertIn("Aether repository marker does not exist", str(ctx.exception))
+            plan = inspect_activation(project=self.root)
+            self.assertEqual(plan["result"], "ready")
         finally:
             agents_bak.rename(agents)
 
@@ -2067,7 +2203,7 @@ class TuiPreservationTests(unittest.TestCase):
         )
 
     def _create_project_dir(self, name: str, project_id: str) -> Path:
-        """Create an additional fixture project that is deliberately not in the registry."""
+        """Create an additional fixture project registered in the isolated registry."""
         project = self.temp_path / name
         project.mkdir(parents=True)
         (project / "AGENTS.md").write_text("fixture\n", encoding="utf-8")
@@ -2086,6 +2222,12 @@ class TuiPreservationTests(unittest.TestCase):
                 )
             ),
             encoding="utf-8",
+        )
+        registry = ProjectRegistry(root=self.state_dir / "aether")
+        registry.register(
+            project_id,
+            project,
+            name=f"launcher-preserve-{name}",
         )
         return project
 

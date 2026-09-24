@@ -157,11 +157,18 @@ def _resolve_runtime_root() -> Path | None:
 def _resolve_category_normalizer() -> tuple[Callable[[str], str], str | None, bool]:
     """Use the locked runtime taxonomy, with a visibly degraded fallback."""
     try:
+        import tools.registry as tools_registry  # type: ignore[import-not-found]
         from hermes_cli.observability.shared_metrics_contract import (  # type: ignore[import-not-found]
             tool_category,
         )
-        from model_tools import get_toolset_for_tool  # type: ignore[import-not-found]
     except Exception:
+        return fallback_tool_category, None, False
+
+    registry_obj = getattr(tools_registry, "registry", tools_registry)
+    get_toolset = getattr(registry_obj, "get_toolset_for_tool", None)
+    if not callable(get_toolset):
+        get_toolset = getattr(tools_registry, "get_toolset_for_tool", None)
+    if not callable(get_toolset):
         return fallback_tool_category, None, False
 
     def normalize(name: str) -> str:
@@ -169,7 +176,7 @@ def _resolve_category_normalizer() -> tuple[Callable[[str], str], str | None, bo
         # then feed that metadata mapping to shared_metrics_contract.tool_category.
         # The native normalizer accepts a mapping, not a bare tool name.
         try:
-            toolset = get_toolset_for_tool(name)
+            toolset = get_toolset(name)
         except Exception:
             return fallback_tool_category(name)
         return tool_category({"toolset": toolset or "other"}) or "unknown"

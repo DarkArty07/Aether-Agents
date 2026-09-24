@@ -4,11 +4,11 @@
 
 ## Preconditions
 
-- Run at the repository root (or pass that root as `PATH`); a plain directory and a subdirectory of a repository are refused.
-- One non-archived native Hermes Project must already have that exact resolved repository path as its `primary_path`.
+- Run at the repository root (or pass that root as `PATH`); an unborn Git root (`git init`) is accepted, while a plain directory and a subdirectory of a repository are refused with `git init` guidance.
+- If an exact-path native Hermes Project already exists, `aether init` reuses it. If none exists, `aether init` creates and verifies exactly one native Hermes Project through the selected runtime CLI.
 - If several native Projects have that exact path, provide the desired ID with `--hermes-project ID`.
 
-The command opens Hermes' Project registry read-only. It never creates, archives, or modifies a native Hermes Project, and it never chooses by display name, slug, current directory, or an approximate path.
+The command never archives or modifies existing native Projects, and it never chooses by display name, slug, current directory, or an approximate path.
 
 ```bash
 # Discovery only: no marker or registry write.
@@ -46,6 +46,6 @@ only and cannot grant authority.
 
 ## Greenfield limit
 
-The broader product design calls for greenfield and brownfield support, but this current implementation does **not** run `git init` in an empty directory. Create an existing Git repository and the exact-path native Hermes Project first, then run `aether init`. This distinction prevents documentation from presenting a planned greenfield product behavior as current.
+`aether init` supports empty directories initialized by the owner with `git init`, but it does **not** run `git init` itself. Run `git init` in an empty or brownfield directory first, then run `aether init`. This keeps Git creation under the owner's explicit control.
 
 For the parser surface, see [CLI reference](../reference/cli.md). For the identity's role in handoff, see [Objective Contracts](objective-contracts.md).
