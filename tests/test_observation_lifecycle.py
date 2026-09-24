@@ -4585,3 +4585,107 @@ def test_candidate_release_rejects_canonical_plan_bytes_in_unowned_role(
             transition_kind="install",
             expected_active_release_id=None,
         )
+
+
+def _stage_interrupted_update(store: ReleaseStore, tmp_path: Path) -> tuple[Any, Any, Path]:
+    """Crash an update after candidate homes are materialized, before the pointer.
+
+    Returns the durable historical record, the crashed candidate record and the
+    candidate-owned ``plan`` skill path still on disk.
+    """
+
+    historical = store.activate(_prepared_release(tmp_path / "r1", "0.9.0", b"wheel-one"))
+    candidate = store.register(_prepared_candidate_release(tmp_path / "r2", "1.0.0", b"wheel-two"))
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    store.begin_transition(
+        kind="update",
+        from_release_id=historical.release_id,
+        to_release_id=candidate.release_id,
+    )
+    manager._materialize_profile_homes(candidate)
+    return historical, candidate, store.profile_home("morfeo") / "skills" / "plan" / "SKILL.md"
+
+
+def test_interrupted_update_recovery_retires_the_crashed_targets_plan_skill(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PS-008: recovery converges instead of deadlocking on the crashed target."""
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    historical, _candidate, plan = _stage_interrupted_update(store, tmp_path)
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    _allow_unit_manager_authority(manager, monkeypatch)
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+
+    # The crashed target delivered plan to Morfeo; recovery must prove ownership
+    # through the pending target, retire it, and validate the converged state.
+    assert store.active().release_id == historical.release_id
+    assert plan.is_file()
+
+    recovered = manager.recover()
+
+    assert recovered["pending_transitions_recovered"] == 1
+    assert recovered["active_release_restored"] == 1
+    assert store.active().release_id == historical.release_id
+    assert not plan.exists()
+    assert not (store.profile_home("morfeo") / "skills" / "plan").exists()
+    manager._validate_profile_homes(store.active())
+
+
+def test_interrupted_update_recovery_refuses_drifted_candidate_owned_skill(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PS-008: a drifted candidate-owned skill fails closed and is never deleted."""
+
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    historical, _candidate, plan = _stage_interrupted_update(store, tmp_path)
+    drifted = b"operator edited the candidate plan skill that must survive\n"
+    plan.write_bytes(drifted)
+
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    _allow_unit_manager_authority(manager, monkeypatch)
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+
+    with pytest.raises(IntegrityError, match="canonical skill ownership evidence is mismatched"):
+        manager.recover()
+
+    assert plan.read_bytes() == drifted
+    assert store.active().release_id == historical.release_id
+
+
+def test_interrupted_update_recovery_preserves_learned_and_operator_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PS-008: nested learned skills and operator config survive active retirement."""
+
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    _historical, _candidate, _plan = _stage_interrupted_update(store, tmp_path)
+    nested = store.profile_home("morfeo") / "skills" / "software-development" / "plan" / "SKILL.md"
+    nested.parent.mkdir(parents=True, exist_ok=True)
+    nested.write_bytes(b"nested learned plan procedure\n")
+    operator_config = store.profile_home("morfeo") / "config.yaml"
+    operator_config.write_bytes(b"operator: owned\n")
+
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    _allow_unit_manager_authority(manager, monkeypatch)
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+
+    manager.recover()
+
+    assert nested.read_bytes() == b"nested learned plan procedure\n"
+    assert operator_config.read_bytes() == b"operator: owned\n"
+    manager._validate_profile_homes(store.active())

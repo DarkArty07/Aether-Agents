@@ -4889,6 +4889,20 @@ class LifecycleManager:
                 if active_record is not None
                 else set()
             )
+            # An interrupted managed update restores the source as active while the
+            # target's bytes may still be materialized on disk.  The crashed target is
+            # an additional prior owner, exactly as preflight already accepts it, so
+            # its retired skill bytes can be proven and removed instead of deadlocking
+            # recovery.  A non-recovery activation has no crashed target to add.
+            if recovery_record is not None:
+                previous_skills |= self._release_role_skills(recovery_record, role)
+            prior_owner_records: list[ReleaseRecord] = []
+            if active_record is not None:
+                prior_owner_records.append(active_record)
+            if recovery_record is not None and recovery_record.release_id != (
+                active_record.release_id if active_record is not None else None
+            ):
+                prior_owner_records.append(recovery_record)
             for skill_name in target_skills:
                 skill_dir = skills_root / skill_name
                 if skill_dir.is_symlink() or (skill_dir.exists() and not skill_dir.is_dir()):
@@ -4926,7 +4940,7 @@ class LifecycleManager:
                         )
                 _atomic_bytes(target, source_bytes)
 
-            if active_record is not None:
+            if prior_owner_records:
                 for retiring_skill in sorted(previous_skills - set(target_skills)):
                     retiring_dir = skills_root / retiring_skill
                     retiring_target = retiring_dir / "SKILL.md"
@@ -4935,16 +4949,32 @@ class LifecycleManager:
                             raise IntegrityError("managed profile canonical skill is unsafe")
                         try:
                             observed = read_private_bytes(retiring_target)
-                            expected = self._profile_bundle_resource_bytes(
-                                active_record,
-                                role,
-                                f"skills/{retiring_skill}/SKILL.md",
-                            )
                         except (OSError, ValueError) as error:
                             raise IntegrityError(
                                 "managed profile canonical skill is unreadable"
                             ) from error
-                        if observed != expected:
+                        # Ownership is proven against the exact bytes of every
+                        # authenticated prior owner; a drifted or unattributable skill
+                        # is never deleted.
+                        owned_bytes: set[bytes] | None = None
+                        for owner_record in prior_owner_records:
+                            if retiring_skill not in self._release_role_skills(
+                                owner_record,
+                                role,
+                            ):
+                                continue
+                            try:
+                                expected = self._profile_bundle_resource_bytes(
+                                    owner_record,
+                                    role,
+                                    f"skills/{retiring_skill}/SKILL.md",
+                                )
+                            except IntegrityError:
+                                continue
+                            if owned_bytes is None:
+                                owned_bytes = set()
+                            owned_bytes.add(expected)
+                        if not owned_bytes or observed not in owned_bytes:
                             raise IntegrityError("canonical skill ownership evidence is mismatched")
                         _unlink_private_file(retiring_target)
                         try:
