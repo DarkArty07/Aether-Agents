@@ -1,0 +1,30 @@
+{
+  "producer": "KG19-04 (t_40c62df8)",
+  "contract": "oc_d96969bf913512f7@v1",
+  "disposition": "owner_superseded_omitted",
+  "owner_direction": "Owner cancels all additional agent-run testing for this objective. Behavior will be assessed organically. Planned E01 re-qualification turn on corrected bytes is omitted without synthetic or fabricated results.",
+  "candidate_bytes": {
+    "morfeo_soul_sha256": "a1c997634ddface5d0f86744ff24cc23b964145a20d736d1ced4b3c23ef1d7f8",
+    "project_knowledge_skill_sha256": "41436ff6cd9f64cd3b82d2e7a160d22454b0c01bb604b67674a3c08471c38e27"
+  },
+  "positive_e01_qualification": {
+    "status": "UNVERIFIED",
+    "reason": "Omitted by owner direction; owner will assess behavior organically.",
+    "new_agent_turns": 0,
+    "model_spend_usd": 0.0,
+    "tokens_consumed": 0
+  },
+  "reused_evidence": {
+    "suite_2_session": "20260923_210140_edb6a3",
+    "suite_3_session": "20260923_210555_a153b2",
+    "control_a_session": "20260923_210233_326a48",
+    "control_b_deterministic_witness": "specs/005-project-knowledge-graphify/fixtures/e01_morfeo_orientation_lane.py::test_unborn_repository_honest_degradation",
+    "attribution": "Attributed to KG19-02 (t_58496a81) in specs/005-project-knowledge-graphify/evidence/KG19-02.md and E01-evidence.json"
+  },
+  "preservation": {
+    "live_morfeo_profile_mutated": false,
+    "live_board_mutated": false,
+    "primary_checkout_mutated": false,
+    "prior_run_roots_preserved": true
+  }
+}

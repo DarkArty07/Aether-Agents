@@ -56,9 +56,9 @@ except ImportError:  # pragma: no cover - dev environment always provides it
 REPO_ROOT = Path(__file__).resolve().parents[3]
 WORKTREE_SRC = REPO_ROOT / "src"
 
-EXPECTED_MORFEO_SOUL_SHA256 = "c4785b1a38e29e49d908268cd2abfedf5d587e63386ef1ba1f00326c999065ee"
+EXPECTED_MORFEO_SOUL_SHA256 = "a1c997634ddface5d0f86744ff24cc23b964145a20d736d1ced4b3c23ef1d7f8"
 EXPECTED_PROJECT_KNOWLEDGE_SKILL_SHA256 = (
-    "9a417c75235eb2fa0388b3d6ba95ca19f268d894fabe2fcabfaa0023c394b869"
+    "41436ff6cd9f64cd3b82d2e7a160d22454b0c01bb604b67674a3c08471c38e27"
 )
 
 
@@ -125,7 +125,7 @@ def hash_file(path: Path) -> str:
 
 
 def verify_candidate_resource_bytes() -> dict[str, str]:
-    """Verify that current candidate resources match the frozen KG19-01 bytes."""
+    """Verify that current candidate resources match the frozen KG19-03 bytes."""
     soul_path = WORKTREE_SRC / "aether_agents/resources/profiles/morfeo/SOUL.md"
     skill_path = WORKTREE_SRC / "aether_agents/resources/skills/project-knowledge/SKILL.md"
 
