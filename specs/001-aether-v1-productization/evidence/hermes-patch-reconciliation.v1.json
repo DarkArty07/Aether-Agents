@@ -3905,7 +3905,7 @@
     "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
     "unverified": 2
   },
-  "source_ledger_sha256": "7f5b8560515367799e33c1e12c9c54a21ddca252e47643c455a7874b231ad85c",
+  "source_ledger_sha256": "a85abfe02925d53c961c28fe426b2829ae55213aeb321f99746da997864eff19",
   "upstream": {
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
     "repository": "https://github.com/NousResearch/hermes-agent"
