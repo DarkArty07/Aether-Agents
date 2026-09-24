@@ -160,9 +160,20 @@ def test_documented_project_selection_precedence_matches_the_implemented_resolve
     monkeypatch.chdir(tmp_path)
     assert launcher._resolve_project("alpha") == (alpha, "11111111-1111-4111-8111-111111111111")
 
-    # (5) The sole registered project resolves only when nothing else applies.
+    # (5) An uninitialized cwd never opens an unrelated registered project:
+    # with several it reports ambiguous identity, and with one it gives actionable init guidance.
     monkeypatch.chdir(tmp_path)
     with pytest.raises(launcher.ActivationError, match="ambiguous project identity"):
+        launcher._resolve_project(None)
+
+    solo_state = tmp_path / "solo_state"
+    solo_registry = ProjectRegistry(root=solo_state / "aether")
+    solo_proj = _initialized_project(
+        tmp_path / "solo", "44444444-4444-4444-8444-444444444444", "solo"
+    )
+    solo_registry.register("44444444-4444-4444-8444-444444444444", solo_proj, "solo")
+    monkeypatch.setenv("XDG_STATE_HOME", str(solo_state))
+    with pytest.raises(launcher.ActivationError, match="run 'git init' and 'aether init'"):
         launcher._resolve_project(None)
 
 
@@ -173,7 +184,7 @@ def test_documented_launch_and_shell_default_guidance_states_the_implemented_beh
         "`AETHER_PROJECT_ROOT` in the environment, which also takes precedence over the current directory",
         "a verified `AETHER_PROJECT_ID` whose project-registry entry and portable marker agree",
         "the current directory, or its nearest initialized parent directory",
-        "the single registered project",
+        "never silently opens an unrelated registered project",
         "`ambiguous project identity`",
         "aether --project /path/to/project --resume latest",
         "`Aether` (fresh) and `Continue Aether` (`--resume latest`)",

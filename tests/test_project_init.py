@@ -8,9 +8,13 @@ the read-only exact-path match is tested, not mocked.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
+import os
 import sqlite3
 import subprocess
 import tomllib
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -20,6 +24,7 @@ from aether_agents.commands import init as init_command
 from aether_agents.commands.init import run_init
 from aether_agents.objective_contracts import ObjectiveContractStore
 from aether_agents.observation.context import ProjectRegistry
+from aether_agents.paths import data_root, state_root
 from aether_agents.project_marker import validate_project_marker
 
 #: The published Aether RC ships this PEP 440 package version; the contract's display
@@ -62,21 +67,167 @@ def _git_repository(path: Path) -> Path:
     return path
 
 
-def _hermes_home(tmp_path: Path, projects: list[tuple[str, str, str, Path]]) -> Path:
+def _hermes_home(
+    tmp_path: Path,
+    projects: list[tuple[str, str, str, Path] | tuple[str, str, str, Path, int]],
+) -> Path:
     """Build a Hermes profile home holding ``(id, slug, name, primary_path)`` projects."""
-    home = tmp_path / "hermes-home"
-    home.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(home / "projects.db")
+    hermes_root = tmp_path / "hermes-root"
+    profile_home = hermes_root / "profiles" / "morfeo"
+    profile_home.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(profile_home / "projects.db")
     connection.executescript(_PROJECTS_SCHEMA)
-    for identifier, slug, name, primary in projects:
+    for entry in projects:
+        identifier, slug, name, primary = entry[0], entry[1], entry[2], entry[3]
+        archived = entry[4] if len(entry) > 4 else 0
         connection.execute(
             "INSERT INTO projects (id, slug, name, primary_path, created_at, archived) "
-            "VALUES (?, ?, ?, ?, 0, 0)",
-            (identifier, slug, name, str(primary)),
+            "VALUES (?, ?, ?, ?, 0, ?)",
+            (identifier, slug, name, str(primary), archived),
         )
     connection.commit()
     connection.close()
-    return home
+    return hermes_root
+
+
+def _runtime_root(tmp_path: Path) -> Path:
+    runtime = tmp_path / "runtime"
+    venv_bin = runtime / "venv" / "bin"
+    venv_bin.mkdir(parents=True, exist_ok=True)
+    hermes_bin = venv_bin / "hermes"
+    script = """#!/usr/bin/env python3
+import os
+import re
+import sqlite3
+import sys
+import uuid
+from pathlib import Path
+
+if "--version" in sys.argv:
+    print("Hermes Agent v0.20.1 (test)")
+    sys.exit(0)
+
+if len(sys.argv) >= 5 and sys.argv[1] == "project" and sys.argv[2] == "create":
+    name = sys.argv[3]
+    primary_idx = sys.argv.index("--primary")
+    primary = sys.argv[primary_idx + 1]
+    home = os.environ.get("HERMES_HOME")
+    if not home:
+        print("HERMES_HOME not set", file=sys.stderr)
+        sys.exit(1)
+    db_path = Path(home) / "projects.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS projects ("
+        "id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL, "
+        "description TEXT, icon TEXT, color TEXT, board_slug TEXT, primary_path TEXT, "
+        "created_at INTEGER NOT NULL, archived INTEGER NOT NULL DEFAULT 0)"
+    )
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "project"
+    project_id = f"p_{uuid.uuid4().hex[:8]}"
+    conn.execute(
+        "INSERT INTO projects (id, slug, name, primary_path, created_at, archived) "
+        "VALUES (?, ?, ?, ?, 0, 0)",
+        (project_id, slug, name, primary),
+    )
+    conn.commit()
+    conn.close()
+    print(f"Created project {slug} ({project_id})")
+    sys.exit(0)
+
+print(f"Unknown command: {sys.argv}", file=sys.stderr)
+sys.exit(1)
+"""
+    hermes_bin.write_text(script, encoding="utf-8")
+    hermes_bin.chmod(0o755)
+    return runtime
+
+
+def _standin_snapshot(path: Path) -> dict[str, object]:
+    """Byte digest plus per-table row counts and content digests for isolation witness."""
+    with sqlite3.connect(path) as connection:
+        tables = [
+            str(row[0])
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"
+            )
+        ]
+        counts: dict[str, int] = {}
+        digests: dict[str, str] = {}
+        for table in tables:
+            rows = [list(row) for row in connection.execute(f"SELECT * FROM {table}")]
+            counts[table] = len(rows)
+            payload = json.dumps(rows, sort_keys=True, ensure_ascii=True)
+            digests[table] = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return {
+        "bytes": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "counts": counts,
+        "digests": digests,
+    }
+
+
+@pytest.fixture(autouse=True)
+def isolate_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    fake_home = tmp_path / "user-home"
+    fake_home.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(fake_home / ".local" / "share"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(fake_home / ".local" / "state"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(fake_home / ".config"))
+    fake_tmp = tmp_path / "tmp"
+    fake_tmp.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("TMPDIR", str(fake_tmp))
+    monkeypatch.delenv("HERMES_HOME", raising=False)
+    monkeypatch.delenv("AETHER_HERMES_ROOT", raising=False)
+    monkeypatch.delenv("AETHER_RUNTIME_ROOT", raising=False)
+    runtime = _runtime_root(tmp_path)
+    monkeypatch.setenv("AETHER_RUNTIME_ROOT", str(runtime))
+
+    fake_kanban = tmp_path / "kanban"
+    fake_kanban.mkdir(parents=True, exist_ok=True)
+    fake_workspaces = fake_kanban / "workspaces"
+    fake_workspaces.mkdir(parents=True, exist_ok=True)
+    standin_board = fake_kanban / "kanban.db"
+    with sqlite3.connect(standin_board) as conn:
+        conn.execute("CREATE TABLE _standin (id INT PRIMARY KEY, canary TEXT)")
+        conn.execute("INSERT INTO _standin VALUES (1, 'witness')")
+        conn.commit()
+    standin_before = _standin_snapshot(standin_board)
+
+    kanban_selectors = {
+        "HERMES_KANBAN_DB": str(standin_board),
+        "HERMES_KANBAN_BOARD": "isolated-test-board",
+        "HERMES_KANBAN_TASK": "t_isolated_task",
+        "HERMES_KANBAN_RUN_ID": "0",
+        "HERMES_KANBAN_WORKSPACE": str(tmp_path / "workspace"),
+        "HERMES_KANBAN_WORKSPACES_ROOT": str(fake_workspaces),
+        "HERMES_KANBAN_CLAIM_LOCK": "isolated-claim-lock",
+        "HERMES_KANBAN_BRANCH": "isolated-branch",
+    }
+    for k, v in kanban_selectors.items():
+        monkeypatch.setenv(k, v)
+    for k in list(os.environ.keys()):
+        if k.startswith("HERMES_KANBAN_") and k not in kanban_selectors:
+            monkeypatch.delenv(k, raising=False)
+
+    tmp_resolved = tmp_path.resolve()
+    assert tmp_resolved in state_root().resolve().parents
+    assert tmp_resolved in data_root().resolve().parents
+    assert tmp_resolved in init_command._resolve_profile_home(tmp_path).resolve().parents
+    assert tmp_resolved in Path(os.environ["HERMES_KANBAN_DB"]).resolve().parents
+    assert tmp_resolved in Path(os.environ["HERMES_KANBAN_WORKSPACES_ROOT"]).resolve().parents
+    assert tmp_resolved in Path(os.environ["TMPDIR"]).resolve().parents
+
+    yield
+
+    assert _standin_snapshot(standin_board) == standin_before
+    assert tmp_resolved in state_root().resolve().parents
+    assert tmp_resolved in data_root().resolve().parents
+    assert tmp_resolved in init_command._resolve_profile_home(tmp_path).resolve().parents
+    assert tmp_resolved in Path(os.environ["HERMES_KANBAN_DB"]).resolve().parents
+    assert tmp_resolved in Path(os.environ["HERMES_KANBAN_WORKSPACES_ROOT"]).resolve().parents
+    assert tmp_resolved in Path(os.environ["TMPDIR"]).resolve().parents
 
 
 def _args(path: Path, **overrides: object) -> argparse.Namespace:
@@ -102,7 +253,7 @@ def test_brownfield_init_writes_valid_marker_and_binds_one_hermes_project(
 ) -> None:
     repository = _git_repository(tmp_path / "repo")
     monkeypatch.setenv(
-        "HERMES_HOME",
+        "AETHER_HERMES_ROOT",
         str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)])),
     )
 
@@ -134,7 +285,7 @@ def test_marker_carries_the_release_identity_when_the_product_version_is_pep440(
     """
     repository = _git_repository(tmp_path / "repo")
     monkeypatch.setenv(
-        "HERMES_HOME",
+        "AETHER_HERMES_ROOT",
         str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)])),
     )
     monkeypatch.setattr(init_command, "product_version", lambda: _PEP440_IDENTITY)
@@ -160,7 +311,7 @@ def test_init_is_idempotent(
 ) -> None:
     repository = _git_repository(tmp_path / "repo")
     monkeypatch.setenv(
-        "HERMES_HOME",
+        "AETHER_HERMES_ROOT",
         str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)])),
     )
     first = run_init(_args(repository), registry=registry)
@@ -182,7 +333,7 @@ def test_exact_path_match_wins_over_identical_project_names(
     repository = _git_repository(tmp_path / "repo")
     decoy = _git_repository(tmp_path / "decoy")
     monkeypatch.setenv(
-        "HERMES_HOME",
+        "AETHER_HERMES_ROOT",
         str(
             _hermes_home(
                 tmp_path,
@@ -206,7 +357,7 @@ def test_ambiguous_exact_matches_refuse_until_disambiguated(
 ) -> None:
     repository = _git_repository(tmp_path / "repo")
     monkeypatch.setenv(
-        "HERMES_HOME",
+        "AETHER_HERMES_ROOT",
         str(
             _hermes_home(
                 tmp_path,
@@ -236,7 +387,7 @@ def test_explicit_hermes_project_with_mismatched_path_is_refused(
     repository = _git_repository(tmp_path / "repo")
     other = _git_repository(tmp_path / "other")
     monkeypatch.setenv(
-        "HERMES_HOME",
+        "AETHER_HERMES_ROOT",
         str(
             _hermes_home(
                 tmp_path,
@@ -255,19 +406,51 @@ def test_explicit_hermes_project_with_mismatched_path_is_refused(
     assert not (repository / ".aether").exists()
 
 
-def test_missing_hermes_project_refuses_without_creating_one(
+def test_missing_hermes_project_creates_exactly_one_native_project_when_none_exists(
     tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """When zero active and zero archived projects exist, init creates exactly one."""
     repository = _git_repository(tmp_path / "repo")
-    home = _hermes_home(tmp_path, [])
-    monkeypatch.setenv("HERMES_HOME", str(home))
+    hermes_root = _hermes_home(tmp_path, [])
+    monkeypatch.setenv("AETHER_HERMES_ROOT", str(hermes_root))
+
+    envelope = run_init(_args(repository), registry=registry)
+
+    assert envelope.result == "changed", envelope.errors
+    assert envelope.changed is True
+    assert envelope.data["hermes_project_action"] == "create"
+    created_id = envelope.data["hermes_project_id"]
+    assert created_id is not None
+    assert (repository / ".aether" / "project.toml").is_file()
+
+    db_path = hermes_root / "profiles" / "morfeo" / "projects.db"
+    connection = sqlite3.connect(db_path)
+    rows = connection.execute("SELECT id, primary_path, archived FROM projects").fetchall()
+    connection.close()
+    assert len(rows) == 1
+    assert rows[0][0] == created_id
+    assert Path(rows[0][1]).resolve() == repository.resolve()
+    assert rows[0][2] == 0
+    assert registry.project_path(envelope.data["project_id"]) == repository.resolve()
+
+
+def test_missing_hermes_project_refuses_when_runtime_unavailable(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When native creation is needed but runtime is unavailable, refuse before mutation."""
+    repository = _git_repository(tmp_path / "repo")
+    hermes_root = _hermes_home(tmp_path, [])
+    monkeypatch.setenv("AETHER_HERMES_ROOT", str(hermes_root))
+    monkeypatch.setenv("AETHER_RUNTIME_ROOT", str(tmp_path / "absent-runtime"))
 
     envelope = run_init(_args(repository), registry=registry)
 
     assert envelope.result == "error"
-    assert envelope.errors[0].code == "AETHER-INIT-HERMES-PROJECT-MISSING"
+    assert envelope.errors[0].code == "AETHER-INIT-HERMES-RUNTIME-UNAVAILABLE"
     assert not (repository / ".aether").exists()
-    connection = sqlite3.connect(home / "projects.db")
+    assert not registry.path.exists()
+    db_path = hermes_root / "profiles" / "morfeo" / "projects.db"
+    connection = sqlite3.connect(db_path)
     assert connection.execute("SELECT count(*) FROM projects").fetchone()[0] == 0
     connection.close()
 
@@ -277,7 +460,7 @@ def test_moved_repository_repoints_the_stale_binding(
 ) -> None:
     original = _git_repository(tmp_path / "repo")
     monkeypatch.setenv(
-        "HERMES_HOME",
+        "AETHER_HERMES_ROOT",
         str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", original)])),
     )
     first = run_init(_args(original), registry=registry)
@@ -286,7 +469,8 @@ def test_moved_repository_repoints_the_stale_binding(
     moved = tmp_path / "moved"
     original.rename(moved)
     monkeypatch.setenv(
-        "HERMES_HOME", str(_hermes_home(tmp_path / "second", [("p_exact", "repo", "Repo", moved)]))
+        "AETHER_HERMES_ROOT",
+        str(_hermes_home(tmp_path / "second", [("p_exact", "repo", "Repo", moved)])),
     )
 
     envelope = run_init(_args(moved), registry=registry)
@@ -303,7 +487,7 @@ def test_conflicting_live_identity_is_refused(
     """A copied repository keeps the original's UUID; both live locations must not merge."""
     original = _git_repository(tmp_path / "repo")
     monkeypatch.setenv(
-        "HERMES_HOME",
+        "AETHER_HERMES_ROOT",
         str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", original)])),
     )
     first = run_init(_args(original), registry=registry)
@@ -314,7 +498,7 @@ def test_conflicting_live_identity_is_refused(
         (original / ".aether" / "project.toml").read_bytes()
     )
     monkeypatch.setenv(
-        "HERMES_HOME",
+        "AETHER_HERMES_ROOT",
         str(_hermes_home(tmp_path / "second", [("p_clone", "clone", "Clone", clone)])),
     )
 
@@ -330,7 +514,7 @@ def test_invalid_existing_marker_is_preserved_not_overwritten(
 ) -> None:
     repository = _git_repository(tmp_path / "repo")
     monkeypatch.setenv(
-        "HERMES_HOME",
+        "AETHER_HERMES_ROOT",
         str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)])),
     )
     marker_path = repository / ".aether" / "project.toml"
@@ -348,7 +532,7 @@ def test_invalid_existing_marker_is_preserved_not_overwritten(
 def test_non_repository_and_subdirectory_are_refused(
     tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("HERMES_HOME", str(_hermes_home(tmp_path, [])))
+    monkeypatch.setenv("AETHER_HERMES_ROOT", str(_hermes_home(tmp_path, [])))
     plain = tmp_path / "plain"
     plain.mkdir()
 
@@ -371,7 +555,7 @@ def test_dry_run_reports_the_plan_without_writing(
 ) -> None:
     repository = _git_repository(tmp_path / "repo")
     monkeypatch.setenv(
-        "HERMES_HOME",
+        "AETHER_HERMES_ROOT",
         str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)])),
     )
 
@@ -396,7 +580,7 @@ def test_github_remote_is_recorded_and_can_be_overridden(
         capture_output=True,
     )
     monkeypatch.setenv(
-        "HERMES_HOME",
+        "AETHER_HERMES_ROOT",
         str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)])),
     )
 
@@ -417,7 +601,7 @@ def test_github_remote_is_recorded_and_can_be_overridden(
         capture_output=True,
     )
     monkeypatch.setenv(
-        "HERMES_HOME",
+        "AETHER_HERMES_ROOT",
         str(_hermes_home(tmp_path / "second", [("p_forced", "forced", "Forced", forced)])),
     )
     local = run_init(_args(forced, forge="local"), registry=registry)
@@ -435,7 +619,7 @@ def test_objective_contract_accepts_the_initialized_project_and_rejects_others(
     """The canary: an initialized project is contract-authorable, an unrelated id is not."""
     repository = _git_repository(tmp_path / "repo")
     monkeypatch.setenv(
-        "HERMES_HOME",
+        "AETHER_HERMES_ROOT",
         str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)])),
     )
     envelope = run_init(_args(repository), registry=registry)
@@ -486,7 +670,7 @@ def _init_with_ignore(
         ("git", "commit", "-m", "ignore policy"), cwd=repository, check=True, capture_output=True
     )
     monkeypatch.setenv(
-        "HERMES_HOME", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
+        "AETHER_HERMES_ROOT", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
     )
     return repository, run_init(_args(repository, **kw), registry=registry)
 
@@ -556,7 +740,7 @@ def test_init_does_not_touch_an_already_correct_ignore_policy(
     )
     (repository / ".gitignore").write_text(policy, encoding="utf-8")
     monkeypatch.setenv(
-        "HERMES_HOME", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
+        "AETHER_HERMES_ROOT", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
     )
 
     envelope = run_init(_args(repository), registry=registry)
@@ -688,7 +872,7 @@ def test_init_preserves_existing_agents_and_does_not_invent_missing_guidance(
     original = "# Existing project rules\n\nKeep this exact guidance.\n"
     agents.write_text(original, encoding="utf-8")
     monkeypatch.setenv(
-        "HERMES_HOME",
+        "AETHER_HERMES_ROOT",
         str(
             _hermes_home(
                 tmp_path / "existing-home", [("p_existing", "existing", "Existing", existing)]
@@ -703,7 +887,7 @@ def test_init_preserves_existing_agents_and_does_not_invent_missing_guidance(
 
     missing = _git_repository(tmp_path / "missing")
     monkeypatch.setenv(
-        "HERMES_HOME",
+        "AETHER_HERMES_ROOT",
         str(
             _hermes_home(tmp_path / "missing-home", [("p_missing", "missing", "Missing", missing)])
         ),
@@ -743,7 +927,7 @@ def test_init_ignores_project_worktrees_and_keeps_owner_status_clean(
     """Fresh brownfield init + project-linked task worktree leaves git status clean."""
     repository = _git_repository(tmp_path / "repo")
     monkeypatch.setenv(
-        "HERMES_HOME", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
+        "AETHER_HERMES_ROOT", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
     )
 
     envelope = run_init(_args(repository), registry=registry)
@@ -798,7 +982,7 @@ def test_init_refuses_when_worktrees_is_already_tracked(
     """Tracked or conflicting .worktrees refuses rather than hiding tracked content."""
     repository = _git_repository(tmp_path / "repo")
     monkeypatch.setenv(
-        "HERMES_HOME", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
+        "AETHER_HERMES_ROOT", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
     )
 
     # Case 1: .worktrees is a tracked file
@@ -833,7 +1017,7 @@ def test_init_refuses_when_worktrees_directory_content_is_tracked(
     """Files inside .worktrees/ tracked or staged refuse initialization."""
     repository = _git_repository(tmp_path / "repo")
     monkeypatch.setenv(
-        "HERMES_HOME", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
+        "AETHER_HERMES_ROOT", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
     )
 
     worktrees_dir = repository / ".worktrees" / "nested"
@@ -859,7 +1043,7 @@ def test_init_refuses_when_worktrees_is_staged_in_index(
     """A staged .worktrees file before commit also refuses initialization."""
     repository = _git_repository(tmp_path / "repo")
     monkeypatch.setenv(
-        "HERMES_HOME", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
+        "AETHER_HERMES_ROOT", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
     )
 
     worktrees_dir = repository / ".worktrees"
@@ -885,7 +1069,7 @@ def test_init_preserves_unrelated_ignore_rules_when_ignoring_worktrees(
         ("git", "commit", "-m", "custom gitignore"), cwd=repository, check=True, capture_output=True
     )
     monkeypatch.setenv(
-        "HERMES_HOME", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
+        "AETHER_HERMES_ROOT", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
     )
 
     envelope = run_init(_args(repository), registry=registry)
@@ -897,3 +1081,321 @@ def test_init_preserves_unrelated_ignore_rules_when_ignoring_worktrees(
     assert _ignored(repository, "app.log")
     assert _ignored(repository, "node_modules/pkg/index.js")
     assert _ignored(repository, ".worktrees/")
+
+
+def test_unborn_git_root_init(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unborn Git root (git init, no commits) is accepted without creating commits or remotes."""
+    repo = tmp_path / "unborn-repo"
+    repo.mkdir()
+    subprocess.run(("git", "init", "-b", "main"), cwd=repo, check=True, capture_output=True)
+
+    # Verify HEAD^{commit} fails before init
+    head_before = subprocess.run(
+        ("git", "rev-parse", "--verify", "HEAD^{commit}"),
+        cwd=repo,
+        capture_output=True,
+    )
+    assert head_before.returncode != 0
+
+    hermes_root = _hermes_home(tmp_path, [])
+    monkeypatch.setenv("AETHER_HERMES_ROOT", str(hermes_root))
+
+    envelope = run_init(_args(repo), registry=registry)
+    assert envelope.result == "changed", envelope.errors
+    assert envelope.changed is True
+
+    # Verify HEAD^{commit} STILL fails after init (no commit created)
+    head_after = subprocess.run(
+        ("git", "rev-parse", "--verify", "HEAD^{commit}"),
+        cwd=repo,
+        capture_output=True,
+    )
+    assert head_after.returncode != 0
+
+    # Verify no git remotes created
+    remotes = subprocess.run(("git", "remote"), cwd=repo, capture_output=True, text=True)
+    assert remotes.stdout.strip() == ""
+
+    # Verify marker
+    marker_path = repo / ".aether" / "project.toml"
+    assert marker_path.is_file()
+    marker = tomllib.loads(marker_path.read_text(encoding="utf-8"))
+    validate_project_marker(marker)
+    assert marker["project_id"] == envelope.data["project_id"]
+    assert marker["default_branch"] == "main"
+    assert "hermes_project_id" not in marker
+
+    # Verify native project in projects.db
+    db_path = hermes_root / "profiles" / "morfeo" / "projects.db"
+    conn = sqlite3.connect(db_path)
+    rows = conn.execute("SELECT id, primary_path FROM projects").fetchall()
+    conn.close()
+    assert len(rows) == 1
+    assert rows[0][0] == envelope.data["hermes_project_id"]
+    assert Path(rows[0][1]).resolve() == repo.resolve()
+
+    # Verify registry
+    assert registry.project_path(marker["project_id"]) == repo.resolve()
+
+
+def test_dry_run_purity_byte_level(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Preview stays pure: no native project, no marker, no registry entry, no .gitignore mutation."""
+    repo = _git_repository(tmp_path / "repo")
+    gitignore = repo / ".gitignore"
+    gitignore.write_text("existing-rule/\n", encoding="utf-8")
+    before_bytes = gitignore.read_bytes()
+
+    hermes_root = _hermes_home(tmp_path, [])
+    monkeypatch.setenv("AETHER_HERMES_ROOT", str(hermes_root))
+
+    envelope = run_init(_args(repo, dry_run=True), registry=registry)
+    assert envelope.result == "planned"
+    assert envelope.changed is False
+    assert envelope.data["hermes_project_action"] == "create"
+    assert envelope.data["hermes_project_id"] is None
+
+    # .gitignore unchanged byte-for-byte
+    assert gitignore.read_bytes() == before_bytes
+    # No .aether directory
+    assert not (repo / ".aether").exists()
+    # No registry file
+    assert not registry.path.exists()
+    # projects.db still empty
+    db_path = hermes_root / "profiles" / "morfeo" / "projects.db"
+    conn = sqlite3.connect(db_path)
+    assert conn.execute("SELECT count(*) FROM projects").fetchone()[0] == 0
+    conn.close()
+
+
+def test_retry_after_interruption_following_native_creation(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Interruption after native creation permits exact-path retry without duplicate or cleanup."""
+    repo = _git_repository(tmp_path / "repo")
+    # Simulate native project already created in projects.db, but marker not yet written
+    hermes_root = _hermes_home(tmp_path, [("p_interrupted", "repo", "Repo", repo)])
+    monkeypatch.setenv("AETHER_HERMES_ROOT", str(hermes_root))
+
+    # Retry proceeds
+    envelope = run_init(_args(repo), registry=registry)
+    assert envelope.result == "changed"
+    assert envelope.data["hermes_project_id"] == "p_interrupted"
+    assert envelope.data["hermes_project_action"] == "reuse"
+
+    # Exactly one project in database (no duplicate)
+    db_path = hermes_root / "profiles" / "morfeo" / "projects.db"
+    conn = sqlite3.connect(db_path)
+    assert conn.execute("SELECT count(*) FROM projects").fetchone()[0] == 1
+    conn.close()
+
+    # Marker and registry completed
+    assert (repo / ".aether" / "project.toml").is_file()
+    assert registry.project_path(envelope.data["project_id"]) == repo.resolve()
+
+
+def test_refuse_archived_exact_path_match(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An archived exact-path match is a visible identity conflict, refusing replacement."""
+    repo = _git_repository(tmp_path / "repo")
+    hermes_root = _hermes_home(tmp_path, [("p_archived", "repo", "Repo", repo, 1)])
+    monkeypatch.setenv("AETHER_HERMES_ROOT", str(hermes_root))
+
+    envelope = run_init(_args(repo), registry=registry)
+    assert envelope.result == "error"
+    assert envelope.errors[0].code == "AETHER-INIT-HERMES-PROJECT-ARCHIVED"
+    assert not (repo / ".aether").exists()
+
+
+def test_refuse_cross_profile_path(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Paths inside a Hermes profile directory are refused."""
+    hermes_root = _hermes_home(tmp_path, [])
+    monkeypatch.setenv("AETHER_HERMES_ROOT", str(hermes_root))
+
+    profile_home = hermes_root / "profiles" / "morfeo"
+    repo_in_profile = _git_repository(profile_home / "nested-repo")
+
+    envelope = run_init(_args(repo_in_profile), registry=registry)
+    assert envelope.result == "error"
+    assert envelope.errors[0].code == "AETHER-INIT-CROSS-PROFILE-PATH"
+    assert not (repo_in_profile / ".aether").exists()
+
+
+def test_refuse_plain_directory_actionable_guidance(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Plain non-Git directory is refused with actionable git init guidance and zero mutation."""
+    hermes_root = _hermes_home(tmp_path, [])
+    monkeypatch.setenv("AETHER_HERMES_ROOT", str(hermes_root))
+    plain = tmp_path / "plain-folder"
+    plain.mkdir()
+
+    envelope = run_init(_args(plain), registry=registry)
+    assert envelope.result == "error"
+    assert envelope.errors[0].code == "AETHER-INIT-NOT-A-GIT-REPOSITORY"
+    assert "git init" in envelope.errors[0].message
+    assert list(plain.iterdir()) == []
+
+
+def test_refuse_symlinked_gitignore(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A symlinked .gitignore is refused before modification."""
+    repo = _git_repository(tmp_path / "repo")
+    target = tmp_path / "external-ignore"
+    target.write_text("some-rule/\n", encoding="utf-8")
+    (repo / ".gitignore").symlink_to(target)
+
+    hermes_root = _hermes_home(tmp_path, [("p_exact", "repo", "Repo", repo)])
+    monkeypatch.setenv("AETHER_HERMES_ROOT", str(hermes_root))
+
+    envelope = run_init(_args(repo), registry=registry)
+    assert envelope.result == "error"
+    assert envelope.errors[0].code == "AETHER-INIT-IGNORE-POLICY-UNSAFE"
+
+
+def test_init_creates_native_project_when_projects_db_absent(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When projects.db does not exist at all, it counts as zero matches and create succeeds."""
+    repo = _git_repository(tmp_path / "repo")
+    hermes_root = tmp_path / "fresh-hermes-root"
+    (hermes_root / "profiles" / "morfeo").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("AETHER_HERMES_ROOT", str(hermes_root))
+
+    envelope = run_init(_args(repo), registry=registry)
+    assert envelope.result == "changed", envelope.errors
+    assert envelope.data["hermes_project_action"] == "create"
+    assert (repo / ".aether" / "project.toml").is_file()
+    assert (hermes_root / "profiles" / "morfeo" / "projects.db").is_file()
+
+
+def test_refuse_when_projects_db_unreadable_or_corrupt(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Genuinely unreadable / corrupt projects.db keeps projects-unavailable refusal."""
+    repo = _git_repository(tmp_path / "repo")
+    hermes_root = tmp_path / "corrupt-hermes-root"
+    profile_home = hermes_root / "profiles" / "morfeo"
+    profile_home.mkdir(parents=True, exist_ok=True)
+    (profile_home / "projects.db").write_bytes(b"not a valid sqlite database header at all")
+    monkeypatch.setenv("AETHER_HERMES_ROOT", str(hermes_root))
+
+    envelope = run_init(_args(repo), registry=registry)
+    assert envelope.result == "error"
+    assert envelope.errors[0].code in (
+        "AETHER-INIT-HERMES-PROJECTS-UNAVAILABLE",
+        "AETHER-INIT-HERMES-PROJECTS-UNREADABLE",
+    )
+    assert not (repo / ".aether").exists()
+
+
+def test_refuse_when_projects_db_schema_invalid(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A SQLite db lacking expected projects schema refuses with unreadable error."""
+    repo = _git_repository(tmp_path / "repo")
+    hermes_root = tmp_path / "invalid-schema-root"
+    profile_home = hermes_root / "profiles" / "morfeo"
+    profile_home.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(profile_home / "projects.db")
+    conn.execute("CREATE TABLE wrong_table (id INT)")
+    conn.close()
+    monkeypatch.setenv("AETHER_HERMES_ROOT", str(hermes_root))
+
+    envelope = run_init(_args(repo), registry=registry)
+    assert envelope.result == "error"
+    assert envelope.errors[0].code == "AETHER-INIT-HERMES-PROJECTS-UNREADABLE"
+    assert not (repo / ".aether").exists()
+
+
+def test_brownfield_preservation_with_dirty_state(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Existing governance, uncommitted files, branches, remotes are preserved."""
+    repo = _git_repository(tmp_path / "repo")
+    (repo / "AGENTS.md").write_text("# Custom Agents\n", encoding="utf-8")
+    (repo / "dirty.txt").write_text("uncommitted content\n", encoding="utf-8")
+    subprocess.run(
+        ("git", "remote", "add", "origin", "git@github.com:TestOrg/repo.git"),
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    hermes_root = _hermes_home(tmp_path, [("p_exact", "repo", "Repo", repo)])
+    monkeypatch.setenv("AETHER_HERMES_ROOT", str(hermes_root))
+
+    envelope = run_init(_args(repo), registry=registry)
+    assert envelope.result == "changed", envelope.errors
+
+    assert (repo / "AGENTS.md").read_text(encoding="utf-8") == "# Custom Agents\n"
+    assert (repo / "dirty.txt").read_text(encoding="utf-8") == "uncommitted content\n"
+    assert (repo / "README.md").read_text(encoding="utf-8") == "brownfield\n"
+    remotes = subprocess.run(("git", "remote", "-v"), cwd=repo, capture_output=True, text=True)
+    assert "TestOrg/repo.git" in remotes.stdout
+
+
+def test_refuse_dangling_symlinked_gitignore(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A dangling symlink for .gitignore is refused before modification; target is not created."""
+    repo = _git_repository(tmp_path / "repo")
+    target = tmp_path / "nonexistent-ignore-target"
+    (repo / ".gitignore").symlink_to(target)
+
+    hermes_root = _hermes_home(tmp_path, [("p_exact", "repo", "Repo", repo)])
+    monkeypatch.setenv("AETHER_HERMES_ROOT", str(hermes_root))
+
+    # Real run refuses before any write
+    envelope = run_init(_args(repo), registry=registry)
+    assert envelope.result == "error"
+    assert envelope.errors[0].code == "AETHER-INIT-IGNORE-POLICY-UNSAFE"
+    assert (repo / ".gitignore").is_symlink()
+    assert not target.exists()
+
+    # Dry-run also refuses safely without creating target
+    dry_envelope = run_init(_args(repo, dry_run=True), registry=registry)
+    assert dry_envelope.result == "error"
+    assert dry_envelope.errors[0].code == "AETHER-INIT-IGNORE-POLICY-UNSAFE"
+    assert (repo / ".gitignore").is_symlink()
+    assert not target.exists()
+
+
+def test_refuse_symlinked_or_dangling_marker(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A symlinked or dangling symlinked marker is refused with AETHER-INIT-MARKER-UNSAFE."""
+    repo = _git_repository(tmp_path / "repo")
+    aether_dir = repo / ".aether"
+    aether_dir.mkdir(parents=True, exist_ok=True)
+    marker_path = aether_dir / "project.toml"
+
+    missing_target = tmp_path / "missing-marker.toml"
+    marker_path.symlink_to(missing_target)
+
+    hermes_root = _hermes_home(tmp_path, [("p_exact", "repo", "Repo", repo)])
+    monkeypatch.setenv("AETHER_HERMES_ROOT", str(hermes_root))
+
+    # Dangling symlink refusal
+    envelope = run_init(_args(repo), registry=registry)
+    assert envelope.result == "error"
+    assert envelope.errors[0].code == "AETHER-INIT-MARKER-UNSAFE"
+    assert marker_path.is_symlink()
+    assert not missing_target.exists()
+
+    # Live symlink refusal
+    marker_path.unlink()
+    live_target = tmp_path / "live-marker.toml"
+    live_target.write_text("name = 'live'\nproject_id = '01234567-89ab-cdef-0123-456789abcdef'\n")
+    marker_path.symlink_to(live_target)
+
+    envelope_live = run_init(_args(repo), registry=registry)
+    assert envelope_live.result == "error"
+    assert envelope_live.errors[0].code == "AETHER-INIT-MARKER-UNSAFE"
+    assert marker_path.is_symlink()
