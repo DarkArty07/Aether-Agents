@@ -1,10 +1,10 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-09-16T08:50:33Z`
+Observation timestamp: `2026-09-24T05:25:09Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `2933a1b1d09578cb16ffadd44ca66e713cfb6ee9d3855d072b8957a63303c9d7`
+Source ledger SHA-256: `4bfbb09476b2389801a09efe696a3f053765c028445351e5689175c8ef19222b`
 
 ## Remaining local guarantees
 
@@ -39,6 +39,7 @@ Source ledger SHA-256: `2933a1b1d09578cb16ffadd44ca66e713cfb6ee9d3855d072b8957a6
 - `HLP-425`: Retain HLP-425. The maintained fork and active Aether runtime now preserve one flow-bound Supervisor conversation across same-card review while keeping the candidate workspace and generic Hermes semantics separate.
 - `HLP-426`: Retain HLP-426. The maintained fork now terminates a worker whose run has ended and is no longer current before the dispatcher can spawn a successor on the same workspace, with elapsed time never a criterion; no upstream equivalent was found at the inspected revision, so this remains a downstream-only correction for the maintained fork.
 - `HLP-427`: Retain HLP-427. The maintained fork preserves the latest explicit review/ready retry phase across a phase-less Aether recovery signal, with exact source, runtime bootstrap and live same-card review evidence; no equivalent public upstream interaction exists.
+- `HLP-428`: Retain HLP-428. The maintained fork recovers canonical Project provenance for non-affinity direct parent worktree children, refuses cross-project mismatches before task persistence, and cleanly bounds review failure containment without unverified notifications; verified by RED/GREEN reproduction, four-round strict contract audit, and exact tree reconstruction.
 
 ## Qualified upstream equivalents
 
@@ -153,6 +154,10 @@ Source ledger SHA-256: `2933a1b1d09578cb16ffadd44ca66e713cfb6ee9d3855d072b8957a6
 - `HLP-427` (retirement_gate): Retirement gate status is not_executed.
 - `HLP-427` (uncertainty): The temporary runtime bootstrap proves the behavior in the pre-RC runtime but is not a substitute for immutable rc.2 publication and activation.
 - `HLP-427` (uncertainty): The fix intentionally skips only phase-less origin_signal records; every other legacy event without phase metadata keeps the historical ready fallback.
+- `HLP-428` (artifact): The patch reconstructs exactly in the maintained fork from candidate 184a6d03bc, but no public upstream equivalent exists and fork PR merge/Aether integration remain pending in INT-494.
+- `HLP-428` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-428` (uncertainty): Upstream hermes-agent lacks board-level Project recovery and origin-signal bounding for review-lane containment.
+- `HLP-428` (uncertainty): The regression test module tests/hermes_cli/test_kanban_project_provenance.py is introduced by this patch and does not exist at pre-merge base aed6591a69; full aggregate component presence resolution defers to INT-494 after merge.
 
 ## Artifact integrity
 
@@ -187,14 +192,15 @@ Source ledger SHA-256: `2933a1b1d09578cb16ffadd44ca66e713cfb6ee9d3855d072b8957a6
 - `HLP-425`: unavailable
 - `HLP-426`: unavailable
 - `HLP-427`: unavailable
+- `HLP-428`: unavailable
 
 ## Selected maintained-fork source
 
-Selected source: `https://github.com/DarkArty07/aether-hermes@aed6591a69f453a1867b73628603e7b53ba40ffc` (presence resolved from a checkout: `true`)
+Selected source: `https://github.com/DarkArty07/aether-hermes@58f8c37a49b341f25b8fdd6310542fe932031b8d` (presence resolved from a checkout: `true`)
 
 | Verdict | Entries |
 | --- | --- |
-| present | 29 |
+| present | 30 |
 | partial | 0 |
 | absent | 0 |
 | unverified | 2 |
