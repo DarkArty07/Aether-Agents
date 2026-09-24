@@ -3,7 +3,8 @@
   "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-428--recover-project-provenance-fail-closed-on-cross-project-mismatch-and-bound-review-failure-maintained-fork-2026-09-23",
   "components": [
     "HLP-428",
-    "hermes_cli/kanban_db.py"
+    "hermes_cli/kanban_db.py",
+    "tests/hermes_cli/test_kanban_project_provenance.py"
   ],
   "required_behavior": "A non-affinity child task created with an explicit direct parent worktree recovers the board's canonical Project and receives a fresh project worktree instead of a null-Project scratch directory; explicit cross-project mismatches on recognized Aether boards fail closed before database insertion; and review failure containment cleanly unblocks with gave_up, clears worker/claim ownership, and bounds notifications to verified subscribers without emitting unverified origin signals.",
   "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
