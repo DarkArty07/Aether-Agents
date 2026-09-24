@@ -395,6 +395,7 @@ class ValidatedReleaseLock:
     profile_bundle_sha256: str
     observation_compatibility: dict[str, Any]
     hermes_source: HermesSource | None = None
+    hermes_extras: tuple[str, ...] = ()
 
     @property
     def effective_hermes_source(self) -> HermesSource:
@@ -479,8 +480,43 @@ def _refuse_retired_source_mode(payload: Any) -> None:
         raise IntegrityError(_retired_mode_message(mode))
 
 
+ALLOWED_HERMES_EXTRAS: tuple[str, ...] = ("mcp",)
+
+
+def _validate_hermes_extras(value: Any) -> tuple[str, ...]:
+    """Return the canonical extra tuple or refuse a value outside the closed grammar."""
+
+    if not isinstance(value, list) or not value or any(type(item) is not str for item in value):
+        raise IntegrityError("release lock hermes extras are invalid")
+    if len(value) != len(set(value)):
+        raise IntegrityError("release lock hermes extras contain duplicates")
+    unknown = [item for item in value if item not in ALLOWED_HERMES_EXTRAS]
+    if unknown:
+        raise IntegrityError("release lock hermes extras contain an unknown extra")
+    canonical = tuple(extra for extra in ALLOWED_HERMES_EXTRAS if extra in value)
+    if tuple(value) != canonical:
+        raise IntegrityError("release lock hermes extras are not in canonical order")
+    return canonical
+
+
+def _hermes_extras_from_payload(payload: dict[str, Any]) -> tuple[str, ...]:
+    """Schema 4 has no extras. Schema 5 requires the closed allowlist."""
+
+    schema_version = payload.get("schema_version")
+    hermes = payload.get("hermes")
+    if not isinstance(hermes, dict):
+        raise IntegrityError("release lock Hermes source identity shape is invalid")
+    if schema_version == 4:
+        if "extras" in hermes:
+            raise IntegrityError("release lock schema 4 rejects hermes extras")
+        return ()
+    if schema_version == 5:
+        return _validate_hermes_extras(hermes.get("extras"))
+    raise IntegrityError("release lock schema is invalid")
+
+
 def load_release_lock(path: Path | str) -> ValidatedReleaseLock:
-    """Validate every schema-4 field and the exact maintained-fork source identity."""
+    """Validate schema 4 or 5 and the exact maintained-fork source identity."""
 
     candidate, raw_bytes = _read_release_lock_bytes(path)
     try:
@@ -516,7 +552,10 @@ def load_release_lock(path: Path | str) -> ValidatedReleaseLock:
     assert isinstance(aether_wheel_sha256, str)
     hermes = payload.get("hermes")
     assert isinstance(hermes, dict)
-    hermes_source = HermesSource.from_record(hermes)
+    hermes_extras = _hermes_extras_from_payload(payload)
+    hermes_for_source = dict(hermes)
+    hermes_for_source.pop("extras", None)
+    hermes_source = HermesSource.from_record(hermes_for_source)
     if (
         identity.package_version != display_version
         and _display_version(identity.package_version) != display_version
@@ -539,6 +578,7 @@ def load_release_lock(path: Path | str) -> ValidatedReleaseLock:
         profile_bundle_sha256=profile_bundle_sha256,
         observation_compatibility=observation_compatibility,
         hermes_source=hermes_source,
+        hermes_extras=hermes_extras,
     )
 
 
@@ -5339,6 +5379,7 @@ class LifecycleManager:
             hermes_source_dir,
             runtime_python,
             artifact_dir / "hermes-requirements.txt",
+            hermes_extras=validated_lock.hermes_extras,
         )
         self._install_observer_dependencies(
             runtime_python,
@@ -6790,6 +6831,7 @@ for name, target in expected.items():
         source: Path,
         python: Path,
         requirements_output: Path,
+        hermes_extras: tuple[str, ...] = (),
     ) -> dict[str, str]:
         """Sync the exact tracked Hermes lock, then install only its local project."""
 
@@ -6809,18 +6851,28 @@ for name, target in expected.items():
             raise IntegrityError("Hermes dependency export already exists")
         lock_sha256 = _sha256(lock)
         source_sha256 = _tree_sha256(source)
-        self._run_uv(
+        if hermes_extras != tuple(
+            extra for extra in ALLOWED_HERMES_EXTRAS if extra in hermes_extras
+        ):
+            raise IntegrityError("Hermes extras are outside the closed allowlist")
+        export_command = [
             "--no-config",
             "export",
             "--frozen",
             "--no-dev",
             "--no-emit-project",
-            "--format",
-            "requirements.txt",
-            "--output-file",
-            str(requirements_output),
-            cwd=source,
+        ]
+        for extra in hermes_extras:
+            export_command.extend(("--extra", extra))
+        export_command.extend(
+            (
+                "--format",
+                "requirements.txt",
+                "--output-file",
+                str(requirements_output),
+            )
         )
+        self._run_uv(*export_command, cwd=source)
         if requirements_output.is_symlink() or not requirements_output.is_file():
             raise IntegrityError("Hermes frozen dependency export is unavailable")
         harden_file(requirements_output)

@@ -1914,6 +1914,136 @@ def test_hermes_install_consumes_the_tracked_lock_with_frozen_hash_bound_command
     ]
 
 
+def test_schema4_release_lock_has_no_hermes_extras(tmp_path: Path) -> None:
+    release_lock = _write_release_lock(tmp_path, "1.0.0")
+    loaded = lifecycle.load_release_lock(release_lock)
+    assert loaded.hermes_extras == ()
+
+
+def test_schema5_release_lock_accepts_only_the_mcp_extra(tmp_path: Path) -> None:
+    release_lock = _write_release_lock(tmp_path, "1.0.0")
+    payload = json.loads(release_lock.read_text(encoding="utf-8"))
+    payload["schema_version"] = 5
+    payload["hermes"]["extras"] = ["mcp"]
+    release_lock.write_text(json.dumps(payload), encoding="utf-8")
+    loaded = lifecycle.load_release_lock(release_lock)
+    assert loaded.hermes_extras == ("mcp",)
+
+
+@pytest.mark.parametrize(
+    ("extras", "match"),
+    (
+        (["mcp", "mcp"], "schema"),
+        (["other"], "unknown extra"),
+        ([], "schema"),
+        (["mcp", "other"], "unknown extra"),
+    ),
+)
+def test_schema5_release_lock_rejects_closed_grammar_violations(
+    tmp_path: Path,
+    extras: list[str],
+    match: str,
+) -> None:
+    release_lock = _write_release_lock(tmp_path, "1.0.0")
+    payload = json.loads(release_lock.read_text(encoding="utf-8"))
+    payload["schema_version"] = 5
+    payload["hermes"]["extras"] = extras
+    release_lock.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(lifecycle.IntegrityError, match=match):
+        lifecycle.load_release_lock(release_lock)
+
+
+def test_schema4_release_lock_rejects_hermes_extras(tmp_path: Path) -> None:
+    release_lock = _write_release_lock(tmp_path, "1.0.0")
+    payload = json.loads(release_lock.read_text(encoding="utf-8"))
+    payload["hermes"]["extras"] = ["mcp"]
+    release_lock.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(lifecycle.IntegrityError, match="schema"):
+        lifecycle.load_release_lock(release_lock)
+
+
+def test_historical_schema4_reader_rejects_schema5_before_a_release_directory(
+    tmp_path: Path,
+) -> None:
+    import jsonschema
+
+    schema = json.loads(
+        (
+            Path(lifecycle.__file__).resolve().parents[2]
+            / "specs"
+            / "001-aether-v1-productization"
+            / "contracts"
+            / "release-lock.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    schema["properties"]["schema_version"] = {"const": 4}
+    schema["allOf"] = [
+        {
+            "if": {
+                "properties": {"schema_version": {"const": 4}},
+                "required": ["schema_version"],
+            },
+            "then": {"properties": {"hermes": {"properties": {"extras": False}}}},
+        }
+    ]
+    release_lock = _write_release_lock(tmp_path, "1.0.0")
+    payload = json.loads(release_lock.read_text(encoding="utf-8"))
+    payload["schema_version"] = 5
+    payload["hermes"]["extras"] = ["mcp"]
+    release_lock.write_text(json.dumps(payload), encoding="utf-8")
+    errors = list(jsonschema.Draft202012Validator(schema).iter_errors(payload))
+    assert errors
+    wheel = tmp_path / "aether-agents.whl"
+    wheel.write_bytes(b"not-a-wheel")
+    manager = LifecycleManager(
+        store=ReleaseStore(tmp_path / "state" / "aether"),
+        python_executable=Path(sys.executable),
+    )
+    payload["hermes"]["extras"] = ["other"]
+    release_lock.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(lifecycle.IntegrityError):
+        manager.prepare_release(
+            wheel=wheel,
+            hermes_checkout=tmp_path / "missing-hermes",
+            release_lock=release_lock,
+        )
+    assert not manager.store.releases.exists() or list(manager.store.releases.iterdir()) == []
+
+
+def test_hermes_export_includes_the_declared_mcp_extra(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkout, _ = _clean_tagged_checkout(tmp_path)
+    runtime_python = tmp_path / "runtime" / "bin" / "python"
+    manager = LifecycleManager(
+        store=ReleaseStore(tmp_path / "state" / "aether"),
+        python_executable=Path(sys.executable),
+    )
+    calls: list[tuple[str, ...]] = []
+    requirements = tmp_path / "artifacts" / "hermes-requirements.txt"
+    requirements.parent.mkdir()
+
+    def record(*arguments: str, cwd: Path | None = None) -> None:
+        calls.append(arguments)
+        if "--output-file" in arguments:
+            requirements.write_text("mcp==1.28.1 \\\n", encoding="utf-8")
+
+    monkeypatch.setattr(manager, "_run_uv", record)
+    manager._install_hermes_from_lock(
+        checkout,
+        runtime_python,
+        requirements,
+        hermes_extras=("mcp",),
+    )
+    export = calls[0]
+    assert export[export.index("--no-dev") + 1 : export.index("--format")] == (
+        "--no-emit-project",
+        "--extra",
+        "mcp",
+    )
+
+
 def test_manager_observer_dependencies_are_synced_from_hash_bound_wheel_lock(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

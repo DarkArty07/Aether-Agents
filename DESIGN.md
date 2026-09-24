@@ -186,6 +186,9 @@ Availability is still not adoption. Upstream's own guidance is that A2A is for c
 
 R6 must therefore decide against that guidance and against Aether's chosen topology, not against availability. The question is which Aether role boundaries genuinely cross a process, and R5 owns that.
 
+**External Morfeo enactment:** an MCP-capable external model may enact the Morfeo role through the canonical managed Morfeo profile. This does not create a fourth Aether role, a second Morfeo profile, or a new inter-role transport. The external model is an execution host for Morfeo's role context and tool surface; authority remains the Morfeo role's authority. Kanban remains the transport between Supervisor and Implementer. The `1.0.0rc9` bridge only prepares the dependency lock for that surface; it does not publish the server.
+
+
 *A previous version of this section claimed Hermes contained no A2A implementation. That claim was researched against version 0.19.1, which is not the source Aether runs, and is withdrawn. See `specs/r4-hermes-boundary/research.md` §11.*
 
 ## 10.1 Autonomous project stewardship and canonical procedures
