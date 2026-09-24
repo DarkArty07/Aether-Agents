@@ -19,9 +19,9 @@ Top-level `aether [--project PATH] --json` emits a non-mutating launch plan from
 
 ## Initialize an existing repository
 
-`aether init` currently requires an **existing Git repository root**. It does not initialize Git in an empty directory, create a remote repository, create a native Hermes Project, or select a Project by name or approximate path.
+`aether init` requires an **existing Git repository root** (such as after `git init` in a new or existing directory). It does not run `git init` in an empty directory, create a remote repository, or select a Project by name or approximate path.
 
-Before running it, create or identify one non-archived native Hermes Project whose primary path is exactly the repository root. If multiple matching Projects exist, pass the matching native identifier with `--hermes-project`.
+`aether init` reuses one exact-path native Hermes Project or creates and verifies one through the selected runtime CLI when absent. If multiple matching Projects exist, pass the matching native identifier with `--hermes-project`.
 
 ```bash
 cd /path/to/existing-git-repository
@@ -38,8 +38,9 @@ Aether never infers a project from a display name, a session history, a board de
 1. an explicit `--project PATH`;
 2. `AETHER_PROJECT_ROOT` in the environment, which also takes precedence over the current directory;
 3. a verified `AETHER_PROJECT_ID` whose project-registry entry and portable marker agree;
-4. the current directory, or its nearest initialized parent directory;
-5. only when none of the above applies: the single registered project.
+4. the current directory, or its nearest initialized parent directory.
+
+An uninitialized current working directory never silently opens an unrelated registered project: when a single project is registered, Aether refuses with actionable `git init` and `aether init` guidance; with several registered projects and no explicit selection the launch stops with a bounded `ambiguous project identity` error rather than presenting a picker, name match, or most-recent guess.
 
 Identity values fail visibly instead of falling back to the current directory, and each one fails differently: an empty `--project` value is refused, while a relative `--project PATH` is resolved against the current working directory; `AETHER_PROJECT_ROOT` must be an absolute path, so an empty or relative value is refused (`must not be empty` / `must be an absolute path`); and `AETHER_PROJECT_ID` must be a canonical UUID whose registry entry and portable marker agree. A directory that is not an initialized project root, a registry/marker disagreement, and a conflict between an explicit identity and the registry are all reported as errors. With several registered projects and no explicit selection the launch stops with a bounded `ambiguous project identity` error rather than presenting a picker, name match, or most-recent guess.
 
@@ -57,7 +58,7 @@ Top-level launch binds the active release's own interpreter, source root, TUI di
 
 Aether never writes a personal shell preference: a default or shortcut in your own shell configuration is optional, stays yours, and is added and removed by you.
 
-**Project default (`AETHER_PROJECT_ROOT`).** Setting `AETHER_PROJECT_ROOT` to an absolute project path selects that project from any directory: it takes precedence over the current directory (and over the single registered project), while an explicit `--project PATH` still wins over it. A relative or empty value is refused, so use an absolute path of your own.
+**Project default (`AETHER_PROJECT_ROOT`).** Setting `AETHER_PROJECT_ROOT` to an absolute project path selects that project from any directory: it takes precedence over the current directory, while an explicit `--project PATH` still wins over it. A relative or empty value is refused, so use an absolute path of your own.
 
 Bash and Zsh (`~/.bashrc`, `~/.zshrc`):
 
