@@ -329,7 +329,7 @@
         "primary_calls_count": 16,
         "title_gen_calls_count": 3,
         "valid_trial": true,
-        "positive_outcome": "orient-before-explore satisfied: project_knowledge.query requested in message 13 (result at message 14), while source file contents entered context in messages 15-18; pre-graph calls were skill_view, terminal (cwd/branch), tool_describe and path-listing search_files",
+        "positive_outcome": "substantive source exploration preceded graph query: content search_files at message 12 returned operative values from both docs/decisions/001-retry-policy.md (60s backoff, max 3 attempts, notice of legacy retries) and billing/processor.py (fixed 10s delay, max 5 attempts) before project_knowledge.query was requested at message 13 (result at message 14)",
         "sessions": [
           {
             "id": "20260923_210555_a153b2",
@@ -352,6 +352,27 @@
         ]
       }
     ],
-    "ac2_conclusion": "mixed across valid trials (Suite 2 read key sources before graph query; Suite 3 requested graph query before file contents entered context). Both valid trials correctly distinguished specification from implementation and loaded project-knowledge. Demonstrates that behavior varies across runs on the candidate trigger wording, informing KG19-01 trigger rework."
+    "ac2_conclusion": "both valid trials consulted the graph only after substantive source exploration; the orient-before-explore order is not demonstrated in either. In Suite 2, key sources were read before the graph query; in Suite 3, a content search at message 12 returned operative values from both ADR 001 and billing/processor.py before the query at message 13. Both valid trials correctly distinguished specification from implementation (derived dynamically from answer content) and loaded project-knowledge early. Demonstrates that the candidate trigger wording does not guarantee graph consultation prior to substantive exploration, informing the supervisor and design-steward trigger question."
+  },
+  "field_provenance": {
+    "lane_derived": [
+      "tools_sequence",
+      "references_returned",
+      "sources_read",
+      "sources_inspected",
+      "sources_inspected_after_graph_query",
+      "usage",
+      "answer",
+      "distinguishes_specification_from_implementation"
+    ],
+    "hand_authored_interpretation": [
+      "ordered_trace",
+      "oracle_verdict",
+      "oracle_verdict_reason",
+      "graph_query_before_source_exploration",
+      "key_sources_read_before_graph_query",
+      "ac2_conclusion"
+    ],
+    "note": "Lane-derived fields are extracted directly from session database payloads and tool records or computed by test functions (such as check_distinguishes_specification_from_implementation). Hand-authored interpretation fields reflect human-evaluated classifications and narrative rationale against the contract criteria."
   }
 }
