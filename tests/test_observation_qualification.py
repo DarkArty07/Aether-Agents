@@ -461,7 +461,7 @@ def test_policy_workflow_pins_every_action_and_confines_spec_files() -> None:
 
     expected_actions = {
         "actions/checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1 # v7",
-        "actions/setup-python": "ece7cb06caefa5fff74198d8649806c4678c61a1 # v6",
+        "actions/setup-python": "5fda3b95a4ea91299a34e894583c3862153e4b97 # v7",
         "actions/upload-artifact": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7",
         "astral-sh/setup-uv": "94527f2e458b27549849d47d273a16bec83a01e9 # v7",
     }
