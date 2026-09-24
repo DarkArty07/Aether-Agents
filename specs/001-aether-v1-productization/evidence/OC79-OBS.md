@@ -52,8 +52,8 @@
 
 | Requirement / oracle | Check actually run | Observed result | Evidence path / attribution |
 |---|---|---|---|
-| AC4 (race reproduction, pre-fix): pre-fix normalizer reaches import/plugin lock cycle | `uv run --frozen python scripts/run_tests.py -- tests/test_observation_passive_startup.py -k "test_pre_fix_category_normalizer_demonstrates_import_lock_cycle"` | **PASS** standalone (3 runs: 1 passed, 13 deselected in 1.80s / 1.91s / 2.13s wall, node `call` duration 1.71s / 1.81s / 2.01s). Pre-fix pattern demonstrably deadlocks: Thread 2 blocks on `model_tools` import lock while Thread 1 blocks on `manager._discovery_lock`. Full environment isolation and witness verified. | `tests/test_observation_passive_startup.py`; direct. |
-| AC4 (race reproduction, candidate): candidate registration avoids lock cycle | `uv run --frozen python scripts/run_tests.py -- tests/test_observation_passive_startup.py -k "test_candidate_observer_registration_avoids_model_tools_import_and_lock_cycle"` | **PASS** standalone on candidate (3 runs: 1 passed, 13 deselected in 2.19s / 2.11s / 2.22s wall, whole-process wall 2.9-3.1s measured with `/usr/bin/time`); **FAIL (RED)** against pre-fix base `004c5f07` with `AssertionError: Candidate registration deadlocked on the import/plugin lock cycle`. The in-test `t2_done.wait(timeout=1.0)` returns immediately on the candidate (in-test wait measured ≈0.4–0.6s standalone on the reviewed host; registration, not harness startup, is its dominant cost). Full environment isolation and witness verified. | `tests/test_observation_passive_startup.py`; direct RED/GREEN evidence. |
+| AC4 (race reproduction, pre-fix): pre-fix normalizer reaches import/plugin lock cycle | `uv run --frozen python scripts/run_tests.py -- tests/test_observation_passive_startup.py -k "test_pre_fix_category_normalizer_demonstrates_import_lock_cycle"` | **PASS** standalone (3 runs: 1 passed, 13 deselected in 2.09s / 2.28s / 2.39s wall, node `call` duration 1.97s / 2.12s / 2.12s). Pre-fix pattern demonstrably deadlocks: Thread 2 blocks on `model_tools` import lock while Thread 1 blocks on `manager._discovery_lock`. Full environment isolation and witness verified. | `tests/test_observation_passive_startup.py`; direct. |
+| AC4 (race reproduction, candidate): candidate registration avoids lock cycle | `uv run --frozen python scripts/run_tests.py -- tests/test_observation_passive_startup.py -k "test_candidate_observer_registration_avoids_model_tools_import_and_lock_cycle"` | **PASS** standalone on candidate (3 runs: 1 passed, 13 deselected in 2.34s / 2.45s / 2.70s wall, whole-process wall 3.3-3.7s measured with `/usr/bin/time`); **FAIL (RED)** against pre-fix base `004c5f07` with `AssertionError: Candidate registration deadlocked on the import/plugin lock cycle`. The in-test `t2_done.wait(timeout=5.0)` returns immediately on the candidate (in-test wait measured ≈0.4–0.6s standalone on the reviewed host; registration, not harness startup, is its dominant cost). Full environment isolation and witness verified. | `tests/test_observation_passive_startup.py`; direct RED/GREEN evidence. |
 | OBS-D-032: native and late-registered tool categories match registry and taxonomy | `uv run --frozen python scripts/run_tests.py -- tests/test_observation_passive_startup.py -k "test_native_and_late_registered_tool_categories_match_registry_and_taxonomy"` | **PASS** standalone (2 runs: 1 passed, 13 deselected in 2.06s / 2.02s wall, node `call` duration 1.93s / 1.91s; order-independent, native discovery deterministic via `discover_builtin_tools()`). Built-in tools resolve to taxonomy categories (`planning`); late-registered tools resolve dynamically (`mcp`, `web`); unregistered resolves to `other`; degraded native resolver records visible `NATIVE_TOOL_CATEGORY_UNAVAILABLE` coverage gap. | `tests/test_observation_passive_startup.py`; direct. |
 | AC4 / OBS-FR-087: isolated MCP-enabled startup and single early turn | `uv run --frozen python scripts/run_tests.py -- tests/test_observation_passive_startup.py -k "test_isolated_mcp_enabled_startup_and_single_early_turn_bounded"` | **PASS** standalone (2 runs: 1 passed, 13 deselected in 1.61s / 1.59s wall); (< 5.0s bound, production timeout not extended); early turn with synthetic MCP tool processed exactly once (`tool.started` and `tool.completed` with category `mcp`). Full environment isolation and witness verified. | `tests/test_observation_passive_startup.py`; direct. |
 | Baseline focused lane | `uv run --frozen python scripts/run_tests.py -- tests/test_project_init.py tests/test_aether_tui_launcher.py tests/test_observation_cli_plugin.py tests/test_observation_passive_startup.py tests/test_observation_usage_guidance.py -q` | **165 passed, 13 subtests passed** in 47.53s (baseline was 161 passed; delta is exactly the 4 new regression tests). | Canonical exact-Hermes runner; direct. |
@@ -91,7 +91,7 @@ E       assert False
 tests/test_observation_passive_startup.py:1205: AssertionError
 =========================== short test summary info ============================
 FAILED tests/test_observation_passive_startup.py::test_candidate_observer_registration_avoids_model_tools_import_and_lock_cycle
-======================= 1 failed, 13 deselected in 2.18s =======================
+======================= 1 failed, 13 deselected in 6.32s =======================
 ```
 
 ### 4.2 GREEN run on candidate implementation
@@ -111,11 +111,11 @@ collected 14 items / 10 deselected / 4 selected
 
 tests/test_observation_passive_startup.py ....                           [100%]
 
-======================= 4 passed, 10 deselected in 6.03s =======================
+======================= 4 passed, 10 deselected in 7.48s =======================
 ```
 
 The earlier 1.98s figure for this 4-node combo was a re-run measurement; the current
-reproducible value on this revision is 6.03s.
+reproducible value on this revision is 7.48s.
 
 ## 5. Manifest and qualification lock delta
 

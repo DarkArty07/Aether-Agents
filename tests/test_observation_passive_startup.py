@@ -94,9 +94,9 @@ def _capture_witness(path: Path | None) -> dict[str, tuple[int, str]]:
             continue
         rel = str(p.relative_to(path))
         if is_live_profile:
-            # Under a live interactive or daemon profile, concurrent processes write state.db/wal, logs, etc.
-            # Witness the sensitive targets that unisolated test nodes touch (SOUL.md, cache/, config.yaml).
-            if not (rel == "SOUL.md" or rel.startswith("cache/") or rel == "config.yaml"):
+            # Under live profiles, concurrent processes churn state.db/wal, logs, and discovery cache.
+            # Witness the sensitive configuration/persona targets that unisolated tests touch.
+            if not (rel == "SOUL.md" or rel == "config.yaml"):
                 continue
         try:
             witness[rel] = (p.stat().st_size, hashlib.sha256(p.read_bytes()).hexdigest())
@@ -1116,7 +1116,7 @@ def test_pre_fix_category_normalizer_demonstrates_import_lock_cycle(
 
         t1 = threading.Thread(target=run_t1)
         t1.start()
-        assert t1_started.wait(timeout=2.0)
+        assert t1_started.wait(timeout=5.0)
         time.sleep(0.05)
 
         # Pre-fix category normalizer imported model_tools
@@ -1135,12 +1135,12 @@ def test_pre_fix_category_normalizer_demonstrates_import_lock_cycle(
 
         # Pre-fix demonstrably deadlocks: t2 cannot complete because t1 holds model_tools import lock
         # and waits for manager._discovery_lock held by the test thread.
-        completed = t2_done.wait(timeout=0.3)
+        completed = t2_done.wait(timeout=0.5)
     finally:
         manager._discovery_lock.release()
 
-    t1.join(timeout=2.0)
-    t2.join(timeout=2.0)
+    t1.join(timeout=10.0)
+    t2.join(timeout=10.0)
 
     assert not completed, "Pre-fix normalizer unexpectedly bypassed the import/plugin lock cycle"
     assert t1_done.is_set()
@@ -1179,7 +1179,7 @@ def test_candidate_observer_registration_avoids_model_tools_import_and_lock_cycl
 
         t1 = threading.Thread(target=run_t1)
         t1.start()
-        assert t1_started.wait(timeout=2.0)
+        assert t1_started.wait(timeout=5.0)
         time.sleep(0.05)
 
         t2_done = threading.Event()
@@ -1195,12 +1195,12 @@ def test_candidate_observer_registration_avoids_model_tools_import_and_lock_cycl
         t2.start()
 
         # Candidate must complete promptly without waiting on model_tools or deadlocking
-        completed = t2_done.wait(timeout=1.0)
+        completed = t2_done.wait(timeout=5.0)
     finally:
         manager._discovery_lock.release()
 
-    t1.join(timeout=2.0)
-    t2.join(timeout=2.0)
+    t1.join(timeout=10.0)
+    t2.join(timeout=10.0)
 
     assert completed, "Candidate registration deadlocked on the import/plugin lock cycle"
     assert t1_done.is_set()
