@@ -136,7 +136,6 @@ jobs:
           docs/reference/limitations-and-troubleshooting.md
           docs/reference/plugins-and-tools.md
           docs/roles-and-authority.md
-          .github/dependabot.yml
           .github/ISSUE_TEMPLATE/bug_report.md
           .github/ISSUE_TEMPLATE/feature_request.md
           .github/PULL_REQUEST_TEMPLATE.md
