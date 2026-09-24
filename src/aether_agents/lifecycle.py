@@ -943,6 +943,18 @@ _CANONICAL_SKILLS = (
     "project-knowledge",
     "work-memory",
 )
+_PLAN_SKILL = "plan"
+_ALL_CANONICAL_SKILLS = _CANONICAL_SKILLS + (_PLAN_SKILL,)
+_HISTORICAL_ROLE_SKILLS: dict[str, tuple[str, ...]] = {
+    "morfeo": _CANONICAL_SKILLS,
+    "supervisor": _CANONICAL_SKILLS,
+    "implementer": _CANONICAL_SKILLS,
+}
+_CANDIDATE_ROLE_SKILLS: dict[str, tuple[str, ...]] = {
+    "morfeo": _CANONICAL_SKILLS + (_PLAN_SKILL,),
+    "supervisor": _CANONICAL_SKILLS,
+    "implementer": _CANONICAL_SKILLS,
+}
 _OBSERVER_RUNTIME_DEPENDENCIES = {"jsonschema": "4.26.0"}
 _OBSERVER_LOCKED_DISTRIBUTIONS = {
     "attrs": "26.1.0",
@@ -4441,19 +4453,25 @@ class LifecycleManager:
 
     @staticmethod
     def _skill_source(name: str) -> Path:
-        if name not in _CANONICAL_SKILLS:
+        if name not in _ALL_CANONICAL_SKILLS:
             raise IntegrityError("unknown canonical skill resource")
         return Path(__file__).parent / "resources" / "skills" / name / "SKILL.md"
 
     @classmethod
-    def _skill_sources(cls) -> dict[str, Path]:
-        return {name: cls._skill_source(name) for name in _CANONICAL_SKILLS}
+    def _role_skills(cls, role: str) -> tuple[str, ...]:
+        if role not in _PROFILE_ROLES:
+            raise IntegrityError(f"unknown profile role: {role}")
+        return _HISTORICAL_ROLE_SKILLS[role]
+
+    @classmethod
+    def _skill_sources(cls, role: str | None = None) -> dict[str, Path]:
+        skills = cls._role_skills(role) if role is not None else _CANONICAL_SKILLS
+        return {name: cls._skill_source(name) for name in skills}
 
     def _materialize_profile_bundle(self, stage: Path) -> str:
         profiles: dict[str, dict[str, dict[str, dict[str, str]]]] = {}
         profiles_root = stage / "profiles"
         _create_private_directory(profiles_root)
-        skill_sources = self._skill_sources()
         for role in _PROFILE_ROLES:
             target_dir = profiles_root / role
             _create_private_directory(target_dir)
@@ -4474,7 +4492,7 @@ class LifecycleManager:
             skills_root = target_dir / "skills"
             _create_private_directory(skills_root)
             skills: dict[str, dict[str, str]] = {}
-            for skill_name, source in skill_sources.items():
+            for skill_name, source in self._skill_sources(role).items():
                 if source.is_symlink() or not source.is_file():
                     raise IntegrityError("packaged canonical skill resource is unavailable")
                 try:
@@ -4521,7 +4539,7 @@ class LifecycleManager:
                     snapshot[path] = read_private_bytes(path) if path.is_file() else None
                 except (OSError, ValueError) as error:
                     raise IntegrityError("managed profile product file is unreadable") from error
-            for skill_name in _CANONICAL_SKILLS:
+            for skill_name in _ALL_CANONICAL_SKILLS:
                 skill_dir = skills_root / skill_name
                 if skill_dir.is_symlink() or (skill_dir.exists() and not skill_dir.is_dir()):
                     raise IntegrityError("managed profile canonical skill directory is unsafe")
@@ -4538,9 +4556,15 @@ class LifecycleManager:
     def _restore_profile_product_state(snapshot: dict[Path, bytes | None]) -> None:
         for path, data in snapshot.items():
             if data is None:
-                _unlink_private_file(path, missing_ok=True)
                 if path.parent.exists():
-                    _fsync_directory(path.parent)
+                    _unlink_private_file(path, missing_ok=True)
+                    try:
+                        if not any(path.parent.iterdir()):
+                            path.parent.rmdir()
+                    except OSError:
+                        pass
+                    if path.parent.parent.exists():
+                        _fsync_directory(path.parent.parent)
             else:
                 _atomic_bytes(path, data)
 
@@ -4675,6 +4699,29 @@ class LifecycleManager:
         }
         _atomic_json(adoption_root / "receipt.json", payload)
 
+    def _release_role_skills(self, record: ReleaseRecord | None, role: str) -> set[str]:
+        if record is None:
+            return set()
+        release_path = self.store.release_path(record.release_id)
+        manifest_path = release_path / "profile-bundle.json"
+        if manifest_path.is_file() and not manifest_path.is_symlink():
+            try:
+                manifest = json.loads(read_private_bytes(manifest_path).decode("utf-8"))
+                profiles = manifest.get("profiles", {})
+                skills = profiles.get(role, {}).get("skills", {})
+                if isinstance(skills, dict):
+                    return set(skills.keys())
+            except (OSError, ValueError, json.JSONDecodeError):
+                pass
+        skills_dir = release_path / "profiles" / role / "skills"
+        if skills_dir.is_dir() and not skills_dir.is_symlink():
+            return {
+                child.name
+                for child in skills_dir.iterdir()
+                if child.is_dir() and not child.is_symlink()
+            }
+        return set(_CANONICAL_SKILLS)
+
     def _preflight_profile_homes(
         self,
         record: ReleaseRecord,
@@ -4748,7 +4795,12 @@ class LifecycleManager:
                 directory=True,
                 label="managed profile skill directory",
             )
-            for skill_name in _CANONICAL_SKILLS:
+            owned_skills = self._release_role_skills(ownership_record, role)
+            target_skills = self._release_role_skills(record, role)
+            skills_to_inspect = owned_skills | target_skills
+            if not skills_to_inspect:
+                skills_to_inspect = set(_ALL_CANONICAL_SKILLS)
+            for skill_name in sorted(skills_to_inspect):
                 skill_dir = skills_root / skill_name
                 if skill_dir.is_symlink():
                     raise IntegrityError(
@@ -4781,17 +4833,21 @@ class LifecycleManager:
                     directory=False,
                     label="managed profile canonical skill",
                 )
-                try:
-                    observed = read_private_bytes(target)
-                    expected = self._profile_bundle_resource_bytes(
-                        ownership_record,
-                        role,
-                        f"skills/{skill_name}/SKILL.md",
-                    )
-                except (OSError, ValueError) as error:
-                    raise IntegrityError("managed profile canonical skill is unreadable") from error
-                if observed != expected:
-                    raise IntegrityError("canonical skill ownership evidence is mismatched")
+                if skill_name in owned_skills:
+                    try:
+                        observed = read_private_bytes(target)
+                        expected = self._profile_bundle_resource_bytes(
+                            ownership_record,
+                            role,
+                            f"skills/{skill_name}/SKILL.md",
+                        )
+                    except (OSError, ValueError) as error:
+                        raise IntegrityError("managed profile canonical skill is unreadable") from error
+                    if observed != expected:
+                        raise IntegrityError("canonical skill ownership evidence is mismatched")
+                else:
+                    if not target.is_file():
+                        raise IntegrityError("managed profile canonical skill is unsafe")
 
     def _materialize_profile_homes(
         self,
@@ -4864,7 +4920,14 @@ class LifecycleManager:
             if skills_root.is_symlink() or (skills_root.exists() and not skills_root.is_dir()):
                 raise IntegrityError("managed profile skill directory is unsafe")
             ensure_private_dir(skills_root)
-            for skill_name in _CANONICAL_SKILLS:
+            target_skills = sorted(self._release_role_skills(record, role))
+            active_record = self.store.active(required=False)
+            previous_skills = (
+                self._release_role_skills(active_record, role)
+                if active_record is not None
+                else set()
+            )
+            for skill_name in target_skills:
                 skill_dir = skills_root / skill_name
                 if skill_dir.is_symlink() or (skill_dir.exists() and not skill_dir.is_dir()):
                     raise IntegrityError("managed profile canonical skill directory is unsafe")
@@ -4900,6 +4963,33 @@ class LifecycleManager:
                             )
                         )
                 _atomic_bytes(target, source_bytes)
+
+            if active_record is not None:
+                for retiring_skill in sorted(previous_skills - set(target_skills)):
+                    retiring_dir = skills_root / retiring_skill
+                    retiring_target = retiring_dir / "SKILL.md"
+                    if retiring_target.exists():
+                        if retiring_target.is_symlink() or not retiring_target.is_file():
+                            raise IntegrityError("managed profile canonical skill is unsafe")
+                        try:
+                            observed = read_private_bytes(retiring_target)
+                            expected = self._profile_bundle_resource_bytes(
+                                active_record,
+                                role,
+                                f"skills/{retiring_skill}/SKILL.md",
+                            )
+                        except (OSError, ValueError) as error:
+                            raise IntegrityError(
+                                "managed profile canonical skill is unreadable"
+                            ) from error
+                        if observed != expected:
+                            raise IntegrityError("canonical skill ownership evidence is mismatched")
+                        _unlink_private_file(retiring_target)
+                        try:
+                            if not any(retiring_dir.iterdir()):
+                                retiring_dir.rmdir()
+                        except OSError:
+                            pass
             _atomic_json(home / "aether-observer.json", self._profile_activation(record, role))
         if adoption_backups or preserved_configs:
             if adoption_root is None:
@@ -4949,8 +5039,9 @@ class LifecycleManager:
                 raise IntegrityError("managed profile activation is unreadable") from error
             if payload != self._profile_activation(record, role):
                 raise IntegrityError("managed profile activation identity mismatch")
+            expected_skills = self._release_role_skills(record, role)
             skill_paths: list[tuple[Path, Path, Path]] = []
-            for skill_name in _CANONICAL_SKILLS:
+            for skill_name in sorted(expected_skills):
                 skill_dir = skills_root / skill_name
                 target = skill_dir / "SKILL.md"
                 source = release / "profiles" / role / "skills" / skill_name / "SKILL.md"
@@ -4966,6 +5057,11 @@ class LifecycleManager:
                 if target_bytes != source_bytes:
                     raise IntegrityError("managed profile canonical skill resource drift")
                 skill_paths.append((skill_dir, target, source))
+            for unowned in _ALL_CANONICAL_SKILLS:
+                if unowned not in expected_skills:
+                    unowned_target = skills_root / unowned / "SKILL.md"
+                    if unowned_target.exists():
+                        raise IntegrityError("managed profile activation contains unowned skill")
             if os.name == "posix" and (
                 stat.S_IMODE(home.stat().st_mode) != DIR_MODE
                 or stat.S_IMODE(config.stat().st_mode) != FILE_MODE
@@ -5062,7 +5158,8 @@ class LifecycleManager:
                 if skills_root.is_symlink() or not skills_root.is_dir():
                     role_issue = True
                 else:
-                    for skill_name in _CANONICAL_SKILLS:
+                    owned_skills = self._release_role_skills(owned_record, role)
+                    for skill_name in sorted(owned_skills):
                         skill_dir = skills_root / skill_name
                         if not skill_dir.exists() and not skill_dir.is_symlink():
                             continue
@@ -5106,6 +5203,12 @@ class LifecycleManager:
             )
         for path in (*removals, *marker_removals):
             _unlink_private_file(path, missing_ok=True)
+            if path.parent.name in _ALL_CANONICAL_SKILLS and path.parent.exists():
+                try:
+                    if not any(path.parent.iterdir()):
+                        path.parent.rmdir()
+                except OSError:
+                    pass
         for role in _PROFILE_ROLES:
             home = self.store.profile_home(role)
             if home.exists():
@@ -5652,7 +5755,7 @@ class LifecycleManager:
                     "path": f"profiles/{role}/skills/{skill_name}/SKILL.md",
                     "sha256": _sha256(source),
                 }
-                for skill_name, source in self._skill_sources().items()
+                for skill_name, source in self._skill_sources(role).items()
             }
             profiles[role] = {"resources": resources, "skills": skills}
         manifest = {
@@ -5670,20 +5773,31 @@ class LifecycleManager:
     def _wheel_profile_bundle_sha256(wheel: Path) -> str:
         """Bind the local lock to the exact candidate wheel's canonical resources."""
         prefix = "aether_agents/resources/"
-        expected = {
+        role_profile_resources = {
             f"{prefix}profiles/{role}/{name}"
             for role in _PROFILE_ROLES
             for name in ("config.yaml", "SOUL.md")
         }
-        expected.update(f"{prefix}skills/{skill}/SKILL.md" for skill in _CANONICAL_SKILLS)
+        historical_expected = role_profile_resources | {
+            f"{prefix}skills/{skill}/SKILL.md" for skill in _CANONICAL_SKILLS
+        }
+        candidate_expected = historical_expected | {
+            f"{prefix}skills/{_PLAN_SKILL}/SKILL.md"
+        }
         try:
             with zipfile.ZipFile(wheel) as archive:
-                names = [
+                names = set(
                     name
                     for name in archive.namelist()
                     if name.startswith((prefix + "profiles/", prefix + "skills/"))
-                ]
-                if len(names) != len(expected) or set(names) != expected:
+                )
+                if names == candidate_expected:
+                    role_skills = _CANDIDATE_ROLE_SKILLS
+                    expected = candidate_expected
+                elif names == historical_expected:
+                    role_skills = _HISTORICAL_ROLE_SKILLS
+                    expected = historical_expected
+                else:
                     raise IntegrityError("candidate wheel profile resource set mismatch")
                 digests = {
                     name: hashlib.sha256(archive.read(name)).hexdigest() for name in expected
@@ -5704,7 +5818,7 @@ class LifecycleManager:
                     "path": f"profiles/{role}/skills/{skill}/SKILL.md",
                     "sha256": digests[f"{prefix}skills/{skill}/SKILL.md"],
                 }
-                for skill in _CANONICAL_SKILLS
+                for skill in role_skills[role]
             }
             profiles[role] = {"resources": resources, "skills": skills}
         manifest = {
@@ -5887,7 +6001,22 @@ class LifecycleManager:
         observed_roles = {child.name for child in children}
         if observed_roles != set(_PROFILE_ROLES):
             raise IntegrityError("managed profile directory set mismatch")
+        observed_role_skills = {
+            role: set(profiles[role]["skills"].keys())
+            if isinstance(profiles.get(role), dict)
+            and isinstance(profiles.get(role, {}).get("skills"), dict)
+            else None
+            for role in _PROFILE_ROLES
+        }
+        if observed_role_skills == {r: set(_CANDIDATE_ROLE_SKILLS[r]) for r in _PROFILE_ROLES}:
+            expected_role_skills = _CANDIDATE_ROLE_SKILLS
+        elif observed_role_skills == {r: set(_HISTORICAL_ROLE_SKILLS[r]) for r in _PROFILE_ROLES}:
+            expected_role_skills = _HISTORICAL_ROLE_SKILLS
+        else:
+            raise IntegrityError("managed profile skill evidence is malformed")
+
         for role in _PROFILE_ROLES:
+            expected_skills = set(expected_role_skills[role])
             details = profiles.get(role)
             if not isinstance(details, dict) or set(details) != {"resources", "skills"}:
                 raise IntegrityError("managed profile evidence is malformed")
@@ -5895,7 +6024,7 @@ class LifecycleManager:
             if not isinstance(resources, dict) or set(resources) != {"config.yaml", "SOUL.md"}:
                 raise IntegrityError("managed profile resource evidence is malformed")
             skills = details.get("skills")
-            if not isinstance(skills, dict) or set(skills) != set(_CANONICAL_SKILLS):
+            if not isinstance(skills, dict) or set(skills) != expected_skills:
                 raise IntegrityError("managed profile skill evidence is malformed")
             role_root = profiles_root / role
             if role_root.is_symlink() or not role_root.is_dir():
@@ -5942,9 +6071,9 @@ class LifecycleManager:
                 raise IntegrityError("managed profile skill directory is missing")
             if os.name == "posix" and stat.S_IMODE(skills_root.stat().st_mode) != DIR_MODE:
                 raise IntegrityError("managed profile skill directory permissions mismatch")
-            if {child.name for child in skills_root.iterdir()} != set(_CANONICAL_SKILLS):
+            if {child.name for child in skills_root.iterdir()} != expected_skills:
                 raise IntegrityError("managed profile skill directory set mismatch")
-            for skill_name in _CANONICAL_SKILLS:
+            for skill_name in expected_role_skills[role]:
                 expected_path = f"profiles/{role}/skills/{skill_name}/SKILL.md"
                 resource = skills.get(skill_name)
                 if not isinstance(resource, dict) or set(resource) != {"path", "sha256"}:
