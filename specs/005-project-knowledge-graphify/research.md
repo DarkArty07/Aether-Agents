@@ -63,3 +63,29 @@ La revisión anterior del plan, hash `f1a006a9b8948e66ff1f8e5aad5e4a554eea99b35c
 - Experiencias pospuestas o limitadas a reflect: ahora son parte de la entrega con guardar/buscar/leer/corregir/reflejar.
 
 No se traslada investigación histórica a un supuesto ACTIVE ni se reescriben resultados para simular que la integración ya existe.
+
+## 6. Orientación inicial de Morfeo — aclaración del propietario #505
+
+En upstream Graphify, revisión inspeccionada
+`4c735618f3d56fd622c2049771584621c31ba9ff`, la
+[skill oficial `skill-claw.md`](https://github.com/Graphify-Labs/graphify/blob/4c735618f3d56fd622c2049771584621c31ba9ff/graphify/skill-claw.md#L1-L8)
+describe expresamente preguntas sobre el código y su arquitectura como disparador;
+su vía de grafo ya existente evita reconstrucción y pregunta al usuario
+([líneas 45–55](https://github.com/Graphify-Labs/graphify/blob/4c735618f3d56fd622c2049771584621c31ba9ff/graphify/skill-claw.md#L45-L55)).
+La [instrucción upstream para AGENTS.md](https://github.com/Graphify-Labs/graphify/blob/4c735618f3d56fd622c2049771584621c31ba9ff/graphify/always_on/agents-md.md#L1-L11)
+prioriza consultas acotadas para preguntas sobre el código. No se adopta el
+instalador ni su suposición de `graphify-out/` por cwd: Aether enlaza la sesión,
+revisión y destino de forma verificada (KG-01/02), preserva instalación explícita
+(KG-05) y no añade hooks de bloqueo, watchers o lectura de grafos ajenos.
+
+En la fuente Aether `4ece53bfadfd0facbbea3220565841a74a07e97a`, el SOUL
+empaquetado de Morfeo usa «when available and relevant» y la skill visible se
+describe sólo como «Query and maintain revision-bound project knowledge». El
+componente y su despacho existen, pero el comportamiento espontáneo de E01 no
+está cualificado (`validation.md` §4). La consulta nativa toma el texto recibido;
+las preguntas generales o con vocabulario que no aparece en símbolos pueden
+devolver nodos ruidosos. Por eso la corrección preferida es un trigger temprano
+específico de trabajo de repositorio y una recuperación de consulta anclada en
+símbolos observados, manteniendo la inspección de fuente y excepciones de KG-10.
+La prueba con agente real, no una nueva promesa de ahorro de tokens o garantía
+universal de cumplimiento, decide si el cambio funcionó.

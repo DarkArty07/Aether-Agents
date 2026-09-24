@@ -43,6 +43,18 @@ def test_skills_are_canonical_procedures_with_valid_examples(name: str, tool: st
         validate_arguments(tool, json.loads(example))
     assert "/home/" not in text
     assert "never" in text.lower()
+    if name == "project-knowledge":
+        assert metadata["description"].startswith("Orient on")
+        assert "Query → Explain → Community" in text
+        assert "resolved_node.community_id" in text
+        assert "search_files" in text
+        assert "graph_worker.py" in text
+        assert "greetings" in text.lower()
+        assert "trivial" in text.lower()
+        assert "before repository content searches and answer-bearing source reads" in text
+        assert "unbound" in text.lower()
+        assert "unborn" in text.lower()
+        assert "degrade honestly" in text.lower()
 
 
 def test_qualification_catalog_matches_registered_schemas() -> None:
@@ -56,7 +68,7 @@ def test_qualification_catalog_matches_registered_schemas() -> None:
 
 
 @pytest.mark.parametrize("role", ["morfeo", "supervisor", "implementer"])
-def test_role_resources_share_tools_and_are_opt_in(role: str) -> None:
+def test_role_resources_share_tools_and_are_opt_in(role: str, tmp_path: Path) -> None:
     soul = (RESOURCES / "profiles" / role / "SOUL.md").read_text()
     for name in ("project_knowledge", "work_memory", "project-knowledge", "work-memory"):
         assert f"`{name}`" in soul
@@ -64,6 +76,37 @@ def test_role_resources_share_tools_and_are_opt_in(role: str) -> None:
     config = yaml.safe_load((RESOURCES / "profiles" / role / "config.yaml").read_text())
     assert "aether-project-knowledge" in config["plugins"]["enabled"]
     assert config["plugins"]["entries"]["aether-project-knowledge"]["settings"]["enabled"] is False
+    if role == "morfeo":
+        assert "first substantive request to understand a bound project" in soul
+        assert "without waiting for the owner to name Graphify" in soul
+        assert "before repository content searches and answer-bearing source reads" in soul
+        assert "narrow current-source inspection, never as proof of behavior" in soul
+        assert "not a global order to query before every file read" in soul
+        assert "promises no universal savings or obedience" in soul
+        assert "greetings, trivial questions, or a directly supplied source" in soul
+        assert "degrade honestly" in soul.lower()
+        assert "unborn" in soul.lower()
+
+        # Materialize candidate Morfeo profile (tracked SOUL + packaged skill) into a disposable profile home
+        disposable_profile_home = tmp_path / "hermes_home" / "profiles" / "morfeo"
+        disposable_skills = disposable_profile_home / "skills" / "project-knowledge"
+        disposable_skills.mkdir(parents=True)
+        materialized_soul = disposable_profile_home / "SOUL.md"
+        materialized_skill = disposable_skills / "SKILL.md"
+        materialized_soul.write_text(soul, encoding="utf-8")
+        materialized_skill.write_text(
+            (RESOURCES / "skills" / "project-knowledge" / "SKILL.md").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        assert materialized_soul.is_file()
+        assert materialized_skill.is_file()
+        assert materialized_soul.read_text(encoding="utf-8") == soul
+        assert materialized_skill.read_text(encoding="utf-8") == (
+            RESOURCES / "skills" / "project-knowledge" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        assert "without waiting for the owner to name Graphify" in materialized_soul.read_text(
+            encoding="utf-8"
+        )
 
 
 def test_morfeo_soul_defines_project_experience_save_contract() -> None:
