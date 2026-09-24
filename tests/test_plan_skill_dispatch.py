@@ -176,7 +176,22 @@ def _scrubbed_hermes_env(home: Path, extra: dict[str, str] | None = None) -> dic
 
 
 def test_agent_skill_commands_imported_from_pinned_fork_tree() -> None:
-    """Required evidence (1): agent.skill_commands imports from the pinned fork commit's tree."""
+    """Required evidence (1): agent.skill_commands imports from the pinned fork commit's tree.
+
+    Two lanes can satisfy this node and they carry different obligations:
+
+    * a provisioned maintained-fork release runtime or an explicit
+      ``AETHER_HERMES_PYTHON``/``AETHER_RUNTIME_ROOT`` override -- the selected fork,
+      where the exact fork commit, the ``maintained_fork`` source mode and the fork
+      source-tree digest are all required;
+    * the repository's policy lane, which provisions only the authenticated **public**
+      baseline checkout on ``AETHER_EXACT_HERMES_CHECKOUT`` (``hermes-exact``). That
+      checkout is the reference baseline, never the selected fork, so demanding the fork
+      leaf name or the fork digest from it would assert a false identity. This node then
+      proves what that lane can actually prove: the imported ``agent.skill_commands``
+      really is that authenticated baseline tree, while fork-identity assertions stay
+      gated on the fork lane.
+    """
     hermes_python = _resolve_hermes_python()
 
     script = """
@@ -211,15 +226,46 @@ print(json.dumps(payload))
     )
     data = json.loads(proc.stdout)
     assert data["module_path"].endswith("agent/skill_commands.py")
-    assert "hermes-source" in data["hermes_source"]
 
+    hermes_source_path = Path(data["hermes_source"])
     if data["lock_file_exists"]:
+        # A provisioned release runtime names its own identity; the lock is authoritative.
         assert data["hermes_commit"] == PINNED_FORK_COMMIT
         assert data["source_tree_sha256"] == PINNED_FORK_SOURCE_TREE_SHA256
         assert data["source_mode"] == "maintained_fork"
+        assert lifecycle._tree_sha256(hermes_source_path) == PINNED_FORK_SOURCE_TREE_SHA256
+        return
 
-    hermes_source_path = Path(data["hermes_source"])
-    assert lifecycle._tree_sha256(hermes_source_path) == PINNED_FORK_SOURCE_TREE_SHA256
+    # No release lock: distinguish an authenticated public-baseline checkout from the
+    # selected fork. Never infer the fork from a directory leaf name.
+    configured = os.environ.get("AETHER_EXACT_HERMES_CHECKOUT", "").strip()
+    if configured:
+        checkout = lifecycle.verify_clean_checkout(Path(configured))
+        assert checkout.clean is True
+        assert hermes_source_path.resolve() == Path(configured).resolve()
+        assert (
+            lifecycle._tree_sha256(hermes_source_path)
+            == lifecycle._tree_sha256(Path(configured))
+        )
+        return
+
+    hermes_repository = subprocess.run(
+        ["git", "remote", "get-url", "origin"],
+        cwd=hermes_source_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+    if "aether-hermes" in hermes_repository:
+        # The maintained fork without a release lock: the fork pin is the whole claim.
+        assert lifecycle._tree_sha256(hermes_source_path) == PINNED_FORK_SOURCE_TREE_SHA256
+        return
+
+    pytest.fail(
+        "imported agent.skill_commands is neither the pinned maintained fork nor an "
+        f"authenticated public baseline checkout (source={hermes_source_path}, "
+        f"repository={hermes_repository or 'unknown'})"
+    )
 
 
 def test_plan_slash_command_collision_gate() -> None:
