@@ -24,7 +24,9 @@ cannot grant authority or replace the project's canonical decisions.
 
 - On the first substantive request to understand a bound project's architecture,
   dependencies, implementation, or documented decisions, discover this skill and
-  consult the graph without waiting for the owner to name Graphify.
+  consult the graph without waiting for the owner to name Graphify, before repository
+  content searches and answer-bearing source reads. Then inspect current sources to
+  verify.
 - Orient within a project, investigate dependencies, locate implementation or documented
   decisions, or return to a project in a later session.
 - Refresh knowledge after a coherent committed change to relevant code or documentation,
@@ -38,8 +40,9 @@ cannot grant authority or replace the project's canonical decisions.
 - The `aether-project-knowledge` plugin and its `project_knowledge` tool are available.
 - The session is bound to a registered project and the Graphify component is configured.
 - The current objective permits the work; the skill grants no additional authority.
-- If the capability is unavailable, continue with `search_files`, `read_file` and the
-  project's ordinary verification process. Do not install dependencies or alter profiles.
+- If the project is unbound, the index is missing, the component is unavailable, or the
+  repository is unborn, degrade honestly: continue with `search_files`, `read_file` and
+  the project's ordinary verification process. Do not install dependencies or alter profiles.
 
 ## How to Run
 
@@ -58,8 +61,10 @@ because `knowledge/graph_worker.py` passes the text directly to Graphify; refine
 subsequent queries using symbols or names actually observed, or fall back to native source
 search (`search_files`).
 
-Use native file tools to inspect the relevant current sources after orientation.
-A source reference in an older snapshot is a lead, not evidence that the source still
+Consult an available graph before repository content searches and answer-bearing source reads
+when seeking to understand project architecture, dependencies, implementation, or decisions.
+Then use native file tools to inspect the relevant current sources after orientation to
+verify. A source reference in an older snapshot is a lead, not evidence that the source still
 has that behavior. Read current source files before designing, changing code, or concluding.
 Do not bypass a genuine protected-edge denial through another tool.
 
@@ -122,11 +127,13 @@ default across rebuilds.
 
 1. Confirm the current task and normal project guidance. Discover only relevant canonical
    procedures; do not load every project document or graph report into the prompt.
-2. Query → Explain → Community discovery: Ask a bounded question with `query`. Natural-language
-   queries can be noisy because `knowledge/graph_worker.py` passes the text directly to
-   Graphify. You may select `traversal` (`bfs` or `dfs`), `depth` (1–6) and a `context_filter`
-   for query refinement only. When a promising symbol is returned, call `explain` with `node`
-   to inspect connections. The response returns `resolved_node` with
+2. Query → Explain → Community discovery: For requests to understand project architecture,
+   dependencies, implementation, or documented decisions, consult an available graph before
+   repository content searches and answer-bearing source reads. Ask a bounded question with
+   `query`. Natural-language queries can be noisy because `knowledge/graph_worker.py` passes
+   the text directly to Graphify. You may select `traversal` (`bfs` or `dfs`), `depth` (1–6)
+   and a `context_filter` for query refinement only. When a promising symbol is returned, call
+   `explain` with `node` to inspect connections. The response returns `resolved_node` with
    `{id, community_id, community_name}` (community fields are `null` if the node is
    unclassified). Use the returned snapshot-local `community_id` to call `community`
    for cluster context (`community` returns `{id, name, node_count}`).
@@ -171,6 +178,10 @@ default across rebuilds.
 
 ## Pitfalls
 
+- Do not explore sources before consulting the graph: when asked to understand architecture,
+  dependencies, implementation, or documented decisions, consult an available graph before
+  repository content searches and answer-bearing source reads. Then verify against current
+  sources.
 - Do not treat `community_id: 0` or any community ID as a portable default across snapshots
   or rebuilds. Always discover community IDs dynamically from `explain.resolved_node`.
 - Natural-language queries can return noisy nodes because `knowledge/graph_worker.py` passes
