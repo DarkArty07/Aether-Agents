@@ -101,6 +101,19 @@ Experiences belong to the project and role, not to a shared owner-personalizatio
 - **KG-18 Delivery:** preserve two tools with fourteen project and five memory actions;
   qualify the real auxiliary, native operations, cross-project isolation and existing
   quality gates; synchronize feature-owned managed guidance and verify fresh-process load.
+- **KG-19 First-turn orientation (owner clarification, issue #505):** on the first
+  substantive request to understand a bound project's architecture, dependencies,
+  implementation or documented decisions, Morfeo proactively discovers the canonical
+  `project-knowledge` skill and consults an available graph of the exact project and
+  revision without waiting for the owner to name Graphify. Use the result to narrow
+  current-source inspection, not as proof of behavior or authority. Direct questions
+  about a supplied source, greetings and unrelated work need no ceremonial graph call.
+  Missing/unbound/unindexed knowledge, an unborn repository or a disabled component
+  degrades honestly to ordinary source inspection; a question alone never installs
+  Graphify, creates a commit or graph, activates a profile, invokes a semantic provider,
+  or changes another session. Qualify unsolicited first-turn use with a real isolated
+  Morfeo (E01), not merely resource presence or static prompt assertions. KG-01/02/05/10/11
+  and the three-role tool parity remain unchanged.
 
 The [expanded tools and semantic contract](contracts/expanded-tools-and-semantic.md) owns
 the concrete shared interfaces, lifecycle, live verification and delegated implementation

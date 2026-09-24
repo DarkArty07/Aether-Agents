@@ -91,6 +91,19 @@ Estas pruebas de distribución complementan, no sustituyen, los comportamientos 
 
 Preparar un proyecto desechable con dos subsistemas y una decisión documentada. Pedir a Morfeo un cambio focalizado sin decirle que use Graphify. Con sólo los recursos empaquetados debe descubrir/cargar la skill pertinente, consultar conocimiento, reconocer cobertura y leer fuentes relevantes. Debe diferenciar una especificación de comportamiento implementado. El criterio no prohíbe un número fijo de archivos ni obliga a consultar en preguntas triviales.
 
+Para KG-19/#505, iniciar una conversación nueva y aislada con un proyecto registrado,
+revisión confirmada e índice disponible. La primera petición técnica no menciona
+Graphify: observar que Morfeo carga la skill y consulta espontáneamente el grafo
+antes de una exploración amplia o una hipótesis arquitectónica, y después comprueba
+la fuente actual. Registrar llamadas, identidad, revisión, cobertura y límites;
+una mención de Graphify en SOUL o un test que sólo examine texto no es PASS.
+Controles separados: pregunta trivial o fuente exacta proporcionada sin llamada
+ceremonial; índice ausente/no vinculable o repositorio sin HEAD confirmado con
+degradación honesta a herramientas de archivos, sin instalación, commit, activación
+o modificación del perfil compartido. La prueba usa perfil/sesión/estado de prueba
+aislados y no modifica sesiones Morfeo existentes. No atribuir el resultado de un
+único piloto a todas las conversaciones o modelos.
+
 ### E02 — colaboración completa
 
 Ejecutar un objetivo con Morfeo, Supervisor y al menos dos implementadores bajo el flujo nativo. Cada rol realiza un cambio pertinente dentro de su alcance y puede actualizar el grafo sin pedir permiso a otro. Comprobar recibos por revisión, deduplicación cuando procede y resultado integrado. No basta con scripts que etiqueten procesos con nombres de rol: observar llamadas de los agentes reales.
