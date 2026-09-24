@@ -4421,7 +4421,7 @@ class LifecycleManager:
     def _role_skills(cls, role: str) -> tuple[str, ...]:
         if role not in _PROFILE_ROLES:
             raise IntegrityError(f"unknown profile role: {role}")
-        return _HISTORICAL_ROLE_SKILLS[role]
+        return _CANDIDATE_ROLE_SKILLS[role]
 
     @classmethod
     def _skill_sources(cls, role: str | None = None) -> dict[str, Path]:
@@ -4802,7 +4802,9 @@ class LifecycleManager:
                             f"skills/{skill_name}/SKILL.md",
                         )
                     except (OSError, ValueError) as error:
-                        raise IntegrityError("managed profile canonical skill is unreadable") from error
+                        raise IntegrityError(
+                            "managed profile canonical skill is unreadable"
+                        ) from error
                     if observed != expected:
                         raise IntegrityError("canonical skill ownership evidence is mismatched")
                 else:
@@ -4962,6 +4964,20 @@ class LifecycleManager:
             )
         _fsync_directory(self.store.profile_homes)
 
+    def _authenticated_releases(self, current: ReleaseRecord) -> list[ReleaseRecord]:
+        records = [current]
+        seen = {current.release_id}
+        if self.store.releases.exists() and self.store.releases.is_dir():
+            for child in sorted(self.store.releases.iterdir()):
+                if child.name not in seen and child.is_dir() and not child.is_symlink():
+                    try:
+                        rec = self.store._read_release(child.name)
+                        records.append(rec)
+                        seen.add(rec.release_id)
+                    except IntegrityError:
+                        pass
+        return records
+
     def _validate_profile_homes(self, record: ReleaseRecord) -> None:
         release = self.store.release_path(record.release_id)
         if self.store.profile_homes.is_symlink() or not self.store.profile_homes.is_dir():
@@ -5019,9 +5035,37 @@ class LifecycleManager:
                 skill_paths.append((skill_dir, target, source))
             for unowned in _ALL_CANONICAL_SKILLS:
                 if unowned not in expected_skills:
-                    unowned_target = skills_root / unowned / "SKILL.md"
-                    if unowned_target.exists():
-                        raise IntegrityError("managed profile activation contains unowned skill")
+                    skill_dir = skills_root / unowned
+                    if skill_dir.is_symlink():
+                        raise IntegrityError("managed profile activation contains a symlink")
+                    unowned_target = skill_dir / "SKILL.md"
+                    if unowned_target.is_symlink():
+                        raise IntegrityError("managed profile activation contains a symlink")
+                    if unowned_target.is_file():
+                        try:
+                            observed = read_private_bytes(unowned_target)
+                        except (OSError, ValueError) as error:
+                            raise IntegrityError(
+                                "managed profile canonical skill is unreadable"
+                            ) from error
+                        owned_bytes: set[bytes] = set()
+                        for auth_record in self._authenticated_releases(record):
+                            for auth_role in _PROFILE_ROLES:
+                                if unowned in self._release_role_skills(auth_record, auth_role):
+                                    try:
+                                        owned_bytes.add(
+                                            self._profile_bundle_resource_bytes(
+                                                auth_record,
+                                                auth_role,
+                                                f"skills/{unowned}/SKILL.md",
+                                            )
+                                        )
+                                    except IntegrityError:
+                                        pass
+                        if observed in owned_bytes:
+                            raise IntegrityError(
+                                "managed profile activation contains unowned skill"
+                            )
             if os.name == "posix" and (
                 stat.S_IMODE(home.stat().st_mode) != DIR_MODE
                 or stat.S_IMODE(config.stat().st_mode) != FILE_MODE
@@ -5740,20 +5784,19 @@ class LifecycleManager:
         historical_expected = role_profile_resources | {
             f"{prefix}skills/{skill}/SKILL.md" for skill in _CANONICAL_SKILLS
         }
-        candidate_expected = historical_expected | {
-            f"{prefix}skills/{_PLAN_SKILL}/SKILL.md"
-        }
+        candidate_expected = historical_expected | {f"{prefix}skills/{_PLAN_SKILL}/SKILL.md"}
         try:
             with zipfile.ZipFile(wheel) as archive:
-                names = set(
+                names = [
                     name
                     for name in archive.namelist()
                     if name.startswith((prefix + "profiles/", prefix + "skills/"))
-                )
-                if names == candidate_expected:
+                ]
+                names_set = set(names)
+                if len(names) == len(candidate_expected) and names_set == candidate_expected:
                     role_skills = _CANDIDATE_ROLE_SKILLS
                     expected = candidate_expected
-                elif names == historical_expected:
+                elif len(names) == len(historical_expected) and names_set == historical_expected:
                     role_skills = _HISTORICAL_ROLE_SKILLS
                     expected = historical_expected
                 else:

@@ -328,6 +328,7 @@ jobs:
           src/aether_agents/resources/skills/objective-contract-design/SKILL.md
           src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md
           src/aether_agents/resources/skills/implementation-evidence/SKILL.md
+          src/aether_agents/resources/skills/plan/SKILL.md
           src/aether_agents/resources/lab
           src/aether_agents/resources/hermes-baseline.json
           src/aether_agents/result.py
@@ -376,6 +377,7 @@ jobs:
           tests/test_observation_qualification.py
           tests/test_observation_query_parity.py
           tests/test_observation_reducer.py
+          tests/test_plan_skill_dispatch.py
           tests/test_policy_hooks.py
           tests/test_projection_transition_runner.py
           tests/test_project_marker_validation.py
