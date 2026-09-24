@@ -1,0 +1,81 @@
+{
+  "id": "HLP-428",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-428--recover-project-provenance-fail-closed-on-cross-project-mismatch-and-bound-review-failure-maintained-fork-2026-09-23",
+  "components": [
+    "HLP-428",
+    "hermes_cli/kanban_db.py",
+    "tests/hermes_cli/test_kanban_project_provenance.py"
+  ],
+  "required_behavior": "A non-affinity child task created with an explicit direct parent worktree recovers the board's canonical Project and receives a fresh project worktree instead of a null-Project scratch directory; explicit cross-project mismatches on recognized Aether boards fail closed before database insertion; and review failure containment cleanly unblocks with gave_up, clears worker/claim ownership, and bounds notifications to verified subscribers without emitting unverified origin signals.",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/494"
+      }
+    ],
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+        "result": "The common inspected baseline lacks board-level Project recovery for non-affinity direct parent worktrees, lacks early refusal for cross-project mismatches before database insertion, and lacks Aether origin-signal bounding in review failure containment."
+      },
+      {
+        "kind": "source",
+        "reference": "latest released artifact v2026.9.14 (tag object 7a963716b81be13ba513d4f127633b7da493aff2, commit 345cd2b057a452236de401d3534b8502a7465e8d) and refreshed upstream main 287c56e95afe5c528beacb7ca8f7ef0ad6216f2a",
+        "result": "Neither upstream revision provides Project provenance recovery for direct parent worktree tasks or Aether review failure containment origin-signal suppression."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Retire only when an adopted exact Hermes release recovers canonical Project provenance for non-affinity direct parent worktree children, refuses cross-project mismatches before task insertion, safely bounds review-lane failure containment without unverified notifications or lock retention, and passes tests/hermes_cli/test_kanban_project_provenance.py without this patch.",
+    "status": "not_executed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "maintained-fork candidate 184a6d03bcab8964fa507ada4d02edc13cdcfb9f",
+        "result": "AC1 RED reproduced at base aed6591a69 (4 failed/1 passed); tip passed 5/5. AC2 supported route verified (canonical Project, fresh .worktrees/<child-id>, review claim source_status=review, real worktree materialization); AC2 early refusal verified with zero inserted rows; AC3 matrix verified including symlink escape; AC4 real review-lane containment verified (auto_blocked, gave_up, no origin_signal, 0 notified subs)."
+      },
+      {
+        "kind": "test",
+        "reference": "maintained-fork test suite tests/hermes_cli/test_kanban_project_provenance.py",
+        "result": "Dedicated regression module passed 5/5 in isolation and as part of the 208-test focused kanban battery."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "unavailable",
+    "artifacts": [
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-428-project-provenance-and-bounded-failure.patch",
+        "result": "passed",
+        "ledger_sha256": "6fe6b20f8a932356da3f5dcb741b3d79f4aa1194dd9f5471c811f3b74a70366f",
+        "computed_sha256": "6fe6b20f8a932356da3f5dcb741b3d79f4aa1194dd9f5471c811f3b74a70366f",
+        "checksum_status": "passed",
+        "parse_status": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "maintained fork base aed6591a69f453a1867b73628603e7b53ba40ffc",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "git apply --check and apply on exact base aed6591a69f453a1867b73628603e7b53ba40ffc; the changed paths reconstruct candidate tree dd579f0f587461f26d59bcb2478069752cd13055, equal to reviewed candidate 184a6d03bcab8964fa507ada4d02edc13cdcfb9f",
+        "result": "passed"
+      }
+    ],
+    "blocker": "The patch reconstructs exactly in the maintained fork from candidate 184a6d03bc, but no public upstream equivalent exists and fork PR merge/Aether integration remain pending in INT-494."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "Upstream hermes-agent lacks board-level Project recovery and origin-signal bounding for review-lane containment.",
+    "The regression test module tests/hermes_cli/test_kanban_project_provenance.py is introduced by this patch and does not exist at pre-merge base aed6591a69; full aggregate component presence resolution defers to INT-494 after merge."
+  ],
+  "summary": "Retain HLP-428. The maintained fork recovers canonical Project provenance for non-affinity direct parent worktree children, refuses cross-project mismatches before task persistence, and cleanly bounds review failure containment without unverified notifications; verified by RED/GREEN reproduction, four-round strict contract audit, and exact tree reconstruction."
+}

@@ -69,6 +69,7 @@ EXPECTED_ACTIVE_IDS = (
     "HLP-425",
     "HLP-426",
     "HLP-427",
+    "HLP-428",
 )
 HLP226_PATCH_REFERENCES = (
     "patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch",
@@ -97,6 +98,7 @@ PATCH_DIGESTS = {
     "HLP-425": ("2b302ca52209e41d5354b8c9ce06deade0742d105534fdf2113eadce1ba322fa",),
     "HLP-426": ("97dc0294b9909e9648bce9d6dbdde4ce7dd379d6cf2114b8c1713b8ee07b2e81",),
     "HLP-427": ("508dbdf45328084e0ccfdd586f28d3d025f1d92364dd64d90c7192e8c8679367",),
+    "HLP-428": ("6fe6b20f8a932356da3f5dcb741b3d79f4aa1194dd9f5471c811f3b74a70366f",),
 }
 
 

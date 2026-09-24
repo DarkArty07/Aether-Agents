@@ -1,6 +1,6 @@
 ---
 name: project-knowledge
-description: Query and maintain revision-bound project knowledge.
+description: Orient on project architecture, dependencies, or decisions.
 version: 0.1.0
 author: Aether contributors
 license: MIT
@@ -22,20 +22,27 @@ project authority, a substitute for tests, or a record of personal preferences.
 Use when the task benefits from project-relative source navigation. This procedure
 cannot grant authority or replace the project's canonical decisions.
 
+- On the first substantive request to understand a bound project's architecture,
+  dependencies, implementation, or documented decisions, discover this skill and
+  consult the graph without waiting for the owner to name Graphify, before repository
+  content searches and answer-bearing source reads. Then inspect current sources to
+  verify.
 - Orient within a project, investigate dependencies, locate implementation or documented
   decisions, or return to a project in a later session.
 - Refresh knowledge after a coherent committed change to relevant code or documentation,
   including on integrated main before closeout, through configured update (`mode="configured"`).
-- Do not use for greetings, unrelated questions, or as ceremony before every file read.
-  Ordinary queries, status checks, and greetings never call a model; no background watcher is installed.
+- Do not use for greetings, trivial questions, a directly supplied source or URL, or as
+  ceremony before every file read. Ordinary queries, status checks, and greetings never call
+  a model; no background watcher is installed.
 
 ## Prerequisites
 
 - The `aether-project-knowledge` plugin and its `project_knowledge` tool are available.
 - The session is bound to a registered project and the Graphify component is configured.
 - The current objective permits the work; the skill grants no additional authority.
-- If the capability is unavailable, continue with `search_files`, `read_file` and the
-  project's ordinary verification process. Do not install dependencies or alter profiles.
+- If the project is unbound, the index is missing, the component is unavailable, or the
+  repository is unborn, degrade honestly: continue with `search_files`, `read_file` and
+  the project's ordinary verification process. Do not install dependencies or alter profiles.
 
 ## How to Run
 
@@ -49,11 +56,17 @@ returned revision, coverage, warnings and freshness.
 
 Tool parameters use action-discriminated schemas: each action accepts only its specific
 declared parameters (such as `question` for `query` or `node` for `explain`), and extra or
-inapplicable arguments are rejected.
+inapplicable arguments are rejected. Natural-language questions can return noisy nodes
+because `knowledge/graph_worker.py` passes the text directly to Graphify; refine
+subsequent queries using symbols or names actually observed, or fall back to native source
+search (`search_files`).
 
-Use native file tools to inspect the relevant current sources after orientation.
-A source reference in an older snapshot is a lead, not evidence that the source still
-has that behavior. Do not bypass a genuine protected-edge denial through another tool.
+Consult an available graph before repository content searches and answer-bearing source reads
+when seeking to understand project architecture, dependencies, implementation, or decisions.
+Then use native file tools to inspect the relevant current sources after orientation to
+verify. A source reference in an older snapshot is a lead, not evidence that the source still
+has that behavior. Read current source files before designing, changing code, or concluding.
+Do not bypass a genuine protected-edge denial through another tool.
 
 ## Quick Reference
 
@@ -114,10 +127,13 @@ default across rebuilds.
 
 1. Confirm the current task and normal project guidance. Discover only relevant canonical
    procedures; do not load every project document or graph report into the prompt.
-2. Query → Explain → Community discovery: Ask a bounded question with `query`. You may
-   select `traversal` (`bfs` or `dfs`), `depth` (1–6) and a `context_filter` for query
-   refinement only. When a promising symbol is returned, call `explain` with `node` to
-   inspect connections. The response returns `resolved_node` with
+2. Query → Explain → Community discovery: For requests to understand project architecture,
+   dependencies, implementation, or documented decisions, consult an available graph before
+   repository content searches and answer-bearing source reads. Ask a bounded question with
+   `query`. Natural-language queries can be noisy because `knowledge/graph_worker.py` passes
+   the text directly to Graphify. You may select `traversal` (`bfs` or `dfs`), `depth` (1–6)
+   and a `context_filter` for query refinement only. When a promising symbol is returned, call
+   `explain` with `node` to inspect connections. The response returns `resolved_node` with
    `{id, community_id, community_name}` (community fields are `null` if the node is
    unclassified). Use the returned snapshot-local `community_id` to call `community`
    for cluster context (`community` returns `{id, name, node_count}`).
@@ -130,14 +146,18 @@ default across rebuilds.
    visible definitions and relation sites. The 50-reference cap is never silent: reaching
    it sets `truncated=true` and adds a warning. No snapshot or private absolute paths escape.
 4. Supported recovery and exploration: When output is truncated or a query needs refinement,
-   use a narrower `question`, a higher `budget_tokens` within the supported range (128–8000),
-   or `explain` on a returned node. `context_filter` is supported only on `query`; `undirected`
-   is supported only on `path`. `relations` narrows `impact`. `god_nodes`, the read-only PR
-   actions and `visualize` are bounded optional views; GitHub and auxiliary availability are
-   reported rather than replaced with a different project or model. Never use an external
-   graph path, command or tool as a substitute for these supported actions.
-5. Follow references to current source files before changing code or making a behavioral
-   claim. Documentation can describe a requirement that the implementation does not meet.
+   refine using symbols or names actually observed, or fall back to source search with
+   `search_files`. Alternatively, use a narrower `question`, a higher `budget_tokens` within
+   the supported range (128–8000), or `explain` on a returned node. `context_filter` is
+   supported only on `query`; `undirected` is supported only on `path`. `relations` narrows
+   `impact`. `god_nodes`, the read-only PR actions and `visualize` are bounded optional views;
+   GitHub and auxiliary availability are reported rather than replaced with a different project
+   or model. Never use an external graph path, command or tool as a substitute for these
+   supported actions.
+5. Follow references to current source files before designing, changing code, or making a
+   behavioral claim. Read returned revision, coverage, and warnings honestly. Documentation
+   can describe a requirement that the implementation does not meet, and dirty files are not
+   indexed.
 6. Perform the authorized work with the role's existing responsibilities, tools, tests
    and review. Owning a tool does not widen scope or transfer another role's authority.
 7. Perform or resume a configured update (`mode="configured"`, default) at coherent
@@ -158,8 +178,20 @@ default across rebuilds.
 
 ## Pitfalls
 
+- Do not explore sources before consulting the graph: when asked to understand architecture,
+  dependencies, implementation, or documented decisions, consult an available graph before
+  repository content searches and answer-bearing source reads. Then verify against current
+  sources.
 - Do not treat `community_id: 0` or any community ID as a portable default across snapshots
   or rebuilds. Always discover community IDs dynamically from `explain.resolved_node`.
+- Natural-language queries can return noisy nodes because `knowledge/graph_worker.py` passes
+  the raw text to Graphify. Refine subsequent exploration with exact symbols or names actually
+  observed, or fall back to source search (`search_files`).
+- Do not design or conclude based on graph output alone without reading current source files.
+- Read returned `revision`, `coverage`, and warnings honestly: dirty files are not indexed,
+  and a snapshot is not proof of current source behavior.
+- Proportionality: do not make ceremonial graph calls for greetings, trivial questions, or
+  directly supplied sources or URLs.
 - `context_filter` is a query-only refinement and `undirected` is a path-only traversal
   option. Do not pass either field to unrelated actions.
 - Do not invoke or document external recovery mechanisms. Supported recovery is a narrower
