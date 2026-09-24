@@ -172,6 +172,7 @@ jobs:
           patches/hermes/HLP-426-terminal-worker-reap.patch
           patches/hermes/HLP-427-routed-recovery-review-phase.patch
           patches/hermes/HLP-428-project-provenance-and-bounded-failure.patch
+          patches/hermes/HLP-433-responses-reasoning-usage.patch
           patches/hermes/HLP-369-goal-mode-review-recovery.patch
           patches/hermes/HLP-275-aux-image-prep-cap.patch
           patches/hermes/HLP-382-bounded-transcript-publication.patch

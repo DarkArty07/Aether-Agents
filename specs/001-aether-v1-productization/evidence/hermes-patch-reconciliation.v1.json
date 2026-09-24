@@ -1,5 +1,5 @@
 {
-  "observed_at_utc": "2026-09-24T06:16:26Z",
+  "observed_at_utc": "2026-09-24T17:50:00Z",
   "overall_blockers": [
     {
       "detail": "Retirement gate status is failed.",
@@ -554,6 +554,26 @@
     {
       "detail": "The regression test module tests/hermes_cli/test_kanban_project_provenance.py is introduced by this patch and does not exist at pre-merge base aed6591a69. It is now declared as a component and resolves present at the merged revision 58f8c37a49b341f25b8fdd6310542fe932031b8d that the aggregate is pinned to.",
       "id": "HLP-428",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "The patch reconstructs exactly in the maintained fork and candidate checks pass, but public upstream equivalence is unavailable: inspected upstream revisions reconstruct only flat prompt/completion/total tokens from Responses usage. No live runtime was activated by this unit.",
+      "id": "HLP-433",
+      "kind": "artifact"
+    },
+    {
+      "detail": "Retirement gate status is not_executed.",
+      "id": "HLP-433",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "Upstream hermes-agent lacks reasoning token preservation across the Responses adapter boundary.",
+      "id": "HLP-433",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "The regression test module tests/agent/test_auxiliary_client_responses_reasoning_433.py is introduced by this patch and does not exist at pre-merge base 58f8c37a49. It is described in artifact and retirement evidence and can be declared as a component once INT-433 merges and re-pins the aggregate.",
+      "id": "HLP-433",
       "kind": "uncertainty"
     }
   ],
@@ -3781,19 +3801,111 @@
         ],
         "repository": "https://github.com/NousResearch/hermes-agent"
       }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [
+          {
+            "checksum_status": "passed",
+            "computed_sha256": "c39be36f2389a980bf66514e1efdf8f7db78e2a1e67223457e440086486c839e",
+            "kind": "patch",
+            "ledger_sha256": "c39be36f2389a980bf66514e1efdf8f7db78e2a1e67223457e440086486c839e",
+            "parse_status": "passed",
+            "reference": "patches/hermes/HLP-433-responses-reasoning-usage.patch",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction_input",
+            "reference": "maintained fork base 58f8c37a49b341f25b8fdd6310542fe932031b8d",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction",
+            "reference": "git apply --check and apply --index on exact base 58f8c37a49b341f25b8fdd6310542fe932031b8d; the changed paths reconstruct candidate tree b1d86fe3c4a973e8c89b5d6aa5c5d4e96dcb89a5, equal to reviewed candidate c31bd6ca149d6d23ebe5678b4a3d91aa17b5de91",
+            "result": "passed"
+          }
+        ],
+        "blocker": "The patch reconstructs exactly in the maintained fork and candidate checks pass, but public upstream equivalence is unavailable: inspected upstream revisions reconstruct only flat prompt/completion/total tokens from Responses usage. No live runtime was activated by this unit.",
+        "status": "unavailable"
+      },
+      "blocking_uncertainty": [
+        "Upstream hermes-agent lacks reasoning token preservation across the Responses adapter boundary.",
+        "The regression test module tests/agent/test_auxiliary_client_responses_reasoning_433.py is introduced by this patch and does not exist at pre-merge base 58f8c37a49. It is described in artifact and retirement evidence and can be declared as a component once INT-433 merges and re-pins the aggregate."
+      ],
+      "components": [
+        "HLP-433",
+        "agent/auxiliary_client.py"
+      ],
+      "id": "HLP-433",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-433--preserve-auxiliary-responses-reasoning-tokens-in-adapter-usage-maintained-fork-2026-09-24",
+      "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+      "required_behavior": "The auxiliary Responses adapter preserves completed response reasoning tokens (in object, mapping, and terminal SSE form) on the chat-compatible usage object as output_tokens_details without changing input/output/total tokens or double-counting reasoning into output or total, and preserves explicit zero, absent detail, and absent usage behavior.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "maintained-fork candidate c31bd6ca149d6d23ebe5678b4a3d91aa17b5de91 on fix/433-reasoning-usage",
+            "result": "Causal RED reproduced at base 58f8c37a49 (5 failed/10 passed); candidate tip passed 15/15. Affected battery (5 files, 238 passed) green; preserved consumer digests byte-identical to base. Mutation pins and independent end-to-end probe confirmed reasoning preserved in object and mapping shapes, exactly one row with api_call_count=1, unchanged input/output/total."
+          },
+          {
+            "kind": "test",
+            "reference": "maintained-fork test suite tests/agent/test_auxiliary_client_responses_reasoning_433.py",
+            "result": "Dedicated regression module passed 15/15 in isolation and as part of the 238-test affected battery."
+          }
+        ],
+        "status": "not_executed",
+        "summary": "Retire only when an adopted exact Hermes release preserves provider reasoning tokens across the Responses adapter boundary into chat-compatible usage and SessionDB accounting without altering input/output/total tokens or double-counting, and passes tests/agent/test_auxiliary_client_responses_reasoning_433.py without this patch."
+      },
+      "retirement_recommendation": "retain",
+      "selected_source": {
+        "paths": [
+          {
+            "path": "agent/auxiliary_client.py",
+            "present": true
+          }
+        ],
+        "presence": "present",
+        "repository": "https://github.com/DarkArty07/aether-hermes",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
+        "unverified_reason": null
+      },
+      "summary": "Retain HLP-433. The maintained fork preserves provider reasoning tokens across the Responses adapter boundary into chat-compatible usage and SessionDB accounting without altering input/output/total tokens or double-counting; verified by RED/GREEN reproduction, strict contract audit, and exact tree reconstruction.",
+      "upstream": {
+        "disposition": "upstream_missing",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/agent/auxiliary_client.py",
+            "result": "The common inspected baseline reconstructs only flat prompt_tokens, completion_tokens, and total_tokens from Responses usage and drops nested reasoning details."
+          },
+          {
+            "kind": "source",
+            "reference": "selected public release v2026.8.18 (commit e624e9fde561e1add9388384012b295fde669ade) and latest release v2026.9.14 (345cd2b057a452236de401d3534b8502a7465e8d)",
+            "result": "Neither upstream revision preserves provider reasoning tokens from Responses usage across the adapter boundary."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "issue",
+            "url": "https://github.com/DarkArty07/Aether-Agents/issues/433"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
     }
   ],
   "schema_version": "aether.hermes-patch-reconciliation.v1",
   "selected_source": {
     "absent": 0,
     "partial": 0,
-    "present": 30,
+    "present": 31,
     "repository": "https://github.com/DarkArty07/aether-hermes",
     "resolved_from_checkout": true,
     "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
     "unverified": 2
   },
-  "source_ledger_sha256": "9a4c29a126cfc8eab2de5edf591a235208996a3ae358a15a614038bea43e3dca",
+  "source_ledger_sha256": "a85abfe02925d53c961c28fe426b2829ae55213aeb321f99746da997864eff19",
   "upstream": {
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
     "repository": "https://github.com/NousResearch/hermes-agent"
