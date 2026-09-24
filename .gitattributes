@@ -11,3 +11,4 @@ patches/hermes/HLP-425-review-flow-continuity.patch whitespace=-trailing-space
 patches/hermes/HLP-426-terminal-worker-reap.patch whitespace=-trailing-space
 patches/hermes/HLP-427-routed-recovery-review-phase.patch whitespace=-trailing-space
 patches/hermes/HLP-428-project-provenance-and-bounded-failure.patch whitespace=-trailing-space
+patches/hermes/HLP-433-responses-reasoning-usage.patch whitespace=-trailing-space
