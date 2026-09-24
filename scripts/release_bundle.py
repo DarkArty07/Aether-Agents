@@ -382,7 +382,7 @@ def profile_bundle_sha256(lifecycle: Any) -> str:
                 "path": f"profiles/{role}/skills/{skill}/SKILL.md",
                 "sha256": _sha256_file(source),
             }
-            for skill, source in manager._skill_sources().items()
+            for skill, source in manager._skill_sources(role).items()
         }
         profiles[role] = {"resources": resources, "skills": skills}
     manifest = {
