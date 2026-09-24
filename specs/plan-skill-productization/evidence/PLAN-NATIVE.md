@@ -166,7 +166,7 @@ The candidate `plan` resource bytes authored by `PLAN-CANDIDATE` (`3da1457223277
 
 ### 4. Planning-only semantics static specification checks (Decision 5)
 
-No shipped Python module in `aether_agents` writes `.aether/plans` directly (`grep -rn 'aether/plans' src/aether_agents` returns 0 hits); rather, the planning procedure is executed by Morfeo under prompt guidance from `skills/plan/SKILL.md`. As behavioral model turns were not performed in this headless run, Decision 5 semantics are verified via static specification checks against the candidate `plan` skill artifact:
+No shipped Python module in `aether_agents` writes `.aether/plans` directly (`grep -rn 'aether/plans' src/aether_agents --include='*.py'` returns 0 hits); rather, the planning procedure is executed by Morfeo under prompt guidance from `skills/plan/SKILL.md`. As behavioral model turns were not performed in this headless run, Decision 5 semantics are verified via static specification checks against the candidate `plan` skill artifact:
 
 - 5a (Project-local creation): The skill procedure explicitly mandates keeping the plan at one stable `.aether/plans/<objective-slug>.md` inside the explicitly resolved project, and explicitly instructs to end after writing or updating the plan file without writing implementation code, dispatching workers, or creating task cards. Verification instructions require confirming no task cards, boards, or code edits were created during planning.
 - 5b (Idempotent repeat): The procedure explicitly instructs: "Reuse and update the existing file across invocations for the same objective; never create duplicate files or global plans."

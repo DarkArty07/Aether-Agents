@@ -397,6 +397,7 @@ print(json.dumps({
     # (skills/software-development/plan/SKILL.md shipped by the pinned fork runtime)
     fork_plan_bytes = _get_fork_bundled_plan_skill_bytes()
     if fork_plan_bytes is not None:
+        assert hashlib.sha256(fork_plan_bytes).hexdigest() == FORK_BUNDLED_PLAN_SHA256
         for home in (morfeo_home, supervisor_home, implementer_home):
             bundled_path = home / "skills" / "software-development" / "plan" / "SKILL.md"
             bundled_path.parent.mkdir(parents=True, exist_ok=True)
