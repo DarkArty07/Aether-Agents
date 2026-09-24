@@ -1,6 +1,6 @@
 # Validación y aceptación de la integración
 
-**Estado:** contrato de aceptación vigente. Los carriles deterministas de componente, plugin, empaquetado y repositorio ya tienen resultados en [implementation.md](implementation.md); deben repetirse sobre la integración final con `main`. Los escenarios E01–E08 y la evaluación comparativa continúan pendientes y no se presentan como resultados actuales. La auditoría previa del componente se documenta por separado en [research.md](research.md).
+**Estado:** contrato de aceptación vigente. Los carriles deterministas de componente, plugin, empaquetado y repositorio ya tienen resultados en [implementation.md](implementation.md); deben repetirse sobre la integración final con `main`. El escenario E01 fue ejecutado y calificado de forma aislada bajo KG-19/#505: el resultado es **parcial** (ver [evidence/KG19-02.md](evidence/KG19-02.md) §3.4), porque en el piloto positivo la consulta al grafo llegó después de la exploración de fuentes; los controles de fuente exacta y repositorio sin HEAD se comportaron como se espera. Los escenarios E02–E08 y la evaluación comparativa continúan pendientes y no se presentan como resultados actuales. La auditoría previa del componente se documenta por separado en [research.md](research.md).
 
 ## 1. Niveles de evidencia
 
@@ -103,6 +103,8 @@ degradación honesta a herramientas de archivos, sin instalación, commit, activ
 o modificación del perfil compartido. La prueba usa perfil/sesión/estado de prueba
 aislados y no modifica sesiones Morfeo existentes. No atribuir el resultado de un
 único piloto a todas las conversaciones o modelos.
+
+**Resultado observado (KG-19 / #505):** E01 ejecutado de forma aislada sobre los bytes candidatos (Morfeo SOUL y skill `project-knowledge`). En las pruebas válidas el resultado del orden KG-19/AC-2 es **mixto entre ejecuciones válidas**: en la suite 2 el agente leyó fuentes clave antes de la consulta al grafo (resultado parcial), mientras que en la suite 3 solicitó `project_knowledge.query` antes de que los contenidos de los archivos entraran en contexto; ambas suites cargaron la skill, consultaron el grafo con revisión correcta (7 referencias devueltas a ADR y código) y distinguieron especificación de implementación (derivado de la respuesta). Los controles de fuente exacta (sin llamada ceremonial) y repositorio sin HEAD (degradación honesta con `SCOPE_UNAVAILABLE`, sin commit, índice ni instalación) se comportaron como se espera. Detalle completo de las 3 suites (9 sesiones, 53 llamadas primarias), trazas, referencias, uso y límites saneados en [evidence/KG19-02.md](evidence/KG19-02.md) y [evidence/E01-evidence.json](evidence/E01-evidence.json); se remite la evidencia a Supervisor para informar el rework de KG19-01.
 
 ### E02 — colaboración completa
 

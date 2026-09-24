@@ -1,0 +1,357 @@
+{
+  "producer": "KG19-02 (t_58496a81)",
+  "contract": "oc_d96969bf913512f7@v1",
+  "candidate_bytes": {
+    "morfeo_soul_sha256": "c4785b1a38e29e49d908268cd2abfedf5d587e63386ef1ba1f00326c999065ee",
+    "project_knowledge_skill_sha256": "9a417c75235eb2fa0388b3d6ba95ca19f268d894fabe2fcabfaa0023c394b869"
+  },
+  "fixture": {
+    "project_id": "e01a0001-0000-4000-8000-000000000001",
+    "head_revision": "c77796c5a309af5ee41b4c29e0ba4672b834bd3f",
+    "pre_call_status": {
+      "status_ok": true,
+      "available": true,
+      "source_revision": "c77796c5a309af5ee41b4c29e0ba4672b834bd3f",
+      "coverage": {
+        "code": "structural",
+        "documents": "structural_only"
+      },
+      "freshness": "current",
+      "indexed_files": 7
+    }
+  },
+  "positive_e01": {
+    "query": "Explain how payment retries work in this project, and what the retry policy is.",
+    "session_id": "20260923_210140_edb6a3",
+    "returncode": 0,
+    "skill_discovered_and_loaded": true,
+    "ordered_trace": [
+      {
+        "message": 2,
+        "tool": "kanban_show",
+        "detail": "no task context present in isolated session"
+      },
+      {
+        "message": 4,
+        "tool": "skill_view",
+        "detail": "loads packaged project-knowledge skill"
+      },
+      {
+        "message": 4,
+        "tool": "terminal",
+        "detail": "git status and rev-parse --show-toplevel"
+      },
+      {
+        "message": 4,
+        "tool": "search_files",
+        "detail": "AGENTS.md filename search"
+      },
+      {
+        "message": 4,
+        "tool": "search_files",
+        "detail": "*retry* filename search"
+      },
+      {
+        "message": 4,
+        "tool": "search_files",
+        "detail": "content search payment|Payment|retry|Retry"
+      },
+      {
+        "message": 10,
+        "tool": "tool_describe",
+        "detail": "project_knowledge schema inspection"
+      },
+      {
+        "message": 10,
+        "tool": "read_file",
+        "detail": "billing/processor.py"
+      },
+      {
+        "message": 10,
+        "tool": "read_file",
+        "detail": "docs/decisions/001-retry-policy.md"
+      },
+      {
+        "message": 10,
+        "tool": "search_files",
+        "detail": "project file listing"
+      },
+      {
+        "message": 16,
+        "tool": "tool_call",
+        "detail": "project_knowledge query: 'Where is payment retry behavior implemented and what documented retry policy governs it?'"
+      },
+      {
+        "message": 16,
+        "tool": "read_file",
+        "detail": "README.md"
+      },
+      {
+        "message": 16,
+        "tool": "read_file",
+        "detail": "notifications/mailer.py"
+      },
+      {
+        "message": 17,
+        "tool": "project_knowledge",
+        "detail": "query result returned"
+      },
+      {
+        "message": 21,
+        "tool": null,
+        "detail": "final answer text"
+      }
+    ],
+    "graph_query_before_source_exploration": false,
+    "graph_query_message": 16,
+    "key_sources_read_before_graph_query": [
+      "billing/processor.py",
+      "docs/decisions/001-retry-policy.md"
+    ],
+    "references_returned": [
+      {
+        "path": "docs/decisions/001-retry-policy.md",
+        "location": "L1",
+        "revision": "c77796c5a309af5ee41b4c29e0ba4672b834bd3f"
+      },
+      {
+        "path": "docs/decisions/001-retry-policy.md",
+        "location": "L10",
+        "revision": "c77796c5a309af5ee41b4c29e0ba4672b834bd3f"
+      },
+      {
+        "path": "billing/processor.py",
+        "location": "L1",
+        "revision": "c77796c5a309af5ee41b4c29e0ba4672b834bd3f"
+      },
+      {
+        "path": "docs/decisions/001-retry-policy.md",
+        "location": "L6",
+        "revision": "c77796c5a309af5ee41b4c29e0ba4672b834bd3f"
+      },
+      {
+        "path": "docs/decisions/001-retry-policy.md",
+        "location": "L16",
+        "revision": "c77796c5a309af5ee41b4c29e0ba4672b834bd3f"
+      },
+      {
+        "path": "docs/decisions/001-retry-policy.md",
+        "location": "L3",
+        "revision": "c77796c5a309af5ee41b4c29e0ba4672b834bd3f"
+      },
+      {
+        "path": "billing/processor.py",
+        "location": "L4",
+        "revision": "c77796c5a309af5ee41b4c29e0ba4672b834bd3f"
+      }
+    ],
+    "sources_inspected_after_graph_query": [
+      "README.md",
+      "notifications/mailer.py"
+    ],
+    "distinguishes_specification_from_implementation": true,
+    "oracle_verdict": "partial",
+    "oracle_verdict_reason": "Skill discovery/load and knowledge consultation were early, but both architecture/decision sources were read before the graph query, so the graph did not orient the exploration as KG-19/AC-2 requires. Reported as KG19-01 trigger rework rather than lowering the oracle or rerunning spend.",
+    "usage": {
+      "model": "gpt-6-sol",
+      "api_call_count": 5,
+      "input_tokens": 67890,
+      "output_tokens": 1336,
+      "cache_read_tokens": 83456,
+      "reasoning_tokens": 502
+    },
+    "answer": "Payment retries are specified but not actually executed in the checked-in code. process_payment sets a legacy 10-second fixed delay and a limit of 5 retries, then immediately returns True; it contains no gateway call, wait, or retry loop (billing/processor.py:4-14). The accepted policy is different: retry after 60, 120, and 240 seconds, exponential backoff at 2x, with at most 3 retry attempts (docs/decisions/001-retry-policy.md:3-14). The ADR explicitly says migration from the legacy settings is planned for a future release (docs/decisions/001-retry-policy.md:16-19).",
+    "distinguishes_specification_from_implementation_derivation": "Derived by check_distinguishes_specification_from_implementation from the answer text: contrasts accepted exponential policy (60s/120s/240s, max 3 attempts) in ADR 001 with legacy variables (fixed 10s delay, max 5 attempts, no execution loop) in billing/processor.py."
+  },
+  "control_a_exact_source": {
+    "query": "In billing/processor.py, what is the default retry delay in seconds and the maximum attempts?",
+    "session_id": "20260923_210233_326a48",
+    "returncode": 0,
+    "tools_sequence": [
+      "kanban_show",
+      "read_file",
+      "read_file"
+    ],
+    "ceremonial_graph_called": false,
+    "sources_inspected": [
+      "billing/processor.py"
+    ],
+    "usage": {
+      "model": "gpt-6-sol",
+      "api_call_count": 3,
+      "input_tokens": 986,
+      "output_tokens": 295,
+      "cache_read_tokens": 79360,
+      "reasoning_tokens": 222
+    },
+    "answer": "The retry delay is 10 seconds, and the limit is 5 retry attempts (billing/processor.py:11-12)."
+  },
+  "control_b_unborn_repo": {
+    "query": "In this repository, what is the architecture and implementation?",
+    "session_id": "20260923_210256_48697c",
+    "returncode": 0,
+    "tools_sequence": [
+      "kanban_show",
+      "skill_view",
+      "search_files",
+      "tool_describe",
+      "project_knowledge",
+      "read_file",
+      "terminal"
+    ],
+    "live_observed_error_code": "PROJECT_UNRESOLVED",
+    "live_observed_error_message": "The project registry and marker do not agree.",
+    "limitation": "The live control did not isolate the unborn-HEAD path: the untracked marker and the disposable registry disagreed, so the live code is registry/marker mismatch rather than a bound no-HEAD failure.",
+    "usage": {
+      "model": "gpt-6-sol",
+      "api_call_count": 5,
+      "input_tokens": 33891,
+      "output_tokens": 1069,
+      "cache_read_tokens": 114944,
+      "reasoning_tokens": 388
+    },
+    "answer": "This repository has no architecture or implementation to describe yet. It is an unborn Git repository on main: there are no commits or tracked source files. The only files present are .aether/project.toml and untracked_notes.txt. I also tried the project knowledge graph, but it was unavailable because the project registry and marker disagree."
+  },
+  "control_b_unborn_head_deterministic_witness": {
+    "witness": "specs/005-project-knowledge-graphify/fixtures/e01_morfeo_orientation_lane.py::test_unborn_repository_honest_degradation",
+    "registry_marker_agreement": true,
+    "resolver_error_code": "SCOPE_UNAVAILABLE",
+    "resolver_error_message": "The bound Git repository is unavailable.",
+    "resolver_error_source": "src/aether_agents/knowledge/common.py:113-114 (git rev-parse --verify HEAD^{commit})",
+    "no_index_created": true,
+    "no_commit_created": true,
+    "no_install": true,
+    "spend": "none (deterministic, no model call)"
+  },
+  "preservation": {
+    "live_morfeo_profile_bytes": "unchanged before and after the runs",
+    "live_board": {
+      "path": "<state_root>/hermes/kanban/boards/oc-12027989a08f41cda82c54ff1bfb6b03-d96969bf913512f7-v1/kanban.db",
+      "task_count": 4,
+      "tasks": [
+        {
+          "id": "t_fbcc54ab",
+          "title": "Supervisor: verify and decompose oc_d96969bf913512f7@v1",
+          "status": "done"
+        },
+        {
+          "id": "t_7c3c1e49",
+          "title": "KG19-01 Package the first-turn orientation trigger in the Morfeo SOUL and project-knowledge skill",
+          "status": "done"
+        },
+        {
+          "id": "t_58496a81",
+          "title": "KG19-02 E01 isolated real-Morfeo first-turn qualification with controls",
+          "status": "running"
+        },
+        {
+          "id": "t_225efc01",
+          "title": "KG19-INT Integrate, accept, publish and close out oc_d96969bf913512f7@v1",
+          "status": "todo"
+        }
+      ],
+      "preserved": true,
+      "isolation_witness": "Qualification runs wrote only to isolated disposable boards under /tmp/...; live board tasks were not modified or added."
+    },
+    "primary_checkout_local_edits": "untouched",
+    "evidence_limit": "Preserved run roots live under /tmp/aether-e01-qualification-{bnqk8kqn,uljbnyd5,ak4t978p} and are subject to OS /tmp volatility on reboot."
+  },
+  "paid_trials_disclosure": {
+    "total_agent_sessions": 9,
+    "total_primary_route_calls": 53,
+    "total_title_generation_calls": 9,
+    "suites": [
+      {
+        "suite_id": "suite_1_bnqk8kqn",
+        "timestamp": "2026-09-23T20:52:00",
+        "fixture_head": "a129839036ca1259fc695bbecda09a862c67b0b4",
+        "sessions_count": 3,
+        "primary_calls_count": 24,
+        "title_gen_calls_count": 3,
+        "valid_trial": false,
+        "defect_note": "Environment defect: terminal cwd was not pinned to fixture repository (resolved to operator home instead of repo root); first terminal call leaked operator HOME entries into live transcript. No operator path reached durable project artifacts (verified). Excluded as an invalid trial.",
+        "sessions": [
+          {
+            "id": "20260923_205308_dea31c",
+            "type": "positive",
+            "primary_calls": 8,
+            "title_calls": 1
+          },
+          {
+            "id": "20260923_205448_44df5c",
+            "type": "control_a",
+            "primary_calls": 6,
+            "title_calls": 1
+          },
+          {
+            "id": "20260923_205648_a04978",
+            "type": "control_b",
+            "primary_calls": 10,
+            "title_calls": 1
+          }
+        ]
+      },
+      {
+        "suite_id": "suite_2_uljbnyd5",
+        "timestamp": "2026-09-23T21:01:00",
+        "fixture_head": "c77796c5a309af5ee41b4c29e0ba4672b834bd3f",
+        "sessions_count": 3,
+        "primary_calls_count": 13,
+        "title_gen_calls_count": 3,
+        "valid_trial": true,
+        "positive_outcome": "partial: skill discovered/loaded early and graph queried, but key sources (billing/processor.py and ADR 001) were read at message 10 before the graph query at message 16",
+        "sessions": [
+          {
+            "id": "20260923_210140_edb6a3",
+            "type": "positive",
+            "primary_calls": 5,
+            "title_calls": 1
+          },
+          {
+            "id": "20260923_210233_326a48",
+            "type": "control_a",
+            "primary_calls": 3,
+            "title_calls": 1
+          },
+          {
+            "id": "20260923_210256_48697c",
+            "type": "control_b",
+            "primary_calls": 5,
+            "title_calls": 1
+          }
+        ]
+      },
+      {
+        "suite_id": "suite_3_ak4t978p",
+        "timestamp": "2026-09-23T21:05:00",
+        "fixture_head": "f63563f8019a49a47bfb3a195022d97b26ec68bf",
+        "sessions_count": 3,
+        "primary_calls_count": 16,
+        "title_gen_calls_count": 3,
+        "valid_trial": true,
+        "positive_outcome": "orient-before-explore satisfied: project_knowledge.query requested in message 13 (result at message 14), while source file contents entered context in messages 15-18; pre-graph calls were skill_view, terminal (cwd/branch), tool_describe and path-listing search_files",
+        "sessions": [
+          {
+            "id": "20260923_210555_a153b2",
+            "type": "positive",
+            "primary_calls": 6,
+            "title_calls": 1
+          },
+          {
+            "id": "20260923_210644_6a1e79",
+            "type": "control_a",
+            "primary_calls": 3,
+            "title_calls": 1
+          },
+          {
+            "id": "20260923_210706_dab797",
+            "type": "control_b",
+            "primary_calls": 7,
+            "title_calls": 1
+          }
+        ]
+      }
+    ],
+    "ac2_conclusion": "mixed across valid trials (Suite 2 read key sources before graph query; Suite 3 requested graph query before file contents entered context). Both valid trials correctly distinguished specification from implementation and loaded project-knowledge. Demonstrates that behavior varies across runs on the candidate trigger wording, informing KG19-01 trigger rework."
+  }
+}
