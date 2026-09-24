@@ -65,6 +65,7 @@ MCP's purpose is exposing tools to an agent. Using it as a work transport invert
 - **FR-609**: MCP MUST NOT be used to hand work between Aether roles.
 - **FR-610**: MCP MAY be used to expose Aether outward — for example, letting an external host create a contract or query pipeline status. That is a legitimate integration surface and belongs to whoever builds it, not to the role model.
 - **FR-611**: An outward MCP surface MUST be read-mostly and MUST NOT expose board mutation beyond contract creation, so an external caller cannot reassign or retire work the contract never authorised.
+- **FR-611a**: An external host that enacts the canonical Morfeo profile uses Morfeo's existing authority and tool surface. That enactment is still outward integration. It is not a fourth role, a second Morfeo profile, or a transport between Supervisor and Implementer. Kanban remains the inter-role transport.
 
 ## 6. The Owner's Channel
 

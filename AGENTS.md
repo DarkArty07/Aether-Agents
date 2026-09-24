@@ -18,6 +18,9 @@ The RC6 bounded corrective objective is `oc_b5926701207812e8@v1`, designed in `s
 
 Current owner-authorized local maintenance for #497/#495 is a two-candidate managed update. RC7 is the compatibility bridge with RC6-identical Morfeo SOUL and canonical contract skills; this `1.0.0rc8` source revision restores the #495 planning guidance and the #497 updater repair. For #487, the owner's accepted option B gives Hermes ownership of the complete main gateway unit; Aether verifies only its required service invariants, as reconciled in A1. Source or a local tag alone cannot establish qualification, active runtime selection or improved agent behavior: require reviewed Git evidence, exact-version isolation and a verified managed cutover. No tag is pushed or published. These maintenance candidates do not accept the outstanding RC6 objective, qualify stable release or WSL2, or authorize unrelated runtime changes.
 
+The owner-authorized Morfeo MCP objective (#515) starts with this `1.0.0rc9` compatibility bridge. RC9 reads release-lock schema 4 and schema 5 and can prepare a schema 5 target whose closed Hermes extra is `mcp`, exported from the authenticated fork lock. RC9 itself still emits schema 4, so an RC8 manager can install it without MCP. `aether mcp morfeo serve` is not available in this candidate. The executable Hermes pin for this objective remains `aed6591a69f453a1867b73628603e7b53ba40ffc`. No Hermes fork change, public feature claim, tag push, or stable release is authorized by the bridge.
+
+
 ## How Aether is built: borrow the thinking, write our own workflow
 
 **Read this before designing or building anything.**

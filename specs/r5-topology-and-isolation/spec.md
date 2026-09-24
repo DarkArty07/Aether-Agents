@@ -24,6 +24,8 @@ R5 makes Aether's roles real: which processes exist, which profile each runs und
 
 Christopher's constraint governs: **each role is a real agentic process with its own reasoning loop.** The durable multi-profile board satisfies it in the strongest available form — every worker is a full operating-system process with its own profile, its own persistent memory, and its own model.
 
+An external MCP host may enact the existing Morfeo role through that role's canonical profile. It does not add a process role, a second Morfeo profile, or another coordination primitive.
+
 R5 does not decide A2A's scope (R6), design supervision policy or set concurrency numbers (R7), decide branch naming and integration mechanics (R8), choose retention (R9), or design enforcement (R10).
 
 ## 2. Selected Coordination Primitive
