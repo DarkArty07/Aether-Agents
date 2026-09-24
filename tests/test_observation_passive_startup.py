@@ -9,11 +9,16 @@ Satisfies:
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import secrets
+import sys
 import threading
+import time
 from contextlib import contextmanager
 from copy import deepcopy
+from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter, thread_time
 from types import SimpleNamespace
@@ -50,6 +55,7 @@ except ModuleNotFoundError:  # Base-revision RED harness: RC6 has no retained in
 from aether_agents.observation.context import ProjectRegistry
 from aether_agents.observation.contracts import (
     canonical_json_bytes,
+    fallback_tool_category,
 )
 from aether_agents.observation.identity import correlation_token
 from aether_agents.observation.locking import ProjectLockTimeout, project_lock
@@ -73,17 +79,256 @@ class FakePluginContext:
         self.unload_callbacks.append(callback)
 
 
+def _witness_target() -> Path | None:
+    ambient = os.environ.get("HERMES_HOME")
+    return Path(ambient).resolve() if ambient else None
+
+
+@dataclass(frozen=True)
+class _FileWitness:
+    size: int
+    mtime_ns: int
+    digest: str | None
+    wal_present: bool | None = None
+
+
+_CACHE_CHURN_PROBE_SECONDS = 2.0
+_CACHE_CHURN_SAMPLE_SECONDS = 0.1
+
+
+def _file_witness(path: Path, relative_path: str) -> _FileWitness | None:
+    try:
+        stat = path.stat()
+        if relative_path == "state.db":
+            # Never read/hash the potentially very large session database. With WAL,
+            # neither main-file metadata nor WAL-only changes provide attributable DB-content
+            # coverage, so WAL-backed state is explicitly outside this witness's scope.
+            return _FileWitness(
+                size=stat.st_size,
+                mtime_ns=stat.st_mtime_ns,
+                digest=None,
+                wal_present=(path.parent / "state.db-wal").is_file(),
+            )
+        return _FileWitness(
+            size=stat.st_size,
+            mtime_ns=stat.st_mtime_ns,
+            digest=hashlib.sha256(path.read_bytes()).hexdigest(),
+        )
+    except OSError:
+        return None
+
+
+def _capture_witness(path: Path | None) -> dict[str, _FileWitness]:
+    """Capture candidate ambient files without hashing SQLite state or sidecars.
+
+    A live profile's root/config/cache files are content-witnessed. ``state.db`` is
+    represented by bounded metadata only; comparisons deliberately ignore its metadata
+    whenever a WAL is present at either endpoint, since WAL commits/checkpoints cannot be
+    attributed to this test. Cache deltas are adjudicated per comparison, never excluded
+    process-globally.
+    """
+    if path is None or not path.exists():
+        return {}
+    witness: dict[str, _FileWitness] = {}
+    is_live_profile = (path / "aether-observer.json").exists() or (path / "profile.yaml").exists()
+    for p in path.rglob("*"):
+        if not p.is_file():
+            continue
+        rel = str(p.relative_to(path))
+        if rel.endswith(("-wal", "-shm", ".lock")) or p.name.startswith(".tmp"):
+            continue
+        if is_live_profile:
+            if (
+                rel.startswith("logs/")
+                or rel.startswith("sessions/")
+                or rel.startswith("cache/terminal-output/")
+                or rel.startswith("cache/blocked-scripts/")
+                or rel.startswith("cache/web/")
+            ):
+                continue
+            if not (
+                rel in ("SOUL.md", "config.yaml", "state.db")
+                or rel.startswith("cache/")
+                or p.parent == path
+            ):
+                continue
+            if rel.endswith(".db") and rel != "state.db":
+                continue
+            if rel in (
+                "processes.json",
+                "channel_directory.json",
+                ".update_check",
+                ".restart_last_processed.json",
+            ):
+                continue
+        value = _file_witness(p, rel)
+        if value is not None:
+            witness[rel] = value
+    return witness
+
+
+def _cache_path_is_churning(path: Path, relative_path: str) -> bool:
+    """Return true only when this cache path changes again during this comparison."""
+    target = path / relative_path
+    previous = _file_witness(target, relative_path)
+    changed_again = False
+    deadline = perf_counter() + _CACHE_CHURN_PROBE_SECONDS
+    while (remaining := deadline - perf_counter()) > 0:
+        time.sleep(min(_CACHE_CHURN_SAMPLE_SECONDS, remaining))
+        current = _file_witness(target, relative_path)
+        if current != previous:
+            changed_again = True
+        previous = current
+    return changed_again
+
+
+def _assert_witness_unchanged(before: dict[str, _FileWitness], path: Path | None) -> None:
+    after = _capture_witness(path)
+    if path is None:
+        return
+
+    coverage_changed: list[str] = []
+    content_changed: list[str] = []
+    for rel in sorted(before.keys() | after.keys()):
+        old = before.get(rel)
+        new = after.get(rel)
+        if old is None or new is None:
+            coverage_changed.append(rel)
+        elif old != new:
+            if rel == "state.db" and (old.wal_present or new.wal_present):
+                # Under WAL, DB-content coverage is intentionally absent: both main-file
+                # metadata and WAL-only changes can reflect unrelated commits/checkpoints.
+                # Creation/removal of the main DB remains a visible coverage change.
+                continue
+            content_changed.append(rel)
+
+    changed = set(coverage_changed) | set(content_changed)
+    unstable_cache_paths = {
+        rel for rel in changed if rel.startswith("cache/") and _cache_path_is_churning(path, rel)
+    }
+    coverage_changed = [rel for rel in coverage_changed if rel not in unstable_cache_paths]
+    content_changed = [rel for rel in content_changed if rel not in unstable_cache_paths]
+    assert not coverage_changed and not content_changed, (
+        "Ambient HERMES_HOME changed: "
+        f"coverage_changed={coverage_changed}, content_changed={content_changed}"
+    )
+
+
+@pytest.mark.parametrize("churn_interval", (0.2, 0.3, 0.5, 0.75, 1.5))
+def test_live_witness_churn_is_per_comparison_and_state_db_is_wal_bounded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, churn_interval: float
+) -> None:
+    """The ambient witness tolerates recurrent cache churn without losing later coverage."""
+    witness_target = _witness_target()
+    ambient_before = _capture_witness(witness_target)
+    _setup_project(tmp_path / "witness-isolation", monkeypatch)
+
+    profile = tmp_path / "live-profile"
+    profile.mkdir()
+    (profile / "aether-observer.json").write_text("{}", encoding="utf-8")
+    cache = profile / "cache" / "tool_discovery_cache.json"
+    cache.parent.mkdir()
+    cache.write_text("initial", encoding="utf-8")
+
+    state_db = profile / "state.db"
+    with state_db.open("wb") as state_file:
+        state_file.truncate(698 * 1024 * 1024)
+    wal = profile / "state.db-wal"
+    wal.write_text("wal-start", encoding="utf-8")
+
+    wal_before = _capture_witness(profile)
+    assert wal_before["state.db"].digest is None
+    assert wal_before["state.db"].size == 698 * 1024 * 1024
+    assert wal_before["state.db"].wal_present is True
+
+    # Main-file and WAL changes in WAL mode are not attributed to this test. A WAL
+    # checkpoint that removes the sidecar is likewise a coverage transition, not a RED.
+    stat = state_db.stat()
+    os.utime(state_db, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+    wal.write_text("wal-updated", encoding="utf-8")
+    _assert_witness_unchanged(wal_before, profile)
+    checkpoint_before = _capture_witness(profile)
+    stat = state_db.stat()
+    os.utime(state_db, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+    wal.unlink()
+    _assert_witness_unchanged(checkpoint_before, profile)
+
+    no_wal_before = _capture_witness(profile)
+    stat = state_db.stat()
+    os.utime(state_db, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+    with pytest.raises(AssertionError, match="state.db"):
+        _assert_witness_unchanged(no_wal_before, profile)
+
+    # One quiet cache delta is still a failure rather than a permanent exclusion.
+    stable_before = _capture_witness(profile)
+    cache.write_text("one quiet update", encoding="utf-8")
+    with pytest.raises(AssertionError, match="cache/tool_discovery_cache.json"):
+        _assert_witness_unchanged(stable_before, profile)
+
+    # Repeated updates during the pair's probe are classified as external churn only
+    # for that comparison. A later quiet delta to the same path must fail again.
+    churn_before = _capture_witness(profile)
+    stop = threading.Event()
+    started = threading.Event()
+
+    def churn_cache() -> None:
+        index = 0
+        started.set()
+        while not stop.is_set():
+            cache.write_text(f"{index:08d}", encoding="utf-8")
+            index += 1
+            time.sleep(churn_interval)
+
+    churner = threading.Thread(target=churn_cache)
+    churner.start()
+    assert started.wait(timeout=1.0)
+    try:
+        _assert_witness_unchanged(churn_before, profile)
+    finally:
+        stop.set()
+        churner.join(timeout=2.0)
+    assert not churner.is_alive()
+
+    quiet_before = _capture_witness(profile)
+    cache.write_text("quiet after churn", encoding="utf-8")
+    with pytest.raises(AssertionError, match="cache/tool_discovery_cache.json"):
+        _assert_witness_unchanged(quiet_before, profile)
+
+    _assert_witness_unchanged(ambient_before, witness_target)
+
+
 def _setup_project(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[Path, ObservationPaths]:
+    # Discard any ambient dispatcher / kanban routing variables
+    for name in tuple(os.environ):
+        if name.startswith("HERMES_KANBAN_"):
+            monkeypatch.delenv(name, raising=False)
+
+    home = tmp_path / "home"
+    xdg_data = tmp_path / "xdg_data"
+    xdg_config = tmp_path / "xdg_config"
     state = tmp_path / "state"
+    xdg_cache = tmp_path / "xdg_cache"
+    temp_dir = tmp_path / "tmp"
+    hermes_home = tmp_path / "hermes" / "profiles" / "morfeo"
+
+    for d in (home, xdg_data, xdg_config, state, xdg_cache, temp_dir, hermes_home):
+        d.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(xdg_data))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_config))
+    monkeypatch.setenv("XDG_STATE_HOME", str(state))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(xdg_cache))
+    monkeypatch.setenv("TMPDIR", str(temp_dir))
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+    monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
+
     project = tmp_path / "project"
     marker = project / ".aether" / "project.toml"
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text(project_marker(PROJECT_ID), encoding="utf-8")
-    monkeypatch.setenv("XDG_STATE_HOME", str(state))
-    monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
-    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes" / "profiles" / "morfeo"))
     registry = ProjectRegistry()
     registry.register(PROJECT_ID, project, "test-passive")
     paths = ObservationPaths.for_project(PROJECT_ID, root=state)
@@ -1034,3 +1279,299 @@ def test_worker_emission_publishes_validated_absence_claims_once_under_the_lock(
     assert _retained_unit_claims(paths, worker_task) == [(worker_trace, "work_unit.bound")]
     assert recorded == ["native-binding", "native-binding"]
     collector.stop()
+
+
+def test_pre_fix_category_normalizer_demonstrates_import_lock_cycle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """OBS-D-032 / OBS-FR-087: Pre-fix category normalizer demonstrably reaches the import/plugin lock cycle."""
+    witness_target = _witness_target()
+    witness_before = _capture_witness(witness_target)
+    _setup_project(tmp_path / "pre-fix-proj", monkeypatch)
+
+    from hermes_cli.plugins import get_plugin_manager
+
+    manager = get_plugin_manager()
+    manager._discovered = False
+    sys.modules.pop("model_tools", None)
+
+    manager._discovery_lock.acquire()
+    try:
+        t1_started = threading.Event()
+        t1_done = threading.Event()
+
+        def run_t1() -> None:
+            t1_started.set()
+            import model_tools  # noqa: F401
+
+            t1_done.set()
+
+        t1 = threading.Thread(target=run_t1)
+        t1.start()
+        assert t1_started.wait(timeout=5.0)
+        time.sleep(0.05)
+
+        # Pre-fix category normalizer imported model_tools
+        t2_done = threading.Event()
+
+        def pre_fix_attempt() -> None:
+            try:
+                from model_tools import get_toolset_for_tool  # type: ignore[import-not-found]
+
+                get_toolset_for_tool("kanban_create")
+            finally:
+                t2_done.set()
+
+        t2 = threading.Thread(target=pre_fix_attempt)
+        t2.start()
+
+        # Pre-fix demonstrably deadlocks: t2 cannot complete because t1 holds model_tools import lock
+        # and waits for manager._discovery_lock held by the test thread.
+        completed = t2_done.wait(timeout=0.5)
+    finally:
+        manager._discovery_lock.release()
+
+    t1.join(timeout=10.0)
+    t2.join(timeout=10.0)
+
+    assert not completed, "Pre-fix normalizer unexpectedly bypassed the import/plugin lock cycle"
+    assert t1_done.is_set()
+    assert t2_done.is_set()
+
+    _assert_witness_unchanged(witness_before, witness_target)
+
+
+def test_candidate_observer_registration_avoids_model_tools_import_and_lock_cycle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """OBS-D-032 / OBS-FR-087: Candidate observer registration never imports model_tools and avoids deadlock."""
+    witness_target = _witness_target()
+    witness_before = _capture_witness(witness_target)
+    _setup_project(tmp_path / "race-proj", monkeypatch)
+
+    from hermes_cli.plugins import get_plugin_manager
+
+    manager = get_plugin_manager()
+    manager._discovered = False
+    sys.modules.pop("model_tools", None)
+
+    manager._discovery_lock.acquire()
+    try:
+        t1_started = threading.Event()
+        t1_done = threading.Event()
+
+        def run_t1() -> None:
+            t1_started.set()
+            import model_tools  # noqa: F401
+
+            t1_done.set()
+
+        t1 = threading.Thread(target=run_t1)
+        t1.start()
+        assert t1_started.wait(timeout=5.0)
+        time.sleep(0.05)
+
+        t2_done = threading.Event()
+        ctx = FakePluginContext(profile_name="morfeo")
+
+        def candidate_register() -> None:
+            try:
+                hermes_plugin.register(ctx)
+            finally:
+                t2_done.set()
+
+        t2 = threading.Thread(target=candidate_register)
+        t2.start()
+
+        # Candidate must complete promptly without waiting on model_tools or deadlocking
+        completed = t2_done.wait(timeout=5.0)
+    finally:
+        manager._discovery_lock.release()
+
+    t1.join(timeout=10.0)
+    t2.join(timeout=10.0)
+
+    assert completed, "Candidate registration deadlocked on the import/plugin lock cycle"
+    assert t1_done.is_set()
+    assert t2_done.is_set()
+    assert "on_session_start" in ctx.hooks
+
+    _assert_witness_unchanged(witness_before, witness_target)
+
+
+def test_native_and_late_registered_tool_categories_match_registry_and_taxonomy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """OBS-D-032: Native registered and late-registered tool categories match the registry and taxonomy."""
+    witness_target = _witness_target()
+    witness_before = _capture_witness(witness_target)
+    _, paths = _setup_project(tmp_path / "tax-proj", monkeypatch)
+
+    from tools.registry import discover_builtin_tools, registry
+
+    # Deterministically establish native registration in-process so this node
+    # passes standalone without depending on a sibling test importing model_tools.
+    discover_builtin_tools()
+
+    ctx = FakePluginContext(profile_name="morfeo")
+    hermes_plugin.register(ctx)
+
+    normalizer, ref, is_native = hermes_plugin._resolve_category_normalizer()
+    assert is_native is True
+    assert ref == "hermes_cli.observability.shared_metrics_contract:tool_category"
+
+    # 1. Native registered tools
+    assert normalizer("kanban_create") == "planning"
+
+    # 2. Late-registered tools
+    late_mcp_tool = f"mcp_custom_tool_{secrets.token_hex(4)}"
+    late_web_tool = f"custom_web_tool_{secrets.token_hex(4)}"
+    registry.register(
+        name=late_mcp_tool,
+        toolset="mcp:context_server",
+        schema={"type": "object"},
+        handler=lambda: None,
+        override=True,
+    )
+    registry.register(
+        name=late_web_tool,
+        toolset="web",
+        schema={"type": "object"},
+        handler=lambda: None,
+        override=True,
+    )
+
+    assert normalizer(late_mcp_tool) == "mcp"
+    assert normalizer(late_web_tool) == "web"
+
+    # 3. Unregistered tool
+    assert normalizer("nonexistent_unregistered_tool") == "other"
+
+    # 4. Missing native capability stays visible NATIVE_TOOL_CATEGORY_UNAVAILABLE coverage gap
+    monkeypatch.setattr(
+        hermes_plugin,
+        "_resolve_category_normalizer",
+        lambda: (fallback_tool_category, None, False),
+    )
+    observer_degraded = hermes_plugin._Observer(ctx)
+    collector = Collector(paths=paths, runtime_fingerprint="0" * 64)
+    collector.start(None)
+    observer_degraded._emit_compatibility_diagnostics(collector, TRACE_ID)
+
+    gaps = [
+        event.get("coverage", {})
+        for event in [
+            json.loads(line.decode("utf-8"))
+            for s in list_segments(paths)
+            for line in read_segment(s.path).lines
+        ]
+        if event.get("event_type") == "coverage.gap"
+    ]
+    reason_codes = {gap.get("reason_code") for gap in gaps}
+    assert "NATIVE_TOOL_CATEGORY_UNAVAILABLE" in reason_codes
+    collector.stop()
+
+    _assert_witness_unchanged(witness_before, witness_target)
+
+
+def test_isolated_mcp_enabled_startup_and_single_early_turn_bounded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC4 / OBS-FR-087: Isolated MCP-enabled startup completes within bounded time, and first turn processes once."""
+    witness_target = _witness_target()
+    witness_before = _capture_witness(witness_target)
+    _, paths = _setup_project(tmp_path / "mcp-startup-proj", monkeypatch)
+
+    import hermes_cli.config as hermes_cfg
+    from hermes_cli import mcp_startup
+    from tools.registry import registry
+
+    raw_config = {
+        "mcp_servers": {
+            "demo_server": {
+                "command": "python3",
+                "args": ["-c", "pass"],
+            }
+        }
+    }
+    monkeypatch.setattr(hermes_cfg, "read_raw_config", lambda: raw_config)
+    monkeypatch.setattr(hermes_cfg, "load_config", lambda: raw_config)
+
+    mcp_tool_name = "mcp__demo_server__echo"
+    registry.register(
+        name=mcp_tool_name,
+        toolset="mcp:demo_server",
+        schema={"type": "object"},
+        handler=lambda **_kw: "echo_result",
+        override=True,
+    )
+
+    start_time = perf_counter()
+    mcp_startup.start_background_mcp_discovery(
+        logger=SimpleNamespace(debug=lambda *_a, **_k: None, warning=lambda *_a, **_k: None),
+        thread_name="test-mcp-startup",
+    )
+
+    ctx = FakePluginContext(profile_name="morfeo")
+    hermes_plugin.register(ctx)
+
+    mcp_startup.wait_for_mcp_discovery(timeout=1.5)
+    elapsed = perf_counter() - start_time
+    assert elapsed < 5.0, f"MCP-enabled startup took {elapsed:.2f}s, exceeding bounded limit"
+
+    observer = ctx.unload_callbacks[-1].__self__
+    paths = observer._collector.paths
+    assert observer._collector.ensure_trace_opened(
+        TRACE_ID,
+        source_kind="aether_checkpoint",
+        source_hook="contract_persisted",
+    )
+    observer._activate_trace(observer._collector, TRACE_ID)
+
+    turn_id = f"trn_{secrets.token_hex(8)}"
+    call_id = f"call_{secrets.token_hex(8)}"
+
+    ctx.hooks["pre_api_request"][0](session_id="session-mcp-1", turn_id=turn_id)
+    ctx.hooks["post_api_request"][0](session_id="session-mcp-1", turn_id=turn_id, duration_ms=45)
+
+    ctx.hooks["pre_tool_call"][0](
+        tool_name=mcp_tool_name,
+        tool_call_id=call_id,
+        session_id="session-mcp-1",
+        turn_id=turn_id,
+        args={"text": "hello"},
+    )
+    ctx.hooks["post_tool_call"][0](
+        tool_name=mcp_tool_name,
+        tool_call_id=call_id,
+        session_id="session-mcp-1",
+        turn_id=turn_id,
+        status="success",
+        result="echo_result",
+        duration_ms=12,
+    )
+
+    ctx.hooks["on_session_end"][0](session_id="session-mcp-1")
+
+    for cb in ctx.unload_callbacks:
+        cb()
+
+    lines = [
+        json.loads(line.decode("utf-8"))
+        for s in list_segments(paths)
+        for line in read_segment(s.path).lines
+    ]
+    tool_events = [
+        e
+        for e in lines
+        if e.get("event_type") in ("tool.started", "tool.completed")
+        and e.get("tool", {}).get("name") == mcp_tool_name
+    ]
+    assert len(tool_events) == 2, (
+        f"Expected exactly one tool.started and one tool.completed, got {len(tool_events)}"
+    )
+    start_ev, comp_ev = tool_events[0], tool_events[1]
+    assert start_ev.get("tool", {}).get("category") == "mcp"
+    assert comp_ev.get("tool", {}).get("category") == "mcp"
+
+    _assert_witness_unchanged(witness_before, witness_target)

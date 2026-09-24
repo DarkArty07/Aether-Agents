@@ -108,14 +108,14 @@ A user selects any Hermes-supported provider and binds models by role. The metho
 
 ### US3 — Initialize and use independent projects
 
-A user runs `aether init` in a new or existing Git project, then invokes `aether`. The project gets portable contract identity while its board, workspaces, credentials, and runtime state remain local and isolated from every other project.
+A user enters a new folder, explicitly runs `git init`, then runs `aether init` and `aether`. The last command opens project-bound Morfeo for an initial conversation before governance or implementation exists. An existing Git project follows the same `init`/launch path without changing its existing work. Portable identity is immediate; boards and workspaces are created only when a concrete contract requires execution, locally and without sharing another project's state.
 
 **Acceptance scenarios**:
 
-1. Given an empty project directory, when the user explicitly initializes it, then Aether can create a Git repository and the minimum portable Aether project artifacts without inventing product principles.
+1. Given an empty folder, when the owner runs `git init` followed by `aether init` and `aether`, then Git remains without a commit, Aether creates only the minimum portable/native Project identity, and Morfeo opens on that folder to ask what the owner intends without inventing principles, tests or guidance.
 2. Given an existing Git repository, when `aether init` runs, then it inspects current project reality, preserves existing content and governance, and creates only non-conflicting Aether artifacts.
-3. Given two initialized repositories, when work is routed in both, then their boards, workspace paths, task state, and project memories cannot collide.
-4. Given an uninitialized directory, when `aether` is invoked, then it does not silently initialize or mutate the project; it returns an actionable initialization error.
+3. Given two initialized repositories, neither conversation creates a board; when a concrete contract is later handed off in each, their boards, workspace paths, task state, and project memories cannot collide.
+4. Given an uninitialized directory, when `aether` is invoked, then it does not silently initialize Git or select an unrelated sole Project; it returns actionable `git init`/`aether init` guidance.
 
 ### US4 — Update and recover safely
 
@@ -210,19 +210,20 @@ A release operator installs the RC from PyPI and runs a preregistered realistic 
 
 - **A1-FR-041**: Aether MUST manage availability of the local Hermes gateway/dispatcher required for board work through the exact selected Hermes runtime's user-scoped gateway service, never a system service requiring root. Hermes owns, generates and refreshes the complete main unit through its supported noninteractive interface; Aether MUST NOT project or byte-compare it as Aether-owned content and MUST NOT add a drop-in. Aether owns the release-bound TUI asset and TUI-launch surfaces; `HERMES_TUI_DIR` is required for those launchers, not for the gateway.
 - **A1-FR-042**: The CLI MUST expose `start`, `stop`, `restart`, and `status`; these commands MUST address only the Aether-managed service.
-- **A1-FR-043**: Invoking `aether` in a valid initialized project MUST validate the active release, ensure the local service is ready, and launch Morfeo in that project. Project selection MUST stay exact and explicit: a non-empty explicit `--project PATH`, then `AETHER_PROJECT_ROOT`, then a verified `AETHER_PROJECT_ID`, then the current directory or its nearest initialized parent, then the single registered project. A non-empty explicit `--project PATH` MAY be relative and MUST be normalized against the invocation's current working directory before the same exact project-marker, registry and conflict checks are applied; this normalization is not approximate project matching. An empty `--project` value MUST be refused. `AETHER_PROJECT_ROOT`, when supplied, MUST be a non-empty absolute path; an empty or relative environment value MUST be refused rather than replaced by the current directory. `AETHER_PROJECT_ID`, when supplied, MUST be a canonical UUID consistent with the selected project's marker and registry binding. A display name, session recency, board default, checkout recency or approximate path MUST NOT select a project, and several registered projects with no explicit selection MUST return a bounded ambiguity error instead of a picker or a guess. `--resume latest` continues the selected project's latest session.
+- **A1-FR-043**: Invoking `aether` in a valid initialized project MUST validate the active release, ensure the local service is ready, and launch Morfeo in that project. Project selection MUST stay exact: a non-empty explicit `--project PATH`, then `AETHER_PROJECT_ROOT`, then a verified `AETHER_PROJECT_ID`, then the current directory or its nearest initialized parent. A non-empty explicit `--project PATH` MAY be relative and MUST be normalized against the invocation's current working directory before the same exact project-marker, registry and conflict checks are applied; this normalization is not approximate project matching. An empty `--project` value MUST be refused. `AETHER_PROJECT_ROOT`, when supplied, MUST be a non-empty absolute path; an empty or relative environment value MUST be refused rather than replaced by the current directory. `AETHER_PROJECT_ID`, when supplied, MUST be a canonical UUID consistent with the selected project's marker and registry binding. A display name, session recency, board default, checkout recency or approximate path MUST NOT select a project. An uninitialized current directory with no explicit project MUST fail with actionable `git init`/`aether init` guidance even when just one other project is registered; no implicit fallback may open the wrong project. `--resume latest` continues only the selected project's latest session. An exact initialized greenfield project MAY have no `AGENTS.md` or Git commit during its initial conversation: Morfeo MUST open in that verified project without inventing governance or starting execution.
+- **A1-FR-043a**: Every launch route, including explicit `--project PATH` and `AETHER_PROJECT_ROOT`, MUST prove the exact portable marker, local Aether registry path, and selected managed Morfeo profile before opening. A copied or unregistered marker MUST NOT turn an arbitrary Git folder into an initialized Project. Missing `AGENTS.md` is a temporary onboarding condition only for that verified initialized Project; it MUST NOT bypass identity, source, or runtime validation.
 - **A1-FR-044**: Automatic start caused by an explicit `aether` invocation MUST be visible; background startup at login MUST remain opt-in.
 - **A1-FR-045**: Messaging channels MAY be configured through the managed Hermes runtime, but TUI is the required 1.0 interaction surface and no messaging adapter is part of the 1.0 release gate.
 
 ### 5.6 Project initialization and isolation
 
-- **A1-FR-046**: `aether init [path]` MUST support both an empty greenfield directory and an existing brownfield Git repository.
-- **A1-FR-047**: Greenfield initialization MAY create a Git repository only because the user explicitly invoked `init`; it MUST NOT create a remote or publish anything.
+- **A1-FR-046**: `aether init [path]` MUST support both a greenfield Git repository with no commits (after the owner explicitly runs `git init`) and an existing brownfield Git repository. A plain non-Git directory or a subdirectory that is not the Git root MUST be refused with actionable guidance.
+- **A1-FR-047**: The owner, not `aether init`, creates a new local Git repository with `git init`. Initialization MUST NOT run `git init`, create a remote, create a commit (including an empty or scaffold commit), publish anything, or require a first commit to open Morfeo for conversation.
 - **A1-FR-048**: Brownfield initialization MUST inspect and preserve existing repository governance, files, branches, remotes, and uncommitted changes.
-- **A1-FR-049**: Initialization MUST create the minimum portable project identity conforming to [`contracts/project.schema.json`](contracts/project.schema.json).
-- **A1-FR-050**: The project constitution MUST be established or confirmed through Morfeo and owner authority; `aether init` MUST NOT invent or silently accept project principles.
+- **A1-FR-049**: Initialization MUST create the minimum portable project identity conforming to [`contracts/project.schema.json`](contracts/project.schema.json). Within the selected managed Morfeo profile it MUST reuse exactly one non-archived native Hermes Project at the exact Git-root primary path, create and verify one through the supported native interface if none exists, and refuse ambiguous, mismatched, archived or conflicting identity. Repeated `init` MUST not create duplicates; `--dry-run` MUST report intended local effects without creating a Project, marker or registry mapping.
+- **A1-FR-050**: The project constitution and testing standard MUST be established or confirmed by Morfeo with the owner **after the first project-bound conversation**, not invented by `aether init`. Once the owner intent is known, Morfeo owns the warranted preparation and direct-versus-pipeline routing; the owner need not select boards, agents or internal Git mechanics. Conversation may begin without project-specific governance, but implementation/handoff may not silently assume it.
 - **A1-FR-051**: Contract artifacts MUST be tracked in the project; board databases, sessions, memories, credentials, logs, caches, backups, and workspaces MUST remain local and untracked.
-- **A1-FR-052**: Every initialized project MUST map to one board and one local workspace root keyed by a portable project identifier, not only by an absolute path.
+- **A1-FR-052**: Initialization MUST establish one exact portable-to-native Project binding without creating a board or execution workspace. When a concrete finalized Objective Contract becomes ready for handoff, Aether MUST provision the contract-bound board and isolated execution workspaces through the native handoff, keyed by the verified portable project identity and never only by an absolute path. A mere onboarding conversation MUST create no board, worker or task.
 - **A1-FR-053**: Two projects MUST NOT share board rows, workspace directories, project memories, or runtime activation state.
 - **A1-FR-054**: Git MUST be required; GitHub MUST be the only qualified 1.0 forge for remote issues, pull requests, and releases, while local contract/build work MUST remain possible before a remote effect is requested.
 - **A1-FR-055**: `gh` authentication MUST be checked only when a GitHub effect is requested and MUST NOT be acquired or widened automatically.
@@ -329,8 +330,11 @@ step MUST carry a concrete non-applicability reason in terminal evidence.
   root `AGENTS.md`, direct project-relative reads, card pinning, or an existing native
   skill mechanism. Agents load only task-relevant procedures rather than a hard-coded
   project skill list.
-- **A1-FR-100**: Every project MUST have accurate root `AGENTS.md` guidance. Morfeo
-  establishes missing guidance after repository inspection and constitution confirmation;
+- **A1-FR-100**: A project MAY begin its first owner/Morfeo conversation without root
+  `AGENTS.md`; that temporary onboarding condition is not an implementation-ready
+  exception. Before implementation in that project or a pipeline handoff, the project MUST have
+  accurate root `AGENTS.md` guidance. Morfeo establishes missing guidance after
+  repository inspection and constitution confirmation;
   the role whose authorized change invalidates build, test, run, version, release,
   deploy, generated-file, or skill guidance updates it in the same change or records a
   concrete non-applicability reason; Supervisor performs the final coherence gate.
@@ -372,7 +376,7 @@ Implementation MAY add private internal structures, but it MUST NOT change these
 - **A1-SC-002**: The equivalent declarative setup produces byte-equivalent product-owned configuration for the same non-secret inputs.
 - **A1-SC-003**: A pre-existing personal Hermes installation remains unchanged across Aether install, update, rollback, and uninstall tests.
 - **A1-SC-004**: Tampering with any locked artifact causes fail-closed verification before activation.
-- **A1-SC-005**: Two initialized projects operate with distinct boards, workspaces, and local state.
+- **A1-SC-005**: Two initialized projects preserve distinct portable/native identities and local state; onboarding alone provisions no execution board or worker, and subsequent independent contract handoffs produce distinct boards and workspaces with no shared rows.
 - **A1-SC-006**: Update failure at each injected transition point leaves either the old complete release or the new complete release active, never a mixed set.
 - **A1-SC-007**: Normal uninstall preserves projects and recoverable user state; purge cannot occur without explicit confirmation.
 - **A1-SC-008**: Built wheel, sdist, profile bundle, docs, release lock, and Hermes source-mode metadata contain zero detected secret/private-runtime material.
@@ -385,7 +389,8 @@ Implementation MAY add private internal structures, but it MUST NOT change these
 - **A1-SC-015**: The operational reliability gate reaches at least 19/20 representative E2E passes with the latest 10 consecutive, zero guard-caused manual recovery and zero protected-edge violations before feature expansion or release qualification resumes.
 - **A1-SC-016**: An authorized GitHub-backed objective reaches one attributable terminal path, with acceptance verification, all three independent release conclusions, applicable issue/milestone disposition, durable evidence, and no false completion at local integration.
 - **A1-SC-017**: Aether Canonical, Project Canonical, and Learned Profile Skills remain distinct in location, visibility, mutability, precedence, and promotion; none grants authority or introduces a second loader, registry, queue, role, or state machine.
-- **A1-SC-018**: Every project has accurate root `AGENTS.md` guidance with Morfeo establishment, induced updates or concrete non-applicability reasons, and Supervisor closure verification, while brownfield guidance and unrelated residues remain intact.
+- **A1-SC-018**: Every project entering execution has accurate root `AGENTS.md` guidance established by Morfeo after repository inspection and owner-confirmed constitution, with induced updates or concrete non-applicability reasons and Supervisor closure verification, while first-conversation greenfield onboarding requires no invented guidance and brownfield guidance and unrelated residues remain intact.
+- **A1-SC-019**: A clean, empty folder supports the owner-executed `git init` → `aether init` → `aether` flow without a first commit, remote, `AGENTS.md`, board, worker, or automatic project principles; Morfeo opens on that exact folder to converse, and only later owner-authorized work produces project guidance and a contract-bound board when warranted.
 
 ## 9. Known assumptions and limitations
 

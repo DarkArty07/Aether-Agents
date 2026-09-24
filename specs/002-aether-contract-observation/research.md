@@ -4,6 +4,12 @@
 **Status**: accepted evidence baseline for [`spec.md`](spec.md)
 **Issue**: [#195](https://github.com/DarkArty07/aether-agents/issues/195)
 
+### Startup import-cycle correction — inspected installed runtime (2026-09-23)
+
+The selected rc8 release loads the maintained Hermes fork at commit `aed6591a69f453a1867b73628603e7b53ba40ffc` (release-lock source identity). In that exact source, `model_tools.py:245-250` invokes `discover_plugins()` during module import; `hermes_cli/plugins.py:3768-3808` owns the plugin-discovery lock. The installed Aether observer's `capture/hermes_plugin.py:157-165` imports `model_tools` while its own plugin registers. A private rc8 backend stack captured the MCP discovery thread holding the plugin lock and waiting on the `model_tools` import while the builder held that module import and waited on the plugin lock. The resulting timeout is the deferred prompt's 600-second readiness wait, not a 600-second provider reply or a proved SessionDB bottleneck.
+
+Hermes's `tools/registry.py:1-14,1171-1174,1262-1263` documents and exposes the registry-owned `get_toolset_for_tool()` without importing `model_tools` or performing plugin discovery; the latter's `model_tools.py:1624-1626` is only a wrapper. The chosen adapter correction consults the lightweight native registry and the already selected shared-metrics taxonomy, preserving native category parity and explicit coverage gaps when that capability is absent. Importing `model_tools` lazily inside a registration callback, lengthening the timeout, turning off observation, or leaving MCP disabled would at best shift or mask the cycle and is rejected. This is source/stack evidence, not a claim that the fix has passed a concurrency or real MCP-enabled canary. The historical public Hermes reference baseline is not substituted for the release's loaded maintained fork.
+
 ## 1. Question
 
 Can Aether reconstruct exact contract duration, participant actions, tool totals, and semantic flow locally without introducing a second workflow authority or modifying Hermes core?

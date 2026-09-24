@@ -34,7 +34,7 @@ The bare command validates project identity and launches Morfeo into the active 
 
 ### Notes / current limits
 
-Bare aether validates project identity and launches Morfeo into the active release-owned TUI; --json emits a non-mutating launch plan. Project selection stays exact and explicit (--project PATH, then AETHER_PROJECT_ROOT with precedence over the current directory, then a verified AETHER_PROJECT_ID, then the current or nearest initialized directory, then the single registered project) with a bounded ambiguity error instead of name/recency inference; identity values fail visibly instead of falling back to the current directory, where an empty --project value is refused while a relative --project PATH is resolved against the current working directory, AETHER_PROJECT_ROOT must be an absolute path, and AETHER_PROJECT_ID must be a canonical UUID agreeing with the portable marker. Reserved arguments are rejected and --resume latest is passed through. Activation installs the matching branded Aether (fresh) and Continue Aether (--resume latest) desktop and Windows Terminal actions, and Aether never writes a personal shell preference.
+Bare aether validates project identity and launches Morfeo into the active release-owned TUI; --json emits a non-mutating launch plan. Project selection stays exact and explicit (--project PATH, then AETHER_PROJECT_ROOT with precedence over the current directory, then a verified AETHER_PROJECT_ID, then the current or nearest initialized directory; an uninitialized directory never opens an unrelated project) with a bounded ambiguity error instead of name/recency inference; identity values fail visibly instead of falling back to the current directory, where an empty --project value is refused while a relative --project PATH is resolved against the current working directory, AETHER_PROJECT_ROOT must be an absolute path, and AETHER_PROJECT_ID must be a canonical UUID agreeing with the portable marker. Reserved arguments are rejected and --resume latest is passed through. Activation installs the matching branded Aether (fresh) and Continue Aether (--resume latest) desktop and Windows Terminal actions, and Aether never writes a personal shell preference.
 
 ## `cli.doctor`
 
@@ -100,7 +100,7 @@ Initializes an existing Git repository root as an Aether Project using a validat
 
 ### Notes / current limits
 
-None.
+Initializes an existing Git repository root (including an unborn root before the first commit). It creates and verifies an exact-path native Hermes Project when none exists or reuses an existing match; previews exact effects under --dry-run without mutation; and leaves git commits, remotes, AGENTS.md, boards, and workers to subsequent owner workflow.
 
 ## `cli.observe`
 
