@@ -115,6 +115,16 @@ Experiences belong to the project and role, not to a shared owner-personalizatio
   Morfeo (E01), not merely resource presence or static prompt assertions. KG-01/02/05/10/11
   and the three-role tool parity remain unchanged.
 
+**Owner's later testing decision for #505:** stop all further agent-run tests, including
+the planned isolated E01 re-qualification on corrected SOUL/skill bytes. The owner will
+assess the behavior through organic use. The already executed E01 trials remain historical
+evidence of the earlier bytes, not a PASS on the corrected ones. Deliver the scoped
+resource modification through the existing normal main closeout without asserting that
+first-turn behavior is qualified. This does not turn E01 into an optional PASS or change
+the general validation oracle; it records the owner's explicit omission for this
+objective. Automatic repository-required checks are distinguished from new discretionary
+agent-run tests and may still gate a normal merge.
+
 The [expanded tools and semantic contract](contracts/expanded-tools-and-semantic.md) owns
 the concrete shared interfaces, lifecycle, live verification and delegated implementation
 freedom. It supersedes only conflicting initial scope statements for this objective.

@@ -104,6 +104,14 @@ o modificación del perfil compartido. La prueba usa perfil/sesión/estado de pr
 aislados y no modifica sesiones Morfeo existentes. No atribuir el resultado de un
 único piloto a todas las conversaciones o modelos.
 
+**Decisión posterior del propietario para #505:** no ejecutar nuevas pruebas de agente,
+incluida la re-calificación E01 sobre los recursos corregidos; observará la conducta
+con uso orgánico. Los ensayos E01 ya realizados corresponden a bytes anteriores y
+no acreditan PASS de los recursos corregidos. La comprobación conductual queda
+**no verificada por decisión del propietario**, no aprobada ni eliminada del oráculo.
+No se inicia otro test discrecional para este objetivo; los controles automáticos
+requeridos por el repositorio, si los hay, se distinguen del ensayo E01 cancelado.
+
 ### E02 — colaboración completa
 
 Ejecutar un objetivo con Morfeo, Supervisor y al menos dos implementadores bajo el flujo nativo. Cada rol realiza un cambio pertinente dentro de su alcance y puede actualizar el grafo sin pedir permiso a otro. Comprobar recibos por revisión, deduplicación cuando procede y resultado integrado. No basta con scripts que etiqueten procesos con nombres de rol: observar llamadas de los agentes reales.
