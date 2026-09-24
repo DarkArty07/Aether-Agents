@@ -84,6 +84,7 @@ jobs:
           .aether/objective-contracts/oc_d7d067bf87e67cba/v2.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v3.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v4.md
+          .aether/objective-contracts/oc_d96969bf913512f7/v1.md
           .aether/objective-contracts/oc_ddebf175a40251f7/v1.md
           .aether/objective-contracts/oc_df24bf0cd91490d5/v1.md
           .aether/objective-contracts/oc_e64cc79af0a649a2/v1.md
@@ -104,6 +105,7 @@ jobs:
           .aether/objective-contracts/oc_ff82ba151cdf3861/v1.md
           .aether/objective-contracts/oc_ff82ba151cdf3861/v2.md
           .aether/objective-contracts/oc_bc27d75a1165818f/v1.md
+          .aether/objective-contracts/oc_ce1f17ebbb4968b4/v1.md
           .aether/project.toml
           .aether/skills/aether-observe/SKILL.md
           AGENTS.md
