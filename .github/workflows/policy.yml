@@ -104,6 +104,7 @@ jobs:
           .aether/objective-contracts/oc_3397f9f05d780f8e/v1.md
           .aether/objective-contracts/oc_ff82ba151cdf3861/v1.md
           .aether/objective-contracts/oc_ff82ba151cdf3861/v2.md
+          .aether/objective-contracts/oc_bc27d75a1165818f/v1.md
           .aether/objective-contracts/oc_ce1f17ebbb4968b4/v1.md
           .aether/project.toml
           .aether/skills/aether-observe/SKILL.md
@@ -167,6 +168,7 @@ jobs:
           patches/hermes/HLP-425-review-flow-continuity.patch
           patches/hermes/HLP-426-terminal-worker-reap.patch
           patches/hermes/HLP-427-routed-recovery-review-phase.patch
+          patches/hermes/HLP-428-project-provenance-and-bounded-failure.patch
           patches/hermes/HLP-369-goal-mode-review-recovery.patch
           patches/hermes/HLP-275-aux-image-prep-cap.patch
           patches/hermes/HLP-382-bounded-transcript-publication.patch
