@@ -18,6 +18,7 @@ import threading
 import time
 from contextlib import contextmanager
 from copy import deepcopy
+from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter, thread_time
 from types import SimpleNamespace
@@ -83,59 +84,74 @@ def _witness_target() -> Path | None:
     return Path(ambient).resolve() if ambient else None
 
 
-_UNSTABLE_WITNESS_PATHS: set[str] = set()
+@dataclass(frozen=True)
+class _FileWitness:
+    size: int
+    mtime_ns: int
+    digest: str | None
+    wal_present: bool | None = None
 
 
-def _capture_witness(path: Path | None) -> dict[str, tuple[int, str]]:
-    """Capture a content-and-size witness of the ambient profile directory or sentinel.
+_CACHE_CHURN_PROBE_SECONDS = 2.0
+_CACHE_CHURN_SAMPLE_SECONDS = 0.1
 
-    Under live profile directories, candidate targets subject to unisolated mutations
-    (SOUL.md, config.yaml, cache/tool_discovery_cache.json, state.db, and direct root
-    files) are witnessed. To prevent false-RED from external concurrent writers churning
-    targets like tool_discovery_cache.json or state.db, candidate paths are stability-gated
-    across a short gap (70ms) at capture time; provably unstable paths are excluded.
+
+def _file_witness(path: Path, relative_path: str) -> _FileWitness | None:
+    try:
+        stat = path.stat()
+        if relative_path == "state.db":
+            # Never read/hash the potentially very large session database. With WAL,
+            # neither main-file metadata nor WAL-only changes provide attributable DB-content
+            # coverage, so WAL-backed state is explicitly outside this witness's scope.
+            return _FileWitness(
+                size=stat.st_size,
+                mtime_ns=stat.st_mtime_ns,
+                digest=None,
+                wal_present=(path.parent / "state.db-wal").is_file(),
+            )
+        return _FileWitness(
+            size=stat.st_size,
+            mtime_ns=stat.st_mtime_ns,
+            digest=hashlib.sha256(path.read_bytes()).hexdigest(),
+        )
+    except OSError:
+        return None
+
+
+def _capture_witness(path: Path | None) -> dict[str, _FileWitness]:
+    """Capture candidate ambient files without hashing SQLite state or sidecars.
+
+    A live profile's root/config/cache files are content-witnessed. ``state.db`` is
+    represented by bounded metadata only; comparisons deliberately ignore its metadata
+    whenever a WAL is present at either endpoint, since WAL commits/checkpoints cannot be
+    attributed to this test. Cache deltas are adjudicated per comparison, never excluded
+    process-globally.
     """
     if path is None or not path.exists():
         return {}
-    witness: dict[str, tuple[int, str]] = {}
+    witness: dict[str, _FileWitness] = {}
     is_live_profile = (path / "aether-observer.json").exists() or (path / "profile.yaml").exists()
-    if not is_live_profile:
-        for p in path.rglob("*"):
-            if not p.is_file():
-                continue
-            rel = str(p.relative_to(path))
-            try:
-                witness[rel] = (p.stat().st_size, hashlib.sha256(p.read_bytes()).hexdigest())
-            except OSError:
-                pass
-        return witness
-
-    # Live profile: gather candidate targets that unisolated nodes touch
-    candidates: dict[str, Path] = {}
     for p in path.rglob("*"):
         if not p.is_file():
             continue
         rel = str(p.relative_to(path))
-        if rel in _UNSTABLE_WITNESS_PATHS:
+        if rel.endswith(("-wal", "-shm", ".lock")) or p.name.startswith(".tmp"):
             continue
-        # Exclude background daemon logs and transient sqlite lock/WAL files
-        if (
-            rel.startswith("logs/")
-            or rel.startswith("sessions/")
-            or rel.startswith("cache/terminal-output/")
-            or rel.startswith("cache/blocked-scripts/")
-            or rel.startswith("cache/web/")
-            or rel.endswith(("-wal", "-shm", ".lock"))
-            or p.name.startswith(".tmp")
-            or (rel == "state.db" and (path / "state.db-wal").exists())
-        ):
-            continue
-        if (
-            rel in ("SOUL.md", "config.yaml", "state.db")
-            or rel.startswith("cache/")
-            or p.parent == path
-        ):
-            # Exclude ambient databases and daemon state files not touched by registry
+        if is_live_profile:
+            if (
+                rel.startswith("logs/")
+                or rel.startswith("sessions/")
+                or rel.startswith("cache/terminal-output/")
+                or rel.startswith("cache/blocked-scripts/")
+                or rel.startswith("cache/web/")
+            ):
+                continue
+            if not (
+                rel in ("SOUL.md", "config.yaml", "state.db")
+                or rel.startswith("cache/")
+                or p.parent == path
+            ):
+                continue
             if rel.endswith(".db") and rel != "state.db":
                 continue
             if rel in (
@@ -145,34 +161,140 @@ def _capture_witness(path: Path | None) -> dict[str, tuple[int, str]]:
                 ".restart_last_processed.json",
             ):
                 continue
-            candidates[rel] = p
-
-    # Stability gate: sample all candidate paths twice across a short gap
-    st1: dict[str, tuple[int, int]] = {}
-    for rel, p in candidates.items():
-        try:
-            st = p.stat()
-            st1[rel] = (st.st_size, st.st_mtime_ns)
-        except OSError:
-            pass
-
-    time.sleep(0.07)
-
-    for rel, p in candidates.items():
-        if rel not in st1:
-            continue
-        try:
-            st = p.stat()
-            st2 = (st.st_size, st.st_mtime_ns)
-            if st1[rel] != st2:
-                # Provably unstable target (active concurrent external writer), skip it
-                _UNSTABLE_WITNESS_PATHS.add(rel)
-                continue
-            witness[rel] = (st.st_size, hashlib.sha256(p.read_bytes()).hexdigest())
-        except OSError:
-            pass
-
+        value = _file_witness(p, rel)
+        if value is not None:
+            witness[rel] = value
     return witness
+
+
+def _cache_path_is_churning(path: Path, relative_path: str) -> bool:
+    """Return true only when this cache path changes again during this comparison."""
+    target = path / relative_path
+    previous = _file_witness(target, relative_path)
+    changed_again = False
+    deadline = perf_counter() + _CACHE_CHURN_PROBE_SECONDS
+    while (remaining := deadline - perf_counter()) > 0:
+        time.sleep(min(_CACHE_CHURN_SAMPLE_SECONDS, remaining))
+        current = _file_witness(target, relative_path)
+        if current != previous:
+            changed_again = True
+        previous = current
+    return changed_again
+
+
+def _assert_witness_unchanged(before: dict[str, _FileWitness], path: Path | None) -> None:
+    after = _capture_witness(path)
+    if path is None:
+        return
+
+    coverage_changed: list[str] = []
+    content_changed: list[str] = []
+    for rel in sorted(before.keys() | after.keys()):
+        old = before.get(rel)
+        new = after.get(rel)
+        if old is None or new is None:
+            coverage_changed.append(rel)
+        elif old != new:
+            if rel == "state.db" and (old.wal_present or new.wal_present):
+                # Under WAL, DB-content coverage is intentionally absent: both main-file
+                # metadata and WAL-only changes can reflect unrelated commits/checkpoints.
+                # Creation/removal of the main DB remains a visible coverage change.
+                continue
+            content_changed.append(rel)
+
+    changed = set(coverage_changed) | set(content_changed)
+    unstable_cache_paths = {
+        rel for rel in changed if rel.startswith("cache/") and _cache_path_is_churning(path, rel)
+    }
+    coverage_changed = [rel for rel in coverage_changed if rel not in unstable_cache_paths]
+    content_changed = [rel for rel in content_changed if rel not in unstable_cache_paths]
+    assert not coverage_changed and not content_changed, (
+        "Ambient HERMES_HOME changed: "
+        f"coverage_changed={coverage_changed}, content_changed={content_changed}"
+    )
+
+
+@pytest.mark.parametrize("churn_interval", (0.2, 0.3, 0.5, 0.75, 1.5))
+def test_live_witness_churn_is_per_comparison_and_state_db_is_wal_bounded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, churn_interval: float
+) -> None:
+    """The ambient witness tolerates recurrent cache churn without losing later coverage."""
+    witness_target = _witness_target()
+    ambient_before = _capture_witness(witness_target)
+    _setup_project(tmp_path / "witness-isolation", monkeypatch)
+
+    profile = tmp_path / "live-profile"
+    profile.mkdir()
+    (profile / "aether-observer.json").write_text("{}", encoding="utf-8")
+    cache = profile / "cache" / "tool_discovery_cache.json"
+    cache.parent.mkdir()
+    cache.write_text("initial", encoding="utf-8")
+
+    state_db = profile / "state.db"
+    with state_db.open("wb") as state_file:
+        state_file.truncate(698 * 1024 * 1024)
+    wal = profile / "state.db-wal"
+    wal.write_text("wal-start", encoding="utf-8")
+
+    wal_before = _capture_witness(profile)
+    assert wal_before["state.db"].digest is None
+    assert wal_before["state.db"].size == 698 * 1024 * 1024
+    assert wal_before["state.db"].wal_present is True
+
+    # Main-file and WAL changes in WAL mode are not attributed to this test. A WAL
+    # checkpoint that removes the sidecar is likewise a coverage transition, not a RED.
+    stat = state_db.stat()
+    os.utime(state_db, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+    wal.write_text("wal-updated", encoding="utf-8")
+    _assert_witness_unchanged(wal_before, profile)
+    checkpoint_before = _capture_witness(profile)
+    stat = state_db.stat()
+    os.utime(state_db, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+    wal.unlink()
+    _assert_witness_unchanged(checkpoint_before, profile)
+
+    no_wal_before = _capture_witness(profile)
+    stat = state_db.stat()
+    os.utime(state_db, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+    with pytest.raises(AssertionError, match="state.db"):
+        _assert_witness_unchanged(no_wal_before, profile)
+
+    # One quiet cache delta is still a failure rather than a permanent exclusion.
+    stable_before = _capture_witness(profile)
+    cache.write_text("one quiet update", encoding="utf-8")
+    with pytest.raises(AssertionError, match="cache/tool_discovery_cache.json"):
+        _assert_witness_unchanged(stable_before, profile)
+
+    # Repeated updates during the pair's probe are classified as external churn only
+    # for that comparison. A later quiet delta to the same path must fail again.
+    churn_before = _capture_witness(profile)
+    stop = threading.Event()
+    started = threading.Event()
+
+    def churn_cache() -> None:
+        index = 0
+        started.set()
+        while not stop.is_set():
+            cache.write_text(f"{index:08d}", encoding="utf-8")
+            index += 1
+            time.sleep(churn_interval)
+
+    churner = threading.Thread(target=churn_cache)
+    churner.start()
+    assert started.wait(timeout=1.0)
+    try:
+        _assert_witness_unchanged(churn_before, profile)
+    finally:
+        stop.set()
+        churner.join(timeout=2.0)
+    assert not churner.is_alive()
+
+    quiet_before = _capture_witness(profile)
+    cache.write_text("quiet after churn", encoding="utf-8")
+    with pytest.raises(AssertionError, match="cache/tool_discovery_cache.json"):
+        _assert_witness_unchanged(quiet_before, profile)
+
+    _assert_witness_unchanged(ambient_before, witness_target)
 
 
 def _setup_project(
@@ -1216,10 +1338,7 @@ def test_pre_fix_category_normalizer_demonstrates_import_lock_cycle(
     assert t1_done.is_set()
     assert t2_done.is_set()
 
-    witness_after = _capture_witness(witness_target)
-    assert witness_before == witness_after, (
-        f"Ambient HERMES_HOME was modified: {witness_before} != {witness_after}"
-    )
+    _assert_witness_unchanged(witness_before, witness_target)
 
 
 def test_candidate_observer_registration_avoids_model_tools_import_and_lock_cycle(
@@ -1277,10 +1396,7 @@ def test_candidate_observer_registration_avoids_model_tools_import_and_lock_cycl
     assert t2_done.is_set()
     assert "on_session_start" in ctx.hooks
 
-    witness_after = _capture_witness(witness_target)
-    assert witness_before == witness_after, (
-        f"Ambient HERMES_HOME was modified: {witness_before} != {witness_after}"
-    )
+    _assert_witness_unchanged(witness_before, witness_target)
 
 
 def test_native_and_late_registered_tool_categories_match_registry_and_taxonomy(
@@ -1355,10 +1471,7 @@ def test_native_and_late_registered_tool_categories_match_registry_and_taxonomy(
     assert "NATIVE_TOOL_CATEGORY_UNAVAILABLE" in reason_codes
     collector.stop()
 
-    witness_after = _capture_witness(witness_target)
-    assert witness_before == witness_after, (
-        f"Ambient HERMES_HOME was modified: {witness_before} != {witness_after}"
-    )
+    _assert_witness_unchanged(witness_before, witness_target)
 
 
 def test_isolated_mcp_enabled_startup_and_single_early_turn_bounded(
@@ -1461,7 +1574,4 @@ def test_isolated_mcp_enabled_startup_and_single_early_turn_bounded(
     assert start_ev.get("tool", {}).get("category") == "mcp"
     assert comp_ev.get("tool", {}).get("category") == "mcp"
 
-    witness_after = _capture_witness(witness_target)
-    assert witness_before == witness_after, (
-        f"Ambient HERMES_HOME was modified: {witness_before} != {witness_after}"
-    )
+    _assert_witness_unchanged(witness_before, witness_target)
