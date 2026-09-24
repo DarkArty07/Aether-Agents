@@ -1,6 +1,6 @@
 # Canonical project-local `/plan` for Morfeo (#504)
 
-**Status:** owner-approved objective; implementation and independent review pending.
+**Status:** owner-approved objective; candidate implementation reviewed; documentation and verification in progress.
 **Decision owner:** project owner. **Route:** Morfeo design → Supervisor → Implementer(s).
 **Owning higher requirements:** R2-FR-204b–f, R1-FR-116a/121a, R5 role isolation, R7 convergence, `DESIGN.md` §10.
 **Technical design:** [plan.md](plan.md). **Validation:** [quickstart.md](quickstart.md).

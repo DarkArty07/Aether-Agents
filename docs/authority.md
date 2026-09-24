@@ -55,7 +55,9 @@ finalized contracts keep their existing domains; native boards own execution sta
 Keep these operational plans local and ignored by default. Record accepted normative
 decisions in their owning canonical artifacts, not only in a plan. Publishing a plan
 requires a separate privacy/portability decision; it does not become public merely
-because the convention is documented here. R2 §3.1 owns this distinction.
+because the convention is documented here. Morfeo's user-invoked planning entry is
+the canonical `plan` skill (scoped to Morfeo only); `objective-contract-design` retains
+the substantive contract method. R2 §3.1 owns this distinction.
 
 ## Derived project knowledge and role experiences
 

@@ -27,9 +27,23 @@ another session. Do not require it for a simple question or routine bounded chan
 Morfeo recognizes the need; the user need not remember to invoke a planning command.
 An explicit planning-only request still ends at the proposal, not implementation.
 
-The generic `/plan` skill has a different default save location. Aether's
-project-local convention governs Aether Objective Plans without rewriting that
-skill for every Hermes user. This adds no global plan picker or automatic hook.
+Aether packages an Aether-owned canonical skill named `plan`, delivered **only to Morfeo**
+through the role-scoped release bundle. It resolves as literal `/plan` on the selected
+maintained fork `aed6591a69f453a1867b73628603e7b53ba40ffc`, planning-only, writing one
+stable `.aether/plans/<objective-slug>.md` inside the explicitly resolved project. A skill
+is package-wide procedure; its **outputs live inside each selected project**.
+
+The generic Hermes `/plan` is not this behaviour. Generic Hermes planning carries
+different defaults and unbounded execution recipes, whereas Aether's project-local
+procedure governs Objective Plans without rewriting skills for every Hermes user or adding
+global plan pickers.
+
+Supervisor and Implementer retain their previous inventories and do not receive `plan`;
+their role boundaries do not include objective-level planning. A future Hermes version
+with a built-in `/plan` requires a separate compatibility decision rather than an assumed
+alias; compatibility is qualified for the pinned fork commit only. A source change or
+merge does not constitute an active-profile installation, release cutover, or universal
+model behavioral guarantee.
 
 ## A compact outline
 

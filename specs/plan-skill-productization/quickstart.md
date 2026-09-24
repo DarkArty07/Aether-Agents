@@ -1,6 +1,6 @@
 # Run and review the canonical `/plan` candidate (#504)
 
-This is the **proposed acceptance path**, not a report of tests already passing. Run from a clean candidate worktree at the exact reviewed commit. Use disposable profile/release roots and the already selected maintained Hermes fork. Never point these exercises at a live Morfeo, Supervisor or Implementer home, gateway, sessions or an active Aether release. See [spec.md](spec.md) for PS-001–011 and [plan.md](plan.md) for expected role inventories.
+This is the acceptance path for candidate verification. Run from a clean candidate worktree at the exact reviewed commit. Use disposable profile/release roots and the already selected maintained Hermes fork. Never point these exercises at a live Morfeo, Supervisor or Implementer home, gateway, sessions or an active Aether release. See [spec.md](spec.md) for PS-001–011 and [plan.md](plan.md) for expected role inventories.
 
 ## 1. Source and documentation checks (PS-001–005, PS-010–011)
 
