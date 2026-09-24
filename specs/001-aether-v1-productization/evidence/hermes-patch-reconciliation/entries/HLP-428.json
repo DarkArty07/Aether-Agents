@@ -70,12 +70,12 @@
         "result": "passed"
       }
     ],
-    "blocker": "The patch reconstructs exactly in the maintained fork from candidate 184a6d03bc, but no public upstream equivalent exists and fork PR merge/Aether integration remain pending in INT-494."
+    "blocker": "The patch reconstructs exactly in the maintained fork and is integrated at merged revision 58f8c37a49b341f25b8fdd6310542fe932031b8d (PR #16) with the aggregate pinned there; only a public upstream equivalent is still missing, which is why this entry stays unavailable rather than passed."
   },
   "retirement_recommendation": "retain",
   "blocking_uncertainty": [
     "Upstream hermes-agent lacks board-level Project recovery and origin-signal bounding for review-lane containment.",
-    "The regression test module tests/hermes_cli/test_kanban_project_provenance.py is introduced by this patch and does not exist at pre-merge base aed6591a69; full aggregate component presence resolution defers to INT-494 after merge."
+    "The regression test module tests/hermes_cli/test_kanban_project_provenance.py is introduced by this patch and does not exist at pre-merge base aed6591a69. It is now declared as a component and resolves present at the merged revision 58f8c37a49b341f25b8fdd6310542fe932031b8d that the aggregate is pinned to."
   ],
   "summary": "Retain HLP-428. The maintained fork recovers canonical Project provenance for non-affinity direct parent worktree children, refuses cross-project mismatches before task persistence, and cleanly bounds review failure containment without unverified notifications; verified by RED/GREEN reproduction, four-round strict contract audit, and exact tree reconstruction."
 }

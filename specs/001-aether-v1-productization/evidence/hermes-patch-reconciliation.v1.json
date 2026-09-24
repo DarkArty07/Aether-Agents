@@ -1,5 +1,5 @@
 {
-  "observed_at_utc": "2026-09-24T05:25:09Z",
+  "observed_at_utc": "2026-09-24T06:16:26Z",
   "overall_blockers": [
     {
       "detail": "Retirement gate status is failed.",
@@ -537,7 +537,7 @@
       "kind": "uncertainty"
     },
     {
-      "detail": "The patch reconstructs exactly in the maintained fork from candidate 184a6d03bc, but no public upstream equivalent exists and fork PR merge/Aether integration remain pending in INT-494.",
+      "detail": "The patch reconstructs exactly in the maintained fork and is integrated at merged revision 58f8c37a49b341f25b8fdd6310542fe932031b8d (PR #16) with the aggregate pinned there; only a public upstream equivalent is still missing, which is why this entry stays unavailable rather than passed.",
       "id": "HLP-428",
       "kind": "artifact"
     },
@@ -552,7 +552,7 @@
       "kind": "uncertainty"
     },
     {
-      "detail": "The regression test module tests/hermes_cli/test_kanban_project_provenance.py is introduced by this patch and does not exist at pre-merge base aed6591a69; full aggregate component presence resolution defers to INT-494 after merge.",
+      "detail": "The regression test module tests/hermes_cli/test_kanban_project_provenance.py is introduced by this patch and does not exist at pre-merge base aed6591a69. It is now declared as a component and resolves present at the merged revision 58f8c37a49b341f25b8fdd6310542fe932031b8d that the aggregate is pinned to.",
       "id": "HLP-428",
       "kind": "uncertainty"
     }
@@ -3708,12 +3708,12 @@
             "result": "passed"
           }
         ],
-        "blocker": "The patch reconstructs exactly in the maintained fork from candidate 184a6d03bc, but no public upstream equivalent exists and fork PR merge/Aether integration remain pending in INT-494.",
+        "blocker": "The patch reconstructs exactly in the maintained fork and is integrated at merged revision 58f8c37a49b341f25b8fdd6310542fe932031b8d (PR #16) with the aggregate pinned there; only a public upstream equivalent is still missing, which is why this entry stays unavailable rather than passed.",
         "status": "unavailable"
       },
       "blocking_uncertainty": [
         "Upstream hermes-agent lacks board-level Project recovery and origin-signal bounding for review-lane containment.",
-        "The regression test module tests/hermes_cli/test_kanban_project_provenance.py is introduced by this patch and does not exist at pre-merge base aed6591a69; full aggregate component presence resolution defers to INT-494 after merge."
+        "The regression test module tests/hermes_cli/test_kanban_project_provenance.py is introduced by this patch and does not exist at pre-merge base aed6591a69. It is now declared as a component and resolves present at the merged revision 58f8c37a49b341f25b8fdd6310542fe932031b8d that the aggregate is pinned to."
       ],
       "components": [
         "HLP-428",
@@ -3793,7 +3793,7 @@
     "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
     "unverified": 2
   },
-  "source_ledger_sha256": "4bfbb09476b2389801a09efe696a3f053765c028445351e5689175c8ef19222b",
+  "source_ledger_sha256": "9a4c29a126cfc8eab2de5edf591a235208996a3ae358a15a614038bea43e3dca",
   "upstream": {
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
     "repository": "https://github.com/NousResearch/hermes-agent"

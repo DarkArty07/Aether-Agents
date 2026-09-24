@@ -295,7 +295,7 @@ This file prevents a Hermes update from silently removing local repairs. An Aeth
 - **Upstream:** inspected `NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`, `v2026.8.18` and latest release `v2026.9.14` (`345cd2b057a452236de401d3534b8502a7465e8d`). Upstream lacks Aether's board-level Project provenance recovery for direct parents, cross-project early refusal, and failure-containment origin routing; no equivalent upstream fix exists.
 - **Rollback:** reverse only `HLP-428` (`git apply --check -R`), or revert fork commit `184a6d03bc` on `aether-main`. No database migration or irreversible schema change is involved.
 - **Retirement gate:** retire only when an adopted exact Hermes release provides equivalent Project provenance recovery for direct parent worktrees, refuses cross-project mismatches before task persistence, safely bounds review-lane failure containment without unverified notifications or lock retention, and passes `tests/hermes_cli/test_kanban_project_provenance.py` without this patch.
-- **Status:** `ACTIVE_LOCAL / UPSTREAM_MISSING`; publication and integration remain pending in `INT-494`.
+- **Status:** `ACTIVE_LOCAL / UPSTREAM_MISSING`. Integrated and merged in the maintained fork (`aether-main` `58f8c37a49b341f25b8fdd6310542fe932031b8d`, PR #16) and reconciled in Aether `main`, with the portable artifact and aggregate pinned to that merged revision. Live adoption of the merged runtime revision and the real review canary remain deferred successors under issue `#494`.
 
 ## HLP-335 — terminal PR references must not strand Graphify closeout
 
