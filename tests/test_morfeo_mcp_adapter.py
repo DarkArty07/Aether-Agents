@@ -13,26 +13,38 @@ from aether_agents.mcp import hermes_adapter
 from aether_agents.mcp.morfeo_server import install_tools, main, prepare_bridge
 
 
-def _module(name: str, **attrs: object) -> types.ModuleType:
-    module = types.ModuleType(name)
-    for key, value in attrs.items():
-        setattr(module, key, value)
-    sys.modules[name] = module
-    return module
+@pytest.fixture
+def install_module():
+    previous: list[tuple[str, types.ModuleType | None]] = []
+
+    def install(name: str, **attrs: object) -> types.ModuleType:
+        module = types.ModuleType(name)
+        for key, value in attrs.items():
+            setattr(module, key, value)
+        previous.append((name, sys.modules.get(name)))
+        sys.modules[name] = module
+        return module
+
+    yield install
+    for name, old in reversed(previous):
+        if old is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = old
 
 
 def test_discovery_filters_external_mcp_names(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, install_module
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    _module("hermes_cli")
-    _module("hermes_cli.config", load_config=lambda: {"toolsets": []})
-    _module("hermes_cli.plugins", discover_plugins=lambda: None)
-    _module(
+    install_module("hermes_cli")
+    install_module("hermes_cli.config", load_config=lambda: {"toolsets": []})
+    install_module("hermes_cli.plugins", discover_plugins=lambda: None)
+    install_module(
         "hermes_cli.tools_config",
         _get_platform_tools=lambda *_args, **_kwargs: ["memory"],
     )
-    _module(
+    install_module(
         "model_tools",
         get_tool_definitions=lambda **_kwargs: [
             {"type": "function", "function": {"name": "memory", "parameters": {}}},
@@ -45,7 +57,7 @@ def test_discovery_filters_external_mcp_names(
     assert [item["function"]["name"] for item in definitions] == ["memory"]
 
 
-def test_context_agent_delegate_is_synchronous(tmp_path: Path) -> None:
+def test_context_agent_delegate_is_synchronous(tmp_path: Path, install_module) -> None:
     calls: list[bool] = []
 
     class Agent:
@@ -56,12 +68,12 @@ def test_context_agent_delegate_is_synchronous(tmp_path: Path) -> None:
         calls.append(bool(kwargs["background"]))
         return "child-done"
 
-    _module("run_agent", AIAgent=Agent)
-    _module("tools")
-    _module(
+    install_module("run_agent", AIAgent=Agent)
+    install_module("tools")
+    install_module(
         "tools.memory_tool", MemoryStore=lambda: types.SimpleNamespace(load_from_disk=lambda: None)
     )
-    _module(
+    install_module(
         "tools.delegate_tool",
         delegate_task=delegate_task,
         _strip_model_hidden_task_fields=lambda tasks: tasks,
@@ -78,7 +90,7 @@ def test_context_agent_delegate_is_synchronous(tmp_path: Path) -> None:
     assert calls == [False]
 
 
-def test_invoke_forwards_to_the_runtime_helper() -> None:
+def test_invoke_forwards_to_the_runtime_helper(install_module) -> None:
     seen: dict[str, object] = {}
 
     def invoke_tool(agent, name, arguments, task_id, tool_call_id):  # noqa: ANN001
@@ -86,14 +98,14 @@ def test_invoke_forwards_to_the_runtime_helper() -> None:
         agent._current_turn_id = tool_call_id
         return "ok"
 
-    _module("agent")
-    _module("agent.agent_runtime_helpers", invoke_tool=invoke_tool)
+    install_module("agent")
+    install_module("agent.agent_runtime_helpers", invoke_tool=invoke_tool)
     agent = types.SimpleNamespace(_current_turn_id="")
     assert hermes_adapter.invoke(agent, "memory", {}, "task", "call") == "ok"
     assert seen["name"] == "memory"
 
 
-def test_runtime_installs_bootstrap_and_visible_tools(tmp_path: Path) -> None:
+def test_runtime_installs_bootstrap_and_visible_tools(tmp_path: Path, install_module) -> None:
     class Context:
         session = object()
 
@@ -108,9 +120,9 @@ def test_runtime_installs_bootstrap_and_visible_tools(tmp_path: Path) -> None:
 
             return decorate
 
-    _module("mcp")
-    _module("mcp.server")
-    _module("mcp.server.fastmcp", Context=Context, FastMCP=FastMCP)
+    install_module("mcp")
+    install_module("mcp.server")
+    install_module("mcp.server.fastmcp", Context=Context, FastMCP=FastMCP)
     bridge = types.SimpleNamespace(
         published=lambda: [
             {"function": {"name": "memory", "description": "mem", "parameters": {"properties": {}}}}
