@@ -106,6 +106,14 @@ aislados y no modifica sesiones Morfeo existentes. No atribuir el resultado de u
 
 **Resultado observado (KG-19 / #505):** E01 evaluado bajo el objetivo KG-19/#505. En la primera evaluación con los bytes iniciales de KG19-01 (Morfeo SOUL y skill `project-knowledge`), en las pruebas válidas **ambas ejecuciones consultaron el grafo sólo tras una exploración sustantiva de fuentes; el orden de orientar antes de explorar no quedó demostrado en ninguna**: en la suite 2 el agente leyó fuentes clave (`billing/processor.py` y ADR 001) antes de la consulta al grafo, mientras que en la suite 3 una búsqueda de contenido en el mensaje 12 ya había introducido en contexto los valores operativos de ambas fuentes antes de solicitar `project_knowledge.query` en el mensaje 13. Ambas suites descubrieron y cargaron la skill de forma temprana, consultaron el grafo con revisión correcta (7 referencias devueltas a ADR y código) y distinguieron especificación de implementación (propiedad derivada de la respuesta). Los controles de fuente exacta (sin llamada ceremonial) y repositorio sin HEAD (degradación honesta con `SCOPE_UNAVAILABLE`, sin commit, índice ni instalación) se comportaron como se espera (ver detalle en [evidence/KG19-02.md](evidence/KG19-02.md) y [evidence/E01-evidence.json](evidence/E01-evidence.json)). En KG19-03 se corrigió el redactado de los recursos empaquetados para explicitar la precedencia orientar-antes-de-explorar. La re-calificación E01 en vivo planificada en KG19-04 fue cancelada y omitida por instrucción directa del propietario (quien evaluará el comportamiento orgánicamente durante el uso ordinario), registrándose la omisión de forma honesta como no verificada (sin simular éxito; ver [evidence/KG19-04.md](evidence/KG19-04.md)).
 
+**Decisión posterior del propietario para #505:** no ejecutar nuevas pruebas de agente,
+incluida la re-calificación E01 sobre los recursos corregidos; observará la conducta
+con uso orgánico. Los ensayos E01 ya realizados corresponden a bytes anteriores y
+no acreditan PASS de los recursos corregidos. La comprobación conductual queda
+**no verificada por decisión del propietario**, no aprobada ni eliminada del oráculo.
+No se inicia otro test discrecional para este objetivo; los controles automáticos
+requeridos por el repositorio, si los hay, se distinguen del ensayo E01 cancelado.
+
 ### E02 — colaboración completa
 
 Ejecutar un objetivo con Morfeo, Supervisor y al menos dos implementadores bajo el flujo nativo. Cada rol realiza un cambio pertinente dentro de su alcance y puede actualizar el grafo sin pedir permiso a otro. Comprobar recibos por revisión, deduplicación cuando procede y resultado integrado. No basta con scripts que etiqueten procesos con nombres de rol: observar llamadas de los agentes reales.
