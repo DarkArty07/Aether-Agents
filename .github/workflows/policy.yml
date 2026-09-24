@@ -781,6 +781,23 @@ jobs:
         with:
           version: 0.12.3
           enable-cache: true
+      - name: Restore exact Hermes baseline cache
+        if: >-
+          github.event_name == 'push' ||
+          needs.impact.outputs.full == 'true' ||
+          (matrix.python-version == '3.11' && (
+            needs.impact.outputs.code == 'true' ||
+            needs.impact.outputs.observation == 'true' ||
+            needs.impact.outputs.knowledge == 'true' ||
+            needs.impact.outputs.release == 'true'
+          ))
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/hermes-exact
+          key: >-
+            aether-hermes-baseline-${{ runner.os }}-${{
+              hashFiles('src/aether_agents/resources/hermes-baseline.json')
+            }}
       - name: Install locked development environment
         if: >-
           github.event_name == 'push' ||

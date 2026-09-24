@@ -33,6 +33,7 @@ from observation_helpers import PROJECT_ID, TRACE_ID, EventFactory  # noqa: E402
 
 from aether_agents.lifecycle import (  # noqa: E402
     HERMES_BASELINE,
+    IntegrityError,
     _materialize_git_archive,
     _tree_sha256,
     verify_clean_checkout,
@@ -555,6 +556,29 @@ def checkout_exact(path: Path) -> dict[str, Any]:
         ).stdout.strip()
         if status:
             raise RuntimeError("refusing to alter a dirty Hermes checkout")
+        # A CI cache is useful only if an already-authenticated exact checkout can
+        # remain offline.  Prove the full tag object/commit identity first; when it
+        # still matches, there is nothing to fetch or mutate.  A stale/incomplete
+        # checkout falls through to the existing exact-tag refresh path and is
+        # verified again below before any qualification code executes.
+        try:
+            evidence = verify_clean_checkout(
+                target,
+                expected_tag=HERMES_BASELINE.tag,
+                expected_commit=HERMES_BASELINE.commit,
+                expected_tag_object=HERMES_BASELINE.tag_object,
+            )
+        except (IntegrityError, OSError, RuntimeError):
+            evidence = None
+        if evidence is not None:
+            _prioritize_hermes_source(evidence.path)
+            return {
+                "path": str(evidence.path),
+                "tag": evidence.tag,
+                "tag_object": evidence.tag_object,
+                "commit": evidence.commit,
+                "clean": evidence.clean,
+            }
         _run(
             ["git", "fetch", "--force", "origin", f"refs/tags/{HERMES_BASELINE.tag}"],
             cwd=target,

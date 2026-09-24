@@ -118,6 +118,10 @@ Main-branch qualification runs are never cancelled by this concurrency rule.
 Adding tracked files to the repository manifest does not by itself count as a CI-logic
 change, and static Python checks target the complete `src/aether_agents`, `tests`, and
 `scripts` trees so a new script does not require another hand-maintained Ruff/compile list.
+The authenticated public Hermes baseline checkout is cached by its versioned baseline
+resource identity. A restored checkout is re-verified locally before reuse; only a stale
+or incomplete cache entry performs a network refresh, so caching never substitutes for
+the exact tag-object/commit gate.
 
 ## Prepare a contribution
 
