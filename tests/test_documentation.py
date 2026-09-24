@@ -315,20 +315,20 @@ def test_canonical_skill_capabilities_are_statused_and_traceable() -> None:
         "lifecycle.project-canonical-skill-discovery"
         in records["skills.project-canonical-discovery"]["surfaces"]
     )
-    for skill_name in (
-        "git-github-closeout",
-        "semver-release",
-        "canonical-skill-governance",
-        "objective-contract-design",
-        "supervisor-decomposition",
-        "implementation-evidence",
-    ):
-        path = ROOT / "src" / "aether_agents" / "resources" / "skills" / skill_name / "SKILL.md"
-        assert path.is_file()
-        assert (
-            str(path.relative_to(ROOT))
-            in records["skills.aether-canonical-resources"]["implementation"]
-        )
+    assert "Ten Aether Canonical Skills" in records["skills.aether-canonical-resources"]["summary"]
+    packaged_skill_paths = {
+        str(path.relative_to(ROOT))
+        for path in (ROOT / "src" / "aether_agents" / "resources" / "skills").glob("*/SKILL.md")
+    }
+    assert len(packaged_skill_paths) == 10
+    registered_skill_paths = {
+        path
+        for path in records["skills.aether-canonical-resources"]["implementation"]
+        if path.endswith("/SKILL.md")
+    }
+    assert registered_skill_paths == packaged_skill_paths
+    for skill_path in packaged_skill_paths:
+        assert (ROOT / skill_path).is_file()
     assert ".aether/skills/<skill-name>/SKILL.md" in (ROOT / "AGENTS.md").read_text(
         encoding="utf-8"
     )

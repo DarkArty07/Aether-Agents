@@ -1016,25 +1016,29 @@ Portable resources are versioned candidate bytes; private live-profile activatio
 
 **Status:** `implemented`
 
-Eight Aether Canonical Skills are explicitly registered for packaging and native profile materialization, including contract execution, project knowledge and role work memory.
+Ten Aether Canonical Skills are explicitly registered for packaging and native profile materialization, including contract execution, project knowledge, role work memory and Morfeo objective planning.
 
 ### Surfaces
 - `lifecycle.aether-canonical-skills`
 
 ### Current documentation
 - [docs/authority.md](../authority.md)
+- [docs/guides/objective-plans.md](../guides/objective-plans.md)
 - [docs/guides/project-initialization.md](../guides/project-initialization.md)
 
 ### Owning specifications
+- [specs/plan-skill-productization/spec.md](../../specs/plan-skill-productization/spec.md)
 - [specs/r13-synthesis-and-release/spec.md](../../specs/r13-synthesis-and-release/spec.md)
 - [specs/r5-topology-and-isolation/spec.md](../../specs/r5-topology-and-isolation/spec.md)
 
 ### Implementation
 - [src/aether_agents/lifecycle.py](../../src/aether_agents/lifecycle.py)
 - [src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md](../../src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md)
+- [src/aether_agents/resources/skills/contract-result-review/SKILL.md](../../src/aether_agents/resources/skills/contract-result-review/SKILL.md)
 - [src/aether_agents/resources/skills/git-github-closeout/SKILL.md](../../src/aether_agents/resources/skills/git-github-closeout/SKILL.md)
 - [src/aether_agents/resources/skills/implementation-evidence/SKILL.md](../../src/aether_agents/resources/skills/implementation-evidence/SKILL.md)
 - [src/aether_agents/resources/skills/objective-contract-design/SKILL.md](../../src/aether_agents/resources/skills/objective-contract-design/SKILL.md)
+- [src/aether_agents/resources/skills/plan/SKILL.md](../../src/aether_agents/resources/skills/plan/SKILL.md)
 - [src/aether_agents/resources/skills/project-knowledge/SKILL.md](../../src/aether_agents/resources/skills/project-knowledge/SKILL.md)
 - [src/aether_agents/resources/skills/semver-release/SKILL.md](../../src/aether_agents/resources/skills/semver-release/SKILL.md)
 - [src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md](../../src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md)
@@ -1046,7 +1050,7 @@ Eight Aether Canonical Skills are explicitly registered for packaging and native
 
 ### Notes / current limits
 
-The resource mechanism and explicit eight-skill inventory are covered by wheel, sdist, profile-bundle, native-directory, byte-identity and privacy checks. The three contract/execution procedures had their open-ended observation requirement in issue #317 closed at owner direction without claiming organic PASS; knowledge-skill packaging does not establish live-agent adoption. Private live-profile activation is separate runtime evidence, and the public installed lifecycle remains unqualified.
+The resource mechanism and explicit ten-skill inventory (with plan delivered only to Morfeo) are covered by wheel, sdist, profile-bundle, native-directory, byte-identity and privacy checks. The three contract/execution procedures had their open-ended observation requirement in issue #317 closed at owner direction without claiming organic PASS; knowledge-skill and plan-skill packaging does not establish live-agent adoption. Private live-profile activation is separate runtime evidence, and the public installed lifecycle remains unqualified.
 
 ## `skills.project-canonical-discovery`
 

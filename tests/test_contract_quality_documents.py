@@ -169,7 +169,8 @@ def test_objective_planning_is_project_local_and_not_another_authority() -> None
         ".aether/plans/",
         "local and ignored",
         "not automatically carried into an independent new session",
-        "generic `/plan`",
+        "delivered **only to Morfeo**",
+        "generic Hermes `/plan` is not this behaviour",
         "No new tool",
     ):
         assert phrase in guide
