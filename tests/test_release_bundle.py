@@ -1188,7 +1188,7 @@ def _v4_lock_schema() -> dict:
         "additionalProperties": False,
         "required": ["schema_version", "aether", "hermes", "profile_bundle"],
         "properties": {
-            "schema_version": {"const": 4},
+            "schema_version": {"const": 5},
             "aether": {
                 "type": "object",
                 "additionalProperties": False,
@@ -1232,6 +1232,7 @@ def _v4_lock_schema() -> dict:
                     "python_requires",
                     "source_tree_sha256",
                     "artifacts",
+                    "extras",
                 ],
                 "properties": {
                     "source_mode": {"const": "maintained_fork"},
@@ -1243,6 +1244,7 @@ def _v4_lock_schema() -> dict:
                     "python_requires": {"type": "string"},
                     "source_tree_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
                     "artifacts": {"type": "array", "minItems": 1, "items": entry_stub},
+                    "extras": {"type": "array", "items": {"const": "mcp"}},
                 },
             },
             "profile_bundle": {
@@ -1273,7 +1275,7 @@ def test_lock_validation_applies_the_repository_schema_when_it_declares_four(
 
     applied = tool.validate_lock(lock, aether_checkout=ROOT, allow_schema_drift=False)
     assert applied["schema_validation"] == "applied"
-    assert applied["repository_schema_version"] == 4
+    assert applied["repository_schema_version"] == 5
 
     broken = json.loads(json.dumps(lock))
     broken["hermes"]["source_mode"] = "upstream"

@@ -1,7 +1,5 @@
 """Runtime entry for Morfeo MCP. Logs go to stderr. stdout is the protocol."""
 
-from __future__ import annotations
-
 import argparse
 import inspect
 import logging

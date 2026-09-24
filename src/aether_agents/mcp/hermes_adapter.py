@@ -40,6 +40,7 @@ def discover_effective_tools(profile: Path) -> tuple[list[dict[str, Any]], list[
     definitions = get_tool_definitions(
         enabled_toolsets=sorted(toolsets),
         quiet_mode=True,
+        skip_tool_search_assembly=True,
     )
     kept: list[dict[str, Any]] = []
     for item in definitions or []:
@@ -155,7 +156,14 @@ def create_context_agent(
             # credentials. This object is a tool container, not a model turn.
             self.session_id = session_id
             self.session_db = session_db
+            self._session_db = session_db
+            self._owns_session_db = False
+            self._persist_disabled = False
             self.task_id = task_id
+            self._memory_manager = None
+            self._todo_store = None
+            self.valid_tool_names = None
+            self.clarify_callback = None
             self.enabled_toolsets = list(toolsets)
             self.disabled_toolsets: list[str] = []
             self._delegate_depth = 0
@@ -177,6 +185,11 @@ def create_context_agent(
                 self._memory_enabled = True
             except Exception:
                 logger.debug("memory store unavailable", exc_info=True)
+
+        def _get_session_db_for_recall(self) -> Any:
+            if self._persist_disabled:
+                return None
+            return self._session_db
 
         def _dispatch_delegate_task(self, function_args: dict) -> str:
             from tools.delegate_tool import (

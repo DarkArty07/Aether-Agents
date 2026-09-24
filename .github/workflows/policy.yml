@@ -378,6 +378,7 @@ jobs:
           tests/test_lifecycle_profile_transfer.py
           tests/test_lifecycle_projections.py
           tests/test_mixed_version_lifecycle_qualification.py
+          tests/test_morfeo_mcp_adapter.py
           tests/test_morfeo_mcp_bridge.py
           tests/test_morfeo_mcp_cli.py
           tests/test_morfeo_mcp_packaging.py
