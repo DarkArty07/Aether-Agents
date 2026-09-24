@@ -30,3 +30,8 @@ Hermes conversation injection channel.
 - A schema 5 target is installed with `uv export --frozen --no-dev --extra mcp --no-emit-project`.
 - The manager does not depend on the MCP SDK.
 - The Hermes fork pin stays `aed6591a69f453a1867b73628603e7b53ba40ffc`.
+
+## RC10
+
+`1.0.0rc10` emits schema 5 with `hermes.extras: [mcp]` and implements `aether mcp morfeo serve`.
+Native Morfeo chat delegation may return asynchronously into its conversation; external MCP delegation returns synchronously because the external host has no Hermes conversation injection channel.

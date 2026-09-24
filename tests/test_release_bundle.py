@@ -143,9 +143,9 @@ def test_version_file_carries_the_objective_release_identity(tool: types.ModuleT
 
     package_version = (ROOT / "VERSION").read_text(encoding="ascii").strip()
     identity = tool.release_identity(package_version)
-    assert identity["package_version"] == "1.0.0rc9"
-    assert identity["semver"] == "1.0.0-rc.9"
-    assert identity["tag"] == "v1.0.0-rc.9"
+    assert identity["package_version"] == "1.0.0rc10"
+    assert identity["semver"] == "1.0.0-rc.10"
+    assert identity["tag"] == "v1.0.0-rc.10"
     assert identity["prerelease"] is True
 
 
@@ -1116,7 +1116,8 @@ def test_release_lock_binds_the_pinned_maintained_fork_identity(
 ) -> None:
     lifecycle = tool.load_product(ROOT)
     lock = _lock(tool, lifecycle, tmp_path)
-    assert lock["schema_version"] == tool.RELEASE_LOCK_SCHEMA_VERSION == 4
+    assert lock["schema_version"] == tool.RELEASE_LOCK_SCHEMA_VERSION == 5
+    assert lock["hermes"]["extras"] == ["mcp"]
     assert lock["hermes"]["source_mode"] == "maintained_fork"
     assert lock["hermes"]["repository"] == "https://github.com/DarkArty07/aether-hermes"
     assert lock["hermes"]["branch"] == "aether-main"
@@ -1137,7 +1138,7 @@ def test_release_lock_binds_the_pinned_maintained_fork_identity(
     assert applied["accepted_schema_versions"] == [4, 5]
     assert applied["repository_schema_version"] is None
     assert applied["pinned_identity"] == [
-        "schema_version=4",
+        "schema_version=5",
         "hermes.source_mode=maintained_fork",
         "hermes.repository=https://github.com/DarkArty07/aether-hermes",
         "hermes.branch=aether-main",

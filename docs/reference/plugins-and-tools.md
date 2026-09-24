@@ -161,3 +161,5 @@ Three lifecycle hooks back the monitor. `post_tool_call` enrolls a project-bound
 The observer plugin is fail-open with respect to Hermes lifecycle: callbacks are observers, not directives. It bounds metadata and avoids prompt/result/error copying. Plugin hook support is a generic Hermes capability; inspect the [Hermes hooks documentation](https://hermes-agent.nousresearch.com/docs/) for its host-side interface.
 
 For full source/test traceability and current qualification limits, see [Capability coverage](capabilities.md).
+
+Morfeo MCP publishes the tools already registered for the Morfeo profile, including Kanban and Aether plugins, after `morfeo_bootstrap`. It does not add a second implementation of those tools and it does not republish external MCP servers.

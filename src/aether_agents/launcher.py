@@ -705,6 +705,57 @@ def inspect_activation(
     }
 
 
+def scrubbed_environment(
+    *,
+    hermes_home: str,
+    project_id: str,
+    project_root: str,
+    target_python: str,
+    target_source_root: str | None,
+    tui_dir: str | None = None,
+) -> dict[str, str]:
+    """Drop inherited Hermes/Python state and set the selected Morfeo identity."""
+
+    environment = dict(os.environ)
+    keys_to_drop = [
+        key
+        for key in environment
+        if key.startswith("PYTHON")
+        or key == "VIRTUAL_ENV"
+        or key == "HERMES_PROFILE"
+        or key == "HERMES_BIN"
+        or key == "HERMES_CWD"
+        or key == "TERMINAL_CWD"
+        or key == "MESSAGING_CWD"
+        or key == "HERMES_PYTHON"
+        or key == "HERMES_PYTHON_SRC_ROOT"
+        or key == "_HERMES_GATEWAY"
+        or key == "HERMES_UI_SESSION_ID"
+        or key == "HERMES_ACTION_ID"
+        or key.startswith("HERMES_TUI")
+        or key.startswith("HERMES_SESSION")
+        or key.startswith("HERMES_RPC")
+        or key.startswith("HERMES_GATEWAY")
+        or key.startswith("HERMES_DESKTOP")
+        or key.startswith("HERMES_COMPUTE_HOST")
+        or key.startswith("HERMES_PARENT")
+        or key.startswith("HERMES_KANBAN_")
+        or key.startswith("HERMES_TASK")
+        or key.startswith("HERMES_CRON_")
+    ]
+    for key in keys_to_drop:
+        environment.pop(key, None)
+    environment["HERMES_HOME"] = hermes_home
+    environment["AETHER_PROJECT_ID"] = project_id
+    environment["PWD"] = project_root
+    environment["HERMES_PYTHON"] = target_python
+    if tui_dir is not None:
+        environment["HERMES_TUI_DIR"] = tui_dir
+    if target_source_root is not None:
+        environment["HERMES_PYTHON_SRC_ROOT"] = target_source_root
+    return environment
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     json_mode = False
@@ -760,43 +811,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         Path(str(report["repo_root"])),
     )
 
-    environment = dict(os.environ)
-    keys_to_drop = [
-        k
-        for k in environment
-        if k.startswith("PYTHON")
-        or k == "VIRTUAL_ENV"
-        or k == "HERMES_PROFILE"
-        or k == "HERMES_BIN"
-        or k == "HERMES_CWD"
-        or k == "TERMINAL_CWD"
-        or k == "MESSAGING_CWD"
-        or k == "HERMES_PYTHON"
-        or k == "HERMES_PYTHON_SRC_ROOT"
-        or k == "_HERMES_GATEWAY"
-        or k == "HERMES_UI_SESSION_ID"
-        or k == "HERMES_ACTION_ID"
-        or k.startswith("HERMES_TUI")
-        or k.startswith("HERMES_SESSION")
-        or k.startswith("HERMES_RPC")
-        or k.startswith("HERMES_GATEWAY")
-        or k.startswith("HERMES_DESKTOP")
-        or k.startswith("HERMES_COMPUTE_HOST")
-        or k.startswith("HERMES_PARENT")
-        or k.startswith("HERMES_KANBAN_")
-        or k.startswith("HERMES_TASK")
-        or k.startswith("HERMES_CRON_")
-    ]
-    for k in keys_to_drop:
-        environment.pop(k, None)
-
-    environment["HERMES_HOME"] = str(report["hermes_home"])
-    environment["AETHER_PROJECT_ID"] = str(report["project_id"])
-    environment["PWD"] = str(report["repo_root"])
-    environment["HERMES_TUI_DIR"] = str(report["tui_dir"])
-    environment["HERMES_PYTHON"] = str(target_python)
-    if target_source_root is not None:
-        environment["HERMES_PYTHON_SRC_ROOT"] = str(target_source_root)
+    environment = scrubbed_environment(
+        hermes_home=str(report["hermes_home"]),
+        project_id=str(report["project_id"]),
+        project_root=str(report["repo_root"]),
+        target_python=str(target_python),
+        target_source_root=str(target_source_root) if target_source_root is not None else None,
+        tui_dir=str(report["tui_dir"]),
+    )
 
     command = list(cast(list[str], report["command"]))
     executable = str(report["hermes_executable"])

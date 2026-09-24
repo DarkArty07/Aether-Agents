@@ -40,7 +40,7 @@ DISTRIBUTION = "aether-agents"
 AETHER_REPOSITORY = "https://github.com/DarkArty07/Aether-Agents"
 MAINTAINED_FORK_REPOSITORY = "https://github.com/DarkArty07/aether-hermes"
 MAINTAINED_FORK_BRANCH = "aether-main"
-RELEASE_LOCK_SCHEMA_VERSION = 4
+RELEASE_LOCK_SCHEMA_VERSION = 5
 ACCEPTED_RELEASE_LOCK_SCHEMAS = (4, 5)
 ALLOWED_HERMES_EXTRAS = ("mcp",)
 HERMES_SOURCE_MODE = "maintained_fork"
@@ -897,7 +897,7 @@ def build_release_lock(
     fork_archive_name: str,
     fork_archive_sha256: str,
 ) -> dict[str, Any]:
-    """Assemble the schema-4 maintained-fork release lock for this bundle."""
+    """Assemble the schema-5 maintained-fork release lock for this bundle."""
 
     if wheel["distribution"] != DISTRIBUTION:
         raise BundleError(
@@ -941,6 +941,7 @@ def build_release_lock(
                     "provenance_url": release_url,
                 }
             ],
+            "extras": list(ALLOWED_HERMES_EXTRAS),
         },
         "profile_bundle": {
             "version": PROFILE_BUNDLE_VERSION,

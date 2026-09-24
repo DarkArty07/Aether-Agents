@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.0rc10 — local-only Morfeo MCP candidate
+
+Package identity `1.0.0rc10` / display `1.0.0-rc.10` / local annotated tag identity
+`v1.0.0-rc.10`; `release_impact=minor`, `release_action=prepare`,
+`release_channel=prerelease`. Issue #515. This candidate emits release-lock
+schema 5 with `hermes.extras: ["mcp"]` and serves the canonical Morfeo role to
+an external MCP host. The Hermes pin is unchanged. No tag is pushed or published.
+
+- `aether mcp morfeo serve` binds one exact project and execs the active runtime.
+- Harness mode hides host file, terminal and code tools. Chatbot mode keeps them when Hermes enables them.
+- External MCP servers, including Context7, are not republished.
+- HTTP listens only on `127.0.0.1`.
+
+
 ## 1.0.0rc9 — local-only release-lock compatibility bridge
 
 Package identity `1.0.0rc9` / display `1.0.0-rc.9` / local annotated tag identity

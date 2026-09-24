@@ -5776,8 +5776,10 @@ class LifecycleManager:
             raise IntegrityError("built candidate wheel version differs from the commit VERSION")
         if metadata["python_requires"] != candidate.aether_python_requires.replace(" ", ""):
             raise IntegrityError("built candidate wheel Python range differs from the commit")
+        hermes_record = candidate.hermes_source().to_record()
+        hermes_record["extras"] = list(ALLOWED_HERMES_EXTRAS)
         lock_payload = {
-            "schema_version": 4,
+            "schema_version": 5,
             "aether": {
                 "version": candidate.display_version,
                 "package_version": candidate.package_version,
@@ -5790,7 +5792,7 @@ class LifecycleManager:
                 "observer_requirements_sha256": metadata["observer_requirements_sha256"],
                 "observation_compatibility": metadata["observation_compatibility"],
             },
-            "hermes": candidate.hermes_source().to_record(),
+            "hermes": hermes_record,
             "profile_bundle": {
                 "version": "2",
                 "sha256": self._wheel_profile_bundle_sha256(wheel),
