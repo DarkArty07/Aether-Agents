@@ -697,6 +697,38 @@ def test_checkout_exact_rejects_a_symlink_before_any_git_mutation(
     assert calls == []
 
 
+def test_checkout_exact_reuses_an_authenticated_clean_checkout_without_fetch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_runner("qualify_observation_checkout_cached")
+    checkout = tmp_path / "hermes-exact"
+    (checkout / ".git").mkdir(parents=True)
+    calls: list[list[str]] = []
+
+    def fake_run(arguments, **_kwargs):
+        calls.append(list(arguments))
+        assert arguments[:2] == ["git", "status"]
+        return subprocess.CompletedProcess(arguments, 0, "", "")
+
+    class Evidence:
+        path = checkout
+        tag = module.HERMES_BASELINE.tag
+        tag_object = module.HERMES_BASELINE.tag_object
+        commit = module.HERMES_BASELINE.commit
+        clean = True
+
+    monkeypatch.setattr(module, "_run", fake_run)
+    monkeypatch.setattr(module, "verify_clean_checkout", lambda *_args, **_kwargs: Evidence())
+    monkeypatch.setattr(module, "_prioritize_hermes_source", lambda _path: None)
+
+    result = module.checkout_exact(checkout)
+
+    assert result["commit"] == module.HERMES_BASELINE.commit
+    assert result["tag_object"] == module.HERMES_BASELINE.tag_object
+    assert calls == [["git", "status", "--porcelain=v1", "--untracked-files=all"]]
+
+
 def test_prioritize_exact_source_evicts_preloaded_hermes_modules(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

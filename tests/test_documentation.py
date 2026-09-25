@@ -512,10 +512,10 @@ def test_policy_manifest_admits_every_monitor_path_literally() -> None:
         "scripts/qualify_telegram_monitor*",
     ):
         assert glob not in workflow, glob
-    assert (
-        "scripts/qualify_telegram_monitor.py"
-        in workflow.split("Static, format and bytecode gates")[1]
-    )
+    static_gate = workflow.split("Static, format and bytecode gates")[1]
+    assert "python -m compileall -q src tests scripts" in static_gate
+    assert "ruff check src/aether_agents tests scripts" in static_gate
+    assert "ruff format --check src/aether_agents tests scripts" in static_gate
 
 
 def test_monitor_guide_states_what_the_store_persists_without_overclaiming() -> None:
