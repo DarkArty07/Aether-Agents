@@ -168,20 +168,23 @@ jobs:
           spec_manifest=$(mktemp)
           trap 'rm -f "$expected" "$actual" "$spec_manifest"' EXIT
           cat >"$expected" <<'EOF'
+          .aether/objective-contracts/oc_0084270d940c98d9/tombstone.json
           .aether/objective-contracts/oc_0a0db5e78c4e24c1/v1.md
           .aether/objective-contracts/oc_184c251953c157ec/v1.md
           .aether/objective-contracts/oc_281059d9a540201f/v1.md
           .aether/objective-contracts/oc_291b2fb34b413d92/v1.md
           .aether/objective-contracts/oc_291b2fb34b413d92/v2.md
+          .aether/objective-contracts/oc_3397f9f05d780f8e/v1.md
           .aether/objective-contracts/oc_3879332591e50500/v1.md
-          .aether/objective-contracts/oc_43012cf8a80820a4/v1.md
-          .aether/objective-contracts/oc_43012cf8a80820a4/v2.md
+          .aether/objective-contracts/oc_3fdf70ccc94e14b1/v1.md
           .aether/objective-contracts/oc_42aa0438fefb4143/v1.md
           .aether/objective-contracts/oc_42aa0438fefb4143/v2.md
           .aether/objective-contracts/oc_42aa0438fefb4143/v3.md
           .aether/objective-contracts/oc_42aa0438fefb4143/v4.md
           .aether/objective-contracts/oc_42aa0438fefb4143/v5.md
           .aether/objective-contracts/oc_42aa0438fefb4143/v6.md
+          .aether/objective-contracts/oc_43012cf8a80820a4/v1.md
+          .aether/objective-contracts/oc_43012cf8a80820a4/v2.md
           .aether/objective-contracts/oc_537e9a8701b4aac7/v1.md
           .aether/objective-contracts/oc_537e9a8701b4aac7/v2.md
           .aether/objective-contracts/oc_59cd48430a56d93c/v1.md
@@ -214,11 +217,13 @@ jobs:
           .aether/objective-contracts/oc_b5926701207812e8/v1.md
           .aether/objective-contracts/oc_b8865f5129d60535/v1.md
           .aether/objective-contracts/oc_ba23edf6f74b7b43/v1.md
+          .aether/objective-contracts/oc_bc27d75a1165818f/v1.md
           .aether/objective-contracts/oc_c0abec2179f6b09c/v1.md
           .aether/objective-contracts/oc_c29c2b0ed38d5030/v1.md
           .aether/objective-contracts/oc_c29c2b0ed38d5030/v2.md
           .aether/objective-contracts/oc_c53c85ffb6c24f69/v1.md
           .aether/objective-contracts/oc_c780a10d94b78d85/v1.md
+          .aether/objective-contracts/oc_ce1f17ebbb4968b4/v1.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v1.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v2.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v3.md
@@ -235,25 +240,37 @@ jobs:
           .aether/objective-contracts/oc_f8c9fc9320587cf3/v3.md
           .aether/objective-contracts/oc_f8c9fc9320587cf3/v4.md
           .aether/objective-contracts/oc_f8c9fc9320587cf3/v5.md
-          .aether/objective-contracts/oc_0084270d940c98d9/tombstone.json
           .aether/objective-contracts/oc_fd2332ffe34aa5f7/v1.md
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v1.md
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v2.md
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v3.md
-          .aether/objective-contracts/oc_3397f9f05d780f8e/v1.md
           .aether/objective-contracts/oc_ff82ba151cdf3861/v1.md
           .aether/objective-contracts/oc_ff82ba151cdf3861/v2.md
-          .aether/objective-contracts/oc_bc27d75a1165818f/v1.md
-          .aether/objective-contracts/oc_3fdf70ccc94e14b1/v1.md
-          .aether/objective-contracts/oc_ce1f17ebbb4968b4/v1.md
           .aether/project.toml
           .aether/skills/aether-observe/SKILL.md
+          .gitattributes
+          .github/ISSUE_TEMPLATE/bug_report.md
+          .github/ISSUE_TEMPLATE/feature_request.md
+          .github/PULL_REQUEST_TEMPLATE.md
+          .github/workflows/pages.yml
+          .github/workflows/policy.yml
+          .github/workflows/release.yml
+          .gitignore
+          .mailmap
           AGENTS.md
           CHANGELOG.md
           CLAUDE.md
           CODE_OF_CONDUCT.md
           CONTRIBUTING.md
           DESIGN.md
+          HERMES_LOCAL_PATCHES.md
+          INCOMPLETE_IMPLEMENTATIONS.md
+          INTEGRATIONS.md
+          LICENSE
+          README.md
+          ROADMAP.md
+          SECURITY.md
+          VERSION
           docs/authority.md
           docs/capabilities.toml
           docs/getting-started.md
@@ -266,6 +283,7 @@ jobs:
           docs/guides/observation.md
           docs/guides/policy-and-recovery.md
           docs/guides/project-initialization.md
+          docs/guides/project-knowledge.md
           docs/guides/telegram-monitor.md
           docs/index.md
           docs/product-boundary.md
@@ -274,48 +292,10 @@ jobs:
           docs/reference/limitations-and-troubleshooting.md
           docs/reference/plugins-and-tools.md
           docs/roles-and-authority.md
-          .github/ISSUE_TEMPLATE/bug_report.md
-          .github/ISSUE_TEMPLATE/feature_request.md
-          .github/PULL_REQUEST_TEMPLATE.md
-          .github/workflows/pages.yml
-          .github/workflows/policy.yml
-          .github/workflows/release.yml
-          .gitattributes
-          .gitignore
-          .mailmap
-          HERMES_LOCAL_PATCHES.md
-          home/config.yaml.template
           home/.env.example
           home/SOUL.md
-          INCOMPLETE_IMPLEMENTATIONS.md
-          INTEGRATIONS.md
-          patches/hermes/HLP-211b-flow-blocker-routing.patch
-          patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch
-          patches/hermes/HLP-226c-cross-board-project-inheritance.patch
-          patches/hermes/HLP-262-origin-signal-sticky.patch
-          patches/hermes/HLP-263-gateway-process-ownership.patch
-          patches/hermes/HLP-280-bounded-flow-recovery.patch
-          patches/hermes/HLP-305-tui-lease-refresh-contention.patch
-          patches/hermes/HLP-310-delegated-child-snapshot-exclusion.patch
-          patches/hermes/HLP-334-native-collaboration.patch
-          patches/hermes/HLP-354-kanban-worktree-base-ref.patch
-          patches/hermes/HLP-362-independent-review-ownership.patch
-          patches/hermes/HLP-372-profile-cron-script-root.patch
-          patches/hermes/HLP-385-review-topology-guidance.patch
-          patches/hermes/HLP-388-cron-session-launch-workdir.patch
-          patches/hermes/HLP-393-cron-commissioning-origin-subscription.patch
-          patches/hermes/HLP-420-responses-terminal-fidelity.patch
-          patches/hermes/HLP-425-review-flow-continuity.patch
-          patches/hermes/HLP-426-terminal-worker-reap.patch
-          patches/hermes/HLP-427-routed-recovery-review-phase.patch
-          patches/hermes/HLP-428-project-provenance-and-bounded-failure.patch
-          patches/hermes/HLP-433-responses-reasoning-usage.patch
-          patches/hermes/HLP-369-goal-mode-review-recovery.patch
-          patches/hermes/HLP-275-aux-image-prep-cap.patch
-          patches/hermes/HLP-382-bounded-transcript-publication.patch
-          patches/hermes/HLP-389-heredoc-data-vs-executable.patch
-          patches/hermes/tests/test_hlp280_live_routing_probe.py
-          patches/hermes/tests/test_hlp280_recovery_compatibility.py
+          home/config.yaml.template
+          lab/README.md
           lab/fixtures/manifest.json
           lab/fixtures/sandbox/brownfield/AGENTS.md
           lab/fixtures/sandbox/brownfield/message.py
@@ -339,7 +319,6 @@ jobs:
           lab/fixtures/sandbox/two-component-feature/normalize.py
           lab/fixtures/sandbox/two-component-feature/render.py
           lab/fixtures/sandbox/two-component-feature/verify.py
-          lab/README.md
           lab/scenarios/e2e-01.json
           lab/scenarios/e2e-02.json
           lab/scenarios/e2e-03.json
@@ -359,21 +338,40 @@ jobs:
           lab/schemas/evidence.schema.json
           lab/schemas/fixture-manifest.schema.json
           lab/schemas/scenario.schema.json
-          LICENSE
-          policy/hooks/aether_pre_tool_policy.py
+          patches/hermes/HLP-211b-flow-blocker-routing.patch
+          patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch
+          patches/hermes/HLP-226c-cross-board-project-inheritance.patch
+          patches/hermes/HLP-262-origin-signal-sticky.patch
+          patches/hermes/HLP-263-gateway-process-ownership.patch
+          patches/hermes/HLP-275-aux-image-prep-cap.patch
+          patches/hermes/HLP-280-bounded-flow-recovery.patch
+          patches/hermes/HLP-305-tui-lease-refresh-contention.patch
+          patches/hermes/HLP-310-delegated-child-snapshot-exclusion.patch
+          patches/hermes/HLP-334-native-collaboration.patch
+          patches/hermes/HLP-354-kanban-worktree-base-ref.patch
+          patches/hermes/HLP-362-independent-review-ownership.patch
+          patches/hermes/HLP-369-goal-mode-review-recovery.patch
+          patches/hermes/HLP-372-profile-cron-script-root.patch
+          patches/hermes/HLP-382-bounded-transcript-publication.patch
+          patches/hermes/HLP-385-review-topology-guidance.patch
+          patches/hermes/HLP-388-cron-session-launch-workdir.patch
+          patches/hermes/HLP-389-heredoc-data-vs-executable.patch
+          patches/hermes/HLP-393-cron-commissioning-origin-subscription.patch
+          patches/hermes/HLP-420-responses-terminal-fidelity.patch
+          patches/hermes/HLP-425-review-flow-continuity.patch
+          patches/hermes/HLP-426-terminal-worker-reap.patch
+          patches/hermes/HLP-427-routed-recovery-review-phase.patch
+          patches/hermes/HLP-428-project-provenance-and-bounded-failure.patch
+          patches/hermes/HLP-433-responses-reasoning-usage.patch
+          patches/hermes/tests/test_hlp280_live_routing_probe.py
+          patches/hermes/tests/test_hlp280_recovery_compatibility.py
           policy/hooks/README.md
+          policy/hooks/aether_pre_tool_policy.py
           pyproject.toml
-          README.md
-          ROADMAP.md
           scripts/aether_tui.py
           scripts/check_documentation.py
-          scripts/check_public_artifacts.py
           scripts/check_hermes_baseline_drift.py
-          scripts/qualify_telegram_monitor.py
-          scripts/release_bundle.py
-          scripts/run_tests.py
-          scripts/telegram_monitor_lab.py
-          scripts/validate_hermes_patch_reconciliation.py
+          scripts/check_public_artifacts.py
           scripts/e2e/README.md
           scripts/e2e/collect.py
           scripts/e2e/dispatch.py
@@ -386,19 +384,40 @@ jobs:
           scripts/qualify_morfeo_mcp.py
           scripts/qualify_observation.py
           scripts/qualify_oc79.py
+          scripts/qualify_telegram_monitor.py
+          scripts/release_bundle.py
+          scripts/run_tests.py
           scripts/sync_policy_hooks.py
-          SECURITY.md
+          scripts/telegram_monitor_lab.py
+          scripts/validate_hermes_patch_reconciliation.py
+          src/aether_agents/__init__.py
           src/aether_agents/cli.py
           src/aether_agents/commands/__init__.py
           src/aether_agents/commands/init.py
+          src/aether_agents/commands/knowledge.py
           src/aether_agents/commands/mcp.py
           src/aether_agents/commands/observe.py
-          src/aether_agents/__init__.py
+          src/aether_agents/hermes_baseline.py
+          src/aether_agents/hermes_editable.py
+          src/aether_agents/knowledge/__init__.py
+          src/aether_agents/knowledge/bindings.py
+          src/aether_agents/knowledge/common.py
+          src/aether_agents/knowledge/component.py
+          src/aether_agents/knowledge/context.py
+          src/aether_agents/knowledge/exports.py
+          src/aether_agents/knowledge/github.py
+          src/aether_agents/knowledge/graph_worker.py
+          src/aether_agents/knowledge/graphify.py
+          src/aether_agents/knowledge/hermes_plugin.py
+          src/aether_agents/knowledge/memory.py
+          src/aether_agents/knowledge/semantic.py
+          src/aether_agents/knowledge/service.py
+          src/aether_agents/knowledge/snapshots.py
+          src/aether_agents/lab/__init__.py
           src/aether_agents/lab/affinity.py
           src/aether_agents/lab/collect.py
           src/aether_agents/lab/dispatch.py
           src/aether_agents/lab/isolation.py
-          src/aether_agents/lab/__init__.py
           src/aether_agents/lab/matrix.py
           src/aether_agents/lab/observation.py
           src/aether_agents/lab/persistent.py
@@ -407,6 +426,7 @@ jobs:
           src/aether_agents/lab/synthetic_owner.py
           src/aether_agents/lab/validation.py
           src/aether_agents/launcher.py
+          src/aether_agents/lifecycle.py
           src/aether_agents/mcp/__init__.py
           src/aether_agents/mcp/bridge.py
           src/aether_agents/mcp/context.py
@@ -414,9 +434,6 @@ jobs:
           src/aether_agents/mcp/hermes_adapter.py
           src/aether_agents/mcp/morfeo_server.py
           src/aether_agents/mcp/session.py
-          src/aether_agents/lifecycle.py
-          src/aether_agents/hermes_baseline.py
-          src/aether_agents/hermes_editable.py
           src/aether_agents/monitor/__init__.py
           src/aether_agents/monitor/collector.py
           src/aether_agents/monitor/commands.py
@@ -432,11 +449,12 @@ jobs:
           src/aether_agents/objective_contracts/execution_boards.py
           src/aether_agents/objective_contracts/hermes_plugin.py
           src/aether_agents/objective_contracts/store.py
+          src/aether_agents/observation/__init__.py
           src/aether_agents/observation/brief.py
+          src/aether_agents/observation/capture/__init__.py
           src/aether_agents/observation/capture/collector.py
           src/aether_agents/observation/capture/flusher.py
           src/aether_agents/observation/capture/hermes_plugin.py
-          src/aether_agents/observation/capture/__init__.py
           src/aether_agents/observation/capture/journal.py
           src/aether_agents/observation/capture/projectors.py
           src/aether_agents/observation/capture/retained_index.py
@@ -446,15 +464,14 @@ jobs:
           src/aether_agents/observation/correlation.py
           src/aether_agents/observation/fingerprints.py
           src/aether_agents/observation/identity.py
-          src/aether_agents/observation/__init__.py
           src/aether_agents/observation/locking.py
           src/aether_agents/observation/privacy.py
           src/aether_agents/observation/projection_transition.py
           src/aether_agents/observation/query.py
+          src/aether_agents/observation/reduce/__init__.py
           src/aether_agents/observation/reduce/attribution.py
           src/aether_agents/observation/reduce/flow.py
           src/aether_agents/observation/reduce/ingest.py
-          src/aether_agents/observation/reduce/__init__.py
           src/aether_agents/observation/reduce/process.py
           src/aether_agents/observation/reduce/reconciliation.py
           src/aether_agents/observation/reduce/reducer.py
@@ -465,10 +482,14 @@ jobs:
           src/aether_agents/observation/storage.py
           src/aether_agents/paths.py
           src/aether_agents/project_marker.py
+          src/aether_agents/resources/graphify/requirements.in
+          src/aether_agents/resources/graphify/requirements.txt
+          src/aether_agents/resources/hermes-baseline.json
+          src/aether_agents/resources/lab
           src/aether_agents/resources/monitor/narration-context.md
           src/aether_agents/resources/monitor/precheck.py
-          src/aether_agents/resources/profiles/implementer/SOUL.md
           src/aether_agents/resources/observer-requirements.txt
+          src/aether_agents/resources/profiles/implementer/SOUL.md
           src/aether_agents/resources/profiles/implementer/config.yaml
           src/aether_agents/resources/profiles/morfeo/SOUL.md
           src/aether_agents/resources/profiles/morfeo/config.yaml
@@ -477,13 +498,13 @@ jobs:
           src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md
           src/aether_agents/resources/skills/contract-result-review/SKILL.md
           src/aether_agents/resources/skills/git-github-closeout/SKILL.md
-          src/aether_agents/resources/skills/semver-release/SKILL.md
-          src/aether_agents/resources/skills/objective-contract-design/SKILL.md
-          src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md
           src/aether_agents/resources/skills/implementation-evidence/SKILL.md
+          src/aether_agents/resources/skills/objective-contract-design/SKILL.md
           src/aether_agents/resources/skills/plan/SKILL.md
-          src/aether_agents/resources/lab
-          src/aether_agents/resources/hermes-baseline.json
+          src/aether_agents/resources/skills/project-knowledge/SKILL.md
+          src/aether_agents/resources/skills/semver-release/SKILL.md
+          src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md
+          src/aether_agents/resources/skills/work-memory/SKILL.md
           src/aether_agents/result.py
           tests/fixtures/e2e
           tests/fixtures/mixed-version/candidate-record.json
@@ -497,19 +518,27 @@ jobs:
           tests/observation_helpers.py
           tests/test_a1_contracts.py
           tests/test_aether_tui_launcher.py
+          tests/test_authorized_cleanup.py
           tests/test_contract_quality_documents.py
           tests/test_contract_result_review.py
           tests/test_documentation.py
-          tests/test_authorized_cleanup.py
-          tests/test_e2e_harness.py
           tests/test_e2e15_qualification.py
+          tests/test_e2e_harness.py
           tests/test_e2e_matrix.py
-          tests/test_lab_formalization.py
-          tests/test_lab_writer_isolation.py
-          tests/test_hermes_patch_reconciliation.py
+          tests/test_graphify_worker_native.py
           tests/test_hermes_baseline.py
           tests/test_hermes_editable.py
           tests/test_hermes_gateway_service.py
+          tests/test_hermes_patch_reconciliation.py
+          tests/test_knowledge_failures.py
+          tests/test_knowledge_plugin_cli.py
+          tests/test_knowledge_regressions.py
+          tests/test_knowledge_resources.py
+          tests/test_knowledge_schema.py
+          tests/test_knowledge_semantic_manager.py
+          tests/test_knowledge_session_binding.py
+          tests/test_lab_formalization.py
+          tests/test_lab_writer_isolation.py
           tests/test_lifecycle_adoption.py
           tests/test_lifecycle_profile_transfer.py
           tests/test_lifecycle_projections.py
@@ -519,7 +548,6 @@ jobs:
           tests/test_morfeo_mcp_cli.py
           tests/test_morfeo_mcp_packaging.py
           tests/test_morfeo_mcp_runtime.py
-          tests/test_tui_projections.py
           tests/test_objective_contracts.py
           tests/test_observation_batch_replay_regression.py
           tests/test_observation_brief_tool.py
@@ -535,11 +563,13 @@ jobs:
           tests/test_observation_qualification.py
           tests/test_observation_query_parity.py
           tests/test_observation_reducer.py
+          tests/test_observation_usage_guidance.py
           tests/test_plan_skill_dispatch.py
           tests/test_policy_hooks.py
-          tests/test_projection_transition_runner.py
-          tests/test_project_marker_validation.py
           tests/test_project_init.py
+          tests/test_project_knowledge_engine.py
+          tests/test_project_marker_validation.py
+          tests/test_projection_transition_runner.py
           tests/test_public_artifacts.py
           tests/test_release_bundle.py
           tests/test_same_card_phase_predicates.py
@@ -551,40 +581,10 @@ jobs:
           tests/test_telegram_monitor_runtime.py
           tests/test_telegram_monitor_sources.py
           tests/test_telegram_monitor_state.py
-          uv.lock
-          VERSION
-          docs/guides/project-knowledge.md
-          src/aether_agents/commands/knowledge.py
-          src/aether_agents/knowledge/__init__.py
-          src/aether_agents/knowledge/bindings.py
-          src/aether_agents/knowledge/common.py
-          src/aether_agents/knowledge/component.py
-          src/aether_agents/knowledge/context.py
-          src/aether_agents/knowledge/exports.py
-          src/aether_agents/knowledge/github.py
-          src/aether_agents/knowledge/graph_worker.py
-          src/aether_agents/knowledge/graphify.py
-          src/aether_agents/knowledge/hermes_plugin.py
-          src/aether_agents/knowledge/memory.py
-          src/aether_agents/knowledge/semantic.py
-          src/aether_agents/knowledge/service.py
-          src/aether_agents/knowledge/snapshots.py
-          src/aether_agents/resources/graphify/requirements.in
-          src/aether_agents/resources/graphify/requirements.txt
-          src/aether_agents/resources/skills/project-knowledge/SKILL.md
-          src/aether_agents/resources/skills/work-memory/SKILL.md
-          tests/test_graphify_worker_native.py
-          tests/test_knowledge_failures.py
-          tests/test_knowledge_plugin_cli.py
-          tests/test_knowledge_regressions.py
-          tests/test_knowledge_resources.py
-          tests/test_knowledge_semantic_manager.py
-          tests/test_observation_usage_guidance.py
-          tests/test_worker_tool_defaults.py
-          tests/test_knowledge_schema.py
-          tests/test_knowledge_session_binding.py
-          tests/test_project_knowledge_engine.py
+          tests/test_tui_projections.py
           tests/test_work_memory.py
+          tests/test_worker_tool_defaults.py
+          uv.lock
           website/.gitignore
           website/AGENTS.md
           website/CONTENT_ARCHITECTURE.md

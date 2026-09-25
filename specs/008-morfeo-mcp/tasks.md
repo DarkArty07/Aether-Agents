@@ -12,4 +12,9 @@
 
 - [x] Emit schema 5 with `hermes.extras: [mcp]`.
 - [x] Implement the Morfeo MCP runtime and manager launcher.
-- [ ] Qualify against the pinned Hermes commit.
+
+## RC13
+
+- [x] Converge the rc12 reader bridge with the rc10 MCP surface.
+- [x] Keep schema 4 reading and emit schema 5.
+- [ ] Qualify the disposable rc12 to rc13 forward update.- [ ] Qualify against the pinned Hermes commit.

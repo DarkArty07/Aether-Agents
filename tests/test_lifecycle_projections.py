@@ -2043,3 +2043,137 @@ def test_reconcile_stale_managed_manager_refuses_recursion(
     assert out["result"] == "error"
     assert out["errors"][0]["code"] == "ACTIVE_MANAGER_AUTHORITY_REQUIRED"
     assert "stale managed manager" in out["errors"][0]["message"]
+
+
+RC12_COMMIT = "7817ec919941edd88fe501c23ba624d254d484c6"
+RC13_HERMES_COMMIT = "aed6591a69f453a1867b73628603e7b53ba40ffc"
+RC13_HERMES_TREE = "cc1ebf94ad167979951e7b956ef3a8c448e96fd3389c93cddf60f8f883bb5ce7"
+
+
+def test_rc12_reader_accepts_rc13_schema5_and_activates_forward(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A disposable rc12 manager accepts an rc13 schema-5 target and moves forward.
+
+    The rc12 reader is the exact live commit. The rc13 manager then activates that
+    target in an isolated store. Mutable state stays put and the Hermes pin does not move.
+    """
+
+    import importlib.util
+    import io
+    import tarfile
+
+    repo = Path(__file__).resolve().parents[1]
+    extract = tmp_path / "rc12-source"
+    extract.mkdir()
+    archive = subprocess.run(
+        [
+            "git",
+            "archive",
+            RC12_COMMIT,
+            "src/aether_agents",
+            "specs/001-aether-v1-productization/contracts/release-lock.schema.json",
+        ],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as bundle:
+        bundle.extractall(extract, filter="data")
+    (extract / "VERSION").write_text("1.0.0rc12\n", encoding="utf-8")
+
+    helper_path = Path(__file__).with_name("test_observation_lifecycle.py")
+    spec = importlib.util.spec_from_file_location("rc13_forward_lock_helper", helper_path)
+    assert spec is not None and spec.loader is not None
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    lock_path = helper._write_release_lock(
+        tmp_path,
+        "1.0.0rc13",
+        hermes_commit=RC13_HERMES_COMMIT,
+        source_tree_sha256=RC13_HERMES_TREE,
+    )
+    payload = json.loads(lock_path.read_text(encoding="utf-8"))
+    payload["schema_version"] = 5
+    payload["hermes"]["extras"] = ["mcp"]
+    payload["aether"]["package_version"] = "1.0.0rc13"
+    lock_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    probe = tmp_path / "rc12_probe.py"
+    probe.write_text(
+        "import json, sys\n"
+        "from pathlib import Path\n"
+        "from aether_agents.lifecycle import load_release_lock\n"
+        "loaded = load_release_lock(Path(sys.argv[1]))\n"
+        "print(json.dumps({\n"
+        "    'extras': list(loaded.hermes_extras),\n"
+        "    'commit': loaded.effective_hermes_source.commit,\n"
+        "    'tree': loaded.hermes_source_tree_sha256,\n"
+        "}))\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(extract / "src")
+    env.pop("AETHER_RUNTIME_ROOT", None)
+    completed = subprocess.run(
+        [sys.executable, str(probe), str(lock_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert completed.returncode == 0, completed.stderr
+    accepted = json.loads(completed.stdout)
+    assert accepted == {
+        "extras": ["mcp"],
+        "commit": RC13_HERMES_COMMIT,
+        "tree": RC13_HERMES_TREE,
+    }
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    controller = RecordingServiceController()
+    manager = _activation_manager(tmp_path, monkeypatch, controller=controller)
+    store = manager.store
+    prior = replace(
+        _record(store, "1.0.0rc12-" + "a" * 16),
+        hermes_commit=RC13_HERMES_COMMIT,
+        hermes_source_tree_sha256=RC13_HERMES_TREE,
+    )
+    target = replace(
+        _record(store, "1.0.0rc13-" + "b" * 16),
+        hermes_commit=RC13_HERMES_COMMIT,
+        hermes_source_tree_sha256=RC13_HERMES_TREE,
+    )
+    prior.validate()
+    target.validate()
+    _install_record(manager, prior)
+    _install_record(manager, target)
+    _release_manager_python(store, prior)
+    _release_manager_python(store, target)
+    manager.activate_existing(
+        prior.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+    mutable = store.state_root / "hermes" / "profiles" / "morfeo" / "memories" / "note.md"
+    mutable.parent.mkdir(parents=True, exist_ok=True)
+    mutable.write_bytes(b"owner memory bytes\n")
+    before = hashlib.sha256(mutable.read_bytes()).hexdigest()
+    active_before = store.active_pointer.read_bytes()
+
+    updated = manager.activate_existing(
+        target.release_id,
+        transition_kind="update",
+        expected_active_release_id=prior.release_id,
+    )
+
+    assert updated.version == "1.0.0rc13"
+    assert updated.hermes_commit == RC13_HERMES_COMMIT
+    assert updated.hermes_source_tree_sha256 == RC13_HERMES_TREE
+    assert updated.release_id != prior.release_id
+    assert store.release_path(prior.release_id).is_dir()
+    assert (store.root / "runtime" / "current").resolve() == store.release_path(target.release_id)
+    assert hashlib.sha256(mutable.read_bytes()).hexdigest() == before
+    assert store.active_pointer.read_bytes() != active_before
+    assert updated.previous_release_id == prior.release_id

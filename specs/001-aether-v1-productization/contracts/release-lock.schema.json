@@ -8,7 +8,7 @@
   "properties": {
     "schema_version": {
       "enum": [4, 5],
-      "description": "Schema 4 is the historical lock. Schema 5 adds a closed hermes.extras allowlist. Readers from 1.0.0rc9 accept both. This release still emits schema 4."
+      "description": "Schema 4 is the historical lock. Schema 5 adds a closed hermes.extras allowlist. Readers from 1.0.0rc9 and the local rc11/rc12 bridges accept both. This release emits schema 5."
     },
     "aether": {
       "type": "object",

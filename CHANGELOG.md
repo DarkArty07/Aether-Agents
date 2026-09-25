@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.0.0rc13 — local-only forward convergence candidate
+
+Package identity `1.0.0rc13` / display `1.0.0-rc.13` / local annotated tag identity
+`v1.0.0-rc.13`; `release_impact=minor`, `release_action=prepare`,
+`release_channel=prerelease`. Issue #515. This source candidate merges the live
+rc12 role-aware reader bridge with main's Morfeo MCP. It emits release-lock
+schema 5 with `hermes.extras: ["mcp"]`, still reads schema 4, and keeps the
+rc11/rc12 ability to accept a historical profile inventory or a Morfeo `plan`
+inventory. It is not an activation claim, not a Hermes fork change, and not
+stable `1.0.0`. No tag is pushed or published.
+
+- `aether mcp morfeo serve` binds one exact project and execs the active runtime.
+- Harness mode hides host file, terminal and code tools. Chatbot mode keeps them when Hermes enables them.
+- External MCP servers, including Context7, are not republished.
+- HTTP listens only on `127.0.0.1`.
+- A managed rc12 reader can inspect this schema 5 candidate without a downgrade.
+
+
+## 1.0.0rc12 — local-only role-aware compatibility bridge
+
+Package identity `1.0.0rc12` / display `1.0.0-rc.12` / local annotated tag identity
+`v1.0.0-rc.12`; `release_impact=patch`, `release_action=prepare`,
+`release_channel=prerelease`. Issue #515. This bridge preserves rc11's schema-4
+emission and schema-5 `mcp` reader, and backports only the reviewed role-aware profile
+inventory reader from #504. Its own profile bundle remains historical, while its reader
+accepts either the historical bundle or a target where Morfeo alone adds `plan`.
+This is not Morfeo MCP, not a Hermes fork change, and not a public feature claim.
+No tag is pushed or published.
+
+- Duplicate, unknown, or non-canonical extras are refused.
+- Historical and Morfeo-`plan` profile inventories are distinguished exactly; arbitrary
+  extra/missing profile resources remain refused.
+
+
 ## 1.0.0rc10 — local-only Morfeo MCP candidate
 
 Package identity `1.0.0rc10` / display `1.0.0-rc.10` / local annotated tag identity
@@ -29,6 +63,7 @@ public feature claim. No tag is pushed or published.
 - Duplicate, unknown, or non-canonical extras are refused.
 - A schema 4 reader refuses a schema 5 lock before a release directory is created.
 - The manager distribution does not depend on the MCP SDK.
+
 
 
 ## 1.0.0rc8 — local-only final instruction candidate
