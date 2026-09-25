@@ -1157,6 +1157,85 @@ def _disposable_environment(root: Path, extra: dict[str, str] | None = None) -> 
     return environment
 
 
+def register_disposable_project(
+    *, python: Path, project_path: Path, environment: dict[str, str]
+) -> None:
+    """Register one fixture project in the disposable state root the probe will use.
+
+    The interpreter is the disposable manager's own Python, so registration goes through
+    the installed ``ProjectRegistry``.  The supplied environment already pins
+    ``XDG_STATE_HOME`` under the clean-install root; this function does not consult the
+    operator's state directory.
+    """
+
+    state_home = environment.get("XDG_STATE_HOME", "").strip()
+    if not state_home or not Path(state_home).is_absolute():
+        raise BundleError(
+            "project-registry",
+            "disposable project registration requires an absolute XDG_STATE_HOME",
+        )
+    completed = subprocess.run(
+        [
+            str(python),
+            "-c",
+            "import os\n"
+            "from pathlib import Path\n"
+            "from aether_agents.observation.context import ProjectRegistry, read_project_marker\n"
+            "project = Path(os.environ['AETHER_DISPOSABLE_PROJECT'])\n"
+            "marker = read_project_marker(project)\n"
+            "if not isinstance(marker, dict):\n"
+            "    raise SystemExit('disposable project marker is unreadable')\n"
+            "project_id = str(marker.get('project_id', ''))\n"
+            "name = str(marker.get('name', ''))\n"
+            "registry = ProjectRegistry()\n"
+            "if not registry.register(project_id, project, name):\n"
+            "    raise SystemExit('disposable project registration failed')\n"
+            "if not registry.verify_with_marker(project_id):\n"
+            "    raise SystemExit('disposable project registry does not match the marker')\n",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={**environment, "AETHER_DISPOSABLE_PROJECT": str(project_path.resolve())},
+    )
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout).strip() or "registration failed"
+        raise BundleError("project-registry", detail)
+
+
+def _bind_disposable_launcher_layout(project: Path, *, runtime_bin: Path, tui_dir: Path) -> None:
+    """Point the fixture launcher at the disposable runtime and its built TUI."""
+
+    bin_dir = project / "home" / ".venv-hermes" / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    runtime_hermes = runtime_bin / "hermes"
+    hermes_link = bin_dir / "hermes"
+    if hermes_link.is_symlink() or hermes_link.exists():
+        hermes_link.unlink()
+    if runtime_hermes.is_file():
+        hermes_link.symlink_to(runtime_hermes)
+    else:
+        hermes_link.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        hermes_link.chmod(0o755)
+    for name in ("python", "python3"):
+        source = runtime_bin / name
+        if not source.exists():
+            continue
+        link = bin_dir / name
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.symlink_to(source)
+    home_tui = project / "home" / "tui"
+    if home_tui.is_symlink() or home_tui.is_file():
+        home_tui.unlink()
+    elif home_tui.is_dir():
+        return
+    if tui_dir.is_dir():
+        home_tui.symlink_to(tui_dir, target_is_directory=True)
+    else:
+        home_tui.mkdir(parents=True)
+
+
 def _tui_checkout(
     *, aether_checkout: Path, roots: Path, runtime_bin: Path, lifecycle: Any
 ) -> tuple[Path, str]:
@@ -1477,18 +1556,25 @@ def clean_install(
         runtime_bin=runtime / "bin",
         lifecycle=lifecycle,
     )
+    tui_environment = _disposable_environment(
+        roots / "tui-root",
+        {
+            "PATH": f"{manager / 'bin'}{os.pathsep}{runtime / 'bin'}{os.pathsep}{path}",
+            "HERMES_TUI_DIR": str(tui_dir),
+        },
+    )
+    _bind_disposable_launcher_layout(tui_repo, runtime_bin=runtime / "bin", tui_dir=tui_dir)
+    register_disposable_project(
+        python=manager_python,
+        project_path=tui_repo,
+        environment=tui_environment,
+    )
     probes.append(
         probe(
             "aether --project --json",
             [str(aether), "--project", str(tui_repo), "--json"],
             root=tui_repo,
-            environment=_disposable_environment(
-                roots / "tui-root",
-                {
-                    "PATH": f"{manager / 'bin'}{os.pathsep}{runtime / 'bin'}{os.pathsep}{path}",
-                    "HERMES_TUI_DIR": str(tui_dir),
-                },
-            ),
+            environment=tui_environment,
             required=True,
             expectation="json-envelope",
         )

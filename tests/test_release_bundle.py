@@ -1329,3 +1329,113 @@ def test_main_refuses_a_dirty_aether_checkout(tool: types.ModuleType, tmp_path: 
 def test_main_reports_a_missing_bundle(tool: types.ModuleType, tmp_path: Path) -> None:
     assert tool.main(["verify", "--bundle", str(tmp_path / "absent")]) == 1
     assert tool.main(["build", "--aether-checkout", str(tmp_path)]) == 2
+
+
+def test_disposable_registry_is_required_for_the_project_probe(
+    tool: types.ModuleType, tmp_path: Path
+) -> None:
+    """The clean-install probe accepts a marker only when the disposable registry agrees."""
+
+    user_registry = Path.home() / ".local" / "state" / "aether" / "projects" / "registry.json"
+    before = user_registry.read_bytes() if user_registry.is_file() else None
+    project_id = "12027989-a08f-41cd-a82c-54ff1bfb6b03"
+    project = tmp_path / "tui-repo"
+    profile = project / "home" / "profiles" / "morfeo"
+    profile.mkdir(parents=True)
+    (project / "home" / "tui").mkdir()
+    (project / "AGENTS.md").write_text("fixture\n", encoding="utf-8")
+    (project / ".aether").mkdir()
+    (project / ".aether" / "project.toml").write_text(
+        "\n".join(
+            (
+                "schema_version = 1",
+                f'project_id = "{project_id}"',
+                'name = "Aether Agents"',
+                'initialized_by = "1.0.0"',
+                'forge = "local"',
+                'contract_root = "specs"',
+                'default_branch = "main"',
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    (profile / "SOUL.md").write_text("# Morfeo\n", encoding="utf-8")
+    (profile / "config.yaml").write_text(
+        "toolsets:\n  - file\n  - kanban\n",
+        encoding="utf-8",
+    )
+    runtime = tmp_path / "runtime"
+    subprocess.run(["uv", "venv", str(runtime)], check=True, capture_output=True, text=True)
+    subprocess.run(
+        [
+            "uv",
+            "pip",
+            "install",
+            "--python",
+            str(runtime / "bin" / "python"),
+            "pyyaml==6.0.3",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    bin_dir = project / "home" / ".venv-hermes" / "bin"
+    bin_dir.mkdir(parents=True)
+    runtime_hermes = runtime / "bin" / "hermes"
+    runtime_hermes.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    runtime_hermes.chmod(0o755)
+    (bin_dir / "hermes").symlink_to(runtime_hermes)
+    (bin_dir / "python").symlink_to(runtime / "bin" / "python")
+    (bin_dir / "python3").symlink_to(runtime / "bin" / "python3")
+
+    environment = tool._disposable_environment(tmp_path / "probe-root")
+    command = [
+        sys.executable,
+        "-m",
+        "aether_agents.cli",
+        "--project",
+        str(project),
+        "--json",
+    ]
+
+    missing = subprocess.run(command, check=False, capture_output=True, text=True, env=environment)
+    assert missing.returncode != 0
+    assert "not registered in the project registry" in missing.stderr
+
+    tool.register_disposable_project(
+        python=Path(sys.executable),
+        project_path=project,
+        environment=environment,
+    )
+    registry_file = tmp_path / "probe-root" / "state" / "aether" / "projects" / "registry.json"
+    assert registry_file.is_file()
+    assert str(user_registry) not in str(registry_file.resolve())
+
+    accepted = subprocess.run(command, check=False, capture_output=True, text=True, env=environment)
+    assert accepted.returncode == 0, accepted.stderr
+    assert json.loads(accepted.stdout)["project_id"] == project_id
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    moved = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import os\n"
+            "from aether_agents.observation.context import ProjectRegistry\n"
+            "ProjectRegistry().register(os.environ['PROJECT_ID'], os.environ['OTHER'], 'Aether Agents')\n",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={**environment, "PROJECT_ID": project_id, "OTHER": str(elsewhere)},
+    )
+    assert moved.returncode == 0, moved.stderr
+    rejected = subprocess.run(command, check=False, capture_output=True, text=True, env=environment)
+    assert rejected.returncode != 0
+    assert "not registered" not in rejected.stderr
+    assert project_id in rejected.stderr
+
+    after = user_registry.read_bytes() if user_registry.is_file() else None
+    assert after == before
