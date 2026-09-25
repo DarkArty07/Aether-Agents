@@ -41,6 +41,9 @@
         "local_status": {
           "$ref": "#/$defs/nonempty_string"
         },
+        "candidate_requirement": {
+          "$ref": "#/$defs/candidate_requirement"
+        },
         "upstream": {
           "$ref": "#/$defs/upstream"
         },
@@ -502,6 +505,13 @@
         }
       }
     },
+    "candidate_requirement": {
+      "enum": [
+        "required",
+        "deferred"
+      ],
+      "description": "Whether the selected Hermes revision of a candidate release must contain this HLP. Absent means required. Deferred keeps the HLP in reconciliation and does not retire it; adoption belongs to a later runtime."
+    },
     "resolved_entry": {
       "type": "object",
       "additionalProperties": false,
@@ -539,6 +549,9 @@
         },
         "local_status": {
           "$ref": "#/$defs/nonempty_string"
+        },
+        "candidate_requirement": {
+          "$ref": "#/$defs/candidate_requirement"
         },
         "upstream": {
           "$ref": "#/$defs/upstream"

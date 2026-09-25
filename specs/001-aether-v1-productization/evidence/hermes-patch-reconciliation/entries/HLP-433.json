@@ -24,6 +24,7 @@
     "blocker": "The patch reconstructs exactly in the maintained fork and is integrated at merged revision 621047dc1c10cceb2825013cc8bb611b4d0e8de1 (PR #17) with the aggregate pinned there; only a public upstream equivalent is still missing, which is why this entry stays unavailable rather than passed. The merged source has not been installed, reloaded or otherwise adopted by the effective Aether runtime.",
     "status": "unavailable"
   },
+  "candidate_requirement": "deferred",
   "blocking_uncertainty": [
     "Upstream hermes-agent lacks reasoning token preservation across the Responses adapter boundary.",
     "The merged maintained-fork revision carrying this behavior has not been adopted by the effective Aether runtime; live adoption and effective-runtime qualification remain deferred successors under issue #433, so no installed behavior is asserted."

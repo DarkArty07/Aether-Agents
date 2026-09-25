@@ -2177,3 +2177,197 @@ def test_rc12_reader_accepts_rc13_schema5_and_activates_forward(
     assert hashlib.sha256(mutable.read_bytes()).hexdigest() == before
     assert store.active_pointer.read_bytes() != active_before
     assert updated.previous_release_id == prior.release_id
+
+
+def test_rc12_reader_accepts_rc14_schema5_and_activates_forward(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A disposable rc12 manager accepts an rc14 schema-5 target and moves forward.
+
+    Required HLP paths are present in a disposable fork. HLP-428 and HLP-433 stay
+    deferred and do not block. Mutable state stays put and the Hermes pin does not move.
+    """
+
+    import importlib.util
+    import io
+    import tarfile
+
+    repo = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location(
+        "rc14_hlp_validator",
+        repo / "scripts" / "validate_hermes_patch_reconciliation.py",
+    )
+    assert spec is not None and spec.loader is not None
+    validator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(validator)
+    entries = (
+        repo
+        / "specs"
+        / "001-aether-v1-productization"
+        / "evidence"
+        / "hermes-patch-reconciliation"
+        / "entries"
+    )
+    records = [
+        json.loads(path.read_text(encoding="utf-8")) for path in sorted(entries.glob("HLP-*.json"))
+    ]
+    fork = tmp_path / "fork"
+    fork.mkdir()
+    _git(fork, "init", "-q", "-b", "aether-main")
+    _git(fork, "config", "user.name", "Aether Test")
+    _git(fork, "config", "user.email", "aether@example.invalid")
+    _git(fork, "remote", "add", "origin", "https://github.com/DarkArty07/aether-hermes")
+    for record in records:
+        if record.get("candidate_requirement") == "deferred":
+            continue
+        for relative in validator._selected_source_paths(record, repo):
+            destination = fork / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if not destination.exists():
+                destination.write_text("present\n", encoding="utf-8")
+    _git(fork, "add", "-A")
+    _git(fork, "commit", "-qm", "required sources")
+    revision = _git(fork, "rev-parse", "HEAD")
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(repo / "scripts" / "validate_hermes_patch_reconciliation.py"),
+            "--root",
+            str(repo),
+            "--candidate-check",
+            "--json",
+            "--selected-revision",
+            revision,
+            "--fork-checkout",
+            str(fork),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    summary = json.loads(
+        [line for line in completed.stdout.splitlines() if line.startswith("{")][-1]
+    )
+    deferred = {item["id"]: item for item in summary["deferred_hlps"]}
+    assert set(deferred) == {"HLP-428", "HLP-433"}
+    assert "tests/hermes_cli/test_kanban_project_provenance.py" in deferred["HLP-428"]["missing"]
+    assert (
+        "tests/agent/test_auxiliary_client_responses_reasoning_433.py"
+        in deferred["HLP-433"]["missing"]
+    )
+    assert summary["refusing_hlps"] == []
+    assert summary["status"] == "qualified"
+    assert "HLP-427" in summary["required_hlps"]
+
+    extract = tmp_path / "rc12-source"
+    extract.mkdir()
+    archive = subprocess.run(
+        [
+            "git",
+            "archive",
+            RC12_COMMIT,
+            "src/aether_agents",
+            "specs/001-aether-v1-productization/contracts/release-lock.schema.json",
+        ],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as bundle:
+        bundle.extractall(extract, filter="data")
+    (extract / "VERSION").write_text("1.0.0rc12\n", encoding="utf-8")
+
+    helper_path = Path(__file__).with_name("test_observation_lifecycle.py")
+    helper_spec = importlib.util.spec_from_file_location("rc14_forward_lock_helper", helper_path)
+    assert helper_spec is not None and helper_spec.loader is not None
+    helper = importlib.util.module_from_spec(helper_spec)
+    helper_spec.loader.exec_module(helper)
+    lock_path = helper._write_release_lock(
+        tmp_path,
+        "1.0.0rc14",
+        hermes_commit=RC13_HERMES_COMMIT,
+        source_tree_sha256=RC13_HERMES_TREE,
+    )
+    payload = json.loads(lock_path.read_text(encoding="utf-8"))
+    payload["schema_version"] = 5
+    payload["hermes"]["extras"] = ["mcp"]
+    payload["aether"]["package_version"] = "1.0.0rc14"
+    lock_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    probe = tmp_path / "rc12_probe.py"
+    probe.write_text(
+        "import json, sys\n"
+        "from pathlib import Path\n"
+        "from aether_agents.lifecycle import load_release_lock\n"
+        "loaded = load_release_lock(Path(sys.argv[1]))\n"
+        "print(json.dumps({\n"
+        "    'extras': list(loaded.hermes_extras),\n"
+        "    'commit': loaded.effective_hermes_source.commit,\n"
+        "    'tree': loaded.hermes_source_tree_sha256,\n"
+        "}))\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(extract / "src")
+    env.pop("AETHER_RUNTIME_ROOT", None)
+    probed = subprocess.run(
+        [sys.executable, str(probe), str(lock_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert probed.returncode == 0, probed.stderr
+    assert json.loads(probed.stdout) == {
+        "extras": ["mcp"],
+        "commit": RC13_HERMES_COMMIT,
+        "tree": RC13_HERMES_TREE,
+    }
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    controller = RecordingServiceController()
+    manager = _activation_manager(tmp_path, monkeypatch, controller=controller)
+    store = manager.store
+    prior = replace(
+        _record(store, "1.0.0rc12-" + "a" * 16),
+        hermes_commit=RC13_HERMES_COMMIT,
+        hermes_source_tree_sha256=RC13_HERMES_TREE,
+    )
+    target = replace(
+        _record(store, "1.0.0rc14-" + "b" * 16),
+        hermes_commit=RC13_HERMES_COMMIT,
+        hermes_source_tree_sha256=RC13_HERMES_TREE,
+    )
+    prior.validate()
+    target.validate()
+    _install_record(manager, prior)
+    _install_record(manager, target)
+    prior_record = (store.release_path(prior.release_id) / "record.json").read_bytes()
+    target_record = (store.release_path(target.release_id) / "record.json").read_bytes()
+    _release_manager_python(store, prior)
+    _release_manager_python(store, target)
+    manager.activate_existing(
+        prior.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+    mutable = store.state_root / "hermes" / "profiles" / "morfeo" / "memories" / "note.md"
+    mutable.parent.mkdir(parents=True, exist_ok=True)
+    mutable.write_bytes(b"owner memory bytes\n")
+    before = hashlib.sha256(mutable.read_bytes()).hexdigest()
+
+    updated = manager.activate_existing(
+        target.release_id,
+        transition_kind="update",
+        expected_active_release_id=prior.release_id,
+    )
+
+    assert updated.version == "1.0.0rc14"
+    assert updated.hermes_commit == RC13_HERMES_COMMIT
+    assert updated.release_id != prior.release_id
+    assert hashlib.sha256(mutable.read_bytes()).hexdigest() == before
+    assert (store.release_path(prior.release_id) / "record.json").read_bytes() == prior_record
+    assert (store.release_path(target.release_id) / "record.json").read_bytes() == target_record
+    assert updated.previous_release_id == prior.release_id

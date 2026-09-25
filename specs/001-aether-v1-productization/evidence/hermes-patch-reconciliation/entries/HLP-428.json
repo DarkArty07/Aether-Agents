@@ -7,7 +7,8 @@
     "tests/hermes_cli/test_kanban_project_provenance.py"
   ],
   "required_behavior": "A non-affinity child task created with an explicit direct parent worktree recovers the board's canonical Project and receives a fresh project worktree instead of a null-Project scratch directory; explicit cross-project mismatches on recognized Aether boards fail closed before database insertion; and review failure containment cleanly unblocks with gave_up, clears worker/claim ownership, and bounds notifications to verified subscribers without emitting unverified origin signals.",
-  "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+  "candidate_requirement": "deferred",
+  "local_status": "MAINTAINED_FORK_ONLY / UPSTREAM_MISSING",
   "upstream": {
     "repository": "https://github.com/NousResearch/hermes-agent",
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",

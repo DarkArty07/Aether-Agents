@@ -665,3 +665,218 @@ def test_reconcile_rejects_private_content_or_upstream_disagreement(
 
     with pytest.raises(ValueError, match=message):
         _reconcile(tmp_path, records)
+
+
+def _candidate_records() -> list[dict[str, Any]]:
+    required = _record("HLP-188")
+    required["components"] = ["HLP-188", "agent/required.py"]
+    deferred = _record("HLP-189")
+    deferred["components"] = ["HLP-189", "agent/deferred.py"]
+    deferred["candidate_requirement"] = "deferred"
+    return [required, deferred]
+
+
+def _write_candidate_ledger(root: Path, records: list[dict[str, Any]]) -> tuple[Path, Path]:
+    root.mkdir(parents=True, exist_ok=True)
+    ledger = root / "HERMES_LOCAL_PATCHES.md"
+    lines = ["# Ledger", ""]
+    for record in records:
+        lines.extend((f"## {record['id']} — behavior", "", "Active detailed record.", ""))
+    ledger.write_text("\n".join(lines), encoding="utf-8")
+    entries = root / "entries"
+    entries.mkdir()
+    for record in records:
+        (entries / f"{record['id']}.json").write_text(
+            json.dumps(record, sort_keys=True), encoding="utf-8"
+        )
+    return ledger, entries
+
+
+def _commit_fork_paths(checkout: Path, paths: list[str]) -> str:
+    for relative in paths:
+        destination = checkout / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text("present\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=checkout, check=True)
+    subprocess.run(["git", "commit", "-qm", "candidate sources"], cwd=checkout, check=True)
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=checkout, check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+
+def _run_validator(
+    root: Path, fork: Path, revision: str, *flags: str
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--root",
+            str(root),
+            "--ledger",
+            str(root / "HERMES_LOCAL_PATCHES.md"),
+            "--entries-dir",
+            str(root / "entries"),
+            "--schema",
+            str(SCHEMA_PATH),
+            "--selected-revision",
+            revision,
+            "--fork-checkout",
+            str(fork),
+            "--json",
+            *flags,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _summary_json(completed: subprocess.CompletedProcess[str]) -> dict[str, Any]:
+    for line in reversed(completed.stdout.splitlines()):
+        if line.startswith("{"):
+            return json.loads(line)
+    raise AssertionError(completed.stderr or completed.stdout)
+
+
+def test_candidate_check_refuses_required_hlp_missing_from_selected_source(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    records = _candidate_records()
+    _write_candidate_ledger(root, records)
+    fork, _revision = _fork_checkout(tmp_path)
+    revision = _commit_fork_paths(fork, ["agent/deferred.py"])
+
+    completed = _run_validator(root, fork, revision, "--candidate-check")
+
+    assert completed.returncode != 0
+    summary = _summary_json(completed)
+    assert summary["status"] == "refused"
+    assert summary["refusing_hlps"] == ["HLP-188"]
+    assert summary["selected_revision"] == revision
+
+
+def test_candidate_check_keeps_deferred_absence_visible_without_blocking(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    records = _candidate_records()
+    before_gate = records[1]["retirement_gate"]["status"]
+    before_artifact = records[1]["artifact_verification"]["status"]
+    _write_candidate_ledger(root, records)
+    fork, _revision = _fork_checkout(tmp_path)
+    revision = _commit_fork_paths(fork, ["agent/required.py"])
+
+    completed = _run_validator(root, fork, revision, "--candidate-check")
+
+    assert completed.returncode == 0, completed.stderr
+    summary = _summary_json(completed)
+    assert summary["status"] == "qualified"
+    assert summary["refusing_hlps"] == []
+    deferred = {item["id"]: item for item in summary["deferred_hlps"]}
+    assert deferred["HLP-189"]["presence"] == "absent"
+    assert deferred["HLP-189"]["missing"] == ["agent/deferred.py"]
+    assert "HLP-188" in summary["required_hlps"]
+    validator = _load_validator()
+    aggregate = validator.reconcile(
+        repository_root=root,
+        ledger_path=root / "HERMES_LOCAL_PATCHES.md",
+        entries_dir=root / "entries",
+        schema_path=SCHEMA_PATH,
+        observed_at_utc=OBSERVED_AT,
+        selected_revision=revision,
+        fork_root=fork,
+    )
+    stored = {record["id"]: record for record in aggregate["records"]}
+    assert stored["HLP-189"]["retirement_gate"]["status"] == before_gate
+    assert stored["HLP-189"]["artifact_verification"]["status"] == before_artifact
+    assert stored["HLP-189"]["retirement_recommendation"] == "retain"
+
+
+def test_missing_candidate_requirement_is_required(tmp_path: Path) -> None:
+    validator = _load_validator()
+    record = _record("HLP-188")
+    assert "candidate_requirement" not in record
+    assert validator.entry_candidate_requirement(record) == "required"
+    record["components"] = ["HLP-188", "agent/required.py"]
+    root = tmp_path / "repo"
+    _write_candidate_ledger(root, [record, _candidate_records()[1]])
+    fork, _revision = _fork_checkout(tmp_path)
+    revision = _commit_fork_paths(fork, ["agent/deferred.py"])
+
+    completed = _run_validator(root, fork, revision, "--candidate-check")
+
+    assert completed.returncode != 0
+    assert _summary_json(completed)["refusing_hlps"] == ["HLP-188"]
+
+
+def test_unknown_candidate_requirement_is_refused(tmp_path: Path) -> None:
+    record = _record("HLP-188")
+    record["candidate_requirement"] = "foo"
+    root = tmp_path / "repo"
+    _write_candidate_ledger(root, [record])
+    fork, revision = _fork_checkout(tmp_path)
+
+    completed = _run_validator(root, fork, revision, "--candidate-check")
+
+    assert completed.returncode != 0
+    assert "schema validation failed" in completed.stderr
+
+
+def test_candidate_check_refuses_wrong_commit_dirty_checkout_and_wrong_remote(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "repo"
+    _write_candidate_ledger(root, _candidate_records())
+    fork, _initial = _fork_checkout(tmp_path)
+    revision = _commit_fork_paths(fork, ["agent/required.py", "agent/deferred.py"])
+
+    wrong_commit = _run_validator(root, fork, "b" * 40, "--candidate-check")
+    assert wrong_commit.returncode != 0
+    assert "is not the selected revision" in wrong_commit.stderr
+
+    (fork / "dirty.txt").write_text("dirty\n", encoding="utf-8")
+    dirty = _run_validator(root, fork, revision, "--candidate-check")
+    assert dirty.returncode != 0
+    assert "dirty" in dirty.stderr
+
+    subprocess.run(
+        ["git", "remote", "set-url", "origin", "https://github.com/example/not-hermes"],
+        cwd=fork,
+        check=True,
+    )
+    (fork / "dirty.txt").unlink()
+    foreign = _run_validator(root, fork, revision, "--candidate-check")
+    assert foreign.returncode != 0
+    assert "origin is not the maintained fork" in foreign.stderr
+
+
+def test_canonical_check_stays_stricter_than_candidate_check(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    records = _candidate_records()
+    _write_candidate_ledger(root, records)
+    fork, _revision = _fork_checkout(tmp_path)
+    revision = _commit_fork_paths(fork, ["agent/required.py"])
+    output = root / "specs/001-aether-v1-productization/evidence"
+    output.mkdir(parents=True)
+    (output / "hermes-patch-reconciliation.v1.json").write_text(
+        json.dumps({"observed_at_utc": OBSERVED_AT, "selected_source": {"revision": "c" * 40}}),
+        encoding="utf-8",
+    )
+    (output / "hermes-patch-preflight.md").write_text("stale\n", encoding="utf-8")
+
+    canonical = _run_validator(root, fork, revision, "--check")
+    candidate = _run_validator(root, fork, revision, "--candidate-check")
+
+    assert canonical.returncode != 0
+    assert "stale" in canonical.stderr
+    assert candidate.returncode == 0, candidate.stderr
+    assert _summary_json(candidate)["status"] == "qualified"
+
+
+def test_repository_hlp428_and_hlp433_are_explicitly_deferred() -> None:
+    hlp428 = json.loads((ENTRIES_PATH / "HLP-428.json").read_text(encoding="utf-8"))
+    hlp433 = json.loads((ENTRIES_PATH / "HLP-433.json").read_text(encoding="utf-8"))
+    assert hlp428["candidate_requirement"] == "deferred"
+    assert hlp428["local_status"] == "MAINTAINED_FORK_ONLY / UPSTREAM_MISSING"
+    assert hlp433["candidate_requirement"] == "deferred"
+    assert hlp433["local_status"] == "MAINTAINED_FORK_ONLY / UPSTREAM_MISSING"
+    assert hlp428["retirement_gate"]["status"] == "not_executed"
+    assert hlp433["retirement_gate"]["status"] == "not_executed"

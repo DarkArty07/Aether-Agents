@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.0rc14 — local-only candidate HLP qualification
+
+Package identity `1.0.0rc14` / display `1.0.0-rc.14` / local annotated tag identity
+`v1.0.0-rc.14`; `release_impact=patch`, `release_action=prepare`,
+`release_channel=prerelease`. This candidate keeps rc13, including schema 5 with
+`hermes.extras: ["mcp"]` and `aether mcp morfeo serve`. Candidate preparation
+qualifies required HLP coverage at Hermes `aed6591a69f453a1867b73628603e7b53ba40ffc`.
+HLP-428 and HLP-433 remain in reconciliation as deferred and do not block that pin.
+Canonical `--check` still refuses a stale aggregate. No tag is pushed or published.
+
+- A missing `candidate_requirement` stays required.
+- An unknown `candidate_requirement` is refused.
+- Deferred absence stays visible and does not retire the HLP.
+- A managed rc12 reader can move forward to this schema 5 candidate without a downgrade.
+
+
+
 ## 1.0.0rc13 — local-only forward convergence candidate
 
 Package identity `1.0.0rc13` / display `1.0.0-rc.13` / local annotated tag identity

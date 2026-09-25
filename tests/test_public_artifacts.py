@@ -38,6 +38,7 @@ ACCEPTED_PACKAGE_IDENTITIES = (
     "1.0.0rc11",
     "1.0.0rc12",
     "1.0.0rc13",
+    "1.0.0rc14",
     "2.30.4",
     "1.0.0.dev3",
 )
@@ -158,8 +159,8 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     assert "releases/tag/v1.0.0-rc.7" not in readme
     assert "releases/tag/v1.0.0-rc.6" not in readme
     assert "releases/tag/v1.0.0-rc.5" not in readme
-    assert "`1.0.0rc13` / `1.0.0-rc.13`" in readme
-    assert "local annotated tag identity is `v1.0.0-rc.13`" in readme
+    assert "`1.0.0rc14` / `1.0.0-rc.14`" in readme
+    assert "local annotated tag identity is `v1.0.0-rc.14`" in readme
     assert "restores the new Morfeo SOUL and canonical contract skills" in readme
     assert (
         "neither this source nor a local tag proves what is installed or that agent behavior improved"
@@ -172,6 +173,7 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     assert "published but rejected" in readme
     status = [line for line in readme.splitlines() if line.startswith("**Status:**")]
     assert len(status) == 1, f"expected exactly one status paragraph, found {len(status)}"
+    assert "releases/tag/v1.0.0-rc.14" not in status[0]
     assert "releases/tag/v1.0.0-rc.13" not in status[0]
     assert "releases/tag/v1.0.0-rc.12" not in status[0]
     assert "releases/tag/v1.0.0-rc.10" not in status[0]
