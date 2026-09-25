@@ -23,7 +23,7 @@ TOOL_PATH = ROOT / "scripts" / "release_bundle.py"
 WORKFLOW_PATH = ROOT / ".github" / "workflows" / "release.yml"
 AETHER_REMOTE = "https://github.com/DarkArty07/Aether-Agents.git"
 FORK_REMOTE = "https://github.com/DarkArty07/aether-hermes.git"
-FORK_COMMIT = "aed6591a69f453a1867b73628603e7b53ba40ffc"
+FORK_COMMIT = "5b2b6ba543680c6fe8a62de4b467d1107be3abf4"
 _ABSENT_COMMIT = "0" * 40
 
 
@@ -143,9 +143,9 @@ def test_version_file_carries_the_objective_release_identity(tool: types.ModuleT
 
     package_version = (ROOT / "VERSION").read_text(encoding="ascii").strip()
     identity = tool.release_identity(package_version)
-    assert identity["package_version"] == "1.0.0rc14"
-    assert identity["semver"] == "1.0.0-rc.14"
-    assert identity["tag"] == "v1.0.0-rc.14"
+    assert identity["package_version"] == "1.0.0rc15"
+    assert identity["semver"] == "1.0.0-rc.15"
+    assert identity["tag"] == "v1.0.0-rc.15"
     assert identity["prerelease"] is True
 
 

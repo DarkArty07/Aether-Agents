@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.0rc15 — bounded Supervisor review and visible return count
+
+Package identity `1.0.0rc15` / display `1.0.0-rc.15` / annotated tag identity
+`v1.0.0-rc.15`. This prerelease retains explicit verification limits; it is not
+stable `1.0.0` or acceptance of any deferred objective.
+
+- Supervisor may directly correct understood, bounded defects restoring agreed
+  behavior from the first delivery; substantial implementation stays delegated.
+- The SOUL and canonical review procedure allow at most two ordinary returns per
+  logical unit, with earlier stopping without progress and recovery through Morfeo.
+  This is an instruction-level policy, not a hard runtime limit.
+- Native task context reports recorded review returns for that card, derived from
+  its existing complete event history. It adds no stored counter, replacement-card
+  tracking, automatic rejection or recovery engine.
+- Focused deterministic tests cover the changed instructions and count. Agent
+  behavior, savings and live workflow efficacy are not evaluated.
+
 ## 1.0.0rc14 — local-only candidate HLP qualification
 
 Package identity `1.0.0rc14` / display `1.0.0-rc.14` / local annotated tag identity

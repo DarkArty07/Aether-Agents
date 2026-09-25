@@ -75,14 +75,14 @@ Every point where a Spec Kit phase expects a present human, with Aether's resolu
 | Upstream assumption | Aether resolution |
 |---|---|
 | `clarify` asks at most five questions of a user who stays available | Budget removed; extraction continues until no material gap remains (R1-D10) |
-| Custom checklists are reviewer-owned and an agent must not self-approve | The supervision role is the reviewer: it wrote neither the spec nor the code |
+| Custom checklists are reviewer-owned and an agent must not self-approve | Supervisor reviews requirements and Implementer work it did not author; a PD-73 repair is separately attributed and verified, never labelled independent self-review |
 | `implement` stops and asks the human when checklist items are unchecked | The supervision role answers, within the authority the contract carries |
 | `analyze` offers remediation and waits for approval | The supervision role repairs what it owns and escalates contract defects to Morfeo |
 | `converge` recommends a next step to the user | The supervision role takes it, bounded by the contract's attempt budget |
 | `implement` is scoped by a human across several runs for large features | The task breakdown's story phases provide the scoping; increments are delivered per converged story |
 
-- **FR-318**: In pipeline work, requirements-quality review MUST be performed by a role that authored neither the requirements nor the implementation.
-- **FR-319**: Pipeline self-approval of one's own requirements or implementation is prohibited. Where upstream relies on a human reviewer inside the pipeline, Aether MUST substitute a different role, never the same one. Direct PD-44 verification is not represented as independent Spec Kit review.
+- **FR-318**: In pipeline work, Supervisor MUST independently review requirements and Implementer work it did not author. The PD-73 bounded-repair exception permits separately attributed verification of Supervisor's own correction; it MUST NOT be represented as independent review of that correction.
+- **FR-319**: Pipeline self-verification MUST NOT substitute for explicitly required independent review of one's own requirements or implementation. A PD-73 repair may be verified and included in the accepted result without automatically adding another reviewer, unless the contract or applicable risk controls require independence for that repair. Neither this exception nor direct PD-44 verification is represented as independent Spec Kit review.
 - **FR-320**: No phase may block waiting for the owner during unattended execution.
 - **FR-321**: Where a resolution grants a role an answer a human would have given, that answer MUST be bounded by the contract, not invented.
 
