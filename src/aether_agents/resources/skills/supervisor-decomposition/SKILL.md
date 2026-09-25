@@ -1,7 +1,7 @@
 ---
 name: supervisor-decomposition
 description: Use when Supervisor decomposes or reviews units.
-version: 0.1.3
+version: 0.1.4
 author: Morfeo (Aether role), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -136,9 +136,15 @@ source provenance, convergence and proportional re-review.
    cause when the same failure class recurs, one fix exposes an equivalent case, or
    repair machinery grows without closing the obligation. Compare the exact candidates
    and evidence; a round count or long runtime alone is not the diagnosis.
-4. **Return one coherent correction or a material design question.** An isolated bug,
-   or a common-cause repair that stays within the agreed design and unit boundary,
-   remains Implementer rework. If the evidence challenges an existing material design,
+4. **Choose acceptance, direct repair, delegated rework or recovery.** Accept supported
+   work. From the first delivery, directly repair an understood, bounded defect that
+   restores agreed behavior when fixing and verifying it is more economical than another
+   handoff and does not monopolize supervision. Delegate substantial work, not every
+   functional correction. Judge the coherent repair rather than lines of code; reconsider
+   the route if investigation or scope grows. Attribute your patch and final-candidate
+   verification separately from independent review; preserve any contract-required
+   independence without automatically adding another agent for each small adjustment.
+   If the evidence challenges an existing material design,
    shared interface, scope, guarantee or authority decision, return it to Morfeo even
    when the contract is complete. Share concrete questions and material execution
    evidence with the originating design steward during the contract; an existing design
@@ -172,6 +178,28 @@ source provenance, convergence and proportional re-review.
    into a blocking requirement. This is a compact use of the existing handoff, not a
    second registry, semantic judge or review engine.
 
+### Ordinary return budget
+
+Allow at most two ordinary review returns per logical unit, using existing durable
+history and `Return 1/2` or `Return 2/2` in the current handoff, not a new counter or
+registry. A truncated event window is not a complete count. Respect stricter contract
+limits. Sessions, replacement cards, changed implementers and contract successors do
+not silently reset prior returns.
+
+When native context supplies `Previous review returns (this task)`, use its count of
+recorded returns for that card. The same context is available through `kanban_show`.
+It is a read-only fact, not a limit or a count across replacement cards. If absent,
+use the existing complete history; no separate stored counter is needed.
+
+Stop earlier without verifiable progress or a concretely improved diagnosis. After
+two returns, accept supported work, make a genuinely bounded repair, or consult
+originating Morfeo through existing collaboration with the candidate, remaining
+obligation, evidence and recovery proposal. Do not issue a third ordinary return,
+approve defects, or absorb substantial implementation. Further recovery requires a
+justified approach and explicit budget within existing authority, never a fresh loop
+by renaming the work. Keep unaffected work moving. This is an instruction-level policy,
+not a runtime-enforced guarantee or a reason to create another lifecycle.
+
 At the first source-backed indication that a premise may be false or a material design
 question exists, use the existing collaboration comment path to consult the originating
 design steward. Preserve the current candidate and continue unaffected work; do not wait
@@ -183,10 +211,11 @@ efficacy or runtime adoption.
 
 | Case | Appropriate response |
 | --- | --- |
-| Isolated implementation defect within a settled interface | Return the bounded correction and its verification to Implementer. |
+| Isolated implementation defect within a settled interface | Correct directly when understood, bounded and economical; otherwise delegate justified rework within the return budget. |
+| Substantial implementation still incomplete after two returns | Preserve the candidate and consult originating Morfeo about recovery; no third ordinary return or automatic acceptance. |
 | Repeated failures expose an unsuitable shared-state isolation design | Consolidate the common cause and return the material design question to Morfeo. |
 | Unrelated optional refactor suggested during review | Record it separately; do not block the existing acceptance. |
-| A later patch introduces a new real preservation regression | Reproduce and return it; consolidation is not immunity from further review. |
+| A later patch introduces a new real preservation regression | Reproduce it and choose repair, budgeted rework or recovery; consolidation does not excuse the regression or reset the budget. |
 
 Document/loading tests can check that this procedure exists and remains consistent.
 They cannot prove that a model follows it. Observe actual authorized work through the

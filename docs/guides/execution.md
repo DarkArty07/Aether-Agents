@@ -54,9 +54,10 @@ coherence at integration.
 ## Review, integration, and terminal evidence
 
 Implementers make local commits and evidence; they do not integrate their own
-units or publish. Supervisor reviews work it did not author, integrates in
-dependency order, and runs integrated verification. That local integration is a
-checkpoint: local integration alone is not terminal.
+units or publish. Supervisor reviews work it did not author, may make an attributed
+bounded repair under PD-73, integrates in dependency order, and runs integrated
+verification. Verification of its own repair is not independent review; any required
+independence remains applicable. Local integration alone is not terminal.
 
 For a GitHub-backed pipeline, terminal evidence covers acceptance verification,
 normal branch push, pull request, required checks, bounded diagnosis/correction
@@ -95,18 +96,31 @@ Supervisor owns convergence as well as defect detection. Repeated failure classe
 equivalent cases exposed by successive fixes, or increasing repair complexity require
 a common-cause assessment before another piecemeal return. Review the affected mechanism
 jointly, tie findings to current obligations, and keep optional improvements out of the
-acceptance gate. A bounded implementation correction stays with Implementer; an
-unsuitable or missing material design, scope, interface, guarantee or authority decision
-returns to Morfeo, even if the contract is complete. Preserve the candidate and evidence;
-do not interrupt healthy independent work or approve because a round count was reached.
+acceptance gate. From the first delivery, Supervisor may directly correct an understood,
+bounded defect restoring agreed behavior when doing so is more economical than another
+handoff and preserves its coordination capacity. Substantial implementation stays with
+Implementer; material design, scope, interface, guarantee or authority decisions return
+to Morfeo, even if the contract is complete. Attribute direct repairs and their checks.
+
+Allow at most two ordinary review returns per logical unit, with the count taken from
+existing durable history and recorded in the existing handoff. Stop earlier without
+progress or a better diagnosis. After two returns, accept supported work, make a bounded
+repair or consult originating Morfeo with evidence and a recovery proposal; no third
+ordinary return or approval by exhaustion. A new session or replacement card does not
+silently reset the budget. Preserve the candidate and healthy independent work.
 
 The existing `supervisor-decomposition` canonical skill owns the detailed procedure and
-illustrative contrasts. This introduces no new engine, form, judge, automatic threshold,
-authority grant or weakened preservation rule. Document and loader tests establish
+illustrative contrasts. This is an instruction-level policy, not technical prevention
+of a third return. The selected Hermes source adds `Previous review returns (this task)`
+to native worker context (also returned by `kanban_show`), counted from all recorded
+`changes_requested` events for that card. It neither tracks replacement cards nor
+enforces the policy; older contexts can still use the complete event history.
+The procedure uses existing history and collaboration without a separately stored counter,
+schema, hook or workflow engine. Document and loader tests establish
 instructional consistency, not observed improvement; the open-ended observation
 gate in #317 was closed at owner direction without claiming organic PASS, and
 unverified behavioral efficacy remains explicit.
-See R7 FR-736b for the owning requirement.
+See PD-73 and R7 FR-703, FR-734 and FR-736b–e for the owning requirements.
 
 ## Contract/execution procedure adoption
 

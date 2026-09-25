@@ -101,7 +101,7 @@ def test_supervisor_convergence_guidance_preserves_authority() -> None:
         "Tie findings to current obligations",
         "Review the mechanism together",
         "Recognize non-convergence",
-        "Return one coherent correction or a material design question",
+        "Choose acceptance, direct repair, delegated rework or recovery",
         "when the contract is complete",
         "Optional work does not",
         "Never approve merely because a round budget was reached",
@@ -113,6 +113,10 @@ def test_supervisor_convergence_guidance_preserves_authority() -> None:
     assert "FR-736b" in spec
     assert "FR-736c" in spec
     assert "FR-736d" in spec
+    assert "FR-736e" in spec
+    assert "initial, uncalibrated setting" in spec
+    assert "In the pipeline, no role reviews its own output." not in spec
+    assert "No role represents verification of its own output as independent" in spec
     assert "no new engine, form or judge is required" in spec
     assert "exact Git/raw artifact" in normalized_skill
     assert "Re-review the delta proportionately" in normalized_skill
@@ -129,6 +133,17 @@ def test_supervisor_convergence_guidance_preserves_authority() -> None:
     assert "unsuitable shared-state isolation design" in skill
     assert "Unrelated optional refactor" in skill
     assert "new real preservation regression" in skill
+    # These are instruction checks, not claims of runtime enforcement or model compliance.
+    guide = (ROOT / "docs/guides/execution.md").read_text()
+    for text in (soul, skill, spec, guide):
+        normalized = " ".join(text.split())
+        assert "at most two ordinary review returns per logical unit" in normalized
+        assert "instruction-level policy" in normalized
+        assert "existing durable history" in normalized
+    assert "not a runtime-enforced guarantee" in normalized_skill
+    assert "without automatically adding another agent" in normalized_skill
+    assert "replacement cards" in soul
+    assert "explicit budget within existing authority" in soul
 
 
 def test_review_return_cannot_silently_redefine_acceptance() -> None:
