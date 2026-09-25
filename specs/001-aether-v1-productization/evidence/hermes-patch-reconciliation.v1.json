@@ -3735,6 +3735,7 @@
         "Upstream hermes-agent lacks board-level Project recovery and origin-signal bounding for review-lane containment.",
         "The regression test module tests/hermes_cli/test_kanban_project_provenance.py is introduced by this patch and does not exist at pre-merge base aed6591a69. It is now declared as a component and resolves present at the merged revision 58f8c37a49b341f25b8fdd6310542fe932031b8d that the aggregate is pinned to."
       ],
+      "candidate_requirement": "deferred",
       "components": [
         "HLP-428",
         "hermes_cli/kanban_db.py",
@@ -3742,7 +3743,7 @@
       ],
       "id": "HLP-428",
       "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-428--recover-project-provenance-fail-closed-on-cross-project-mismatch-and-bound-review-failure-maintained-fork-2026-09-23",
-      "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+      "local_status": "MAINTAINED_FORK_ONLY / UPSTREAM_MISSING",
       "required_behavior": "A non-affinity child task created with an explicit direct parent worktree recovers the board's canonical Project and receives a fresh project worktree instead of a null-Project scratch directory; explicit cross-project mismatches on recognized Aether boards fail closed before database insertion; and review failure containment cleanly unblocks with gave_up, clears worker/claim ownership, and bounds notifications to verified subscribers without emitting unverified origin signals.",
       "retirement_gate": {
         "evidence": [
@@ -3832,6 +3833,7 @@
         "Upstream hermes-agent lacks reasoning token preservation across the Responses adapter boundary.",
         "The merged maintained-fork revision carrying this behavior has not been adopted by the effective Aether runtime; live adoption and effective-runtime qualification remain deferred successors under issue #433, so no installed behavior is asserted."
       ],
+      "candidate_requirement": "deferred",
       "components": [
         "HLP-433",
         "agent/auxiliary_client.py",
@@ -3910,7 +3912,7 @@
     "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
     "unverified": 2
   },
-  "source_ledger_sha256": "8cf0be8f7afcb2801ef883c65af29f2af9187a5544ccc7e82ac9522676ef4b0a",
+  "source_ledger_sha256": "1d1122bdf016c17147988fbb9616e64bcd8a26615350cfc5330071f46fc9cd8d",
   "upstream": {
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
     "repository": "https://github.com/NousResearch/hermes-agent"

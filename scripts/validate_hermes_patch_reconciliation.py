@@ -7,8 +7,12 @@ Two modes:
   the preflight decision aid.
 * **Check** (``--check``): regenerate the same aggregate in memory from the committed
   inputs and compare it with the committed files.  Nothing is written; a stale, missing
-  or malformed evidence file exits non-zero.  This is the mode release integration and
-  the local candidate route consume.
+  or malformed evidence file exits non-zero.  This answers whether the committed
+  evidence matches the canonical reconciliation.
+* **Candidate check** (``--candidate-check``): qualify one exact maintained-fork
+  revision for a candidate release.  Every HLP stays in the evidence.  An entry whose
+  ``candidate_requirement`` is ``required`` (including an entry that omits the field)
+  must be present.  ``deferred`` stays visible and does not block or retire the HLP.
 
 Reconciliation is performed against the *selected* Hermes source — the maintained fork
 ``DarkArty07/aether-hermes`` — not against the retired fixed public baseline.  Each
@@ -66,6 +70,70 @@ _PRIVATE_DESKTOP = re.compile(
 
 class ReconciliationError(ValueError):
     """Raised for an evidence input that cannot support a portable aggregate."""
+
+
+_CANDIDATE_REQUIREMENTS = frozenset({"required", "deferred"})
+
+
+def entry_candidate_requirement(record: dict[str, Any]) -> str:
+    """Return the closed candidate obligation for one HLP entry.
+
+    A missing field is ``required``.  An unknown value is a schema/refusal error and
+    is never treated as optional.
+    """
+
+    if "candidate_requirement" not in record:
+        return "required"
+    value = record["candidate_requirement"]
+    if value not in _CANDIDATE_REQUIREMENTS:
+        identifier = record.get("id", "<unknown>")
+        raise ReconciliationError(
+            f"{identifier} candidate_requirement {value!r} is not required or deferred"
+        )
+    return value
+
+
+def candidate_qualification(aggregate: dict[str, Any]) -> dict[str, Any]:
+    """Classify every HLP for one selected revision without retiring anything.
+
+    Deferred absence stays in the evidence and is not a preparation blocker.
+    Retirement gates and artifact verification are not rewritten.
+    """
+
+    required_hlps: list[str] = []
+    deferred_hlps: list[dict[str, Any]] = []
+    refusing: list[dict[str, str]] = []
+    for record in aggregate["records"]:
+        requirement = entry_candidate_requirement(record)
+        selected = record["selected_source"]
+        missing = [row["path"] for row in selected["paths"] if not row["present"]]
+        if requirement == "deferred":
+            deferred_hlps.append(
+                {
+                    "id": record["id"],
+                    "presence": selected["presence"],
+                    "missing": missing,
+                }
+            )
+            continue
+        required_hlps.append(record["id"])
+        if selected["presence"] in {"absent", "partial"}:
+            refusing.append(
+                {
+                    "id": record["id"],
+                    "kind": "selected_source",
+                    "detail": (
+                        "Declared source path(s) missing at the selected revision "
+                        f"{selected['revision']}: {', '.join(missing)}."
+                    ),
+                }
+            )
+    return {
+        "required_hlps": required_hlps,
+        "deferred_hlps": deferred_hlps,
+        "refusing": refusing,
+        "refusing_hlps": [item["id"] for item in refusing],
+    }
 
 
 def active_detailed_ledger_ids(ledger_path: Path) -> tuple[str, ...]:
@@ -708,13 +776,93 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--preflight", type=Path, default=DEFAULT_PREFLIGHT)
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--check",
         action="store_true",
         help="compare regenerated evidence with the committed files; never write",
     )
+    mode.add_argument(
+        "--candidate-check",
+        action="store_true",
+        help=(
+            "qualify required HLP presence at --selected-revision; "
+            "deferred HLPs stay visible and do not block; never write"
+        ),
+    )
     parser.add_argument("--json", action="store_true", help="emit a machine-readable summary")
     return parser
+
+
+def _candidate_summary(aggregate: dict[str, Any], qualification: dict[str, Any]) -> dict[str, Any]:
+    """Return the public candidate qualification record.
+
+    Paths here are repository-relative Hermes paths already stored in the ledger.
+    Checkout paths and other private locations are not included.
+    """
+
+    refusing = qualification["refusing"]
+    return {
+        "status": "qualified" if not refusing else "refused",
+        "schema_version": aggregate["schema_version"],
+        "observed_at_utc": aggregate["observed_at_utc"],
+        "selected_source": aggregate["selected_source"],
+        "selected_revision": aggregate["selected_source"]["revision"],
+        "records": len(aggregate["records"]),
+        "required_hlps": qualification["required_hlps"],
+        "deferred_hlps": qualification["deferred_hlps"],
+        "refusing": refusing,
+        "refusing_hlps": qualification["refusing_hlps"],
+        "unverified": [
+            record["id"]
+            for record in aggregate["records"]
+            if record["selected_source"]["presence"] == "unverified"
+        ],
+    }
+
+
+def _candidate_check(
+    *,
+    root: Path,
+    args: argparse.Namespace,
+    output: Path,
+) -> tuple[int, dict[str, Any] | None, str]:
+    """Qualify one selected revision.  Do not compare or rewrite committed evidence."""
+
+    if args.selected_revision is None:
+        return 2, None, "--selected-revision is required for candidate qualification"
+    if args.fork_checkout is None:
+        return 2, None, "--fork-checkout is required for candidate qualification"
+    observed_at_utc = "2026-09-24T00:00:00Z"
+    if output.is_file():
+        try:
+            committed = json.loads(output.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            committed = None
+        if isinstance(committed, dict):
+            stamp = committed.get("observed_at_utc")
+            if isinstance(stamp, str) and _TIMESTAMP.fullmatch(stamp):
+                observed_at_utc = stamp
+    aggregate = reconcile(
+        repository_root=root,
+        ledger_path=args.ledger,
+        entries_dir=args.entries_dir,
+        schema_path=args.schema,
+        observed_at_utc=observed_at_utc,
+        selected_revision=args.selected_revision,
+        upstream_repository=args.upstream_repository,
+        upstream_revision=args.upstream_revision,
+        fork_root=args.fork_checkout,
+    )
+    qualification = candidate_qualification(aggregate)
+    if qualification["refusing"]:
+        identifiers = ", ".join(qualification["refusing_hlps"])
+        return (
+            2,
+            aggregate,
+            f"required HLP behavior is absent at the selected revision: {identifiers}",
+        )
+    return 0, aggregate, "candidate runtime satisfies required HLP coverage"
 
 
 def _summary(aggregate: dict[str, Any], status: str) -> dict[str, Any]:
@@ -813,6 +961,20 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"reconciliation validation failed: {message}", file=sys.stderr)
                 return code
             print(f"reconciliation validation passed: {message}")
+            return 0
+        if args.candidate_check:
+            code, aggregate, message = _candidate_check(
+                root=root,
+                args=args,
+                output=output,
+            )
+            qualification = candidate_qualification(aggregate) if aggregate is not None else None
+            if args.json and aggregate is not None and qualification is not None:
+                print(json.dumps(_candidate_summary(aggregate, qualification)))
+            if code != 0:
+                print(f"candidate qualification failed: {message}", file=sys.stderr)
+                return code
+            print(f"candidate qualification passed: {message}")
             return 0
         if args.observed_at_utc is None:
             print(

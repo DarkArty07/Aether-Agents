@@ -4,9 +4,11 @@ Aether is a multi-agent software-engineering product built on [Hermes Agent](htt
 
 This index is navigation only and routes reader questions to the appropriate guide, reference, or authority artifact. For the complete reader-facing placement and conflict-resolution map across all artifact classes, see [Authority and artifact ownership](authority.md).
 
-This source tree defines the local-only `1.0.0rc13` forward candidate. It
-converges the rc12 role-aware reader with Morfeo MCP and emits release-lock
-schema 5 with the closed Hermes extra `mcp`, while still reading schema 4.
+This source tree defines the local-only `1.0.0rc14` forward candidate. It
+keeps the rc13 Morfeo MCP surface and release-lock schema 5 with the closed
+Hermes extra `mcp`, while still reading schema 4. Candidate preparation qualifies
+required HLP coverage at Hermes `aed6591a69f453a1867b73628603e7b53ba40ffc`;
+HLP-428 and HLP-433 remain deferred.
 An external host can enact the canonical Morfeo role through
 [Morfeo MCP](guides/morfeo-mcp.md). Source and local tags do not prove runtime
 activation or agent behavior. Consult `aether doctor` and a verified cutover receipt.

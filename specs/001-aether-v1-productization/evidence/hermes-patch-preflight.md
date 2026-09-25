@@ -4,7 +4,7 @@ Observation timestamp: `2026-09-24T18:43:51Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `8cf0be8f7afcb2801ef883c65af29f2af9187a5544ccc7e82ac9522676ef4b0a`
+Source ledger SHA-256: `1d1122bdf016c17147988fbb9616e64bcd8a26615350cfc5330071f46fc9cd8d`
 
 ## Remaining local guarantees
 

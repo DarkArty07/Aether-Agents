@@ -5682,7 +5682,12 @@ class LifecycleManager:
     def _local_hlp_coverage(
         self, aether_checkout: Path, fork_checkout: Path, fork_commit: str
     ) -> dict[str, Any]:
-        """Run the candidate's own reconciliation check mode and refuse stale coverage."""
+        """Qualify required HLP coverage for this candidate revision.
+
+        Canonical reconciliation freshness stays on ``--check``.  This route uses
+        ``--candidate-check`` so a deferred HLP does not block a candidate that is
+        deliberately pinned to an earlier maintained-fork commit.
+        """
 
         script = aether_checkout / "scripts" / "validate_hermes_patch_reconciliation.py"
         if script.is_symlink() or not script.is_file():
@@ -5692,7 +5697,7 @@ class LifecycleManager:
             str(script),
             "--root",
             str(aether_checkout),
-            "--check",
+            "--candidate-check",
             "--json",
             "--selected-revision",
             fork_commit,
@@ -5727,7 +5732,7 @@ class LifecycleManager:
                 f"(exit {completed.returncode})"
             )
         if completed.returncode != 0:
-            detail = completed.stderr.strip() or "reconciliation evidence is not current"
+            detail = completed.stderr.strip() or "required HLP coverage is not satisfied"
             raise IntegrityError(f"active HLP coverage is not current: {detail}")
         refusing = summary.get("refusing")
         if not isinstance(refusing, list):
