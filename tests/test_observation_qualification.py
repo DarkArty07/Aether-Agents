@@ -461,7 +461,7 @@ def test_policy_workflow_pins_every_action_and_confines_spec_files() -> None:
 
     expected_actions = {
         "actions/checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1 # v7",
-        "actions/setup-python": "ece7cb06caefa5fff74198d8649806c4678c61a1 # v6",
+        "actions/setup-python": "5fda3b95a4ea91299a34e894583c3862153e4b97 # v7",
         "actions/upload-artifact": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7",
         "astral-sh/setup-uv": "94527f2e458b27549849d47d273a16bec83a01e9 # v7",
     }
@@ -695,6 +695,38 @@ def test_checkout_exact_rejects_a_symlink_before_any_git_mutation(
         module.checkout_exact(alias)
 
     assert calls == []
+
+
+def test_checkout_exact_reuses_an_authenticated_clean_checkout_without_fetch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_runner("qualify_observation_checkout_cached")
+    checkout = tmp_path / "hermes-exact"
+    (checkout / ".git").mkdir(parents=True)
+    calls: list[list[str]] = []
+
+    def fake_run(arguments, **_kwargs):
+        calls.append(list(arguments))
+        assert arguments[:2] == ["git", "status"]
+        return subprocess.CompletedProcess(arguments, 0, "", "")
+
+    class Evidence:
+        path = checkout
+        tag = module.HERMES_BASELINE.tag
+        tag_object = module.HERMES_BASELINE.tag_object
+        commit = module.HERMES_BASELINE.commit
+        clean = True
+
+    monkeypatch.setattr(module, "_run", fake_run)
+    monkeypatch.setattr(module, "verify_clean_checkout", lambda *_args, **_kwargs: Evidence())
+    monkeypatch.setattr(module, "_prioritize_hermes_source", lambda _path: None)
+
+    result = module.checkout_exact(checkout)
+
+    assert result["commit"] == module.HERMES_BASELINE.commit
+    assert result["tag_object"] == module.HERMES_BASELINE.tag_object
+    assert calls == [["git", "status", "--porcelain=v1", "--untracked-files=all"]]
 
 
 def test_prioritize_exact_source_evicts_preloaded_hermes_modules(

@@ -17,6 +17,49 @@ The observed Aether gap is operational application, not absent upstream thinking
 
 Morfeo personally owns this canonical design work. Independent qualification must still test both under-specification and over-prescription without transferring missing owner intent or material architecture to Implementer. The amendment records accepted requirements; it does not claim that the skill, role prompts, behavioral qualification or runtime activation already exist.
 
+## #504: explicit project-local `/plan` without a competing methodology
+
+**Upstream checked directly:** GitHub Spec Kit `templates/commands/plan.md` at
+`5cc1f2a846c4c296adb45f46b72a9a0bc13883a7:66-71,108-110,137-159`
+plans one feature's *technical implementation*: research, data-model/interfaces,
+quickstart, then a handoff to tasks. Its command ends after Phase 1 design. This is
+not an objective-spanning continuity record and does not decide how Morfeo retains
+one owner's boundary across several contracts. Aether reuses that technical
+artifact's thinking in its existing Spec Kit `plan.md`; it does not rename that
+artifact or import the upstream command as the Aether Objective Plan.
+
+**Aether gap and owner decision:** R2-FR-204b–e already own local, per-project
+Objective Plans and continuity. The owner uses the literal `/plan` as a deliberate
+planning-only entry to bound the whole objective, maintain history and express
+closure and stop/replan conditions before work; Objective Contracts are separate
+delegation handoffs. The count of contracts is **not limited**. R2-FR-204f makes the
+explicit entry observable without making a planning command mandatory for other
+requests or turning the plan into new authority. The previous #495 instruction
+covered implicit planning but did not qualify this user-invoked surface.
+
+**Existing transport versus new procedure:** the selected maintained Hermes fork
+`aed6591a69f453a1867b73628603e7b53ba40ffc` (`0.20.1`) has no built-in
+`plan` in `hermes_cli/commands.py`; `agent/skill_commands.py:402-495` exposes a
+loaded skill named `plan` as `/plan` unless a built-in collides. The public Hermes
+slash-command documentation accessed during this decision describes a newer
+built-in `/plan`; that is not evidence the selected fork has it. Qualification
+must assert the selected runtime dispatches the Aether-owned skill; an eventual
+fork upgrade that claims `/plan` must stop and be redesigned rather than silently
+switching to the generic behavior. No core Hermes change is requested.
+
+**Alternatives and impact:** simply referencing `objective-contract-design` leaves
+the explicitly invoked generic skill's conflicting save path and task recipe;
+copying a private learned skill into public source would leak local assumptions and
+skip independent qualification; distributing `plan` through the current all-role
+skill list would affect Supervisor and Implementer; patching Hermes core is not
+needed for the selected fork. The chosen design is a sanitized Aether Canonical
+Skill `plan` for Morfeo only, with a short user-invoked method that defers deeper
+contract design to `objective-contract-design`. It changes R2 instruction,
+role-scoped package/profile materialization and compatible old/new release
+readback, current-build documentation once implemented, and focused tests. It does
+not select publication, live activation, a fourth role, a new skill loader, or a
+fixed contract count.
+
 ## 1. Research Question
 
 R1 established that Morfeo extracts the owner's intent once and the owner then leaves. The same structure repeats one level down: Morfeo hands over a contract and is no longer the one executing. So the question is what the contract must contain for the supervision role to work without asking anyone, and how much of that Spec Kit already provides.

@@ -33,6 +33,7 @@ CANONICAL_SKILLS = (
     "implementation-evidence",
     "project-knowledge",
     "work-memory",
+    "plan",
 )
 
 

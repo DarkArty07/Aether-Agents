@@ -46,8 +46,14 @@ with the narrowest relevant test path or node:
 uv run --frozen pytest -q tests/test_objective_contracts.py
 ```
 
-Run focused tests while iterating and the full bootstrap before handoff. Do not remove,
-skip, or weaken a test to obtain a green result.
+Run focused tests while iterating. Pull requests use Python 3.11 as the primary
+development lane, while Python 3.12 and 3.13 run a lightweight compatibility smoke for
+ordinary code changes. Expensive domain qualification is selected by changed paths, and
+every push to `main` still runs the exhaustive three-version qualification matrix. Run
+the full bootstrap locally before handoff when the change touches a release/lifecycle,
+observation, knowledge/Graphify, Hermes-baseline, or CI-policy boundary; ordinary scoped
+changes may rely on the focused tests plus the PR development lane. Do not remove, skip,
+or weaken a test merely to obtain a green result.
 
 Kanban fixtures must isolate dispatcher routing and execution identity, not only
 `HERMES_HOME`: inherited `HERMES_KANBAN_*` variables can still select the worker's live
@@ -88,6 +94,34 @@ uv run --frozen python scripts/run_tests.py -- tests/test_aether_tui_launcher.py
 Use the repository runner for exact-Hermes integration coverage even if the ordinary
 focused test or coverage command passes. The committed configuration enforces the
 current coverage floor; do not lower it to make a contribution pass.
+
+### CI tiers
+
+Repository Policy deliberately separates iteration speed from release confidence:
+
+- **Ordinary pull requests:** Python 3.11 runs the full exact-Hermes test suite without
+  the expensive observation performance/coverage qualification; Python 3.12 and 3.13
+  compile/import the changed code as compatibility smoke checks. Static, documentation,
+  build and public-artifact checks run once on the primary lane where applicable.
+- **Sensitive pull requests:** changes to lifecycle/release identity, observation,
+  knowledge/Graphify, or Hermes-baseline inputs retain their deeper qualification on the
+  Python 3.11 primary lane; Python 3.12 and 3.13 stay compatibility smoke lanes. A
+  policy-workflow change is the exception: it self-qualifies through the old exhaustive
+  three-version behavior before the faster policy can land.
+- **`main`:** every integrated change runs the exhaustive Python 3.11/3.12/3.13
+  qualification, integrated coverage, observation performance evidence, build and
+  public-artifact checks. A faster PR therefore moves some detection later to `main`;
+  it does not remove the final qualification boundary.
+
+Superseded pull-request runs are cancelled when a newer commit is pushed to the same PR.
+Main-branch qualification runs are never cancelled by this concurrency rule.
+Adding tracked files to the repository manifest does not by itself count as a CI-logic
+change, and static Python checks target the complete `src/aether_agents`, `tests`, and
+`scripts` trees so a new script does not require another hand-maintained Ruff/compile list.
+The authenticated public Hermes baseline checkout is cached by its versioned baseline
+resource identity. A restored checkout is re-verified locally before reuse; only a stale
+or incomplete cache entry performs a network refresh, so caching never substitutes for
+the exact tag-object/commit gate.
 
 ## Prepare a contribution
 

@@ -4,6 +4,7 @@
 **Stage status**: in-progress — installed contract-quality procedures; open-ended observation requirement closed under #317 at owner direction without claiming organic PASS
 **Amended**: 2026-08-24 — Objective Contract identity/materialization added after #227; prior 2026-08-18 pipeline scoping retained
 **Amended**: 2026-09-22 — owner-approved local Objective Plans and continuity across contracts (#495)
+**Amended**: 2026-09-23 — owner-approved project-local `/plan` entry and unbounded contract count (#504)
 **Owner-approved refinement**: contract-design sufficiency, canonical procedure and focused role guidance; open-ended observation in #317 waived at owner direction without claiming organic PASS, and implementation/readback evidence remains separate from behavioral qualification
 **Decision authority**: Christopher  
 **Autonomous design delegate for this stage**: Hermes  
@@ -60,10 +61,15 @@ The normative obligation set remains the Spec Kit artifact set governed by the c
 - **FR-204c**: The Objective Plan MUST distinguish the stable destination (outcome, scope and closure references), current route (useful milestones/dependencies and related contracts), and operational continuity (attributed verified results, failed attempts, open questions and justified next step or stop). It references canonical owners rather than duplicating their obligations; it is neither the technical `plan.md` nor a new authority. One owner's objective may span multiple contracts; each pipeline handoff still requires exactly one finalized Objective Contract.
 - **FR-204d**: Morfeo MUST update continuity at material decisions, milestones, failures and session handoff, without waiting for a save command or rewriting after every tool call. A resumed session reads the exact project/plan, checks changeable facts against current sources, and preserves prior failed approaches and applicable convergence limits. `todo` tracks the current segment; native board state remains the execution-status authority. A local plan is not a required input for an autonomous worker to reconstruct missing intent.
 - **FR-204e**: Significant continuation follows R1-FR-121a. Design and reception MUST distinguish a product defect, a verification/oracle defect and a coordination failure, check representative starting state early, and reuse applicable reviewed verification rather than casually recreating it at closure. Review findings remain traceable to accepted obligations; evidence is reused only with revision/applicability established. These are procedural responsibilities, not a new scheduler, gate, classifier or fixed retry budget.
+- **FR-204f**: For a verified Aether Project, an explicit owner invocation of `/plan` in Morfeo MUST enter a planning-only, Aether-owned canonical skill that creates or updates the one local Objective Plan for the owner's whole objective. It MUST capture the observable destination, scope and exclusions, closure evidence, useful route and anticipated contract handoffs when knowable, operational history and stop/replan conditions without executing or delegating the plan. Anticipated contracts are a revisable forecast, **not a cap**: Morfeo MAY use as many justified Objective Contracts as the owner objective needs, while each actual pipeline handoff still requires exactly one finalized contract and retains its own attempt/convergence budget. The plan neither grants authority nor substitutes for the contracts or their independent review. `/plan` is not mandatory for simple questions, bounded direct work, or authorized objectives Morfeo already conducts without a command.
 
 The #495 intervention is bounded instruction/procedure maintenance. Resource and
 loading checks do not prove behavioral efficacy; subsequent real sessions supply
 that evidence. No synthetic campaign or additional runtime enforcement is implied.
+The #504 addition owns a separate user-invoked skill surface and its project-local
+continuity behavior. Its public distribution and selected-Hermes slash compatibility
+require their own package and native-loading evidence before claiming availability;
+the #495 checks did not qualify that surface.
 
 ## 4. Aether's Execution Envelope
 

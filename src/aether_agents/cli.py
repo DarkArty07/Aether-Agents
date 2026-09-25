@@ -67,6 +67,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     build_knowledge_subparser(subparsers)
 
+    from aether_agents.commands.mcp import build_subparser as build_mcp_subparser
+
+    build_mcp_subparser(subparsers)
+
     from aether_agents.monitor.commands import build_subparser as build_monitor_subparser
 
     build_monitor_subparser(subparsers)
@@ -971,6 +975,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             else f"{envelope.result}: Aether project {envelope.data.get('project_id')}"
         )
         return _emit(envelope, json_mode=args.json, human=human)
+
+    if args.command == "mcp":
+        from aether_agents.commands.mcp import run_mcp
+
+        return run_mcp(args)
 
     if args.command == "observe":
         from aether_agents.commands.observe import run_observe

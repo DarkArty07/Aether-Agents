@@ -34,7 +34,7 @@ The bare command validates project identity and launches Morfeo into the active 
 
 ### Notes / current limits
 
-Bare aether validates project identity and launches Morfeo into the active release-owned TUI; --json emits a non-mutating launch plan. Project selection stays exact and explicit (--project PATH, then AETHER_PROJECT_ROOT with precedence over the current directory, then a verified AETHER_PROJECT_ID, then the current or nearest initialized directory, then the single registered project) with a bounded ambiguity error instead of name/recency inference; identity values fail visibly instead of falling back to the current directory, where an empty --project value is refused while a relative --project PATH is resolved against the current working directory, AETHER_PROJECT_ROOT must be an absolute path, and AETHER_PROJECT_ID must be a canonical UUID agreeing with the portable marker. Reserved arguments are rejected and --resume latest is passed through. Activation installs the matching branded Aether (fresh) and Continue Aether (--resume latest) desktop and Windows Terminal actions, and Aether never writes a personal shell preference.
+Bare aether validates project identity and launches Morfeo into the active release-owned TUI; --json emits a non-mutating launch plan. Project selection stays exact and explicit (--project PATH, then AETHER_PROJECT_ROOT with precedence over the current directory, then a verified AETHER_PROJECT_ID, then the current or nearest initialized directory; an uninitialized directory never opens an unrelated project) with a bounded ambiguity error instead of name/recency inference; identity values fail visibly instead of falling back to the current directory, where an empty --project value is refused while a relative --project PATH is resolved against the current working directory, AETHER_PROJECT_ROOT must be an absolute path, and AETHER_PROJECT_ID must be a canonical UUID agreeing with the portable marker. Reserved arguments are rejected and --resume latest is passed through. Activation installs the matching branded Aether (fresh) and Continue Aether (--resume latest) desktop and Windows Terminal actions, and Aether never writes a personal shell preference.
 
 ## `cli.doctor`
 
@@ -100,7 +100,45 @@ Initializes an existing Git repository root as an Aether Project using a validat
 
 ### Notes / current limits
 
-None.
+Initializes an existing Git repository root (including an unborn root before the first commit). It creates and verifies an exact-path native Hermes Project when none exists or reuses an existing match; previews exact effects under --dry-run without mutation; and leaves git commits, remotes, AGENTS.md, boards, and workers to subsequent owner workflow.
+
+## `cli.morfeo-mcp`
+
+**Status:** `partial`
+
+Standards-compliant MCP clients can load Morfeo context and the supported Morfeo tool surface through stdio or loopback Streamable HTTP.
+
+### Surfaces
+- `cli.command.aether.mcp`
+- `cli.command.aether.mcp.morfeo`
+- `cli.command.aether.mcp.morfeo.serve`
+- `cli.option.aether.mcp.morfeo.serve.--host`
+- `cli.option.aether.mcp.morfeo.serve.--mode`
+- `cli.option.aether.mcp.morfeo.serve.--port`
+- `cli.option.aether.mcp.morfeo.serve.--project`
+- `cli.option.aether.mcp.morfeo.serve.--transport`
+
+### Current documentation
+- [docs/guides/morfeo-mcp.md](../guides/morfeo-mcp.md)
+- [docs/reference/cli.md](cli.md)
+
+### Owning specifications
+- [specs/001-aether-v1-productization/contracts/cli.md](../../specs/001-aether-v1-productization/contracts/cli.md)
+- [specs/008-morfeo-mcp/spec.md](../../specs/008-morfeo-mcp/spec.md)
+
+### Implementation
+- [src/aether_agents/commands/mcp.py](../../src/aether_agents/commands/mcp.py)
+- [src/aether_agents/mcp/hermes_adapter.py](../../src/aether_agents/mcp/hermes_adapter.py)
+- [src/aether_agents/mcp/morfeo_server.py](../../src/aether_agents/mcp/morfeo_server.py)
+
+### Verification
+- [tests/test_morfeo_mcp_bridge.py](../../tests/test_morfeo_mcp_bridge.py)
+- [tests/test_morfeo_mcp_cli.py](../../tests/test_morfeo_mcp_cli.py)
+- [tests/test_morfeo_mcp_runtime.py](../../tests/test_morfeo_mcp_runtime.py)
+
+### Notes / current limits
+
+The external host keeps its own model and enacts the canonical Morfeo profile. Context7 and other configured MCP servers are not federated. HTTP is loopback only. This status is partial until the pinned-fork qualification has been recorded against an activated runtime.
 
 ## `cli.observe`
 
@@ -1016,25 +1054,29 @@ Portable resources are versioned candidate bytes; private live-profile activatio
 
 **Status:** `implemented`
 
-Eight Aether Canonical Skills are explicitly registered for packaging and native profile materialization, including contract execution, project knowledge and role work memory.
+Ten Aether Canonical Skills are explicitly registered for packaging and native profile materialization, including contract execution, project knowledge, role work memory and Morfeo objective planning.
 
 ### Surfaces
 - `lifecycle.aether-canonical-skills`
 
 ### Current documentation
 - [docs/authority.md](../authority.md)
+- [docs/guides/objective-plans.md](../guides/objective-plans.md)
 - [docs/guides/project-initialization.md](../guides/project-initialization.md)
 
 ### Owning specifications
+- [specs/plan-skill-productization/spec.md](../../specs/plan-skill-productization/spec.md)
 - [specs/r13-synthesis-and-release/spec.md](../../specs/r13-synthesis-and-release/spec.md)
 - [specs/r5-topology-and-isolation/spec.md](../../specs/r5-topology-and-isolation/spec.md)
 
 ### Implementation
 - [src/aether_agents/lifecycle.py](../../src/aether_agents/lifecycle.py)
 - [src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md](../../src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md)
+- [src/aether_agents/resources/skills/contract-result-review/SKILL.md](../../src/aether_agents/resources/skills/contract-result-review/SKILL.md)
 - [src/aether_agents/resources/skills/git-github-closeout/SKILL.md](../../src/aether_agents/resources/skills/git-github-closeout/SKILL.md)
 - [src/aether_agents/resources/skills/implementation-evidence/SKILL.md](../../src/aether_agents/resources/skills/implementation-evidence/SKILL.md)
 - [src/aether_agents/resources/skills/objective-contract-design/SKILL.md](../../src/aether_agents/resources/skills/objective-contract-design/SKILL.md)
+- [src/aether_agents/resources/skills/plan/SKILL.md](../../src/aether_agents/resources/skills/plan/SKILL.md)
 - [src/aether_agents/resources/skills/project-knowledge/SKILL.md](../../src/aether_agents/resources/skills/project-knowledge/SKILL.md)
 - [src/aether_agents/resources/skills/semver-release/SKILL.md](../../src/aether_agents/resources/skills/semver-release/SKILL.md)
 - [src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md](../../src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md)
@@ -1046,7 +1088,7 @@ Eight Aether Canonical Skills are explicitly registered for packaging and native
 
 ### Notes / current limits
 
-The resource mechanism and explicit eight-skill inventory are covered by wheel, sdist, profile-bundle, native-directory, byte-identity and privacy checks. The three contract/execution procedures had their open-ended observation requirement in issue #317 closed at owner direction without claiming organic PASS; knowledge-skill packaging does not establish live-agent adoption. Private live-profile activation is separate runtime evidence, and the public installed lifecycle remains unqualified.
+The resource mechanism and explicit ten-skill inventory (with plan delivered only to Morfeo) are covered by wheel, sdist, profile-bundle, native-directory, byte-identity and privacy checks. The three contract/execution procedures had their open-ended observation requirement in issue #317 closed at owner direction without claiming organic PASS; knowledge-skill and plan-skill packaging does not establish live-agent adoption. Private live-profile activation is separate runtime evidence, and the public installed lifecycle remains unqualified.
 
 ## `skills.project-canonical-discovery`
 

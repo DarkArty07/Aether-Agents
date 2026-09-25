@@ -1,0 +1,81 @@
+{
+  "artifact_verification": {
+    "artifacts": [
+      {
+        "checksum_status": "passed",
+        "computed_sha256": "c39be36f2389a980bf66514e1efdf8f7db78e2a1e67223457e440086486c839e",
+        "kind": "patch",
+        "ledger_sha256": "c39be36f2389a980bf66514e1efdf8f7db78e2a1e67223457e440086486c839e",
+        "parse_status": "passed",
+        "reference": "patches/hermes/HLP-433-responses-reasoning-usage.patch",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "maintained fork base 58f8c37a49b341f25b8fdd6310542fe932031b8d",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "git apply --check and apply --index on exact base 58f8c37a49b341f25b8fdd6310542fe932031b8d; the changed paths reconstruct candidate tree b1d86fe3c4a973e8c89b5d6aa5c5d4e96dcb89a5, equal to reviewed candidate c31bd6ca149d6d23ebe5678b4a3d91aa17b5de91",
+        "result": "passed"
+      }
+    ],
+    "blocker": "The patch reconstructs exactly in the maintained fork and is integrated at merged revision 621047dc1c10cceb2825013cc8bb611b4d0e8de1 (PR #17) with the aggregate pinned there; only a public upstream equivalent is still missing, which is why this entry stays unavailable rather than passed. The merged source has not been installed, reloaded or otherwise adopted by the effective Aether runtime.",
+    "status": "unavailable"
+  },
+  "blocking_uncertainty": [
+    "Upstream hermes-agent lacks reasoning token preservation across the Responses adapter boundary.",
+    "The merged maintained-fork revision carrying this behavior has not been adopted by the effective Aether runtime; live adoption and effective-runtime qualification remain deferred successors under issue #433, so no installed behavior is asserted."
+  ],
+  "components": [
+    "HLP-433",
+    "agent/auxiliary_client.py",
+    "tests/agent/test_auxiliary_client_responses_reasoning_433.py"
+  ],
+  "id": "HLP-433",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-433--preserve-auxiliary-responses-reasoning-tokens-in-adapter-usage-maintained-fork-2026-09-24",
+  "local_status": "MAINTAINED_FORK_ONLY / UPSTREAM_MISSING",
+  "required_behavior": "The auxiliary Responses adapter preserves completed response reasoning tokens (in object, mapping, and terminal SSE form) on the chat-compatible usage object as output_tokens_details without changing input/output/total tokens or double-counting reasoning into output or total, and preserves explicit zero, absent detail, and absent usage behavior.",
+  "retirement_gate": {
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "maintained-fork candidate c31bd6ca149d6d23ebe5678b4a3d91aa17b5de91 on fix/433-reasoning-usage",
+        "result": "Causal RED reproduced at base 58f8c37a49 (5 failed/10 passed); candidate tip passed 15/15. Affected battery (5 files, 238 passed) green; preserved consumer digests byte-identical to base. Mutation pins and independent end-to-end probe confirmed reasoning preserved in object and mapping shapes, exactly one row with api_call_count=1, unchanged input/output/total."
+      },
+      {
+        "kind": "test",
+        "reference": "maintained-fork test suite tests/agent/test_auxiliary_client_responses_reasoning_433.py",
+        "result": "Dedicated regression module passed 15/15 in isolation and as part of the 238-test affected battery."
+      }
+    ],
+    "status": "not_executed",
+    "summary": "Retire only when an adopted exact Hermes release preserves provider reasoning tokens across the Responses adapter boundary into chat-compatible usage and SessionDB accounting without altering input/output/total tokens or double-counting, and passes tests/agent/test_auxiliary_client_responses_reasoning_433.py without this patch."
+  },
+  "retirement_recommendation": "retain",
+  "summary": "Retain HLP-433. The maintained fork preserves provider reasoning tokens across the Responses adapter boundary into chat-compatible usage and SessionDB accounting without altering input/output/total tokens or double-counting; verified by RED/GREEN reproduction, strict contract audit, and exact tree reconstruction. Merged at 621047dc1c10cceb2825013cc8bb611b4d0e8de1 but not yet adopted by the effective runtime, hence MAINTAINED_FORK_ONLY.",
+  "upstream": {
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/agent/auxiliary_client.py",
+        "result": "The common inspected baseline reconstructs only flat prompt_tokens, completion_tokens, and total_tokens from Responses usage and drops nested reasoning details."
+      },
+      {
+        "kind": "source",
+        "reference": "selected public release v2026.8.18 (commit e624e9fde561e1add9388384012b295fde669ade) and latest release v2026.9.14 (345cd2b057a452236de401d3534b8502a7465e8d)",
+        "result": "Neither upstream revision preserves provider reasoning tokens from Responses usage across the adapter boundary."
+      }
+    ],
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/433"
+      }
+    ],
+    "repository": "https://github.com/NousResearch/hermes-agent"
+  }
+}

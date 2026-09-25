@@ -49,13 +49,12 @@ deliberately selected public source. Hermes keeps its own distribution identity
 aether init [PATH] [--name NAME] [--forge local|github] [--hermes-project ID] [--dry-run] [--json]
 ```
 
-- Defaults `PATH` to the current directory and requires it to be an existing Git repository root.
-- Does not initialize Git or support an empty greenfield directory in this build.
-- Never creates a remote, GitHub repository, issue, pull request, commit, or push.
+- Defaults `PATH` to the current directory and requires it to be the exact root of an existing Git repository. An unborn repository created explicitly by the owner with `git init` qualifies; an empty plain directory without Git does not.
+- Never runs `git init`, creates a remote/GitHub repository, issue, pull request, commit (including an empty initial commit), or pushes.
 - Preserves a brownfield repository and refuses conflicting Aether identity.
-- Writes `.aether/project.toml` conforming to `project.schema.json` plus only the minimum portable contract/bootstrap artifacts approved by the specification.
-- Resolves exactly one non-archived native Hermes Project whose primary path exactly matches the repository root. It never creates, modifies, archives, or matches a Hermes Project by name, slug, current directory, or approximate path. When more than one exact match exists, `--hermes-project ID` selects one of those matches; a missing or mismatched ID is refused.
-- Records the local Aether Project mapping outside tracked project content. Execution boards are provisioned later by a ready Objective Contract handoff, not by `init`.
+- Writes `.aether/project.toml` conforming to `project.schema.json` and only the minimum approved portable identity/ignore artifacts; it does not invent constitution, project guidance or a test standard. A `--dry-run`/`--json` preview reports the intended native-Project creation/reuse and local file/mapping effects without mutating them.
+- Resolves exactly one non-archived native Hermes Project whose primary path exactly matches the repository root in the selected managed Morfeo profile. If no exact Project exists, it creates one through that release's supported native interface and verifies the returned ID/path; if one exists, it reuses it; multiple exact matches, a mismatched `--hermes-project ID`, archived identity or conflicting marker/mapping are refused. It never selects by name, slug, arbitrary current directory or approximate path. Retry after a partial failure reuses the already-created exact Project instead of duplicating it; failures expose what changed and what remains to retry without discarding unrelated state.
+- Records the local Aether Project mapping outside tracked project content. No board, worktree, worker or first commit is required for onboarding. Execution boards are provisioned only by a ready Objective Contract handoff, not by `init` or by a conversation.
 
 ### `aether`
 
@@ -63,13 +62,13 @@ aether init [PATH] [--name NAME] [--forge local|github] [--hermes-project ID] [-
 aether [--project PATH] [--resume latest] [--json]
 ```
 
-Validates setup, active release, project identity, service readiness, and Morfeo profile. An explicit invocation may visibly start the Aether user service if it is stopped. It then launches Morfeo in the selected project. It never initializes a project implicitly.
+Validates setup, active release, project identity, service readiness, and Morfeo profile. An explicit invocation may visibly start the Aether user service if it is stopped. It then launches Morfeo in the selected project. A verified initialized repository with no commit or root `AGENTS.md` is allowed to open and continue the owner's project-intake conversation for as long as it takes to resolve intent, governance and the test standard. Morfeo inspects and confirms those questions before creating accurate guidance or starting execution. It never initializes a project, invents guidance, commits a scaffold or creates a board implicitly.
 
-Project selection is exact and never inferred from a display name, session recency, board default, checkout recency, or approximate path. The precedence is: (1) a non-empty explicit `--project PATH`; (2) `AETHER_PROJECT_ROOT`, which also takes precedence over the current directory; (3) a verified `AETHER_PROJECT_ID` whose registry entry and portable marker agree; (4) the current directory or its nearest initialized parent; (5) only when none of the above applies, the single registered project.
+Project selection is exact and never inferred from a display name, session recency, board default, checkout recency, or approximate path. The precedence is: (1) a non-empty explicit `--project PATH`; (2) `AETHER_PROJECT_ROOT`, which also takes precedence over the current directory; (3) a verified `AETHER_PROJECT_ID` whose registry entry and portable marker agree; (4) the current directory or its nearest initialized parent. All routes verify the portable marker and the local exact-path registry binding; an explicit path containing only a copied/unregistered marker is refused.
 
 Path input and project identity are distinct: a non-empty explicit `--project PATH` may be relative and is normalized against the invocation's current working directory before the exact marker, registry and conflict checks; an empty `--project` value is refused. `AETHER_PROJECT_ROOT` must instead be a non-empty absolute path, and an empty or relative environment value is refused rather than replaced with cwd. `AETHER_PROJECT_ID` must be a canonical UUID consistent with the selected project. Path normalization does not permit approximate, name-based or recency-based project selection.
 
-A directory that is not an initialized root, a registry/marker disagreement, and an identity conflict are errors. Several registered projects with no explicit selection return a bounded ambiguity error rather than a picker or a guess. `--resume latest` continues the selected project's latest session and does not select a project.
+A directory that is not an initialized root, a registry/marker disagreement, and an identity conflict are errors. A current directory with no matching initialized project and no explicit selection returns actionable `git init`/`aether init` guidance even when only one other project is registered; it never falls back to that other project. `--resume latest` continues the selected project's latest session and does not select a project.
 
 Activation also installs the same two forms as branded desktop entries (`Aether` for a fresh session, `Continue Aether` for `--resume latest`) and, on WSL hosts, as Windows Terminal fragments, each targeting the stable `runtime/current` entry with the exact project root.
 
@@ -193,6 +192,11 @@ aether --version
 ```
 
 Reports manager version, active product version, selected Hermes source mode and version/tag/commit, profile-policy version, and mismatch state.
+
+
+### `aether mcp morfeo serve`
+
+Additive command. It resolves one exact project with the existing launcher rules and execs the active runtime. Modes are `harness` (default, stdio) and `chatbot` (default transport `streamable-http`). `--host` other than `127.0.0.1` is refused. There is no credential argument. `aether mcp --help` does not import Hermes or the MCP SDK. `serve` requires the active runtime and the schema-5 MCP extra.
 
 ## 3. Stable JSON envelope
 

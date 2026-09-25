@@ -4461,7 +4461,7 @@ class LifecycleManager:
     def _role_skills(cls, role: str) -> tuple[str, ...]:
         if role not in _PROFILE_ROLES:
             raise IntegrityError(f"unknown profile role: {role}")
-        return _HISTORICAL_ROLE_SKILLS[role]
+        return _CANDIDATE_ROLE_SKILLS[role]
 
     @classmethod
     def _skill_sources(cls, role: str | None = None) -> dict[str, Path]:
@@ -4929,6 +4929,20 @@ class LifecycleManager:
                 if active_record is not None
                 else set()
             )
+            # An interrupted managed update restores the source as active while the
+            # target's bytes may still be materialized on disk.  The crashed target is
+            # an additional prior owner, exactly as preflight already accepts it, so
+            # its retired skill bytes can be proven and removed instead of deadlocking
+            # recovery.  A non-recovery activation has no crashed target to add.
+            if recovery_record is not None:
+                previous_skills |= self._release_role_skills(recovery_record, role)
+            prior_owner_records: list[ReleaseRecord] = []
+            if active_record is not None:
+                prior_owner_records.append(active_record)
+            if recovery_record is not None and recovery_record.release_id != (
+                active_record.release_id if active_record is not None else None
+            ):
+                prior_owner_records.append(recovery_record)
             for skill_name in target_skills:
                 skill_dir = skills_root / skill_name
                 if skill_dir.is_symlink() or (skill_dir.exists() and not skill_dir.is_dir()):
@@ -4966,7 +4980,7 @@ class LifecycleManager:
                         )
                 _atomic_bytes(target, source_bytes)
 
-            if active_record is not None:
+            if prior_owner_records:
                 for retiring_skill in sorted(previous_skills - set(target_skills)):
                     retiring_dir = skills_root / retiring_skill
                     retiring_target = retiring_dir / "SKILL.md"
@@ -4975,16 +4989,32 @@ class LifecycleManager:
                             raise IntegrityError("managed profile canonical skill is unsafe")
                         try:
                             observed = read_private_bytes(retiring_target)
-                            expected = self._profile_bundle_resource_bytes(
-                                active_record,
-                                role,
-                                f"skills/{retiring_skill}/SKILL.md",
-                            )
                         except (OSError, ValueError) as error:
                             raise IntegrityError(
                                 "managed profile canonical skill is unreadable"
                             ) from error
-                        if observed != expected:
+                        # Ownership is proven against the exact bytes of every
+                        # authenticated prior owner; a drifted or unattributable skill
+                        # is never deleted.
+                        owned_bytes: set[bytes] | None = None
+                        for owner_record in prior_owner_records:
+                            if retiring_skill not in self._release_role_skills(
+                                owner_record,
+                                role,
+                            ):
+                                continue
+                            try:
+                                expected = self._profile_bundle_resource_bytes(
+                                    owner_record,
+                                    role,
+                                    f"skills/{retiring_skill}/SKILL.md",
+                                )
+                            except IntegrityError:
+                                continue
+                            if owned_bytes is None:
+                                owned_bytes = set()
+                            owned_bytes.add(expected)
+                        if not owned_bytes or observed not in owned_bytes:
                             raise IntegrityError("canonical skill ownership evidence is mismatched")
                         _unlink_private_file(retiring_target)
                         try:
@@ -5003,6 +5033,20 @@ class LifecycleManager:
                 preserved_config=preserved_configs,
             )
         _fsync_directory(self.store.profile_homes)
+
+    def _authenticated_releases(self, current: ReleaseRecord) -> list[ReleaseRecord]:
+        records = [current]
+        seen = {current.release_id}
+        if self.store.releases.exists() and self.store.releases.is_dir():
+            for child in sorted(self.store.releases.iterdir()):
+                if child.name not in seen and child.is_dir() and not child.is_symlink():
+                    try:
+                        rec = self.store._read_release(child.name)
+                        records.append(rec)
+                        seen.add(rec.release_id)
+                    except IntegrityError:
+                        pass
+        return records
 
     def _validate_profile_homes(self, record: ReleaseRecord) -> None:
         release = self.store.release_path(record.release_id)
@@ -5061,9 +5105,37 @@ class LifecycleManager:
                 skill_paths.append((skill_dir, target, source))
             for unowned in _ALL_CANONICAL_SKILLS:
                 if unowned not in expected_skills:
-                    unowned_target = skills_root / unowned / "SKILL.md"
-                    if unowned_target.exists():
-                        raise IntegrityError("managed profile activation contains unowned skill")
+                    skill_dir = skills_root / unowned
+                    if skill_dir.is_symlink():
+                        raise IntegrityError("managed profile activation contains a symlink")
+                    unowned_target = skill_dir / "SKILL.md"
+                    if unowned_target.is_symlink():
+                        raise IntegrityError("managed profile activation contains a symlink")
+                    if unowned_target.is_file():
+                        try:
+                            observed = read_private_bytes(unowned_target)
+                        except (OSError, ValueError) as error:
+                            raise IntegrityError(
+                                "managed profile canonical skill is unreadable"
+                            ) from error
+                        owned_bytes: set[bytes] = set()
+                        for auth_record in self._authenticated_releases(record):
+                            for auth_role in _PROFILE_ROLES:
+                                if unowned in self._release_role_skills(auth_record, auth_role):
+                                    try:
+                                        owned_bytes.add(
+                                            self._profile_bundle_resource_bytes(
+                                                auth_record,
+                                                auth_role,
+                                                f"skills/{unowned}/SKILL.md",
+                                            )
+                                        )
+                                    except IntegrityError:
+                                        pass
+                        if observed in owned_bytes:
+                            raise IntegrityError(
+                                "managed profile activation contains unowned skill"
+                            )
             if os.name == "posix" and (
                 stat.S_IMODE(home.stat().st_mode) != DIR_MODE
                 or stat.S_IMODE(config.stat().st_mode) != FILE_MODE
@@ -5704,8 +5776,10 @@ class LifecycleManager:
             raise IntegrityError("built candidate wheel version differs from the commit VERSION")
         if metadata["python_requires"] != candidate.aether_python_requires.replace(" ", ""):
             raise IntegrityError("built candidate wheel Python range differs from the commit")
+        hermes_record = candidate.hermes_source().to_record()
+        hermes_record["extras"] = list(ALLOWED_HERMES_EXTRAS)
         lock_payload = {
-            "schema_version": 4,
+            "schema_version": 5,
             "aether": {
                 "version": candidate.display_version,
                 "package_version": candidate.package_version,
@@ -5718,7 +5792,7 @@ class LifecycleManager:
                 "observer_requirements_sha256": metadata["observer_requirements_sha256"],
                 "observation_compatibility": metadata["observation_compatibility"],
             },
-            "hermes": candidate.hermes_source().to_record(),
+            "hermes": hermes_record,
             "profile_bundle": {
                 "version": "2",
                 "sha256": self._wheel_profile_bundle_sha256(wheel),
@@ -5786,15 +5860,16 @@ class LifecycleManager:
         candidate_expected = historical_expected | {f"{prefix}skills/{_PLAN_SKILL}/SKILL.md"}
         try:
             with zipfile.ZipFile(wheel) as archive:
-                names = set(
+                names = [
                     name
                     for name in archive.namelist()
                     if name.startswith((prefix + "profiles/", prefix + "skills/"))
-                )
-                if names == candidate_expected:
+                ]
+                names_set = set(names)
+                if len(names) == len(candidate_expected) and names_set == candidate_expected:
                     role_skills = _CANDIDATE_ROLE_SKILLS
                     expected = candidate_expected
-                elif names == historical_expected:
+                elif len(names) == len(historical_expected) and names_set == historical_expected:
                     role_skills = _HISTORICAL_ROLE_SKILLS
                     expected = historical_expected
                 else:

@@ -287,8 +287,6 @@ def _resolve_project(project_arg: str | Path | None = None) -> tuple[Path, str]:
                 raise ActivationError("AETHER_PROJECT_ROOT must not be empty")
             repo = repo_env.resolve()
 
-        if not (repo / "AGENTS.md").is_file():
-            raise ActivationError(f"Aether repository marker does not exist: {repo / 'AGENTS.md'}")
         project_id = _portable_project_id(repo)
 
         if "AETHER_PROJECT_ID" in os.environ:
@@ -305,12 +303,19 @@ def _resolve_project(project_arg: str | Path | None = None) -> tuple[Path, str]:
                     f"explicit AETHER_PROJECT_ID {env_pid_raw} conflicts with project marker {project_id}"
                 )
 
-        if registry.knows(project_id):
-            registered = registry.project_path(project_id)
-            if registered is not None and registered.resolve() != repo:
-                raise ActivationError(
-                    f"project ID {project_id} conflicts with registered path: {registered}"
-                )
+        if not registry.knows(project_id):
+            raise ActivationError(
+                f"project {project_id} at {repo} is not registered in the project registry; run 'aether init' first"
+            )
+        registered = registry.project_path(project_id)
+        if registered is None or registered.resolve() != repo:
+            raise ActivationError(
+                f"project ID {project_id} conflicts with registered path: {registered}"
+            )
+        if not registry.verify_with_marker(project_id):
+            raise ActivationError(
+                f"project registry and portable marker do not agree for {project_id}"
+            )
 
         return repo, project_id
 
@@ -334,11 +339,9 @@ def _resolve_project(project_arg: str | Path | None = None) -> tuple[Path, str]:
                 f"project registry and portable marker do not agree for {env_pid}"
             )
         repo = loc.resolve()
-        if not (repo / "AGENTS.md").is_file():
-            raise ActivationError(f"Aether repository marker does not exist: {repo / 'AGENTS.md'}")
         return repo, env_pid
 
-    # (3) Current repository marker or sole registered project only when registry and marker agree
+    # (3) Current repository marker or nearest parent only when registry and marker agree
     cursor = Path.cwd().resolve()
     repo_candidate: Path | None = None
     for candidate in (cursor, *cursor.parents):
@@ -355,10 +358,6 @@ def _resolve_project(project_arg: str | Path | None = None) -> tuple[Path, str]:
             and reg_path.resolve() == repo_candidate.resolve()
             and registry.verify_with_marker(marker_pid)
         ):
-            if not (repo_candidate / "AGENTS.md").is_file():
-                raise ActivationError(
-                    f"Aether repository marker does not exist: {repo_candidate / 'AGENTS.md'}"
-                )
             return repo_candidate, marker_pid
         raise ActivationError(
             f"project registry and repository marker do not agree for project {marker_pid}"
@@ -366,17 +365,10 @@ def _resolve_project(project_arg: str | Path | None = None) -> tuple[Path, str]:
 
     projects = registry._load()
     if len(projects) == 1:
-        sole_pid = next(iter(projects.keys()))
-        if not registry.verify_with_marker(sole_pid):
-            raise ActivationError(
-                f"project registry and marker do not agree for the sole registered project {sole_pid}"
-            )
-        loc = registry.project_path(sole_pid)
-        assert loc is not None
-        repo = loc.resolve()
-        if not (repo / "AGENTS.md").is_file():
-            raise ActivationError(f"Aether repository marker does not exist: {repo / 'AGENTS.md'}")
-        return repo, sole_pid
+        raise ActivationError(
+            "current directory is not an initialized Aether project; "
+            "run 'git init' and 'aether init' to initialize"
+        )
     if len(projects) == 0:
         raise ActivationError("no Aether project found and project registry is empty")
     raise ActivationError(
@@ -656,8 +648,6 @@ def inspect_activation(
     config = profile / "config.yaml"
     soul = profile / "SOUL.md"
 
-    if not (repo / "AGENTS.md").is_file():
-        raise ActivationError(f"Aether repository marker does not exist: {repo / 'AGENTS.md'}")
     if not profile.is_dir():
         raise ActivationError(f"Morfeo profile directory does not exist: {profile}")
     if not config.is_file():
@@ -715,6 +705,57 @@ def inspect_activation(
     }
 
 
+def scrubbed_environment(
+    *,
+    hermes_home: str,
+    project_id: str,
+    project_root: str,
+    target_python: str,
+    target_source_root: str | None,
+    tui_dir: str | None = None,
+) -> dict[str, str]:
+    """Drop inherited Hermes/Python state and set the selected Morfeo identity."""
+
+    environment = dict(os.environ)
+    keys_to_drop = [
+        key
+        for key in environment
+        if key.startswith("PYTHON")
+        or key == "VIRTUAL_ENV"
+        or key == "HERMES_PROFILE"
+        or key == "HERMES_BIN"
+        or key == "HERMES_CWD"
+        or key == "TERMINAL_CWD"
+        or key == "MESSAGING_CWD"
+        or key == "HERMES_PYTHON"
+        or key == "HERMES_PYTHON_SRC_ROOT"
+        or key == "_HERMES_GATEWAY"
+        or key == "HERMES_UI_SESSION_ID"
+        or key == "HERMES_ACTION_ID"
+        or key.startswith("HERMES_TUI")
+        or key.startswith("HERMES_SESSION")
+        or key.startswith("HERMES_RPC")
+        or key.startswith("HERMES_GATEWAY")
+        or key.startswith("HERMES_DESKTOP")
+        or key.startswith("HERMES_COMPUTE_HOST")
+        or key.startswith("HERMES_PARENT")
+        or key.startswith("HERMES_KANBAN_")
+        or key.startswith("HERMES_TASK")
+        or key.startswith("HERMES_CRON_")
+    ]
+    for key in keys_to_drop:
+        environment.pop(key, None)
+    environment["HERMES_HOME"] = hermes_home
+    environment["AETHER_PROJECT_ID"] = project_id
+    environment["PWD"] = project_root
+    environment["HERMES_PYTHON"] = target_python
+    if tui_dir is not None:
+        environment["HERMES_TUI_DIR"] = tui_dir
+    if target_source_root is not None:
+        environment["HERMES_PYTHON_SRC_ROOT"] = target_source_root
+    return environment
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     json_mode = False
@@ -770,43 +811,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         Path(str(report["repo_root"])),
     )
 
-    environment = dict(os.environ)
-    keys_to_drop = [
-        k
-        for k in environment
-        if k.startswith("PYTHON")
-        or k == "VIRTUAL_ENV"
-        or k == "HERMES_PROFILE"
-        or k == "HERMES_BIN"
-        or k == "HERMES_CWD"
-        or k == "TERMINAL_CWD"
-        or k == "MESSAGING_CWD"
-        or k == "HERMES_PYTHON"
-        or k == "HERMES_PYTHON_SRC_ROOT"
-        or k == "_HERMES_GATEWAY"
-        or k == "HERMES_UI_SESSION_ID"
-        or k == "HERMES_ACTION_ID"
-        or k.startswith("HERMES_TUI")
-        or k.startswith("HERMES_SESSION")
-        or k.startswith("HERMES_RPC")
-        or k.startswith("HERMES_GATEWAY")
-        or k.startswith("HERMES_DESKTOP")
-        or k.startswith("HERMES_COMPUTE_HOST")
-        or k.startswith("HERMES_PARENT")
-        or k.startswith("HERMES_KANBAN_")
-        or k.startswith("HERMES_TASK")
-        or k.startswith("HERMES_CRON_")
-    ]
-    for k in keys_to_drop:
-        environment.pop(k, None)
-
-    environment["HERMES_HOME"] = str(report["hermes_home"])
-    environment["AETHER_PROJECT_ID"] = str(report["project_id"])
-    environment["PWD"] = str(report["repo_root"])
-    environment["HERMES_TUI_DIR"] = str(report["tui_dir"])
-    environment["HERMES_PYTHON"] = str(target_python)
-    if target_source_root is not None:
-        environment["HERMES_PYTHON_SRC_ROOT"] = str(target_source_root)
+    environment = scrubbed_environment(
+        hermes_home=str(report["hermes_home"]),
+        project_id=str(report["project_id"]),
+        project_root=str(report["repo_root"]),
+        target_python=str(target_python),
+        target_source_root=str(target_source_root) if target_source_root is not None else None,
+        tui_dir=str(report["tui_dir"]),
+    )
 
     command = list(cast(list[str], report["command"]))
     executable = str(report["hermes_executable"])
