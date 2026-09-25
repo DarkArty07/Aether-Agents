@@ -1,9 +1,9 @@
 # Changelog
 
-## 1.0.0rc9 — local-only release-lock compatibility bridge
+## 1.0.0rc11 — local-only corrective release-lock compatibility bridge
 
-Package identity `1.0.0rc9` / display `1.0.0-rc.9` / local annotated tag identity
-`v1.0.0-rc.9`; `release_impact=patch`, `release_action=prepare`,
+Package identity `1.0.0rc11` / display `1.0.0-rc.11` / local annotated tag identity
+`v1.0.0-rc.11`; `release_impact=patch`, `release_action=prepare`,
 `release_channel=prerelease`. Issue #515. This candidate teaches the lifecycle to read
 release-lock schema 4 and schema 5. Schema 4 keeps its historical meaning and
 carries no Hermes extras. Schema 5 requires `hermes.extras`, initially only the

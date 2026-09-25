@@ -4,7 +4,7 @@
 
 Issue: #515.
 
-Owner-authorized objective. `1.0.0rc9` is the compatibility bridge only.
+Owner-authorized objective. The local corrective `1.0.0rc11` bridge carries only the rc8-compatible profile surface plus the schema-5 reader needed to reach the final MCP candidate.
 `aether mcp morfeo serve` is not part of that candidate.
 
 ## Decision
