@@ -21,6 +21,17 @@ Current owner-authorized local maintenance for #497/#495 is a two-candidate mana
 The owner-authorized Morfeo MCP objective (#515) continues in this `1.0.0rc14` source candidate. It keeps rc13's schema 5 emission, `hermes.extras: [mcp]`, and `aether mcp morfeo serve`. Candidate preparation qualifies required HLP coverage at the executable Hermes pin `aed6591a69f453a1867b73628603e7b53ba40ffc`; HLP-428 and HLP-433 stay deferred and are not retired. This source is not an activation claim. No Hermes fork change, tag push, or stable release is authorized.
 
 
+## RC15 review maintenance
+
+The current owner objective prepares RC15 with the revised Supervisor SOUL and
+canonical review procedure. Its Hermes source is the RC14 base plus a generic
+read-only count of recorded review returns in task context. Aether still works when
+that optional context field is absent by consulting existing durable history; no
+workflow decision or enforcement mechanism depends on the addition. The objective
+excludes agent behavior tests and unrelated deferred fork changes. RC15 does not
+resume or accept the paused #494 objective. Preserve earlier releases and distinguish
+focused deterministic checks, packaging verification and untested agent behavior.
+
 ## How Aether is built: borrow the thinking, write our own workflow
 
 **Read this before designing or building anything.**
