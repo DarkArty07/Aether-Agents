@@ -2004,6 +2004,7 @@ def test_import_boundary_is_static_and_manager_modules_import_without_hermes() -
     assert set(hermes_importers) <= {
         "observation/capture/hermes_plugin.py",
         "objective_contracts/hermes_plugin.py",
+        "mcp/hermes_adapter.py",
     }
     assert forbidden_plugin_imports == []
 

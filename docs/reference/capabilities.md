@@ -102,6 +102,44 @@ Initializes an existing Git repository root as an Aether Project using a validat
 
 Initializes an existing Git repository root (including an unborn root before the first commit). It creates and verifies an exact-path native Hermes Project when none exists or reuses an existing match; previews exact effects under --dry-run without mutation; and leaves git commits, remotes, AGENTS.md, boards, and workers to subsequent owner workflow.
 
+## `cli.morfeo-mcp`
+
+**Status:** `partial`
+
+Standards-compliant MCP clients can load Morfeo context and the supported Morfeo tool surface through stdio or loopback Streamable HTTP.
+
+### Surfaces
+- `cli.command.aether.mcp`
+- `cli.command.aether.mcp.morfeo`
+- `cli.command.aether.mcp.morfeo.serve`
+- `cli.option.aether.mcp.morfeo.serve.--host`
+- `cli.option.aether.mcp.morfeo.serve.--mode`
+- `cli.option.aether.mcp.morfeo.serve.--port`
+- `cli.option.aether.mcp.morfeo.serve.--project`
+- `cli.option.aether.mcp.morfeo.serve.--transport`
+
+### Current documentation
+- [docs/guides/morfeo-mcp.md](../guides/morfeo-mcp.md)
+- [docs/reference/cli.md](cli.md)
+
+### Owning specifications
+- [specs/001-aether-v1-productization/contracts/cli.md](../../specs/001-aether-v1-productization/contracts/cli.md)
+- [specs/008-morfeo-mcp/spec.md](../../specs/008-morfeo-mcp/spec.md)
+
+### Implementation
+- [src/aether_agents/commands/mcp.py](../../src/aether_agents/commands/mcp.py)
+- [src/aether_agents/mcp/hermes_adapter.py](../../src/aether_agents/mcp/hermes_adapter.py)
+- [src/aether_agents/mcp/morfeo_server.py](../../src/aether_agents/mcp/morfeo_server.py)
+
+### Verification
+- [tests/test_morfeo_mcp_bridge.py](../../tests/test_morfeo_mcp_bridge.py)
+- [tests/test_morfeo_mcp_cli.py](../../tests/test_morfeo_mcp_cli.py)
+- [tests/test_morfeo_mcp_runtime.py](../../tests/test_morfeo_mcp_runtime.py)
+
+### Notes / current limits
+
+The external host keeps its own model and enacts the canonical Morfeo profile. Context7 and other configured MCP servers are not federated. HTTP is loopback only. This status is partial until the pinned-fork qualification has been recorded against an activated runtime.
+
 ## `cli.observe`
 
 **Status:** `implemented`

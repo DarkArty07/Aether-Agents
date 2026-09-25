@@ -193,6 +193,11 @@ aether --version
 
 Reports manager version, active product version, selected Hermes source mode and version/tag/commit, profile-policy version, and mismatch state.
 
+
+### `aether mcp morfeo serve`
+
+Additive command. It resolves one exact project with the existing launcher rules and execs the active runtime. Modes are `harness` (default, stdio) and `chatbot` (default transport `streamable-http`). `--host` other than `127.0.0.1` is refused. There is no credential argument. `aether mcp --help` does not import Hermes or the MCP SDK. `serve` requires the active runtime and the schema-5 MCP extra.
+
 ## 3. Stable JSON envelope
 
 Every command supporting `--json` returns:

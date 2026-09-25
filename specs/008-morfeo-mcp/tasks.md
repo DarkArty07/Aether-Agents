@@ -10,6 +10,6 @@
 
 ## RC10
 
-- [ ] Emit schema 5 with `hermes.extras: ["mcp"]`.
-- [ ] Implement the Morfeo MCP runtime and manager launcher.
+- [x] Emit schema 5 with `hermes.extras: [mcp]`.
+- [x] Implement the Morfeo MCP runtime and manager launcher.
 - [ ] Qualify against the pinned Hermes commit.

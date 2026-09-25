@@ -259,6 +259,7 @@ jobs:
           docs/getting-started.md
           docs/guides/execution.md
           docs/guides/lifecycle.md
+          docs/guides/morfeo-mcp.md
           docs/guides/morfeo-tool-configuration.md
           docs/guides/objective-contracts.md
           docs/guides/objective-plans.md
@@ -382,6 +383,7 @@ jobs:
           scripts/e2e/synthetic_owner.py
           scripts/qualify_knowledge_expansion.py
           scripts/qualify_mixed_version_lifecycle.py
+          scripts/qualify_morfeo_mcp.py
           scripts/qualify_observation.py
           scripts/qualify_oc79.py
           scripts/sync_policy_hooks.py
@@ -389,6 +391,7 @@ jobs:
           src/aether_agents/cli.py
           src/aether_agents/commands/__init__.py
           src/aether_agents/commands/init.py
+          src/aether_agents/commands/mcp.py
           src/aether_agents/commands/observe.py
           src/aether_agents/__init__.py
           src/aether_agents/lab/affinity.py
@@ -404,6 +407,13 @@ jobs:
           src/aether_agents/lab/synthetic_owner.py
           src/aether_agents/lab/validation.py
           src/aether_agents/launcher.py
+          src/aether_agents/mcp/__init__.py
+          src/aether_agents/mcp/bridge.py
+          src/aether_agents/mcp/context.py
+          src/aether_agents/mcp/contracts.py
+          src/aether_agents/mcp/hermes_adapter.py
+          src/aether_agents/mcp/morfeo_server.py
+          src/aether_agents/mcp/session.py
           src/aether_agents/lifecycle.py
           src/aether_agents/hermes_baseline.py
           src/aether_agents/hermes_editable.py
@@ -504,6 +514,11 @@ jobs:
           tests/test_lifecycle_profile_transfer.py
           tests/test_lifecycle_projections.py
           tests/test_mixed_version_lifecycle_qualification.py
+          tests/test_morfeo_mcp_adapter.py
+          tests/test_morfeo_mcp_bridge.py
+          tests/test_morfeo_mcp_cli.py
+          tests/test_morfeo_mcp_packaging.py
+          tests/test_morfeo_mcp_runtime.py
           tests/test_tui_projections.py
           tests/test_objective_contracts.py
           tests/test_observation_batch_replay_regression.py
