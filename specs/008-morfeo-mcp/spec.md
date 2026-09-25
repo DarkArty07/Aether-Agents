@@ -4,7 +4,7 @@
 
 Issue: #515.
 
-Owner-authorized objective. The local corrective `1.0.0rc11` bridge carries only the rc8-compatible profile surface plus the schema-5 reader needed to reach the final MCP candidate.
+Owner-authorized objective. The local corrective `1.0.0rc12` bridge retains the historical emitted profile surface, reads schema 5, and adds only the reviewed role-aware reader required to accept the final MCP candidate's Morfeo `plan` inventory.
 `aether mcp morfeo serve` is not part of that candidate.
 
 ## Decision

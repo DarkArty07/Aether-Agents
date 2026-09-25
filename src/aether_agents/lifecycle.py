@@ -4842,7 +4842,9 @@ class LifecycleManager:
                             f"skills/{skill_name}/SKILL.md",
                         )
                     except (OSError, ValueError) as error:
-                        raise IntegrityError("managed profile canonical skill is unreadable") from error
+                        raise IntegrityError(
+                            "managed profile canonical skill is unreadable"
+                        ) from error
                     if observed != expected:
                         raise IntegrityError("canonical skill ownership evidence is mismatched")
                 else:
@@ -5781,9 +5783,7 @@ class LifecycleManager:
         historical_expected = role_profile_resources | {
             f"{prefix}skills/{skill}/SKILL.md" for skill in _CANONICAL_SKILLS
         }
-        candidate_expected = historical_expected | {
-            f"{prefix}skills/{_PLAN_SKILL}/SKILL.md"
-        }
+        candidate_expected = historical_expected | {f"{prefix}skills/{_PLAN_SKILL}/SKILL.md"}
         try:
             with zipfile.ZipFile(wheel) as archive:
                 names = set(

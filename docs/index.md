@@ -4,10 +4,11 @@ Aether is a multi-agent software-engineering product built on [Hermes Agent](htt
 
 This index is navigation only and routes reader questions to the appropriate guide, reference, or authority artifact. For the complete reader-facing placement and conflict-resolution map across all artifact classes, see [Authority and artifact ownership](authority.md).
 
-This source tree defines the local-only corrective `1.0.0rc11` compatibility bridge. It
-reads release-lock schema 4 and schema 5, still emits schema 4, and does not
-publish Morfeo MCP. Source and local tags do not prove runtime activation or
-agent behavior. Consult `aether doctor` and a verified cutover receipt.
+This source tree defines the local-only corrective `1.0.0rc12` compatibility bridge. It
+reads release-lock schema 4 and schema 5, still emits schema 4, accepts the reviewed
+historical-or-Morfeo-`plan` profile inventory transition, and does not publish Morfeo MCP.
+Source and local tags do not prove runtime activation or agent behavior. Consult
+`aether doctor` and a verified cutover receipt.
 The executable Hermes source is Aether's maintained fork
 `DarkArty07/aether-hermes` branch `aether-main`, bound
 by release-lock schema 4 or 5 `maintained_fork` and installed through `aether update`.

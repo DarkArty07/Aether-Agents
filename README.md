@@ -2,7 +2,7 @@
 
 Aether Agents is a multi-agent software-engineering product and method. It adapts [Hermes Agent](https://hermes-agent.nousresearch.com/docs) as the runtime substrate and [GitHub Spec Kit](https://github.com/github/spec-kit) as the specification method, while defining Aether's role, handoff, policy, and qualification boundaries.
 
-**Status:** this source revision defines `1.0.0rc11` / `1.0.0-rc.11` as a **local-only corrective compatibility bridge**. It preserves the rc8 profile-resource surface while teaching the lifecycle to read release-lock schema 4 and schema 5 and to install the closed Hermes `mcp` extra from an authenticated schema-5 target. It still emits schema 4. Morfeo MCP is not available in this bridge. Its local annotated tag identity is `v1.0.0-rc.11`; neither this source nor a local tag proves activation. This shim exists only because the earlier rc9 bridge also carried the later `plan` profile resource and therefore could not be accepted by the live rc8 reader. No tag is pushed and no package publication is authorized. This is **not** stable `1.0.0`, a PyPI release or WSL2 qualification.
+**Status:** this source revision defines `1.0.0rc12` / `1.0.0-rc.12` as a **local-only role-aware compatibility bridge**. It keeps the rc11 historical emitted profile-resource surface, reads release-lock schema 4 and 5, supports the closed Hermes `mcp` extra, and can validate a later target where only Morfeo adds the canonical `plan` skill. It still emits schema 4 and does not expose Morfeo MCP. Its local annotated tag identity is `v1.0.0-rc.12`; neither this source nor a local tag proves activation. No tag is pushed and no package publication is authorized. This is **not** stable `1.0.0`, a PyPI release or WSL2 qualification.
 
 ## Documentation
 

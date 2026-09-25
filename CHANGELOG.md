@@ -1,19 +1,19 @@
 # Changelog
 
-## 1.0.0rc11 — local-only corrective release-lock compatibility bridge
+## 1.0.0rc12 — local-only role-aware compatibility bridge
 
-Package identity `1.0.0rc11` / display `1.0.0-rc.11` / local annotated tag identity
-`v1.0.0-rc.11`; `release_impact=patch`, `release_action=prepare`,
-`release_channel=prerelease`. Issue #515. This candidate teaches the lifecycle to read
-release-lock schema 4 and schema 5. Schema 4 keeps its historical meaning and
-carries no Hermes extras. Schema 5 requires `hermes.extras`, initially only the
-closed value `["mcp"]`. RC9 still emits schema 4, so an RC8 manager can install
-it. Preparing a schema 5 target exports the declared extra from the authenticated
-Hermes `uv.lock`. This is not Morfeo MCP, not a Hermes fork change, and not a
-public feature claim. No tag is pushed or published.
+Package identity `1.0.0rc12` / display `1.0.0-rc.12` / local annotated tag identity
+`v1.0.0-rc.12`; `release_impact=patch`, `release_action=prepare`,
+`release_channel=prerelease`. Issue #515. This bridge preserves rc11's schema-4
+emission and schema-5 `mcp` reader, and backports only the reviewed role-aware profile
+inventory reader from #504. Its own profile bundle remains historical, while its reader
+accepts either the historical bundle or a target where Morfeo alone adds `plan`.
+This is not Morfeo MCP, not a Hermes fork change, and not a public feature claim.
+No tag is pushed or published.
 
 - Duplicate, unknown, or non-canonical extras are refused.
-- A schema 4 reader refuses a schema 5 lock before a release directory is created.
+- Historical and Morfeo-`plan` profile inventories are distinguished exactly; arbitrary
+  extra/missing profile resources remain refused.
 - The manager distribution does not depend on the MCP SDK.
 
 
