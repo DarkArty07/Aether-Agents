@@ -150,6 +150,8 @@ def create_context_agent(
 
     from run_agent import AIAgent
 
+    route = _configured_parent_route()
+
     class MorfeoMcpContextAgent(AIAgent):
         def __init__(self) -> None:
             # AIAgent.__init__ resolves a provider and refuses to start without
@@ -170,9 +172,34 @@ def create_context_agent(
             self._current_turn_id = ""
             self._current_api_request_id = ""
             self.quiet_mode = True
-            self.model = ""
-            self.provider = ""
-            self.api_key = ""
+            self.model = route["model"]
+            self.provider = route["provider"]
+            self.api_key = route["api_key"]
+            self.api_mode = route["api_mode"]
+            self.base_url = route["base_url"]
+            self._client_kwargs = {
+                key: value
+                for key, value in {
+                    "base_url": route["base_url"],
+                    "api_key": route["api_key"],
+                }.items()
+                if value
+            }
+            self.client = None
+            self.acp_command = None
+            self.acp_args: list[str] = []
+            self.reasoning_config = None
+            self.prefill_messages = None
+            self._fallback_chain: list[dict[str, Any]] = []
+            self.providers_allowed = None
+            self.providers_ignored = None
+            self.providers_order = None
+            self.provider_sort = None
+            self.provider_require_parameters = False
+            self.provider_data_collection = ""
+            self.openrouter_min_coding_score = None
+            self.max_tokens = None
+            self.request_overrides: dict[str, Any] = {}
             self.cwd = str(project)
             self._memory_store = None
             self._memory_enabled = False
@@ -215,6 +242,34 @@ def create_context_agent(
             )
 
     return MorfeoMcpContextAgent()
+
+
+def _configured_parent_route() -> dict[str, Any]:
+    """Read Morfeo's configured route without opening a provider client."""
+
+    from hermes_cli.config import load_config
+
+    config = load_config() or {}
+    raw_model = config.get("model")
+    if isinstance(raw_model, dict):
+        model = str(raw_model.get("default") or raw_model.get("model") or "").strip()
+        provider = str(raw_model.get("provider") or config.get("provider") or "").strip()
+        base_url = str(raw_model.get("base_url") or "").strip()
+        api_mode = str(raw_model.get("api_mode") or "").strip() or None
+        api_key = str(raw_model.get("api_key") or "")
+    else:
+        model = str(raw_model or "").strip()
+        provider = str(config.get("provider") or "").strip()
+        base_url = str(config.get("base_url") or "").strip()
+        api_mode = str(config.get("api_mode") or "").strip() or None
+        api_key = str(config.get("api_key") or "")
+    return {
+        "model": model,
+        "provider": provider,
+        "base_url": base_url,
+        "api_mode": api_mode,
+        "api_key": api_key,
+    }
 
 
 def invoke(

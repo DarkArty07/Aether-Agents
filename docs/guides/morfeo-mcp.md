@@ -13,6 +13,10 @@ Harness mode is stdio and does not publish `terminal`, `process`, `read_file`, `
 
 Call `morfeo_bootstrap` before any other tool. A second call on the same connection returns the same context revision. HTTP binds only `127.0.0.1`. The command does not open tunnels or accept provider credentials.
 
+The external MCP client remains Morfeo's top-level model. Native `delegate_task`
+children inherit Morfeo's configured Hermes model/provider route; bootstrap itself does
+not construct a provider client or make a model call.
+
 Source and a local tag do not prove that a live installation is serving Morfeo MCP. Activation still requires the managed rc9-then-rc10 update path.
 
 `scripts/qualify_morfeo_mcp.py` is the deterministic disposable qualification. It does not activate the live installation. A managed update after merge is still required before `aether doctor` can report this candidate as the active runtime.
