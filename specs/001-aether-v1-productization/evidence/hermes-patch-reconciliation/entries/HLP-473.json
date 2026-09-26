@@ -1,0 +1,70 @@
+{
+  "id": "HLP-473",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-473--telegram-lazy-typehandler-maintained-fork-2026-09-26",
+  "components": [
+    "HLP-473",
+    "plugins/platforms/telegram/adapter.py",
+    "tests/gateway/test_telegram_connect.py"
+  ],
+  "candidate_requirement": "deferred",
+  "required_behavior": "Rebind TypeHandler when the Telegram SDK becomes available after the adapter was imported without it. Missing TypeHandler leaves the dependency unavailable; handler registration must not instantiate typing.Any.",
+  "local_status": "MAINTAINED_FORK_ONLY / UPSTREAM_VERIFIED",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/473"
+      },
+      {
+        "kind": "pull_request",
+        "url": "https://github.com/DarkArty07/aether-hermes/pull/21"
+      }
+    ],
+    "disposition": "upstream_verified",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "plugins/platforms/telegram/adapter.py:337-391",
+        "result": "The shared upstream reference already imports and rebinds TypeHandler in the lazy loader; also confirmed at d0288be5b3330d2442e3907185b8e9d0958297bb:306-334."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Retire only after an adopted exact upstream release passes the recorded regression boundaries without this downstream fix.",
+    "status": "not_executed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "specs/issue-473-telegram-lazy-typehandler/evidence/HLP-473.md",
+        "result": "Two causal REDs included the exact TypeError through adapter handler registration. After the fix, the hermetic runner passed 38 tests across Telegram connect, fallback-network and reconnect modules; Ruff and diff checks passed. SDK stubs; no Telegram requests or messages."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "passed",
+    "blocker": null,
+    "artifacts": [
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-473-telegram-lazy-typehandler.patch",
+        "ledger_sha256": "c3f7776d457b1cec5c1dd4c1fa31a65e0f6af7d694de4ad303ce93d7bc7ea13d",
+        "computed_sha256": "c3f7776d457b1cec5c1dd4c1fa31a65e0f6af7d694de4ad303ce93d7bc7ea13d",
+        "checksum_status": "passed",
+        "parse_status": "passed",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "54abacd1c38ce6300997289628fe2f2a7569df18 -> 49189104a6888ef604ff0733d97b6b05e25b0d33; reverse -> b6bc239e625197ce7ea683a59d5091fe6ed29e53",
+        "result": "passed"
+      }
+    ]
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified."
+  ],
+  "summary": "Base 54abacd1c38ce6300997289628fe2f2a7569df18; implementation c81053679cd57a24f5a7a6c93b6cd450eee47343; reviewed implementation tree 49189104a6888ef604ff0733d97b6b05e25b0d33; merged source 30b4846a2c8063528d491f48950b3b341b0ce7d7 (fork PR #21). Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified."
+}

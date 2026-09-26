@@ -1,10 +1,10 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-09-26T21:56:55Z`
+Observation timestamp: `2026-09-26T23:04:04Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `677dc611643828f3dd32587251cfecb43a4c5f8156f1c4f2a043f8da5fd9ee59`
+Source ledger SHA-256: `1255e6a4f1ead752e9b372ac32e67c80fc4f5e8554d588fa79b0e4b24ca72c84`
 
 ## Remaining local guarantees
 
@@ -42,10 +42,13 @@ Source ledger SHA-256: `677dc611643828f3dd32587251cfecb43a4c5f8156f1c4f2a043f8da
 - `HLP-428`: Retain HLP-428. The maintained fork recovers canonical Project provenance for non-affinity direct parent worktree children, refuses cross-project mismatches before task persistence, and cleanly bounds review failure containment without unverified notifications; verified by RED/GREEN reproduction, four-round strict contract audit, and exact tree reconstruction.
 - `HLP-433`: Retain HLP-433. The maintained fork preserves provider reasoning tokens across the Responses adapter boundary into chat-compatible usage and SessionDB accounting without altering input/output/total tokens or double-counting; verified by RED/GREEN reproduction, strict contract audit, and exact tree reconstruction. Merged at 621047dc1c10cceb2825013cc8bb611b4d0e8de1 but deferred for RC16 (selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d) and not yet adopted by the effective runtime, hence MAINTAINED_FORK_ONLY.
 - `HLP-435`: HLP-435 corrects the two observed normalized-only quote imbalances in maintained-fork source. PR #19 merged as b287195d63d47d73788653bdd012c2fbfe00c0ac with tree identical to reviewed f459cfa0. Keep deferred at unchanged RC16 pin 58f8c37a49b341f25b8fdd6310542fe932031b8d; no RC17, runtime adoption or upstream retirement is claimed.
+- `HLP-473`: Base 54abacd1c38ce6300997289628fe2f2a7569df18; implementation c81053679cd57a24f5a7a6c93b6cd450eee47343; reviewed implementation tree 49189104a6888ef604ff0733d97b6b05e25b0d33; merged source 30b4846a2c8063528d491f48950b3b341b0ce7d7 (fork PR #21). Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
+- `HLP-474`: Base b287195d63d47d73788653bdd012c2fbfe00c0ac; implementation 7755f82df15786285378732ef17544b4736c4b81; reviewed implementation tree 105071996d00bfbb361771d82d0863552380fccb; merged source 54abacd1c38ce6300997289628fe2f2a7569df18 (fork PR #20). Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
 
 ## Qualified upstream equivalents
 
 - `HLP-209`: Qualified source disposition: upstream_verified; retirement recommendation: retain.
+- `HLP-473`: Qualified source disposition: upstream_verified; retirement recommendation: retain.
 
 ## Retirement blockers
 
@@ -170,6 +173,10 @@ Source ledger SHA-256: `677dc611643828f3dd32587251cfecb43a4c5f8156f1c4f2a043f8da
 - `HLP-435` (retirement_gate): Retirement gate status is not_executed.
 - `HLP-435` (uncertainty): Both modified paths exist at the frozen RC16 selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d, but path presence is not proof of the #435 fix. The repair is only in later maintained-fork source b287195d63d47d73788653bdd012c2fbfe00c0ac; it has not been adopted by the installed runtime.
 - `HLP-435` (uncertainty): The accepted fork candidate retains the pre-existing escaped-quote bypass difference documented against newer upstream and the baseline-shared real-binary test failure; neither is repaired by this patch.
+- `HLP-473` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-473` (uncertainty): Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
+- `HLP-474` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-474` (uncertainty): Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
 
 ## Artifact integrity
 
@@ -207,6 +214,8 @@ Source ledger SHA-256: `677dc611643828f3dd32587251cfecb43a4c5f8156f1c4f2a043f8da
 - `HLP-428`: unavailable
 - `HLP-433`: unavailable
 - `HLP-435`: passed
+- `HLP-473`: passed
+- `HLP-474`: passed
 
 ## Selected maintained-fork source
 
@@ -214,7 +223,7 @@ Selected source: `https://github.com/DarkArty07/aether-hermes@58f8c37a49b341f25b
 
 | Verdict | Entries |
 | --- | --- |
-| present | 31 |
+| present | 33 |
 | partial | 0 |
 | absent | 1 |
 | unverified | 2 |

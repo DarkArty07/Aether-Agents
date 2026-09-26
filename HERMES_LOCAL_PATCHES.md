@@ -59,6 +59,26 @@ This file prevents a Hermes update from silently removing local repairs. An Aeth
 | `HLP-428` | `#494` | recover Project provenance for non-affinity direct parent worktrees, fail closed on cross-project mismatches before task persistence, and bound review failure containment without unverified notifications | no equivalent in `NousResearch/hermes-agent` at contract inspection; upstream kanban lacks Aether Project binding recovery and failure-containment origin routing | `MAINTAINED_FORK_ONLY / UPSTREAM_MISSING` |
 | `HLP-433` | `#433` | auxiliary Responses adapter preserves provider reasoning tokens in reconstructed usage without altering input/output/total or double-counting | no equivalent in `NousResearch/hermes-agent` at contract inspection; upstream adapter reconstructs only prompt/completion/total tokens | `MAINTAINED_FORK_ONLY / UPSTREAM_MISSING` |
 | `HLP-435` | `#435` | judge grep quote structure before escape-stripping normalization while retaining the protected guard chain | historical public reference has the defect; upstream `e383c28d` and v2026.9.21+ contain the false-positive fix plus additional bypass protection | `MAINTAINED_FORK_ONLY / UPSTREAM_PARTIAL` |
+| `HLP-473` | `#473` | rebind TypeHandler after lazy SDK loading; refuse incomplete dependencies | equivalent binding exists at upstream `4f225435` | `MAINTAINED_FORK_ONLY / UPSTREAM_VERIFIED` |
+| `HLP-474` | `#474` | retain parent review auth only for the same provider and exact endpoint | routed fallback absent at inspected upstream | `MAINTAINED_FORK_ONLY / UPSTREAM_MISSING` |
+
+## HLP-473 — Telegram lazy TypeHandler (maintained fork, 2026-09-26)
+
+- **Source:** fork PR #21, merge `30b4846a2c8063528d491f48950b3b341b0ce7d7`, implementation `c81053679cd57a24f5a7a6c93b6cd450eee47343`, base `54abacd1c38ce6300997289628fe2f2a7569df18`.
+- **Behavior:** rebind TypeHandler before declaring the SDK ready; an unavailable class stays a missing dependency, never `typing.Any` passed to handler registration.
+- **Artifact:** `patches/hermes/HLP-473-telegram-lazy-typehandler.patch`, SHA-256 `c3f7776d457b1cec5c1dd4c1fa31a65e0f6af7d694de4ad303ce93d7bc7ea13d`.
+- **Evidence:** two causal REDs and 38 hermetic tests GREEN; reversible exact-tree proof in `specs/issue-473-telegram-lazy-typehandler/evidence/HLP-473.md`. No Telegram delivery or runtime mutation.
+- **Disposition:** deferred at unchanged RC16 pin `58f8c37a49b341f25b8fdd6310542fe932031b8d`; source-path presence there is not fixed behavior. Upstream source already has equivalent rebinding, but provisioned-path observation remains outstanding.
+- **Rollback/retirement:** reverse the patch or revert the implementation; retire only after an adopted exact upstream release passes the loader/registration controls without it.
+
+## HLP-474 — Background review auth (maintained fork, 2026-09-26)
+
+- **Source:** fork PR #20, merge `54abacd1c38ce6300997289628fe2f2a7569df18`, implementation `7755f82df15786285378732ef17544b4736c4b81`, base `b287195d63d47d73788653bdd012c2fbfe00c0ac`.
+- **Behavior:** reuse the bound parent key only for absent/no-key-required review auth at the same provider and exact requested/resolved URL. Preserve explicit credentials, pools and different destinations.
+- **Artifact:** `patches/hermes/HLP-474-background-review-auth.patch`, SHA-256 `399409050eb82c5c9a16aac33231670b84bf50be63b579ed2229f03757ccff67`; reconstructs the implementation tree, excluding the later separately attributed fork audit commit.
+- **Evidence:** causal RED through the actual custom resolver with synthetic auth; 50 hermetic tests GREEN and reversible tree proof in `specs/issue-474-background-review-auth/evidence/HLP-474.md`.
+- **Disposition:** deferred at the same RC16 pin. No model request, credential change, runtime update or RC17. The inspected upstream routed selector still lacks this fallback.
+- **Rollback/retirement:** reverse the implementation patch or revert its commit; retire only after an adopted exact upstream release passes same-endpoint inheritance and the non-leakage controls.
 
 ## HLP-188 — sticky `initial_status=blocked`
 

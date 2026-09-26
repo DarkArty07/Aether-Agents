@@ -1,0 +1,108 @@
+diff --git a/AETHER_FORK.md b/AETHER_FORK.md
+index 660aa3540f..ae21597dc1 100644
+--- a/AETHER_FORK.md
++++ b/AETHER_FORK.md
+@@ -456,0 +457,21 @@ release, configuration, credential-store or primary-task lifecycle change is cla
++## Telegram lazy-load TypeHandler binding (Aether #473)
++
++From base `54abacd1c38ce6300997289628fe2f2a7569df18`, rebind `TypeHandler` when
++the Telegram SDK becomes available after the adapter was initially imported
++without it. Otherwise the global remains `typing.Any` and handler registration
++raises the exact `Any cannot be instantiated` error despite a successful loader.
++An SDK lacking TypeHandler must leave the dependency unavailable rather than
++publishing a false ready flag. The source correction restores import parity,
++without changing transport, DNS, TLS, retry policy or Telegram credentials.
++
++The same rebinding is present in upstream `plugins/platforms/telegram/adapter.py` at
++`4f22543509d1b91dc45bcb369447126c5eb14fb7:337-391` and
++`d0288be5b3330d2442e3907185b8e9d0958297bb:306-334`.
++Two regressions were RED, including the exact TypeError through real adapter
++handler registration with SDK stubs. The corrected hermetic runner passes **38
++tests across connect, fallback-network and reconnect modules**. No package was
++installed into a live profile and no Telegram request or message was sent.
++Rollback reverts this scoped source commit. Retire after an adopted exact upstream
++release passes the loader/registration regressions without the downstream fix;
++source tests do not establish installed reconnection or delivery.
++
+diff --git a/plugins/platforms/telegram/adapter.py b/plugins/platforms/telegram/adapter.py
+index 6a6fb549c3..bbc804949a 100644
+--- a/plugins/platforms/telegram/adapter.py
++++ b/plugins/platforms/telegram/adapter.py
+@@ -418 +418 @@ def check_telegram_requirements() -> bool:
+-    global CommandHandler, CallbackQueryHandler, TelegramMessageHandler
++    global CommandHandler, CallbackQueryHandler, TelegramMessageHandler, TypeHandler
+@@ -436,0 +437 @@ def check_telegram_requirements() -> bool:
++            TypeHandler as _TH,
+@@ -452,0 +454 @@ def check_telegram_requirements() -> bool:
++    TypeHandler = _TH
+diff --git a/tests/gateway/test_telegram_connect.py b/tests/gateway/test_telegram_connect.py
+index 801d9a406a..324d189d99 100644
+--- a/tests/gateway/test_telegram_connect.py
++++ b/tests/gateway/test_telegram_connect.py
+@@ -8,0 +9,2 @@ import sys
++from types import ModuleType
++from typing import Any
+@@ -56,0 +59,63 @@ class TestTelegramUnconfiguredNonRetryable:
++
++def _lazy_telegram_sdk(monkeypatch):
++    sdk = ModuleType("telegram")
++    ext = ModuleType("telegram.ext")
++    constants = ModuleType("telegram.constants")
++    request = ModuleType("telegram.request")
++    for name in ("Update", "Bot", "Message", "InlineKeyboardButton", "InlineKeyboardMarkup"):
++        setattr(sdk, name, type(name, (), {}))
++    setattr(sdk, "LinkPreviewOptions", None)
++    for name in ("Application", "CommandHandler", "CallbackQueryHandler", "MessageHandler"):
++        setattr(ext, name, MagicMock())
++    setattr(ext, "ContextTypes", MagicMock())
++    setattr(ext, "filters", MagicMock())
++    setattr(constants, "ParseMode", MagicMock())
++    setattr(constants, "ChatType", MagicMock())
++    setattr(request, "HTTPXRequest", MagicMock())
++
++    class FakeTypeHandler:
++        def __init__(self, update_type, callback):
++            self.update_type = update_type
++            self.callback = callback
++
++    setattr(ext, "TypeHandler", FakeTypeHandler)
++    # Restore every global that the lazy-loader rebinds, not just the flag.
++    for name in (
++        "Update", "Bot", "Message", "InlineKeyboardButton", "InlineKeyboardMarkup",
++        "LinkPreviewOptions", "Application", "CommandHandler", "CallbackQueryHandler",
++        "TelegramMessageHandler", "TypeHandler", "ContextTypes", "filters", "ParseMode",
++        "ChatType", "HTTPXRequest",
++    ):
++        monkeypatch.setattr(telegram_mod, name, getattr(telegram_mod, name))
++    monkeypatch.setattr(telegram_mod, "TELEGRAM_AVAILABLE", False)
++    monkeypatch.setattr(telegram_mod, "TypeHandler", Any)
++    for name, module in (
++        ("telegram", sdk), ("telegram.ext", ext),
++        ("telegram.constants", constants), ("telegram.request", request),
++    ):
++        monkeypatch.setitem(sys.modules, name, module)
++    ensure = MagicMock()
++    monkeypatch.setattr("tools.lazy_deps.ensure", ensure)
++    return sdk, ext, ensure
++
++
++def test_lazy_install_rebinds_type_handler_before_registering_handlers(monkeypatch):
++    sdk, ext, ensure = _lazy_telegram_sdk(monkeypatch)
++    adapter = TelegramAdapter(PlatformConfig(enabled=True, token="fake"))
++    assert telegram_mod.check_telegram_requirements() is True
++    app = MagicMock()
++    adapter._register_handlers(app)
++    handler = app.add_handler.call_args.args[0]
++    assert isinstance(handler, getattr(ext, "TypeHandler"))
++    assert handler.update_type is getattr(sdk, "Update")
++    assert app.add_handler.call_args.kwargs == {"group": 99}
++    ensure.assert_called_once_with("platform.telegram", prompt=False)
++
++
++def test_lazy_install_without_type_handler_stays_unavailable(monkeypatch):
++    _, ext, _ = _lazy_telegram_sdk(monkeypatch)
++    delattr(ext, "TypeHandler")
++    assert telegram_mod.check_telegram_requirements() is False
++    assert telegram_mod.TELEGRAM_AVAILABLE is False
++    assert telegram_mod.TypeHandler is Any
++
