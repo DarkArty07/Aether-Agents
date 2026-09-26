@@ -2251,15 +2251,12 @@ def test_rc12_reader_accepts_rc14_schema5_and_activates_forward(
         [line for line in completed.stdout.splitlines() if line.startswith("{")][-1]
     )
     deferred = {item["id"]: item for item in summary["deferred_hlps"]}
-    assert set(deferred) == {"HLP-428", "HLP-433"}
-    assert "tests/hermes_cli/test_kanban_project_provenance.py" in deferred["HLP-428"]["missing"]
-    assert (
-        "tests/agent/test_auxiliary_client_responses_reasoning_433.py"
-        in deferred["HLP-433"]["missing"]
-    )
+    assert set(deferred) == {"HLP-433"}
+    assert deferred["HLP-433"]["missing"] == []
     assert summary["refusing_hlps"] == []
     assert summary["status"] == "qualified"
     assert "HLP-427" in summary["required_hlps"]
+    assert "HLP-428" in summary["required_hlps"]
 
     extract = tmp_path / "rc12-source"
     extract.mkdir()
