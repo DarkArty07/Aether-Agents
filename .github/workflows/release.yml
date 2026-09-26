@@ -32,10 +32,9 @@ env:
   # `9031bae0e8b0ab40c4fd7ba50c644972ff512611` remain historical evidence and are superseded,
   # not rewritten.
   FORK_REPOSITORY: https://github.com/DarkArty07/aether-hermes
-  # RC15 pins the RC14 source plus a read-only review-return count in task context.
-  # The exact topic commit is reachable from aether-main after its merge; selecting
-  # it avoids adopting unrelated deferred changes at the maintained branch tip.
-  FORK_COMMIT: "5b2b6ba543680c6fe8a62de4b467d1107be3abf4"
+  # RC16 pins the maintained fork commit containing HLP-428 (PR #16 merge),
+  # keeping HLP-433 deferred and omitting the optional review-return context count.
+  FORK_COMMIT: "58f8c37a49b341f25b8fdd6310542fe932031b8d"
 
 jobs:
   release:

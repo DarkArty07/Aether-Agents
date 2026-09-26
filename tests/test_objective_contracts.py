@@ -1413,7 +1413,8 @@ def test_sectorized_souls_preserve_decision_recovery_and_review_distinctions() -
         assert clause in souls["morfeo"], clause
     for clause in (
         "do not present your own verification as an independent review of your edit",
-        "behavioral corrections remain implementation work",
+        "functional corrections are not automatically returned merely because they change defective code",
+        "Keep substantial implementation delegated",
         "Unit review, integrated verification, and terminal pipeline closeout are distinct obligations",
         "or approve merely because a review-round count was reached",
     ):

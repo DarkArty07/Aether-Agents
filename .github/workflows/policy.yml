@@ -222,6 +222,8 @@ jobs:
           .aether/objective-contracts/oc_c29c2b0ed38d5030/v1.md
           .aether/objective-contracts/oc_c29c2b0ed38d5030/v2.md
           .aether/objective-contracts/oc_c53c85ffb6c24f69/v1.md
+          .aether/objective-contracts/oc_c770cea3db51d97e/v1.md
+          .aether/objective-contracts/oc_c770cea3db51d97e/v2.md
           .aether/objective-contracts/oc_c780a10d94b78d85/v1.md
           .aether/objective-contracts/oc_ce1f17ebbb4968b4/v1.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v1.md
@@ -384,6 +386,7 @@ jobs:
           scripts/qualify_morfeo_mcp.py
           scripts/qualify_observation.py
           scripts/qualify_oc79.py
+          scripts/qualify_rc16_transition.py
           scripts/qualify_telegram_monitor.py
           scripts/release_bundle.py
           scripts/run_tests.py
@@ -515,6 +518,8 @@ jobs:
           tests/fixtures/mixed-version/rc5-record.json
           tests/fixtures/observation/complete-summary.json
           tests/fixtures/observation/performance-baseline.json
+          tests/fixtures/rc16-transition/rc15-record.json
+          tests/fixtures/rc16-transition/rc15-release-lock.json
           tests/observation_helpers.py
           tests/test_a1_contracts.py
           tests/test_aether_tui_launcher.py
@@ -571,6 +576,7 @@ jobs:
           tests/test_project_marker_validation.py
           tests/test_projection_transition_runner.py
           tests/test_public_artifacts.py
+          tests/test_rc16_transition_qualification.py
           tests/test_release_bundle.py
           tests/test_same_card_phase_predicates.py
           tests/test_source_restoration.py

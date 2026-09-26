@@ -689,14 +689,14 @@
   "provenance": {
     "compatibility_pairs": [
       {
-        "collector_version": "1.0.0rc14",
+        "collector_version": "1.0.0rc16",
         "normalizer_ref": "hermes.tool-category.v1",
         "runtime_fingerprint": "3333333333333333333333333333333333333333333333333333333333333333"
       }
     ],
     "producer_count": 1
   },
-  "reducer_version": "aether.observation.reducer.v1+1.0.0rc14",
+  "reducer_version": "aether.observation.reducer.v1+1.0.0rc16",
   "review_brief": {
     "change_classes": [],
     "evidence_status": "partial",
@@ -865,5 +865,5 @@
       }
     ]
   },
-  "summary_id": "sum_5ed729beb83b7bec2bf4571db74442043cf076d859f215ffafadd8898c1fa409"
+  "summary_id": "sum_8ee21047473dbb8228fe0e4414beca2ef6dcc7b048d0a0c623a067028e9ff86a"
 }

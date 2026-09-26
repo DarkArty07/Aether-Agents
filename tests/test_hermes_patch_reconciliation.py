@@ -871,10 +871,10 @@ def test_canonical_check_stays_stricter_than_candidate_check(tmp_path: Path) -> 
     assert _summary_json(candidate)["status"] == "qualified"
 
 
-def test_repository_hlp428_and_hlp433_are_explicitly_deferred() -> None:
+def test_repository_hlp428_is_required_and_hlp433_is_deferred() -> None:
     hlp428 = json.loads((ENTRIES_PATH / "HLP-428.json").read_text(encoding="utf-8"))
     hlp433 = json.loads((ENTRIES_PATH / "HLP-433.json").read_text(encoding="utf-8"))
-    assert hlp428["candidate_requirement"] == "deferred"
+    assert hlp428["candidate_requirement"] == "required"
     assert hlp428["local_status"] == "MAINTAINED_FORK_ONLY / UPSTREAM_MISSING"
     assert hlp433["candidate_requirement"] == "deferred"
     assert hlp433["local_status"] == "MAINTAINED_FORK_ONLY / UPSTREAM_MISSING"
