@@ -39,6 +39,10 @@ RC16_TAG = "v1.0.0-rc.16"
 RC16_HERMES_COMMIT = "58f8c37a49b341f25b8fdd6310542fe932031b8d"
 RC16_HERMES_TREE_SHA256 = "a2a9b374bd2022c7f96242b0ab2c95691119262c925389eb3820ca627c581144"
 
+#: The operator's own Aether data store; the decisive transition run reads the installed
+#: predecessor release from it, so that scenario is executable only where it exists.
+DEFAULT_SOURCE_STORE = Path.home() / ".local" / "share" / "aether"
+
 
 def load_entry() -> Any:
     spec = importlib.util.spec_from_file_location("qualify_rc16_transition", ENTRY_SCRIPT)
@@ -388,6 +392,13 @@ def test_lifecycle_manager_refuses_wrong_commit_checkout(tmp_path: Path) -> None
 # Decisive Qualification Invocation
 # --------------------------------------------------------------------------------------
 def test_decisive_transition_qualification_runs_cleanly(tmp_path: Path) -> None:
+    # The decisive run copies the *installed* predecessor release out of the operator's own
+    # store, so it is only executable where that installation exists.  CI runners have no such
+    # store; there the committed contract, isolation and confinement controls still run, and the
+    # environment-dependent execution is reported as skipped rather than as a false failure.
+    if not (DEFAULT_SOURCE_STORE / "active.json").is_file():
+        pytest.skip("no installed Aether store is available to copy the RC15 predecessor from")
+
     work_root = tmp_path / "work"
     receipts_root = tmp_path / "receipts"
     work_root.mkdir(parents=True)

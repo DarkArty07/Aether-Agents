@@ -385,16 +385,11 @@ class Inputs:
         if not (resolved_repo / ".git").exists():
             raise Refusal(f"Aether repository path is not a Git worktree: {resolved_repo}")
 
-        resolved_source_store = (source_store or DEFAULT_SOURCE_STORE).expanduser().resolve()
-        if not (resolved_source_store / "active.json").is_file():
-            raise Refusal(
-                f"Source store has no active.json to copy RC15 release from: {resolved_source_store}"
-            )
-
-        resolved_fork = (fork_checkout or DEFAULT_FORK_CHECKOUT).expanduser().resolve()
-        if not (resolved_fork / ".git").exists():
-            raise Refusal(f"Maintained fork path is not a Git repository: {resolved_fork}")
-
+        # Caller-supplied containment is decided before environmental availability: an
+        # invocation whose own work root or receipts root would write outside a disposable
+        # store must be refused for that reason, and its actionable diagnostic must not be
+        # masked by a missing local installation (a CI runner has neither the maintained-fork
+        # checkout nor an installed predecessor release at the operator's default paths).
         isolation = Isolation(work_root=work_root, receipts_root=receipts_root)
         if not is_under_system_temp(isolation.work_root):
             raise Refusal(
@@ -409,6 +404,16 @@ class Inputs:
             raise Refusal(
                 "Isolation refuses escaped derived destination: every derived destination must "
                 f"resolve inside the work root to keep writes disposable; {'; '.join(escapes)}"
+            )
+
+        resolved_fork = (fork_checkout or DEFAULT_FORK_CHECKOUT).expanduser().resolve()
+        if not (resolved_fork / ".git").exists():
+            raise Refusal(f"Maintained fork path is not a Git repository: {resolved_fork}")
+
+        resolved_source_store = (source_store or DEFAULT_SOURCE_STORE).expanduser().resolve()
+        if not (resolved_source_store / "active.json").is_file():
+            raise Refusal(
+                f"Source store has no active.json to copy RC15 release from: {resolved_source_store}"
             )
 
         return cls(
