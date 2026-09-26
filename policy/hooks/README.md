@@ -8,6 +8,22 @@ Technical permission does not reassign work: Implementer produces local commits 
 
 The canonical source contains policy only. It contains no credentials, sessions, memories, profile configuration, databases, logs, or other runtime state.
 
+### Local path names versus credential values
+
+The generic `sk-` detector makes one conservative distinction for non-durable tool
+arguments: an explicit local path component with a short lowercase identifier
+(13–20 lowercase letters, digits, underscores or hyphens after `sk-`, beginning
+with a letter or digit) is not a credential solely because of that prefix.
+Known provider prefixes (`proj-`, `svcacct-`, `ant-`), mixed-case or longer matches
+remain blocked, even inside paths. Standalone values, credential-labelled fields
+including nested mappings, authentication/header/query contexts and durable tools
+receive no path exemption. Other secret and protected-effect patterns are unchanged.
+
+This is not credential validation or a general path allowlist. Ambiguous shapes
+remain refused; do not claim every path beginning with `sk-` is accepted. The
+source regression matrix uses synthetic data and disposable installed copies of
+all three roles; a green source test does not activate any live hook.
+
 ## Verify an installation
 
 ```bash
