@@ -39,6 +39,8 @@ ACCEPTED_PACKAGE_IDENTITIES = (
     "1.0.0rc12",
     "1.0.0rc13",
     "1.0.0rc14",
+    "1.0.0rc15",
+    "1.0.0rc16",
     "2.30.4",
     "1.0.0.dev3",
 )
@@ -159,8 +161,8 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     assert "releases/tag/v1.0.0-rc.7" not in readme
     assert "releases/tag/v1.0.0-rc.6" not in readme
     assert "releases/tag/v1.0.0-rc.5" not in readme
-    assert "`1.0.0rc14` / `1.0.0-rc.14`" in readme
-    assert "local annotated tag identity is `v1.0.0-rc.14`" in readme
+    assert "`1.0.0rc16` / `1.0.0-rc.16`" in readme
+    assert "local annotated tag identity is `v1.0.0-rc.16`" in readme
     assert "restores the new Morfeo SOUL and canonical contract skills" in readme
     assert (
         "neither this source nor a local tag proves what is installed or that agent behavior improved"
@@ -168,11 +170,13 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     )
     assert "Query `aether doctor` for the active version" in readme
     assert "no tag is pushed and no GitHub/package publication is authorized" in readme
-    assert "RC7 and earlier local tags remain immutable" in readme
+    assert "Earlier local tags remain immutable" in readme
     assert "releases/tag/v1.0.0-rc.1" in readme
     assert "published but rejected" in readme
     status = [line for line in readme.splitlines() if line.startswith("**Status:**")]
     assert len(status) == 1, f"expected exactly one status paragraph, found {len(status)}"
+    assert "releases/tag/v1.0.0-rc.16" not in status[0]
+    assert "releases/tag/v1.0.0-rc.15" not in status[0]
     assert "releases/tag/v1.0.0-rc.14" not in status[0]
     assert "releases/tag/v1.0.0-rc.13" not in status[0]
     assert "releases/tag/v1.0.0-rc.12" not in status[0]
@@ -182,7 +186,7 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     assert "releases/tag/v1.0.0-rc.7" not in status[0]
     assert "releases/tag/v1.0.0-rc.6" not in status[0]
     assert "releases/tag/v1.0.0-rc.5" not in status[0]
-    assert "release_impact = minor" in status[0]
+    assert "release_impact = patch" in status[0]
     assert "release_action = prepare" in status[0]
     assert "release_channel = prerelease" in status[0]
     for time_bound in ("will be published", "not yet", "pending", "to be superseded"):
