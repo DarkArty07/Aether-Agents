@@ -386,6 +386,7 @@ jobs:
           scripts/qualify_morfeo_mcp.py
           scripts/qualify_observation.py
           scripts/qualify_oc79.py
+          scripts/qualify_rc16_transition.py
           scripts/qualify_telegram_monitor.py
           scripts/release_bundle.py
           scripts/run_tests.py
@@ -517,6 +518,8 @@ jobs:
           tests/fixtures/mixed-version/rc5-record.json
           tests/fixtures/observation/complete-summary.json
           tests/fixtures/observation/performance-baseline.json
+          tests/fixtures/rc16-transition/rc15-record.json
+          tests/fixtures/rc16-transition/rc15-release-lock.json
           tests/observation_helpers.py
           tests/test_a1_contracts.py
           tests/test_aether_tui_launcher.py
@@ -573,6 +576,7 @@ jobs:
           tests/test_project_marker_validation.py
           tests/test_projection_transition_runner.py
           tests/test_public_artifacts.py
+          tests/test_rc16_transition_qualification.py
           tests/test_release_bundle.py
           tests/test_same_card_phase_predicates.py
           tests/test_source_restoration.py
