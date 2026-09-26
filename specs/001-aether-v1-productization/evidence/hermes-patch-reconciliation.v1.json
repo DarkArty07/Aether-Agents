@@ -572,12 +572,17 @@
       "kind": "retirement_gate"
     },
     {
+      "detail": "Declared source path(s) missing at the selected revision 58f8c37a49b341f25b8fdd6310542fe932031b8d: tests/agent/test_auxiliary_client_responses_reasoning_433.py.",
+      "id": "HLP-433",
+      "kind": "selected_source"
+    },
+    {
       "detail": "Upstream hermes-agent lacks reasoning token preservation across the Responses adapter boundary.",
       "id": "HLP-433",
       "kind": "uncertainty"
     },
     {
-      "detail": "The regression test module tests/agent/test_auxiliary_client_responses_reasoning_433.py is introduced by this patch and does not exist at selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d. It is declared only as an evidenced absence rather than an active component for this pin.",
+      "detail": "The regression test module tests/agent/test_auxiliary_client_responses_reasoning_433.py is introduced by this patch and does not exist at selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d, making its absence visible in candidate reconciliation.",
       "id": "HLP-433",
       "kind": "uncertainty"
     },
@@ -3842,13 +3847,13 @@
       },
       "blocking_uncertainty": [
         "Upstream hermes-agent lacks reasoning token preservation across the Responses adapter boundary.",
-        "The regression test module tests/agent/test_auxiliary_client_responses_reasoning_433.py is introduced by this patch and does not exist at selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d. It is declared only as an evidenced absence rather than an active component for this pin.",
+        "The regression test module tests/agent/test_auxiliary_client_responses_reasoning_433.py is introduced by this patch and does not exist at selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d, making its absence visible in candidate reconciliation.",
         "The merged maintained-fork revision 621047dc1c10cceb2825013cc8bb611b4d0e8de1 carrying this behavior is a descendant of the selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d and has not been adopted by the effective Aether runtime; live adoption and effective-runtime qualification remain deferred successors under issue #433, so no installed behavior is asserted."
       ],
       "candidate_requirement": "deferred",
       "components": [
         "HLP-433",
-        "agent/auxiliary_client.py"
+        "tests/agent/test_auxiliary_client_responses_reasoning_433.py"
       ],
       "id": "HLP-433",
       "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-433--preserve-auxiliary-responses-reasoning-tokens-in-adapter-usage-maintained-fork-2026-09-24",
@@ -3874,11 +3879,11 @@
       "selected_source": {
         "paths": [
           {
-            "path": "agent/auxiliary_client.py",
-            "present": true
+            "path": "tests/agent/test_auxiliary_client_responses_reasoning_433.py",
+            "present": false
           }
         ],
-        "presence": "present",
+        "presence": "absent",
         "repository": "https://github.com/DarkArty07/aether-hermes",
         "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
@@ -3911,9 +3916,9 @@
   ],
   "schema_version": "aether.hermes-patch-reconciliation.v1",
   "selected_source": {
-    "absent": 0,
+    "absent": 1,
     "partial": 0,
-    "present": 31,
+    "present": 30,
     "repository": "https://github.com/DarkArty07/aether-hermes",
     "resolved_from_checkout": true,
     "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",

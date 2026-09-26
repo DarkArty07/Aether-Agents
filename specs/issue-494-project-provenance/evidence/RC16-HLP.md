@@ -37,8 +37,8 @@ Fetch provenance note: the pinned commit `58f8c37a49b341f25b8fdd6310542fe932031b
 
 ### HLP-433 (`specs/001-aether-v1-productization/evidence/hermes-patch-reconciliation/entries/HLP-433.json`)
 - Retained `candidate_requirement: "deferred"`, unretired, and visible.
-- Declared components: `HLP-433`, `agent/auxiliary_client.py`.
-- Evidenced absence: the regression test module `tests/agent/test_auxiliary_client_responses_reasoning_433.py` does not exist at selected pin `58f8c37a49b341f25b8fdd6310542fe932031b8d`. Merged revision `621047dc1c10cceb2825013cc8bb611b4d0e8de1` (PR #17) is an excluded descendant of the pin; live adoption and effective-runtime qualification remain deferred successors under issue #433.
+- Declared components: `HLP-433`, `tests/agent/test_auxiliary_client_responses_reasoning_433.py`.
+- Evidenced absence: the regression test module `tests/agent/test_auxiliary_client_responses_reasoning_433.py` is introduced by HLP-433 and does not exist at selected pin `58f8c37a49b341f25b8fdd6310542fe932031b8d`, making its absence visible in candidate reconciliation without declaring an active behavior. Merged revision `621047dc1c10cceb2825013cc8bb611b4d0e8de1` (PR #17) is an excluded descendant of the pin; live adoption and effective-runtime qualification remain deferred successors under issue #433.
 
 ## Exact execution commands and raw results
 
@@ -55,7 +55,7 @@ uv run --frozen python scripts/validate_hermes_patch_reconciliation.py \
 
 Raw JSON output:
 ```json
-{"status": "generated", "schema_version": "aether.hermes-patch-reconciliation.v1", "observed_at_utc": "2026-09-26T00:15:00Z", "selected_source": {"repository": "https://github.com/DarkArty07/aether-hermes", "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d", "resolved_from_checkout": true, "present": 31, "partial": 0, "absent": 0, "unverified": 2}, "records": 33, "refusing": [], "unverified": ["HLP-246", "HLP-247"]}
+{"status": "generated", "schema_version": "aether.hermes-patch-reconciliation.v1", "observed_at_utc": "2026-09-26T00:15:00Z", "selected_source": {"repository": "https://github.com/DarkArty07/aether-hermes", "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d", "resolved_from_checkout": true, "present": 30, "partial": 0, "absent": 1, "unverified": 2}, "records": 33, "refusing": [{"id": "HLP-433", "kind": "selected_source", "detail": "Declared source path(s) missing at the selected revision 58f8c37a49b341f25b8fdd6310542fe932031b8d: tests/agent/test_auxiliary_client_responses_reasoning_433.py."}], "unverified": ["HLP-246", "HLP-247"]}
 ```
 Standard output:
 ```
@@ -75,13 +75,15 @@ uv run --frozen python scripts/validate_hermes_patch_reconciliation.py \
 
 Raw JSON output:
 ```json
-{"status": "current", "schema_version": "aether.hermes-patch-reconciliation.v1", "observed_at_utc": "2026-09-26T00:15:00Z", "selected_source": {"repository": "https://github.com/DarkArty07/aether-hermes", "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d", "resolved_from_checkout": true, "present": 31, "partial": 0, "absent": 0, "unverified": 2}, "records": 33, "refusing": [], "unverified": ["HLP-246", "HLP-247"]}
+{"status": "current", "schema_version": "aether.hermes-patch-reconciliation.v1", "observed_at_utc": "2026-09-26T00:15:00Z", "selected_source": {"repository": "https://github.com/DarkArty07/aether-hermes", "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d", "resolved_from_checkout": true, "present": 30, "partial": 0, "absent": 1, "unverified": 2}, "records": 33, "refusing": [{"id": "HLP-433", "kind": "selected_source", "detail": "Declared source path(s) missing at the selected revision 58f8c37a49b341f25b8fdd6310542fe932031b8d: tests/agent/test_auxiliary_client_responses_reasoning_433.py."}], "unverified": ["HLP-246", "HLP-247"]}
 ```
 Standard output:
 ```
 reconciliation validation passed: reconciliation evidence is current
 ```
 Exit code: `0`.
+
+Interpretation note: with HLP-433's discriminating module declared and absent at the pin, the canonical `--check` aggregate summary's `refusing` field carries one `selected_source` blocker for HLP-433 (`"absent": 1`). This is the mechanical form of recording deferred absence in the aggregate. It does not block candidate qualification because HLP-433 is `candidate_requirement: "deferred"`. The card's `--check` requirement ('no new refusals') is satisfied in this operative sense: no new required-HLP refusal exists, status is `current`, and candidate qualification passes with `refusing_hlps: []`.
 
 ### 3. Candidate check qualification (`--candidate-check`)
 
@@ -96,7 +98,7 @@ uv run --frozen python scripts/validate_hermes_patch_reconciliation.py \
 
 Raw JSON output:
 ```json
-{"status": "qualified", "schema_version": "aether.hermes-patch-reconciliation.v1", "observed_at_utc": "2026-09-26T00:15:00Z", "selected_source": {"repository": "https://github.com/DarkArty07/aether-hermes", "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d", "resolved_from_checkout": true, "present": 31, "partial": 0, "absent": 0, "unverified": 2}, "selected_revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d", "records": 33, "required_hlps": ["HLP-188", "HLP-189", "HLP-191", "HLP-194", "HLP-198", "HLP-204", "HLP-209", "HLP-211", "HLP-226", "HLP-246", "HLP-247", "HLP-262", "HLP-275", "HLP-280", "HLP-305", "HLP-310", "HLP-334", "HLP-335", "HLP-354", "HLP-362", "HLP-369", "HLP-372", "HLP-382", "HLP-385", "HLP-388", "HLP-389", "HLP-393", "HLP-420", "HLP-425", "HLP-426", "HLP-427", "HLP-428"], "deferred_hlps": [{"id": "HLP-433", "presence": "present", "missing": []}], "refusing": [], "refusing_hlps": [], "unverified": ["HLP-246", "HLP-247"]}
+{"status": "qualified", "schema_version": "aether.hermes-patch-reconciliation.v1", "observed_at_utc": "2026-09-26T00:15:00Z", "selected_source": {"repository": "https://github.com/DarkArty07/aether-hermes", "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d", "resolved_from_checkout": true, "present": 30, "partial": 0, "absent": 1, "unverified": 2}, "selected_revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d", "records": 33, "required_hlps": ["HLP-188", "HLP-189", "HLP-191", "HLP-194", "HLP-198", "HLP-204", "HLP-209", "HLP-211", "HLP-226", "HLP-246", "HLP-247", "HLP-262", "HLP-275", "HLP-280", "HLP-305", "HLP-310", "HLP-334", "HLP-335", "HLP-354", "HLP-362", "HLP-369", "HLP-372", "HLP-382", "HLP-385", "HLP-388", "HLP-389", "HLP-393", "HLP-420", "HLP-425", "HLP-426", "HLP-427", "HLP-428"], "deferred_hlps": [{"id": "HLP-433", "presence": "absent", "missing": ["tests/agent/test_auxiliary_client_responses_reasoning_433.py"]}], "refusing": [], "refusing_hlps": [], "unverified": ["HLP-246", "HLP-247"]}
 ```
 Standard output:
 ```
@@ -107,7 +109,7 @@ Exit code: `0`.
 Key observations from raw candidate-check JSON:
 - `status`: `"qualified"`
 - `required_hlps`: contains `HLP-428` alongside 31 earlier required HLPs
-- `deferred_hlps`: contains `HLP-433` (`presence: "present"`, `missing: []`)
+- `deferred_hlps`: contains `HLP-433` (`presence: "absent"`, `missing: ["tests/agent/test_auxiliary_client_responses_reasoning_433.py"]`)
 - `refusing`: `[]`
 - `refusing_hlps`: `[]`
 

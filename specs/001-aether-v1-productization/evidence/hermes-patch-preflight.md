@@ -162,8 +162,9 @@ Source ledger SHA-256: `f473972a00a054a678a71dd52a614799e4a09c909833be78edc22083
 - `HLP-428` (uncertainty): The optional 'Previous review returns (this task)' context line introduced in RC15 does not exist at selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d; retained RC15 review guidance uses its documented durable-history fallback when this optional context is absent. This absence is a disclosed candidate limitation, not an enforcement gate or retirement claim.
 - `HLP-433` (artifact): The patch reconstructs exactly in the maintained fork and candidate checks pass, but public upstream equivalence is unavailable: inspected upstream revisions reconstruct only flat prompt/completion/total tokens from Responses usage. Merged revision 621047dc1c10cceb2825013cc8bb611b4d0e8de1 (PR #17) is a descendant of the selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d; the merged source has not been installed, reloaded or otherwise adopted by the effective Aether runtime.
 - `HLP-433` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-433` (selected_source): Declared source path(s) missing at the selected revision 58f8c37a49b341f25b8fdd6310542fe932031b8d: tests/agent/test_auxiliary_client_responses_reasoning_433.py.
 - `HLP-433` (uncertainty): Upstream hermes-agent lacks reasoning token preservation across the Responses adapter boundary.
-- `HLP-433` (uncertainty): The regression test module tests/agent/test_auxiliary_client_responses_reasoning_433.py is introduced by this patch and does not exist at selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d. It is declared only as an evidenced absence rather than an active component for this pin.
+- `HLP-433` (uncertainty): The regression test module tests/agent/test_auxiliary_client_responses_reasoning_433.py is introduced by this patch and does not exist at selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d, making its absence visible in candidate reconciliation.
 - `HLP-433` (uncertainty): The merged maintained-fork revision 621047dc1c10cceb2825013cc8bb611b4d0e8de1 carrying this behavior is a descendant of the selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d and has not been adopted by the effective Aether runtime; live adoption and effective-runtime qualification remain deferred successors under issue #433, so no installed behavior is asserted.
 
 ## Artifact integrity
@@ -208,13 +209,14 @@ Selected source: `https://github.com/DarkArty07/aether-hermes@58f8c37a49b341f25b
 
 | Verdict | Entries |
 | --- | --- |
-| present | 31 |
+| present | 30 |
 | partial | 0 |
-| absent | 0 |
+| absent | 1 |
 | unverified | 2 |
 
 - `HLP-246`: unverified — no repository-relative component path or declared portable patch path is recorded for this entry
 - `HLP-247`: unverified — no repository-relative component path or declared portable patch path is recorded for this entry
+- `HLP-433`: absent — missing: tests/agent/test_auxiliary_client_responses_reasoning_433.py
 
 ## Safe next decisions
 
