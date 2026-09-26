@@ -1,7 +1,7 @@
 ---
 name: semver-release
 description: Classify SemVer impact and release action safely.
-version: 0.1.0
+version: 0.1.1
 author: Christopher, Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -81,6 +81,9 @@ Do not create a second release registry or workflow engine.
 7. Run the focused release-decision and version-coherence tests plus the repository's
    documented quality gates. Inspect the actual workflow-owned logic rather than proving
    only that a desired string appears in documentation.
+   Select qualification from changed compatibility risks and existing policy. Do not
+   invent a new cross-version oracle or live rollback campaign for every release. A
+   `defer`/`none` disposition does not require preparing or exercising a release at all.
 8. Report all three conclusions, evidence, omitted effects, and rollback implications.
    Keep a correct `defer`/`none` result visible; do not represent unqualified behavior as
    a release.
@@ -98,8 +101,9 @@ Do not create a second release registry or workflow engine.
 ## Verification
 
 - Assert the three fields are present and each belongs to its independent allowed set.
-- Compare version source, package metadata, changelog, expected tag/ref, and release
-  metadata byte-for-byte or through the repository's existing deterministic checks.
-- Exercise stable and RC cases, including malformed/mismatched/default-branch refusals,
-  without making an external publication.
+- For an authorized prepared/published candidate, compare version source, package metadata,
+  changelog, expected tag/ref and release metadata through existing deterministic checks.
+- Exercise the required stable/RC and refusal cases for the changed boundary without
+  making an unauthorized publication. Reuse applicable exact-revision evidence; a new
+  version label alone does not mandate replaying an unrelated qualification campaign.
 - Record test commands, observed results, selected conclusions, and every remaining gate.

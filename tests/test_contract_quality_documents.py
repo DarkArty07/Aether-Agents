@@ -23,10 +23,10 @@ SKILLS = {
     "implementation-evidence": "Implementer",
 }
 SKILL_VERSIONS = {
-    "objective-contract-design": "0.2.0",
-    "contract-result-review": "0.1.1",
-    "supervisor-decomposition": "0.1.4",
-    "implementation-evidence": "0.1.1",
+    "objective-contract-design": "0.2.1",
+    "contract-result-review": "0.1.2",
+    "supervisor-decomposition": "0.1.5",
+    "implementation-evidence": "0.1.2",
 }
 
 
@@ -206,6 +206,40 @@ def test_morfeo_owns_continuation_judgment_without_mandatory_plan_ceremony() -> 
         "Inability to accept does not itself justify another attempt",
     ):
         assert phrase in soul
+
+
+def test_role_guidance_preserves_requirement_meaning_without_new_authority() -> None:
+    """Presence/coherence checks only; these do not measure model obedience."""
+    paths = [
+        RESOURCES / "profiles" / role / "SOUL.md"
+        for role in ("morfeo", "supervisor", "implementer")
+    ]
+    paths += [RESOURCES / "skills" / name / "SKILL.md" for name in SKILLS]
+    for path in paths:
+        text = " ".join(path.read_text(encoding="utf-8").split())
+        assert "alternatives, quantities, destinations, conditions and exclusions" in text
+
+    contract = " ".join(
+        (RESOURCES / "skills/objective-contract-design/SKILL.md").read_text().split()
+    )
+    assert "independently acceptable outcome" in contract
+    assert "not mandatory phases for every bug" in contract
+    assert "applicable project gate" in contract
+    assert "smallest sufficient existing check" in contract
+    assert "when the owner chooses ordinary-use observation" in contract
+
+
+def test_role_guidance_consolidates_repeated_collaboration_obligations() -> None:
+    counts = {
+        "morfeo": "Remain the design steward after handoff",
+        "supervisor": "An existing design may be unsuitable even when no section is missing",
+        "implementer": "Before encoding a test oracle, verify that the required state or transition",
+    }
+    for role, phrase in counts.items():
+        text = (RESOURCES / "profiles" / role / "SOUL.md").read_text(encoding="utf-8")
+        assert text.count(phrase) == 1
+    skill = (RESOURCES / "skills/objective-contract-design/SKILL.md").read_text()
+    assert "this objective starts on the old runtime" not in skill
 
 
 def test_native_loader_reads_exact_documents_in_disposable_home(tmp_path: Path) -> None:

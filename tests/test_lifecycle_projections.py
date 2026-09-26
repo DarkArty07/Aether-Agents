@@ -2185,8 +2185,8 @@ def test_rc12_reader_accepts_rc14_schema5_and_activates_forward(
 ) -> None:
     """A disposable rc12 manager accepts an rc14 schema-5 target and moves forward.
 
-    Required HLP paths are present in a disposable fork. HLP-428 and HLP-433 stay
-    deferred and do not block. Mutable state stays put and the Hermes pin does not move.
+    Required HLP paths are present in a disposable fork. HLP-428 is required and present,
+    HLP-433 stays deferred and does not block. Mutable state stays put and the Hermes pin does not move.
     """
 
     import importlib.util
@@ -2251,15 +2251,15 @@ def test_rc12_reader_accepts_rc14_schema5_and_activates_forward(
         [line for line in completed.stdout.splitlines() if line.startswith("{")][-1]
     )
     deferred = {item["id"]: item for item in summary["deferred_hlps"]}
-    assert set(deferred) == {"HLP-428", "HLP-433"}
-    assert "tests/hermes_cli/test_kanban_project_provenance.py" in deferred["HLP-428"]["missing"]
-    assert (
+    assert set(deferred) == {"HLP-433"}
+    assert deferred["HLP-433"]["presence"] == "absent"
+    assert deferred["HLP-433"]["missing"] == [
         "tests/agent/test_auxiliary_client_responses_reasoning_433.py"
-        in deferred["HLP-433"]["missing"]
-    )
+    ]
     assert summary["refusing_hlps"] == []
     assert summary["status"] == "qualified"
     assert "HLP-427" in summary["required_hlps"]
+    assert "HLP-428" in summary["required_hlps"]
 
     extract = tmp_path / "rc12-source"
     extract.mkdir()

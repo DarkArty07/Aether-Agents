@@ -1,7 +1,7 @@
 ---
 name: objective-contract-design
 description: Use when Morfeo plans objectives or pipeline contracts.
-version: 0.2.0
+version: 0.2.1
 author: Morfeo (Aether role), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -83,6 +83,23 @@ The following full extraction procedure applies to pipeline handoffs only. If an
 Objective Plan exists, locate the contract's milestone there before proceeding;
 one handoff still uses exactly one finalized Objective Contract.
 
+### Contract boundary and scope fidelity
+
+Conduct the whole objective, but make each contract an independently acceptable outcome.
+Use separate contracts when dependencies, effect authority or useful delivery boundaries
+justify them; do not bundle an entire release program merely because its stages are related.
+Source repair, artifact preparation and live adoption are possible boundaries, not mandatory
+phases for every bug. Keep an indivisible change together; neither splitting nor consolidation
+is justified by a file, card or contract quota.
+
+For every mandatory deliverable/check, identify the accepted outcome, preservation obligation
+or applicable project gate that requires it. Preserve alternatives, quantities, destinations,
+conditions and exclusions when deriving acceptance. An example, reviewer preference or a
+passing test cannot create authority. Remove unsupported additions before finalizing; return
+an accepted material conflict to its owner instead of silently weakening it.
+
+### Extraction and handoff
+
 1. **Inspect before prescribing.** With `read_file`, `search_files` and `terminal`,
    locate the actual implementation, public interfaces, tests, dependencies and
    repository state. Record stable project-relative paths/symbols and the inspected
@@ -120,10 +137,14 @@ one handoff still uses exactly one finalized Objective Contract.
    lines are inspection evidence, not a permanently fixed patch instruction.
 7. **Design verification.** Map each acceptance obligation to a scenario, expected
    observable result and intended evidence in the owning artifacts. Provide the
-   canonical runnable end-to-end validation, including prerequisites, commands or
-   tool actions, and expected pass/fail observations. Mark unavailable capabilities honestly.
-   Distinguish proposed checks from executed results and unit checks from integrated
-   acceptance; do not impose test-first or live calls unless the resolved standard does.
+   canonical runnable validation required by the resolved standard, including prerequisites,
+   commands/tool actions and pass/fail observations. Product end-to-end validation is not a
+   mandate to build fresh qualification machinery for every source or documentation change.
+   Prefer the smallest sufficient existing check; justify new instrumentation by a concrete
+   risk those checks cannot cover. Do not add a live rollback, cross-version matrix or agent
+   campaign merely because a previous release used one. Preserve actual mandatory gates.
+   Distinguish proposed from executed checks and unit evidence from integrated acceptance;
+   do not impose test-first, live calls or behavioral qualification unless required.
    Check the representative starting state and decisive oracle before expensive
    qualification. Distinguish a product defect, a verification/oracle defect, and a
    coordination failure. Preserve useful failure evidence and reuse the reviewed
@@ -159,9 +180,9 @@ one handoff still uses exactly one finalized Objective Contract.
     Early advice is not final result acceptance. Clarifications within existing accepted
     obligations go in the owning plan/evidence and addressed response; material changes
     to finalized contract terms use `objective_contract supersede`, not an in-place edit.
-    For future root handoffs on supported runtimes, opt in via `kanban_create(..., collaboration="advisory")`
-    from the trusted originating session; this objective starts on the old runtime
-    bootstrap where existing explicit observation and comments are used.
+    On supported runtimes, opt in via `kanban_create(..., collaboration="advisory")` from
+    the trusted originating session. Otherwise use available explicit observation/comments;
+    do not assume this portable procedure runs on a particular installation or bootstrap.
 
 ## Writing rules and compact evidence
 
@@ -173,14 +194,9 @@ label. Use MUST only for an existing or accepted requirement, not a stylistic pr
 Write an action, its observable output and its completion condition rather than a list
 of adjectives. Avoid repeating the same rule in the Objective Contract, plan and skill.
 
-For a material design decision, a compact entry in the existing plan can say:
-
-| Decision | Approved choice and reason | Evidence/assumption | Verification reference | Local freedom |
-|---|---|---|---|---|
-| Existing decision reference | Chosen behavior and rejected material alternative | Inspected source or authorized probe; validity boundary | Existing acceptance/scenario reference | Equivalent private implementation choices |
-
-This is an optional prose aid, not another registry or schema. Use existing identifiers
-and references; do not create a separate file or new identifier system just for this table.
+Keep the approved choice, reason, evidence/assumption and local freedom together in the
+existing plan when material. Use existing identifiers and references, not another registry,
+schema or file created merely to hold a decision table.
 If design is incomplete, return the specific question, why it changes the outcome,
 known alternatives and evidence, and which owner can decide. Do not ask the owner to
 repeat context that the repository or prior accepted artifact can answer.
@@ -230,9 +246,9 @@ additional applicable state/atomicity decisions; this example does not supply th
 
 ## Verification
 
-Review one sufficient small case, one materially incomplete case, one contradictory
-case and one complex interface/state case. Record exact references and what each case
-accepts, rejects or leaves locally discretionary. The small case must not acquire
-unnecessary architecture. A real receiver must identify absent material decisions
-rather than invent them. Evidence of this exercise is separate from document-format
-checks and from later product execution; do not self-label it independent review.
+For the contract being authored, check sufficiency, missing material decisions,
+contradictions and applicable interface/state boundaries. A small objective must not acquire
+irrelevant architecture. Record exact references and local discretion; do not call author
+self-check independent review. These dimensions are not a mandatory synthetic case campaign
+for every skill edit. Resource checks verify text/packaging, not agent behavior; when the owner
+chooses ordinary-use observation, state that limit rather than adding E2E qualification.

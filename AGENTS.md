@@ -32,6 +32,17 @@ excludes agent behavior tests and unrelated deferred fork changes. RC15 does not
 resume or accept the paused #494 objective. Preserve earlier releases and distinguish
 focused deterministic checks, packaging verification and untested agent behavior.
 
+## Current role-guidance maintenance (#426 / #459)
+
+The owner authorizes Morfeo to directly consolidate the three package-owned SOULs and
+relevant canonical skills, preserving intent, useful contract boundaries and proportional
+verification. This is instruction/source maintenance, not a pipeline or release. Close
+#426/#459 after source integration and documentary/resource checks; no E2E, synthetic
+agent campaign, live canary or runtime adoption is part of this objective. The owner will
+observe ordinary usage and reopen issues if needed. Do not report behavioral qualification
+from resource checks. See `specs/006-contract-execution-quality/spec.md` for the owning
+maintenance decision; this does not waive required repository checks or unrelated gates.
+
 ## How Aether is built: borrow the thinking, write our own workflow
 
 **Read this before designing or building anything.**

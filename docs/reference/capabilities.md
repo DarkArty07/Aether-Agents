@@ -1025,6 +1025,7 @@ The package carries portable Morfeo, Supervisor, and Implementer role resources 
 - `role.supervisor`
 
 ### Current documentation
+- [docs/guides/execution.md](../guides/execution.md)
 - [docs/guides/objective-plans.md](../guides/objective-plans.md)
 - [docs/product-boundary.md](../product-boundary.md)
 - [docs/roles-and-authority.md](../roles-and-authority.md)
@@ -1048,7 +1049,7 @@ The package carries portable Morfeo, Supervisor, and Implementer role resources 
 
 ### Notes / current limits
 
-Portable resources are versioned candidate bytes; private live-profile activation is runtime evidence only, and clean installed-profile activation and public qualification remain pending. Objective planning/continuity guidance is source-level procedure, not a new runtime tool or demonstrated behavioral efficacy.
+Portable resources are versioned candidate bytes; private live-profile activation is runtime evidence only, and clean installed-profile activation and public qualification remain pending. Objective planning/continuity guidance is source-level procedure, not a new runtime tool or demonstrated behavioral efficacy. For #426/#459 the owner accepts direct instruction maintenance with resource checks and later ordinary-use observation, without an E2E agent campaign or a claim of active-profile adoption.
 
 ## `skills.aether-canonical-resources`
 
