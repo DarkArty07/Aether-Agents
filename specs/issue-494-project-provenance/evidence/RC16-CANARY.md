@@ -94,14 +94,22 @@ failure recorded through the supported failure path with the breaker tripped pro
 | Witness | Observed |
 | --- | --- |
 | Live board count | unchanged (99 boards) |
-| Live board task / comment / run totals | unchanged (567 / 1504 / 2300) |
-| Live board db hashes | **all 99 byte-identical** before and after the canary |
-| Live event delta | +4 events, all attributable to this canary card's own control-plane lifecycle (its claim, spawn, promote and heartbeats) on this objective's board; no other board changed |
+| Live board task / comment / run totals | unchanged (567 / 1504 / 2300) across the whole canary window |
+| Live board write attribution | of the 99 live board databases, **exactly one** was written during the window — this objective's own board — and its only new events belong to this canary card's own control-plane lifecycle (its claim, spawn, promote and heartbeats). Every other live board is untouched by mtime, so its bytes are unchanged. |
+| Isolation proof | the canary ran with `HERMES_KANBAN_HOME`, `HERMES_KANBAN_DB` and `HERMES_KANBAN_BOARD` pinned to its own disposable board, with `HERMES_KANBAN_TASK` / `HERMES_KANBAN_RUN_ID` / `HERMES_SESSION_ID` cleared, so no live board was reachable |
 | Project registry | unchanged |
 | Active release record | unchanged |
 | Unrelated services | the unrelated Hestia gateway and the other user services remain active |
 | Selected release | still the RC16 release after the canary |
 | Canary artifacts | created only under the disposable temp root; nothing committed as product source and no live board mutated |
+
+Note on the live-board evidence: an earlier revision of this file claimed all 99 board hashes
+were compared byte-identical before and after. That comparison is **withdrawn as invalid** — the
+fingerprint helper wrote its reading to the same path it had read the pre-state from, so the
+"post" value was not an independent second measurement. The checks recorded above (stable
+structural totals, exact write attribution by mtime across all 99 boards, and the pinned
+disposable board routing) are the ones actually observed, and they support the preservation
+claim as stated here and no more.
 
 No accidental live mutation was discovered, so no escalation was required.
 
