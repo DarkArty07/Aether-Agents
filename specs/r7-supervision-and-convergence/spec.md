@@ -86,6 +86,11 @@ The two defaults compose badly. The unblock-loop breaker routes a repeatedly-blo
 - **FR-714g**: Ready independent units MUST NOT be held behind an unrelated review, optional investigation or documentation task unless the canonical contract makes that task a real prerequisite. File-conflicting units remain ordered under FR-714; this requirement does not waive a gate, interrupt healthy work or change concurrency settings.
 - **FR-714h**: Throughput claims MUST distinguish verified graph independence from actual run overlap, queue wait, rework and integration. Use run-level evidence and the effective existing capacity; current-assignee totals and heartbeats alone are insufficient. Qualification MUST include an independent graph and a genuinely ordered graph without inventing a percentage speedup target.
 
+FR-714h governs an authorized behavioral/throughput qualification, not every edit to role
+instructions. For the owner-directed #426/#459 source maintenance, the disposition in
+`../006-contract-execution-quality/spec.md` applies: resource checks and later ordinary-use
+observation, no synthetic agent/E2E campaign and no throughput improvement claim.
+
 ## 5. Escalation — local judgement first, durable escalation when material
 
 Christopher's original instruction remains authoritative at the material boundary:

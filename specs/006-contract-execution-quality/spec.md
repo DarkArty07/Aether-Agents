@@ -24,6 +24,28 @@ not change other projects' testing standards or authorize bypassing required che
 
 ## Intent and scope
 
+### Owner-authorized instruction maintenance — #426 / #459
+
+The owner directs Morfeo to resolve #426 and #459 through bounded, direct edits to the
+three package-owned SOULs and relevant canonical procedures, consolidating repetition and
+reconciling contradictions without a pipeline or an agent-behavior test campaign. Preserve
+the existing role/authority boundaries, native handoff/review lifecycle, two-return policy
+and protected effects. #426 covers semantic fidelity and over-specified acceptance; #459
+covers useful contract boundaries within a whole objective, not a mandatory split per bug.
+
+Completion for this maintenance is source integration and issue reconciliation after
+documentary/resource checks, not an E2E, live canary, release or profile activation.
+The owner will observe ordinary usage over time and reopen/file issues if problems recur.
+Do not carry the older intervention's installation or observation-tracker requirements
+into this maintenance. The existing managed release path delivers source resources later;
+no installed or behavioral improvement is claimed here. Required repository checks remain
+applicable, and this local decision does not waive other objectives' testing standards.
+The owner subsequently authorized updating and deploying the existing documentation site
+through its normal GitHub Pages workflow after a green merge; no other deployment or
+runtime activation is authorized by that instruction.
+
+### Original intervention
+
 Make the existing responsibilities explicit, teachable and verifiable from Morfeo's
 intent/design through Supervisor's independent units to Implementer's behavior/evidence.
 Reduce avoidable ambiguity, serialization and rework without equating more prose or

@@ -29,6 +29,7 @@ const descriptions: Record<string, string> = {
   'guides/telegram-monitor': 'Reportes horarios de progreso y límites del monitor de Telegram.',
   'guides/policy-and-recovery': 'Política, límites y recuperación reversible.',
   'guides/morfeo-tool-configuration': 'Selección local de herramientas por rol, sus motivos y límites.',
+  'guides/morfeo-mcp': 'Uso de Morfeo desde clientes MCP externos, contexto inicial y límites de la conexión.',
   'reference/cli': 'Comandos, opciones y salidas de la interfaz de terminal.',
   'reference/plugins-and-tools': 'Plugins y herramientas registradas por el producto.',
   'reference/capabilities': 'Estado de implementación y trazabilidad de las capacidades.',

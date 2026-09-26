@@ -1,7 +1,7 @@
 ---
 name: supervisor-decomposition
 description: Use when Supervisor decomposes or reviews units.
-version: 0.1.4
+version: 0.1.5
 author: Morfeo (Aether role), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -42,6 +42,9 @@ current limits and authority as constraints, not settings to tune during decompo
    or genuinely missing product decisions before inventing a breakdown around them.
    Return a contract defect to Morfeo. Do not require irrelevant diagrams or escalate
    equivalent reversible local choices that already preserve the contract.
+   Also challenge disproportionate acceptance or verification machinery with a concrete
+   source-backed reason. Morfeo reconciles the owning design; do not silently waive an
+   existing obligation or add implementation work to make an oversized contract convenient.
    Stop receipt investigation when the design and dependency decisions needed to write
    executable units are known. Before another broad read, name the unanswered question
    and which scope, dependency or acceptance choice it affects. Do not perform each
@@ -52,6 +55,8 @@ current limits and authority as constraints, not settings to tune during decompo
    as preservation and authority. Do not partition by arbitrary file count, by technical
    layer alone, or into tiny busywork to fill slots. Review this draft with the owning
    spec/plan before creating execution instances.
+   Preserve the source's alternatives, quantities, destinations, conditions and exclusions;
+   a unit or review must not turn one allowed alternative into several required behaviors.
 3. **Explain dependencies and shared decisions.** For every edge, name the prerequisite
    artifact, verified state or shared-file ownership that necessitates it. Resolve
    contract-supported shared execution choices once and stamp them into affected unit
@@ -104,11 +109,8 @@ current limits and authority as constraints, not settings to tune during decompo
    when the trusted runtime graph explicitly supplies it. The terminal integration
    card consumes reviewed units; it does not replace unit review. Integrate and close
    out under existing procedures, preserving accepted commits and release conclusions.
-   A write-capable probe or review step constructs one disposable board context and
-   refuses a context that resolves outside its private roots before the first writer.
-   If an accidental mutation of a live or shared board is discovered, preserve it as
-   evidence and escalate through the supported lifecycle; direct SQL deletion of
-   tasks, comments, events or runs is never cleanup.
+   A write-capable probe refuses destinations outside its disposable roots before the first
+   writer. Apply the accidental-mutation procedure below if isolation fails.
 
 ## Review convergence
 
@@ -125,6 +127,8 @@ source provenance, convergence and proportional re-review.
    requirement or preservation boundary, its reproduction and the affected mechanism.
    Separate required corrections from optional improvements. Optional work does not
    block acceptance; record it without adding it to the unit's scope. Bind factual
+   findings to the original obligation, not only to tests of the worker's interpretation.
+   A passing test can still encode an unrequested behavior. Bind source
    citations to the artifact actually inspected: source coordinates come from the exact
    Git/raw artifact whose coordinates are reported. A rendered, normalized or transformed
    copy may help discovery, but its line numbers are not line numbers of the original.
@@ -144,15 +148,10 @@ source provenance, convergence and proportional re-review.
    the route if investigation or scope grows. Attribute your patch and final-candidate
    verification separately from independent review; preserve any contract-required
    independence without automatically adding another agent for each small adjustment.
-   If the evidence challenges an existing material design,
-   shared interface, scope, guarantee or authority decision, return it to Morfeo even
-   when the contract is complete. Share concrete questions and material execution
-   evidence with the originating design steward during the contract; an existing design
-   may be unsuitable even when no section is missing. Consume and disposition the
-   answer against current sources; retain execution, review and integration ownership,
-   and keep unaffected work moving. Peer advice never supplies owner authority or
-   independent approval of coauthored changes. State the failing premise, evidence,
-   preserved requirements and the decision needed; do not silently redesign it or weaken it.
+   If evidence challenges material design, an interface, scope, guarantee or authority,
+   return it to Morfeo even when the contract is complete, using coordination step 7.
+   State the failing premise, evidence, preserved requirements and decision needed;
+   do not silently redesign or weaken it.
    Suspend the failing patch-by-patch strategy, not healthy independent work. Preserve
    the candidate and unfinished work through the native lifecycle.
 5. **Consolidate the handoff.** Give the known findings together, the common mechanism
@@ -163,8 +162,9 @@ source provenance, convergence and proportional re-review.
    environment, obligation and risk surface remain unchanged; re-run affected mandatory
    controls and regressions when the delta can invalidate them. If a broad verification
    is repeated, state what changed or what specific risk invalidated the earlier result;
-   the review-round number alone is not a reason. Do not reopen settled unrelated areas
-   without evidence or invent universal guarantees outside the agreed boundary.
+   the review-round number alone is not a reason. Prefer existing checks to a new oracle;
+   new instrumentation must answer a concrete uncovered acceptance risk. Do not reopen
+   settled unrelated areas or invent universal guarantees outside the agreed boundary.
    A genuinely new defect or introduced regression still requires its own reproduction
    and may prevent acceptance. Never approve merely because a round budget was reached,
    hide a failure, or remove a preservation obligation to finish sooner.
@@ -218,9 +218,7 @@ efficacy or runtime adoption.
 | A later patch introduces a new real preservation regression | Reproduce it and choose repair, budgeted rework or recovery; consolidation does not excuse the regression or reset the budget. |
 
 Document/loading tests can check that this procedure exists and remains consistent.
-They cannot prove that a model follows it. Observe actual authorized work through the
-existing adoption tracker; do not restart a retired synthetic campaign or fabricate a
-speedup or behavioral qualification result.
+They cannot prove that a model follows it. Observe actual authorized work; do not restart a retired synthetic campaign or fabricate a speedup or behavioral qualification result.
 
 ### Accidental mutation is evidence, not cleanup
 
@@ -228,8 +226,9 @@ Synthetic rows written into a live or shared board are a preservation event, not
 cleanliness problem. Direct SQL deletion of tasks, comments, events or runs is never
 cleanup: it destroys the audit trail of the accident. Preserve the rows and the exact
 mutation evidence, and escalate through the supported lifecycle so the owning flow can
-decide. Reproduce the isolation defect only against disposable boards, and require a
-byte/row-stable live-board fingerprint from the unit that fixes it.
+decide. Reproduce the isolation defect only against disposable boards. Preservation
+evidence needs an independently retained prestate and attribution of expected/concurrent
+changes; a hash comparison on an actively written live board is not proof of isolation.
 
 ### Collaboration comment lifecycle and examples (illustrative)
 
@@ -282,16 +281,6 @@ because Formatter is listed first. If inspection instead proves both must edit
 authorize an architectural refactor or waive a contract gate to recover parallelism.
 Actual overlap still needs run evidence; this table demonstrates only graph reasoning.
 
-## Worked contrasts (illustrative)
-
-- Independent report formatting and an unrelated read-only export can run together
-  only if their stories, agreed interfaces, writable files and tests are independent.
-- Two operations editing the same dispatcher file are not parallel units under current
-  policy even if they implement different logical branches. Record that collision.
-- A shared interface must exist before consumers implement against it. An unrelated
-  documentation unit is not a prerequisite for those consumers merely because it was
-  listed earlier. Never waive an actual contract-required gate to manufacture overlap.
-
 ## Pitfalls
 
 - Creating cards without a canonical breakdown or replacing design with long card prose.
@@ -308,10 +297,9 @@ Actual overlap still needs run evidence; this table demonstrates only graph reas
 
 ## Verification
 
-Trace requirement to unit to actual evidence. Inspect a graph with real independence
-and one with a necessary interface/shared-file dependency: the first must permit
-concurrent execution; the second must preserve its valid ordering. When live execution
-is authorized, prove overlap from claimed/spawned/completed run intervals on an isolated
-board, not dependency diagrams alone. Record unavailable capacity and external latency
-separately. Check an incomplete worker delivery is returned for rework and that ordinary
-local choices stay local. Do not infer a speedup percentage from these controls.
+For the actual delivery, trace requirement to unit to evidence; check independent work,
+necessary ordering, the review lane and delegated local choices. Claim overlap only from
+actual run intervals, not diagrams, and distinguish unavailable capacity from execution time.
+These are execution checks, not a requirement to dispatch sample agents when editing this
+document. Honor an owner-chosen ordinary-use observation boundary without claiming behavioral
+qualification or a speedup from resource checks.

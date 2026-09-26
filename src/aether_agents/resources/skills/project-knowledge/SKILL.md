@@ -1,7 +1,7 @@
 ---
 name: project-knowledge
 description: Orient on project architecture, dependencies, or decisions.
-version: 0.1.0
+version: 0.1.1
 author: Aether contributors
 license: MIT
 platforms: [linux]
@@ -61,11 +61,9 @@ because `knowledge/graph_worker.py` passes the text directly to Graphify; refine
 subsequent queries using symbols or names actually observed, or fall back to native source
 search (`search_files`).
 
-Consult an available graph before repository content searches and answer-bearing source reads
-when seeking to understand project architecture, dependencies, implementation, or decisions.
-Then use native file tools to inspect the relevant current sources after orientation to
-verify. A source reference in an older snapshot is a lead, not evidence that the source still
-has that behavior. Read current source files before designing, changing code, or concluding.
+Within the orientation boundary above, consult an available graph before repository content searches and answer-bearing source reads.
+A source reference in an older snapshot is a lead, not evidence of current behavior.
+Read current source files before designing, changing code, or concluding.
 Do not bypass a genuine protected-edge denial through another tool.
 
 ## Quick Reference
@@ -127,11 +125,10 @@ default across rebuilds.
 
 1. Confirm the current task and normal project guidance. Discover only relevant canonical
    procedures; do not load every project document or graph report into the prompt.
-2. Query → Explain → Community discovery: For requests to understand project architecture,
-   dependencies, implementation, or documented decisions, consult an available graph before
-   repository content searches and answer-bearing source reads. Ask a bounded question with
-   `query`. Natural-language queries can be noisy because `knowledge/graph_worker.py` passes
-   the text directly to Graphify. You may select `traversal` (`bfs` or `dfs`), `depth` (1–6)
+2. Query → Explain → Community discovery: use only the depth needed to locate relevant
+   sources, not a mandatory sequence of all three actions. Ask a bounded question with
+   `query`; move to current sources once the unanswered material question is located.
+   You may select `traversal` (`bfs` or `dfs`), `depth` (1–6)
    and a `context_filter` for query refinement only. When a promising symbol is returned, call
    `explain` with `node` to inspect connections. The response returns `resolved_node` with
    `{id, community_id, community_name}` (community fields are `null` if the node is
@@ -178,15 +175,9 @@ default across rebuilds.
 
 ## Pitfalls
 
-- Do not explore sources before consulting the graph: when asked to understand architecture,
-  dependencies, implementation, or documented decisions, consult an available graph before
-  repository content searches and answer-bearing source reads. Then verify against current
-  sources.
+- Apply the orientation trigger in When to Use, not a graph gate before every file read.
 - Do not treat `community_id: 0` or any community ID as a portable default across snapshots
   or rebuilds. Always discover community IDs dynamically from `explain.resolved_node`.
-- Natural-language queries can return noisy nodes because `knowledge/graph_worker.py` passes
-  the raw text to Graphify. Refine subsequent exploration with exact symbols or names actually
-  observed, or fall back to source search (`search_files`).
 - Do not design or conclude based on graph output alone without reading current source files.
 - Read returned `revision`, `coverage`, and warnings honestly: dirty files are not indexed,
   and a snapshot is not proof of current source behavior.

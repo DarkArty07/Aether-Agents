@@ -88,6 +88,13 @@ Completeness is measured with mechanisms that already exist upstream, not assert
 
 ### Before handoff — Morfeo's side
 
+Contract sizing follows the owner's whole objective, not a mandatory release template.
+Use independently acceptable outcomes and real dependency/effect boundaries when they
+justify several contracts; do not place source correction, publication and live adoption
+in one contract merely because they belong to the same program. Conversely, do not split
+an indivisible change or create extra gates to meet a contract/card quota. The Objective
+Plan carries continuity across useful milestones, not repeated acceptance obligations.
+
 - **FR-210**: Morfeo MUST validate the requirements quality of what he wrote: completeness, clarity, consistency, measurability, and scenario coverage.
 - **FR-211**: No unresolved clarification marker or unquantified vague term may remain at handoff.
 - **FR-212**: Requirements-quality validation MUST use traceability references, per upstream's standard of at least 80% of items carrying one.
@@ -102,7 +109,21 @@ Completeness is measured with mechanisms that already exist upstream, not assert
 - **FR-213e**: Each acceptance obligation MUST have a traceable verification scenario and expected observable evidence at the level needed for the objective. Morfeo MUST check contradictions among authority, scope, deliverables, preservation requirements and test effects. Expected mutations of objective-owned test or execution state MUST NOT be confused with preservation of unrelated state.
 - **FR-213f**: Aether MUST provide a canonical contract-design procedure that operationalizes these requirements through existing artifact owners. Focused role guidance MUST require discovery and use of the applicable canonical procedure without duplicating its manual. Skills own procedure, never requirements or authority; Supervisor's independent receipt analysis remains separate from Morfeo's self-check.
 
-The approved joint intervention preserves the current Objective Contract schema and immutable historical versions. Qualification MUST compare actual contract-shaped cases: a sufficient small objective, missing material design, contradictory acceptance, and a complex interface/state objective. R7 owns the complementary decomposition, parallelism and unit-evidence obligations. The check must demonstrate useful detection and proportionality, not document length, self-certified boolean fields, or a new cognitive enforcement engine. Tool availability, delegation authority, concurrency, models and providers remain unchanged. Scoped activation is authorized only after the isolated qualification and preservation gates in `../006-contract-execution-quality/quickstart.md`; existing active flows are not interrupted.
+Preserve alternatives, quantities, destinations, conditions and exclusions when deriving
+acceptance. Every mandatory deliverable/check needs an accepted outcome, preservation
+obligation or applicable project gate; optional hardening and illustrative scenarios must
+not become new requirements. Prefer existing verification and justify new instrumentation
+by the concrete acceptance risk it covers. Never silently waive an accepted requirement.
+
+The joint intervention preserves the Objective Contract schema and immutable historical
+versions. Its earlier synthetic qualification/adoption campaign was superseded by the
+owner's organic-observation decision in
+[`../006-contract-execution-quality/spec.md`](../006-contract-execution-quality/spec.md).
+Sufficiency, missing design, contradiction and complex interface cases remain useful
+reasoning dimensions, not a mandatory campaign for every instruction edit. R7 owns the
+complementary decomposition and unit-evidence obligations. Resource consistency is not
+behavioral qualification; tools, roles, concurrency, models and providers remain unchanged.
+This reference does not authorize live activation or interruption of existing flows.
 
 ### After receipt — the supervision side
 
