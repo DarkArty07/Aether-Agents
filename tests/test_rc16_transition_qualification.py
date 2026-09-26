@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -122,17 +123,54 @@ def test_entry_refuses_non_temp_work_root_to_confine_service_boundary(tmp_path: 
         )
         assert completed.returncode == 2
         output = (completed.stderr + completed.stdout).lower()
-        assert "must resolve under a system temp directory" in output
+        assert "must resolve under a" in output and "temp directory" in output
         assert not non_temp_work_root.exists()
     finally:
         if non_temp_work_root.exists():
             shutil.rmtree(non_temp_work_root, ignore_errors=True)
 
 
+def test_entry_refuses_custom_tmpdir_work_root_outside_fixed_system_roots(tmp_path: Path) -> None:
+    custom_tmp = Path.home() / ".aether-test-custom-tmpdir"
+    custom_work_root = custom_tmp / "work"
+    if custom_tmp.exists():
+        shutil.rmtree(custom_tmp, ignore_errors=True)
+
+    env = os.environ.copy()
+    env["TMPDIR"] = str(custom_tmp)
+
+    try:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(ENTRY_SCRIPT),
+                "run",
+                "--work-root",
+                str(custom_work_root),
+                "--receipts-root",
+                str(tmp_path / "receipts"),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=str(REPO_ROOT),
+            env=env,
+        )
+        assert completed.returncode == 2
+        output = (completed.stderr + completed.stdout).lower()
+        assert "must resolve under a fixed system temp directory" in output
+        assert not custom_work_root.exists()
+        assert not custom_tmp.exists()
+    finally:
+        if custom_tmp.exists():
+            shutil.rmtree(custom_tmp, ignore_errors=True)
+
+
 def test_is_under_system_temp_confinement_helper(entry: Any, tmp_path: Path) -> None:
-    assert entry.is_under_system_temp(tmp_path / "sub") is True
     assert entry.is_under_system_temp(Path("/tmp/arbitrary")) is True
+    assert entry.is_under_system_temp(Path("/var/tmp/arbitrary")) is True
     assert entry.is_under_system_temp(Path.home() / "non-temp-root") is False
+    assert entry.is_under_system_temp(Path.home() / "custom-tmp" / "work") is False
 
 
 def test_unknown_scenario_is_refused(entry: Any) -> None:

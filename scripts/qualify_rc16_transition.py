@@ -8,11 +8,13 @@ destination could overlap the operator's live install, live selector, live unit,
 operator configuration.
 
 Service boundary confinement:
-The disposable work root must resolve under a system temporary directory (/tmp, /var/tmp, etc.)
-so that the Hermes CLI service installation guard (_refuse_temp_home_service_write) is triggered,
-positively confining the gateway unit materialization and preventing any live user systemd daemon
-reloads or bus communication. A work root resolving outside system temp roots is refused with exit 2
-before any mutation.
+The disposable work root must resolve under a fixed system temporary directory (/tmp, /var/tmp,
+/private/tmp, /private/var/tmp) so that the Hermes CLI service installation guard
+(_refuse_temp_home_service_write) is triggered in the child execution frame (where child TMPDIR is
+set to <work_root>/tmp while HERMES_HOME is <work_root>/home/.hermes), positively confining the gateway
+unit materialization and preventing any live user systemd daemon reloads or bus communication.
+A work root resolving outside the fixed system temp roots (including under a custom TMPDIR) is
+refused with exit 2 before any mutation.
 
 What it proves with real artifacts:
 1. isolation: Confinement witnesses for live unit, active pointer, selector, operator
@@ -97,7 +99,6 @@ SCENARIOS = (
 )
 
 SYSTEM_TEMP_ROOTS = (
-    Path(tempfile.gettempdir()).resolve(),
     Path("/tmp"),
     Path("/var/tmp"),
     Path("/private/tmp"),
@@ -106,12 +107,24 @@ SYSTEM_TEMP_ROOTS = (
 
 
 def is_under_system_temp(path: Path) -> bool:
-    """Return True if path resolves under one of the system temporary directory roots."""
+    """Return True if path resolves under one of the fixed system temporary directory roots."""
     try:
         resolved = path.expanduser().resolve()
     except OSError:
         return False
-    return any(resolved == root or root in resolved.parents for root in SYSTEM_TEMP_ROOTS)
+    for root in SYSTEM_TEMP_ROOTS:
+        try:
+            resolved_root = root.resolve()
+        except OSError:
+            resolved_root = root
+        if (
+            resolved == root
+            or resolved == resolved_root
+            or root in resolved.parents
+            or resolved_root in resolved.parents
+        ):
+            return True
+    return False
 
 
 class Refusal(RuntimeError):
@@ -342,8 +355,8 @@ class Inputs:
         isolation = Isolation(work_root=work_root, receipts_root=receipts_root)
         if not is_under_system_temp(isolation.work_root):
             raise Refusal(
-                f"Isolation refuses non-temp work root: work root must resolve under a system temp directory "
-                f"({tempfile.gettempdir()}, /tmp, /var/tmp) to guarantee service boundary confinement; got: {isolation.work_root}"
+                f"Isolation refuses non-temp work root: work root must resolve under a fixed system temp directory "
+                f"(/tmp, /var/tmp, /private/tmp, /private/var/tmp) to guarantee service boundary confinement; got: {isolation.work_root}"
             )
         overlaps = isolation.live_overlaps()
         if overlaps:

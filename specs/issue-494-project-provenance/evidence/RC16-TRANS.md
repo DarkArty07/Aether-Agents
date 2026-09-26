@@ -37,7 +37,7 @@ All eight decisive scenarios implemented in `scripts/qualify_rc16_transition.py`
 
 | Scenario | Objective obligation | Observed result | Status |
 | --- | --- | --- | --- |
-| `isolation` | Derived paths strictly under disposable work root; refusal of live overlap; scrubbed environment | 0 filesystem directory overlaps detected against configured live directories by path-listing; all 12 derived paths relative to temp work root; service boundary positively confined under system temp; operator environment variables scrubbed | PASS |
+| `isolation` | Derived paths strictly under disposable work root; refusal of live overlap; scrubbed environment | 0 filesystem directory overlaps detected against configured live directories by path-listing; all 12 derived paths relative to temp work root; service boundary positively confined under fixed system temp roots (/tmp, /var/tmp, /private/tmp, /private/var/tmp); operator environment variables scrubbed | PASS |
 | `rc15-immutability` | RC15 active-record and release-lock bytes readable, coherent, and byte-immutable | Initial SHA-256 recorded; verified identical across forward transition, rollback, and reselection | PASS |
 | `candidate-identity` | RC16 candidate release-lock and record bind exact pin `58f8c37a49...` and digest `a2a9b374...` | Verified `schema_version: 5`, Hermes commit `58f8c37a49...`, source tree digest `a2a9b374...`, extras `["mcp"]`, package version `1.0.0rc16`, display `1.0.0-rc.16`, tag `v1.0.0-rc.16` | PASS |
 | `transition-cycle` | RC15 -> RC16 transition with mutable state preserved; rollback target RC15 coherent; RC16 reselection | Complete cycle executed: RC15 initial -> RC16 update -> RC15 rollback -> RC16 reselect; profile memory, session data, project registry, and board database bytes 100% preserved; record and lock bytes immutable | PASS |
@@ -49,8 +49,8 @@ All eight decisive scenarios implemented in `scripts/qualify_rc16_transition.py`
 ## Environment limits
 
 1. **Service manager and bus boundary confinement**:
-   - The isolated transition qualification confines gateway unit materialization through the product's temp-root guard: `HERMES_HOME` resolves under a system temporary directory (`/tmp`, `/var/tmp`, `tempfile.gettempdir()`), triggering `hermes_cli/gateway.py:3465 _refuse_temp_home_service_write`. This guard prevents writing real systemd service units to disk and avoids invoking `systemctl --user daemon-reload` or connecting to the D-Bus user scope bus.
-   - Any work root resolving outside system temp roots is fail-closed refused with exit code 2 before any filesystem mutation occurs (`test_entry_refuses_non_temp_work_root_to_confine_service_boundary`).
+   - The isolated transition qualification confines gateway unit materialization through the product's temp-root guard: the work root must resolve under a fixed system temporary directory (`/tmp`, `/var/tmp`, `/private/tmp`, `/private/var/tmp`). In the child execution frame (where child `TMPDIR` is rewritten to `<work_root>/tmp` while `HERMES_HOME` is `<work_root>/home/.hermes`), `HERMES_HOME` is recognized as temporary only when `<work_root>` is under one of these fixed system roots, triggering `hermes_cli/gateway.py:3465 _refuse_temp_home_service_write`. This guard prevents writing real systemd service units to disk and avoids invoking `systemctl --user daemon-reload` or connecting to the D-Bus user scope bus.
+   - Any work root resolving outside the fixed system temp roots (including under a custom `TMPDIR`) is fail-closed refused with exit code 2 before any filesystem mutation occurs (`test_entry_refuses_non_temp_work_root_to_confine_service_boundary` and `test_entry_refuses_custom_tmpdir_work_root_outside_fixed_system_roots`).
    - **What this lane does NOT prove**: No real user-systemd unit materialization, service reload, or live D-Bus session interaction was executed or claimed. This qualification lane does not prove host systemd service supervisor behavior, unit file validation by an active systemd daemon, or user-bus activation under a live operator session manager.
 
 2. **Filesystem path-listing isolation scope**:
@@ -77,11 +77,11 @@ uv run --frozen python scripts/run_tests.py -- tests/test_rc16_transition_qualif
 
 Result:
 ```text
-...............                                                          [100%]
-15 passed in 93.60s (0:01:33)
+................                                                         [100%]
+16 passed in 87.93s (0:01:27)
 ```
 Exit code: `0`.
-Includes the service boundary confinement control asserting that non-temp work roots are refused before mutation (`test_entry_refuses_non_temp_work_root_to_confine_service_boundary`).
+Includes the service boundary confinement controls asserting that non-temp work roots (`test_entry_refuses_non_temp_work_root_to_confine_service_boundary`) and custom TMPDIR work roots outside fixed system temp roots (`test_entry_refuses_custom_tmpdir_work_root_outside_fixed_system_roots`) are refused before mutation.
 
 ### 2. Mixed-version lifecycle and projection regression suites
 
@@ -112,9 +112,9 @@ Raw JSON receipt output:
 ```json
 {
   "schema_version": "aether.rc16-transition-qualification.v1",
-  "timestamp_utc": "2026-09-26T03:00:39.737039+00:00",
+  "timestamp_utc": "2026-09-26T04:10:49.732661+00:00",
   "overall_status": "passed",
-  "total_duration_s": 91.766,
+  "total_duration_s": 87.362,
   "scenarios_selected": [
     "isolation",
     "rc15-immutability",
@@ -138,7 +138,7 @@ Raw JSON receipt output:
     {
       "name": "rc15-immutability",
       "passed": true,
-      "duration_s": 3.164,
+      "duration_s": 3.536,
       "details": {
         "rc15_record_sha256": "a4b584c06cac60482bac5203ebb24e7948626d2e213162df12518dadc67534c6",
         "rc15_lock_sha256": "ebd5a85a3851bff49156a70988996880bcd79ac71031348f0dde90a2d753f1c7",
@@ -149,7 +149,7 @@ Raw JSON receipt output:
     {
       "name": "candidate-identity",
       "passed": true,
-      "duration_s": 14.712,
+      "duration_s": 13.435,
       "details": {
         "candidate_commit": "<candidate-commit>",
         "candidate_lock": "<disposable-work-root>/candidate-staging/release-lock.json",
@@ -161,7 +161,7 @@ Raw JSON receipt output:
     {
       "name": "transition-cycle",
       "passed": true,
-      "duration_s": 47.822,
+      "duration_s": 45.359,
       "details": {
         "cycle_steps": [
           "rc15_initial",
@@ -176,7 +176,7 @@ Raw JSON receipt output:
     {
       "name": "refusal-matrix",
       "passed": true,
-      "duration_s": 13.725,
+      "duration_s": 13.09,
       "details": {
         "refusals_tested": [
           "wrong_commit",
@@ -192,7 +192,7 @@ Raw JSON receipt output:
     {
       "name": "hlp-reconciliation",
       "passed": true,
-      "duration_s": 0.278,
+      "duration_s": 0.272,
       "details": {
         "required_hlps_count": 32,
         "deferred_hlps": [
@@ -204,7 +204,7 @@ Raw JSON receipt output:
     {
       "name": "review-fallback",
       "passed": true,
-      "duration_s": 0.465,
+      "duration_s": 0.454,
       "details": {
         "fallback_phrases_verified": [
           "If the field is absent, consult existing durable history.",
@@ -218,7 +218,7 @@ Raw JSON receipt output:
     {
       "name": "fork-regression",
       "passed": true,
-      "duration_s": 11.599,
+      "duration_s": 11.214,
       "details": {
         "test_files": [
           "tests/hermes_cli/test_kanban_project_provenance.py",
@@ -245,7 +245,7 @@ Raw JSON receipt output:
     "rc16_hermes_commit": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
     "rc16_hermes_tree_sha256": "a2a9b374bd2022c7f96242b0ab2c95691119262c925389eb3820ca627c581144"
   },
-  "receipt_path": "<durable-private-receipts-root>/rc16-transition-receipt-1790391639.json"
+  "receipt_path": "<durable-private-receipts-root>/rc16-transition-receipt-1790395849.json"
 }
 ```
 Exit code: `0`.
