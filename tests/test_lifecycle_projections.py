@@ -2251,7 +2251,10 @@ def test_rc12_reader_accepts_rc14_schema5_and_activates_forward(
         [line for line in completed.stdout.splitlines() if line.startswith("{")][-1]
     )
     deferred = {item["id"]: item for item in summary["deferred_hlps"]}
-    assert set(deferred) == {"HLP-433"}
+    assert set(deferred) == {
+        record["id"] for record in records if record.get("candidate_requirement") == "deferred"
+    }
+    assert set(deferred).isdisjoint(summary["required_hlps"])
     assert deferred["HLP-433"]["presence"] == "absent"
     assert deferred["HLP-433"]["missing"] == [
         "tests/agent/test_auxiliary_client_responses_reasoning_433.py"
