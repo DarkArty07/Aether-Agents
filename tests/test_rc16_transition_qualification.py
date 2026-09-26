@@ -215,6 +215,42 @@ def test_isolation_derives_every_root_under_work_root(entry: Any, tmp_path: Path
     ):
         assert derived.is_relative_to(tmp_path / "work")
     assert isolation.live_overlaps() == []
+    assert isolation.destination_escapes() == []
+
+
+def test_entry_refuses_symlinked_derived_destination_outside_work_root(tmp_path: Path) -> None:
+    work_root = tmp_path / "work"
+    outside = tmp_path / "outside"
+    work_root.mkdir(parents=True)
+    outside.mkdir(parents=True)
+    symlinked = work_root / "home"
+    symlinked.symlink_to(outside, target_is_directory=True)
+
+    try:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(ENTRY_SCRIPT),
+                "run",
+                "--work-root",
+                str(work_root),
+                "--receipts-root",
+                str(tmp_path / "receipts"),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=str(REPO_ROOT),
+        )
+        assert completed.returncode == 2
+        output = (completed.stderr + completed.stdout).lower()
+        assert "escaped derived destination" in output
+        assert list(outside.rglob("*")) == []
+    finally:
+        if symlinked.is_symlink():
+            symlinked.unlink()
+        shutil.rmtree(work_root, ignore_errors=True)
+        shutil.rmtree(outside, ignore_errors=True)
 
 
 def test_isolated_environment_scrubs_operator_state(

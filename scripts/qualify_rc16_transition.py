@@ -16,6 +16,13 @@ unit materialization and preventing any live user systemd daemon reloads or bus 
 A work root resolving outside the fixed system temp roots (including under a custom TMPDIR) is
 refused with exit 2 before any mutation.
 
+Destination containment:
+Before the first mutating step, every derived destination (HOME, the XDG roots, TMPDIR,
+HERMES_HOME, store/state roots, projections and the project dir) is resolved and required to
+stay inside the disposable work root. A work root whose derived destinations resolve outside
+it — for example through a pre-planted symlink at a derived directory — is refused with exit 2
+instead of redirecting writes outside the disposable store.
+
 What it proves with real artifacts:
 1. isolation: Confinement witnesses for live unit, active pointer, selector, operator
    configs, ensuring zero mutation of live stores or boards.
@@ -240,6 +247,42 @@ class Isolation:
                 overlaps.append(f"live root {live} is inside receipts_root")
         return overlaps
 
+    def destination_escapes(self) -> list[str]:
+        """Return derived destinations that do not resolve inside the work root.
+
+        Every derived destination is required to stay inside the disposable work root
+        even after symlink resolution: a pre-planted symlink at a derived directory
+        would otherwise redirect writes outside the disposable store and defeat the
+        lexical live-overlap check above.
+        """
+        resolved_root = self.work_root.resolve()
+        escapes: list[str] = []
+        for label, path in (
+            ("home", self.home),
+            ("data_home", self.data_home),
+            ("state_home", self.state_home),
+            ("config_home", self.config_home),
+            ("cache_home", self.cache_home),
+            ("runtime_dir", self.runtime_dir),
+            ("tmp", self.tmp),
+            ("store_root", self.store_root),
+            ("state_root", self.state_root),
+            ("hermes_home", self.hermes_home),
+            ("projections", self.projections),
+            ("project_dir", self.project_dir),
+            ("candidate_repo", self.work_root / "candidate-repo"),
+            ("fork_pin_clone", self.work_root / "fork-pin-clone"),
+            ("candidate_staging", self.work_root / "candidate-staging"),
+        ):
+            try:
+                resolved = path.resolve()
+            except OSError:
+                escapes.append(f"{label} {path} cannot be resolved")
+                continue
+            if resolved != resolved_root and resolved_root not in resolved.parents:
+                escapes.append(f"{label} {path} resolves outside the work root: {resolved}")
+        return escapes
+
     def prepare_directories(self) -> None:
         for directory in (
             self.home,
@@ -361,6 +404,12 @@ class Inputs:
         overlaps = isolation.live_overlaps()
         if overlaps:
             raise Refusal(f"Isolation refuses live directory overlap: {'; '.join(overlaps)}")
+        escapes = isolation.destination_escapes()
+        if escapes:
+            raise Refusal(
+                "Isolation refuses escaped derived destination: every derived destination must "
+                f"resolve inside the work root to keep writes disposable; {'; '.join(escapes)}"
+            )
 
         return cls(
             repo=resolved_repo,
@@ -400,6 +449,9 @@ def scenario_isolation(inputs: Inputs, result: ScenarioResult) -> None:
     overlaps = isolation.live_overlaps()
     if overlaps:
         raise ScenarioFailure(f"live overlap detected: {overlaps}")
+    escapes = isolation.destination_escapes()
+    if escapes:
+        raise ScenarioFailure(f"derived destination escapes the work root: {escapes}")
 
     for derived in (
         isolation.home,

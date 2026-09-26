@@ -31,13 +31,25 @@
   - Hermes source-tree SHA-256: `adf77d5840028f490818a3f78304a9f3835bff176df3ad34255aea2f9882aba2`
 - **Explicit non-claims:** This document records unit-level implementation evidence and verification only. It does NOT constitute independent review, integration, live managed cutover, canary verification, activation, publication, deployment, or agent-behavior qualification.
 
+## Supervisor repair attribution (round 3)
+
+The candidate delivered for review was `0ba79130` (the file states 16 focused tests). During the third review round the reviewer reproduced a further instance of the confinement failure class: with a pre-planted symlink at a derived directory (for example `<work_root>/home` pointing at the operator's live data root), the entry accepted the input (`live_overlaps()` returned no overlap) and a full run materialized files outside the work root. Both ordinary review returns for this logical unit were already spent, so the reviewer performed one bounded, invariant-level repair instead of a third return:
+
+- `Isolation.destination_escapes()` resolves every derived destination (HOME, XDG roots, TMPDIR, `HERMES_HOME`, store/state roots, projections, project dir, and the candidate/fork/staging directories under the work root) and requires each to stay inside the disposable work root.
+- `Inputs.resolve` refuses with exit 2 before any mutation when a destination escapes; `scenario_isolation` re-checks it.
+- New control `test_entry_refuses_symlinked_derived_destination_outside_work_root`; the focused entry guards docstring and this evidence's Environment-limits section were corrected.
+
+The controls were mutation-tested: `test_entry_refuses_symlinked_derived_destination_outside_work_root` fails on both earlier candidates (`fd204928`, `0ba79130`), and the round-2 discriminator control (`test_entry_refuses_custom_tmpdir_work_root_outside_fixed_system_roots`) fails on `fd204928`. On the repaired tree the escaped-destination input refuses with exit 2 and materializes zero files, and the decisive run, focused suite (17) and the mixed-version/projection lane all pass.
+
+**This repair and its verification are the reviewer's own work, not independent review of the reviewer's change.** The round-3 verdict on the repaired candidate therefore rests on reviewer-authored code plus reviewer-run verification only; a further independent check would need a different reviewer. The implementation-phase provenance of the underlying unit (its design, its real-reader requirement and the round-1/round-2 corrections above) is unchanged.
+
 ## Scenario results matrix
 
 All eight decisive scenarios implemented in `scripts/qualify_rc16_transition.py` were executed against an isolated disposable store:
 
 | Scenario | Objective obligation | Observed result | Status |
 | --- | --- | --- | --- |
-| `isolation` | Derived paths strictly under disposable work root; refusal of live overlap; scrubbed environment | 0 filesystem directory overlaps detected against configured live directories by path-listing; all 12 derived paths relative to temp work root; service boundary positively confined under fixed system temp roots (/tmp, /var/tmp, /private/tmp, /private/var/tmp); operator environment variables scrubbed | PASS |
+| `isolation` | Derived paths strictly under disposable work root; refusal of live overlap; scrubbed environment | 0 filesystem directory overlaps detected against configured live directories by path-listing; all 12 derived paths relative to temp work root; every derived destination resolves inside the work root (escaped-destination refusal included); service boundary positively confined under fixed system temp roots (/tmp, /var/tmp, /private/tmp, /private/var/tmp); operator environment variables scrubbed | PASS |
 | `rc15-immutability` | RC15 active-record and release-lock bytes readable, coherent, and byte-immutable | Initial SHA-256 recorded; verified identical across forward transition, rollback, and reselection | PASS |
 | `candidate-identity` | RC16 candidate release-lock and record bind exact pin `58f8c37a49...` and digest `a2a9b374...` | Verified `schema_version: 5`, Hermes commit `58f8c37a49...`, source tree digest `a2a9b374...`, extras `["mcp"]`, package version `1.0.0rc16`, display `1.0.0-rc.16`, tag `v1.0.0-rc.16` | PASS |
 | `transition-cycle` | RC15 -> RC16 transition with mutable state preserved; rollback target RC15 coherent; RC16 reselection | Complete cycle executed: RC15 initial -> RC16 update -> RC15 rollback -> RC16 reselect; profile memory, session data, project registry, and board database bytes 100% preserved; record and lock bytes immutable | PASS |
@@ -51,11 +63,13 @@ All eight decisive scenarios implemented in `scripts/qualify_rc16_transition.py`
 1. **Service manager and bus boundary confinement**:
    - The isolated transition qualification confines gateway unit materialization through the product's temp-root guard: the work root must resolve under a fixed system temporary directory (`/tmp`, `/var/tmp`, `/private/tmp`, `/private/var/tmp`). In the child execution frame (where child `TMPDIR` is rewritten to `<work_root>/tmp` while `HERMES_HOME` is `<work_root>/home/.hermes`), `HERMES_HOME` is recognized as temporary only when `<work_root>` is under one of these fixed system roots, triggering `hermes_cli/gateway.py:3465 _refuse_temp_home_service_write`. This guard prevents writing real systemd service units to disk and avoids invoking `systemctl --user daemon-reload` or connecting to the D-Bus user scope bus.
    - Any work root resolving outside the fixed system temp roots (including under a custom `TMPDIR`) is fail-closed refused with exit code 2 before any filesystem mutation occurs (`test_entry_refuses_non_temp_work_root_to_confine_service_boundary` and `test_entry_refuses_custom_tmpdir_work_root_outside_fixed_system_roots`).
+   - **Accepted set == guard-covered set**: the entry accepts exactly the fixed system roots, and the child frame's `TMPDIR` is set to `<work_root>/tmp`, so the guard's own `tempfile.gettempdir()` term always evaluates inside the already-accepted set. Verified in the exact child frame: feeding the real emitted unit text into the pin's `_temp_home_in_service_definition` returns `would_refuse=True` for an accepted work root, and the real CLI (`hermes_cli.main --profile morfeo gateway install --force --no-start-now --start-on-login`) prints `✗ Refusing to write the gateway systemd unit` and writes no unit file. A full shimmed decisive run recorded `systemctl is-system-running` only — **zero** `daemon-reload` and zero `enable` invocations, with no unit written anywhere in the work root.
    - **What this lane does NOT prove**: No real user-systemd unit materialization, service reload, or live D-Bus session interaction was executed or claimed. This qualification lane does not prove host systemd service supervisor behavior, unit file validation by an active systemd daemon, or user-bus activation under a live operator session manager.
 
 2. **Filesystem path-listing isolation scope**:
    - The isolation check verifies path resolution against configured live data/state/config/service directories (`~/.local/share/aether`, `~/.local/state/aether`, `~/.config/aether`, `~/.hermes`, `/etc/systemd/user`).
    - This check is strictly a filesystem path-listing and environment-scrubbing check; it does not probe or monitor the host service manager, active IPC sockets, or background daemons.
+   - **Destination containment**: every derived destination is additionally resolved and required to stay inside the disposable work root before the first mutating step. A pre-planted symlink at a derived directory (e.g. `<work_root>/home` pointing at the operator's live data root), which the lexical live-overlap check alone does not catch, is refused with exit code 2 (`test_entry_refuses_symlinked_derived_destination_outside_work_root`); the same input previously accepted and materialized files outside the work root.
 
 3. **Durable private receipts root**:
    - Raw qualification receipts are stored in a durable private root (`.aether/receipts/rc16-trans/`, ignored by Git) rather than an ephemeral `/tmp` location. The temporary work root containing candidate builds, isolated stores, and clones remains strictly disposable and temp-confined.
@@ -77,11 +91,11 @@ uv run --frozen python scripts/run_tests.py -- tests/test_rc16_transition_qualif
 
 Result:
 ```text
-................                                                         [100%]
-16 passed in 87.93s (0:01:27)
+.................                                                        [100%]
+17 passed in 90.84s (0:01:30)
 ```
 Exit code: `0`.
-Includes the service boundary confinement controls asserting that non-temp work roots (`test_entry_refuses_non_temp_work_root_to_confine_service_boundary`) and custom TMPDIR work roots outside fixed system temp roots (`test_entry_refuses_custom_tmpdir_work_root_outside_fixed_system_roots`) are refused before mutation.
+Includes the service boundary confinement controls asserting that non-temp work roots (`test_entry_refuses_non_temp_work_root_to_confine_service_boundary`) and custom TMPDIR work roots outside fixed system temp roots (`test_entry_refuses_custom_tmpdir_work_root_outside_fixed_system_roots`) are refused before mutation, and the destination-containment control (`test_entry_refuses_symlinked_derived_destination_outside_work_root`).
 
 ### 2. Mixed-version lifecycle and projection regression suites
 
@@ -93,7 +107,7 @@ uv run --frozen python scripts/run_tests.py -- tests/test_mixed_version_lifecycl
 Result:
 ```text
 .....................................................................    [100%]
-69 passed in 50.39s
+69 passed in 46.44s
 ```
 Exit code: `0`.
 Confirms that neither `scripts/qualify_mixed_version_lifecycle.py` nor `tests/test_lifecycle_projections.py` was modified or weakened.
@@ -112,9 +126,9 @@ Raw JSON receipt output:
 ```json
 {
   "schema_version": "aether.rc16-transition-qualification.v1",
-  "timestamp_utc": "2026-09-26T04:10:49.732661+00:00",
+  "timestamp_utc": "2026-09-26T04:57:40.421879+00:00",
   "overall_status": "passed",
-  "total_duration_s": 87.362,
+  "total_duration_s": 87.614,
   "scenarios_selected": [
     "isolation",
     "rc15-immutability",
@@ -138,7 +152,7 @@ Raw JSON receipt output:
     {
       "name": "rc15-immutability",
       "passed": true,
-      "duration_s": 3.536,
+      "duration_s": 2.709,
       "details": {
         "rc15_record_sha256": "a4b584c06cac60482bac5203ebb24e7948626d2e213162df12518dadc67534c6",
         "rc15_lock_sha256": "ebd5a85a3851bff49156a70988996880bcd79ac71031348f0dde90a2d753f1c7",
@@ -149,7 +163,7 @@ Raw JSON receipt output:
     {
       "name": "candidate-identity",
       "passed": true,
-      "duration_s": 13.435,
+      "duration_s": 13.562,
       "details": {
         "candidate_commit": "<candidate-commit>",
         "candidate_lock": "<disposable-work-root>/candidate-staging/release-lock.json",
@@ -161,7 +175,7 @@ Raw JSON receipt output:
     {
       "name": "transition-cycle",
       "passed": true,
-      "duration_s": 45.359,
+      "duration_s": 45.867,
       "details": {
         "cycle_steps": [
           "rc15_initial",
@@ -176,7 +190,7 @@ Raw JSON receipt output:
     {
       "name": "refusal-matrix",
       "passed": true,
-      "duration_s": 13.09,
+      "duration_s": 13.342,
       "details": {
         "refusals_tested": [
           "wrong_commit",
@@ -192,7 +206,7 @@ Raw JSON receipt output:
     {
       "name": "hlp-reconciliation",
       "passed": true,
-      "duration_s": 0.272,
+      "duration_s": 0.259,
       "details": {
         "required_hlps_count": 32,
         "deferred_hlps": [
@@ -204,7 +218,7 @@ Raw JSON receipt output:
     {
       "name": "review-fallback",
       "passed": true,
-      "duration_s": 0.454,
+      "duration_s": 0.451,
       "details": {
         "fallback_phrases_verified": [
           "If the field is absent, consult existing durable history.",
@@ -218,7 +232,7 @@ Raw JSON receipt output:
     {
       "name": "fork-regression",
       "passed": true,
-      "duration_s": 11.214,
+      "duration_s": 11.422,
       "details": {
         "test_files": [
           "tests/hermes_cli/test_kanban_project_provenance.py",
@@ -231,7 +245,7 @@ Raw JSON receipt output:
         "runner": "<disposable-work-root>/fork-pin-clone/scripts/run_tests.sh",
         "exit_code": 0,
         "stdout_summary": [
-          "=== Summary: 5 files, 30 tests passed, 0 failed (100% complete) in 3.5s (48 workers) ==="
+          "=== Summary: 5 files, 30 tests passed, 0 failed (100% complete) in 3.7s (48 workers) ==="
         ]
       },
       "error": null
@@ -245,7 +259,7 @@ Raw JSON receipt output:
     "rc16_hermes_commit": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
     "rc16_hermes_tree_sha256": "a2a9b374bd2022c7f96242b0ab2c95691119262c925389eb3820ca627c581144"
   },
-  "receipt_path": "<durable-private-receipts-root>/rc16-transition-receipt-1790395849.json"
+  "receipt_path": "<durable-private-receipts-root>/rc16-transition-receipt-1790398660.json"
 }
 ```
 Exit code: `0`.
@@ -279,7 +293,7 @@ Discovered 5 test files (~22 tests) under ['tests/hermes_cli/test_kanban_project
 
 === Summary: 5 files, 30 tests passed, 0 failed (100% complete) in 2.9s (48 workers) ===
 ```
-Exit code: `0`.
+Exit code: `0`. Reviewer re-run at the same pin against the repaired candidate (independent clone, `HERMES_PYTHON` = the fork's dev venv): `5 files, 30 tests passed, 0 failed`, exit `0` (3.8s wall; per-file times vary with host load). The same battery also runs inside the decisive entry's `fork-regression` scenario, whose receipt records exit `0`.
 
 ### 5. Static quality and code formatting checks
 
