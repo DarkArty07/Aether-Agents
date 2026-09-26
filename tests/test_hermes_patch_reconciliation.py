@@ -71,6 +71,7 @@ EXPECTED_ACTIVE_IDS = (
     "HLP-427",
     "HLP-428",
     "HLP-433",
+    "HLP-435",
 )
 HLP226_PATCH_REFERENCES = (
     "patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch",
@@ -101,6 +102,7 @@ PATCH_DIGESTS = {
     "HLP-427": ("508dbdf45328084e0ccfdd586f28d3d025f1d92364dd64d90c7192e8c8679367",),
     "HLP-428": ("6fe6b20f8a932356da3f5dcb741b3d79f4aa1194dd9f5471c811f3b74a70366f",),
     "HLP-433": ("c39be36f2389a980bf66514e1efdf8f7db78e2a1e67223457e440086486c839e",),
+    "HLP-435": ("1836729e2b76ecc390e4467d17fb65ba67a5239ebb34492402b7629a7ac3a563",),
 }
 
 
@@ -303,7 +305,10 @@ def test_repository_fragments_cover_active_ledger_and_bind_patch_digests(
             assert artifact["computed_sha256"] == artifact["ledger_sha256"]
             assert artifact["checksum_status"] == "passed"
             assert artifact["parse_status"] == "passed"
-        assert records[identifier]["artifact_verification"]["status"] == "unavailable"
+        # HLP-435 has an accepted exact-tree reconstruction; older receipts retain
+        # their unavailable artifact status. Neither status grants runtime adoption.
+        expected_status = "passed" if identifier == "HLP-435" else "unavailable"
+        assert records[identifier]["artifact_verification"]["status"] == expected_status
 
 
 def test_active_hlp369_fragment_is_schema_valid_and_binds_patch_digest() -> None:
@@ -880,3 +885,17 @@ def test_repository_hlp428_is_required_and_hlp433_is_deferred() -> None:
     assert hlp433["local_status"] == "MAINTAINED_FORK_ONLY / UPSTREAM_MISSING"
     assert hlp428["retirement_gate"]["status"] == "not_executed"
     assert hlp433["retirement_gate"]["status"] == "not_executed"
+
+
+def test_repository_hlp435_is_source_only_and_keeps_release_selection() -> None:
+    record = json.loads((ENTRIES_PATH / "HLP-435.json").read_text(encoding="utf-8"))
+    aggregate = json.loads(
+        (ENTRIES_PATH.parent.parent / "hermes-patch-reconciliation.v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert record["candidate_requirement"] == "deferred"
+    assert record["local_status"] == "MAINTAINED_FORK_ONLY / UPSTREAM_PARTIAL"
+    assert record["retirement_gate"]["status"] == "not_executed"
+    assert record["artifact_verification"]["status"] == "passed"
+    assert aggregate["selected_source"]["revision"] == "58f8c37a49b341f25b8fdd6310542fe932031b8d"

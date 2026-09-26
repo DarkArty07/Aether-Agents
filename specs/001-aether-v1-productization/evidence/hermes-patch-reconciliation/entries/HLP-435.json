@@ -1,0 +1,44 @@
+{
+  "id": "HLP-435",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-435--hardline-quote-structure-on-raw-syntax-maintained-fork-2026-09-26",
+  "components": ["HLP-435", "tools/approval.py", "tests/tools/test_hardline_blocklist.py"],
+  "required_behavior": "Valid quoted grep inspections retain raw shell quote structure before normalization, without weakening malformed-input, destructive-command, obfuscation or full guard-chain rejection.",
+  "local_status": "MAINTAINED_FORK_ONLY / UPSTREAM_PARTIAL",
+  "candidate_requirement": "deferred",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {"kind": "issue", "url": "https://github.com/DarkArty07/Aether-Agents/issues/435"},
+      {"kind": "pull_request", "url": "https://github.com/DarkArty07/aether-hermes/pull/19"},
+      {"kind": "commit", "url": "https://github.com/NousResearch/hermes-agent/commit/e383c28d2ffcfd6342e92109b556c0a9039de4b7"}
+    ],
+    "disposition": "upstream_partial",
+    "evidence": [
+      {"kind": "source", "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/tools/approval.py#L754-L767", "result": "The common public reference still validates grep syntax after escape-stripping normalization; re-inspected at source integration."},
+      {"kind": "test", "reference": "specs/issue-435-hardline-parser/evidence/HLP-435.md#4-upstream-comparison-and-retirement-gate", "result": "Reused accepted source-phase evidence at upstream d0288be5b3330d2442e3907185b8e9d0958297bb and releases v2026.9.21/v2026.9.24: the reported false positives are fixed upstream. Additional escaped-quote bypass protections there are not equivalent to this narrower fork patch and remain a disclosed baseline-shared limitation."}
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Retire after adoption of an exact upstream release containing e383c28d or its equivalent, with the two original valid commands, genuine malformed inputs and protected/escaped-quote guard controls passing without HLP-435. Source availability alone is not adoption.",
+    "status": "not_executed",
+    "evidence": [
+      {"kind": "test", "reference": "specs/issue-435-hardline-parser/evidence/morfeo-reception.md#acceptance-criteria", "result": "Accepted source-phase reception: both original byte shapes fail at base and pass at f459cfa0; 24 destructive and 10 malformed controls retained, plus 199 hardline-module tests. Broader battery and format limitations are explicitly recorded, not called green."}
+    ]
+  },
+  "artifact_verification": {
+    "status": "passed",
+    "blocker": null,
+    "artifacts": [
+      {"kind": "patch", "reference": "patches/hermes/HLP-435-hardline-quoted-grep.patch", "ledger_sha256": "1836729e2b76ecc390e4467d17fb65ba67a5239ebb34492402b7629a7ac3a563", "computed_sha256": "1836729e2b76ecc390e4467d17fb65ba67a5239ebb34492402b7629a7ac3a563", "checksum_status": "passed", "parse_status": "passed", "result": "passed"},
+      {"kind": "reconstruction_input", "reference": "maintained fork base 938bc34fbc797402ccc61d352192e122a344d052", "result": "passed"},
+      {"kind": "reconstruction", "reference": "Accepted exact-base apply/reverse proof reconstructs cac4313200eb7a3359cb435622da17060494af8a and restores ae106dfbf45e6615b261674b7cb0dc9252ce14f1. Fork merge b287195d63d47d73788653bdd012c2fbfe00c0ac retains that reviewed candidate tree exactly.", "result": "passed"}
+    ]
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "Both modified paths exist at the frozen RC16 selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d, but path presence is not proof of the #435 fix. The repair is only in later maintained-fork source b287195d63d47d73788653bdd012c2fbfe00c0ac; it has not been adopted by the installed runtime.",
+    "The accepted fork candidate retains the pre-existing escaped-quote bypass difference documented against newer upstream and the baseline-shared real-binary test failure; neither is repaired by this patch."
+  ],
+  "summary": "HLP-435 corrects the two observed normalized-only quote imbalances in maintained-fork source. PR #19 merged as b287195d63d47d73788653bdd012c2fbfe00c0ac with tree identical to reviewed f459cfa0. Keep deferred at unchanged RC16 pin 58f8c37a49b341f25b8fdd6310542fe932031b8d; no RC17, runtime adoption or upstream retirement is claimed."
+}

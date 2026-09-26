@@ -170,6 +170,7 @@ jobs:
           cat >"$expected" <<'EOF'
           .aether/objective-contracts/oc_0084270d940c98d9/tombstone.json
           .aether/objective-contracts/oc_0a0db5e78c4e24c1/v1.md
+          .aether/objective-contracts/oc_13551b9a7a1eaf42/v1.md
           .aether/objective-contracts/oc_184c251953c157ec/v1.md
           .aether/objective-contracts/oc_281059d9a540201f/v1.md
           .aether/objective-contracts/oc_291b2fb34b413d92/v1.md
@@ -365,6 +366,7 @@ jobs:
           patches/hermes/HLP-427-routed-recovery-review-phase.patch
           patches/hermes/HLP-428-project-provenance-and-bounded-failure.patch
           patches/hermes/HLP-433-responses-reasoning-usage.patch
+          patches/hermes/HLP-435-hardline-quoted-grep.patch
           patches/hermes/tests/test_hlp280_live_routing_probe.py
           patches/hermes/tests/test_hlp280_recovery_compatibility.py
           policy/hooks/README.md
