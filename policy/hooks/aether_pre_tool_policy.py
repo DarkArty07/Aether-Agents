@@ -54,10 +54,17 @@ CONN_STRING_RE = re.compile(
 QUERY_TOKEN_RE = re.compile(
     r"(?i)[?&](?:token|access_token|api_key|key|signature|sig)=([^&#\s]{8,})"
 )
+SK_SECRET_RE = re.compile(r"\bsk-[A-Za-z0-9][A-Za-z0-9_-]{12,}\b")
+SCRATCH_NAME_RE = re.compile(r"sk-(?!(?:proj|svcacct|ant)-)[a-z0-9][a-z0-9_-]{12,19}\Z")
+LOCAL_PATH_RE = re.compile(r"(?:^|[\s'\"(=])(?:/|\.{1,2}/|~/)(?:[^\s'\"()=;?&]*/)?$")
+SECRET_CONTEXT_RE = re.compile(
+    r"(?i)(?<![a-z0-9])(?:api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|"
+    r"credential|secret|password|passwd|private[_-]?key|connection[_-]?string|token|authorization|bearer)(?![a-z0-9])"
+)
 
 HIGH_CONFIDENCE_SECRET_PATTERNS = (
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----"),
-    re.compile(r"\bsk-[A-Za-z0-9][A-Za-z0-9_-]{12,}\b"),
+    SK_SECRET_RE,
     re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
     re.compile(r"\bAIza[0-9A-Za-z_-]{30,}\b"),
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
@@ -219,6 +226,19 @@ def _is_doc_path(path: str | None) -> bool:
     )
 
 
+def _local_scratch_name(text: str, match: re.Match[str]) -> bool:
+    """Treat a short, lowercase directory ID as a path only outside credential contexts."""
+    if not SCRATCH_NAME_RE.fullmatch(match.group()):
+        return False
+    if match.end() < len(text) and text[match.end()] not in "/'\" \t\r\n);,":
+        return False
+    prefix = text[:match.start()]
+    if re.search(r"//[^\s'\"<>]*$", prefix):
+        return False
+    path = LOCAL_PATH_RE.search(prefix)
+    return bool(path and not SECRET_CONTEXT_RE.search(prefix[:path.start()]))
+
+
 def _contains_secret(value: Any, *, broad: bool, is_doc: bool = False) -> bool:
     for text in _strings(value):
         sanitized = text
@@ -229,21 +249,33 @@ def _contains_secret(value: Any, *, broad: bool, is_doc: bool = False) -> bool:
                 matches = list(pattern.finditer(sanitized))
                 if matches and any(not _is_placeholder(m.group(1)) for m in matches):
                     return True
+            elif pattern is SK_SECRET_RE and not broad:
+                if any(not _local_scratch_name(sanitized, match) for match in pattern.finditer(sanitized)):
+                    return True
             elif pattern.search(sanitized):
                 return True
         if broad and any(pattern.search(sanitized) for pattern in BROAD_SECRET_PATTERNS):
             return True
 
-    if broad and isinstance(value, dict):
+    if isinstance(value, dict):
         for key, nested in value.items():
             if (
-                SENSITIVE_KEYS.fullmatch(str(key).strip())
+                broad
+                and SENSITIVE_KEYS.fullmatch(str(key).strip())
                 and isinstance(nested, str)
                 and not _is_placeholder(nested)
                 and len(nested.strip()) >= 8
             ):
                 return True
-            if _contains_secret(nested, broad=broad, is_doc=is_doc):
+            if (
+                not broad
+                and SECRET_CONTEXT_RE.search(str(key))
+                and any(SK_SECRET_RE.search(text) for text in _strings(nested))
+            ):
+                return True
+            if (broad or isinstance(nested, (dict, list, tuple, set))) and _contains_secret(
+                nested, broad=broad, is_doc=is_doc
+            ):
                 return True
     elif isinstance(value, (list, tuple, set)):
         return any(_contains_secret(item, broad=broad, is_doc=is_doc) for item in value)
