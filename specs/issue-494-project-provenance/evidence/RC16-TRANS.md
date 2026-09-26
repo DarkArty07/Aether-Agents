@@ -293,7 +293,7 @@ Discovered 5 test files (~22 tests) under ['tests/hermes_cli/test_kanban_project
 
 === Summary: 5 files, 30 tests passed, 0 failed (100% complete) in 2.9s (48 workers) ===
 ```
-Exit code: `0`. Reviewer re-run at the same pin against the repaired candidate (independent clone, `HERMES_PYTHON` = the fork's dev venv): `5 files, 30 tests passed, 0 failed`, exit `0` (3.8s wall; per-file times vary with host load). The same battery also runs inside the decisive entry's `fork-regression` scenario, whose receipt records exit `0`.
+Exit code: `0`. Reviewer re-run of the same battery against an independent clone at the same pin (`HERMES_PYTHON` = the fork's dev venv): `5 files, 30 tests passed, 0 failed`, exit `0` (3.8s wall; per-file times vary with host load). This battery exercises the maintained fork at the pin, not the Aether candidate; the same battery also runs inside the decisive entry's `fork-regression` scenario, whose receipt records exit `0`.
 
 ### 5. Static quality and code formatting checks
 
