@@ -1,10 +1,10 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-09-26T00:15:00Z`
+Observation timestamp: `2026-09-26T21:56:55Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `f473972a00a054a678a71dd52a614799e4a09c909833be78edc22083db805956`
+Source ledger SHA-256: `677dc611643828f3dd32587251cfecb43a4c5f8156f1c4f2a043f8da5fd9ee59`
 
 ## Remaining local guarantees
 
@@ -41,6 +41,7 @@ Source ledger SHA-256: `f473972a00a054a678a71dd52a614799e4a09c909833be78edc22083
 - `HLP-427`: Retain HLP-427. The maintained fork preserves the latest explicit review/ready retry phase across a phase-less Aether recovery signal, with exact source, runtime bootstrap and live same-card review evidence; no equivalent public upstream interaction exists.
 - `HLP-428`: Retain HLP-428. The maintained fork recovers canonical Project provenance for non-affinity direct parent worktree children, refuses cross-project mismatches before task persistence, and cleanly bounds review failure containment without unverified notifications; verified by RED/GREEN reproduction, four-round strict contract audit, and exact tree reconstruction.
 - `HLP-433`: Retain HLP-433. The maintained fork preserves provider reasoning tokens across the Responses adapter boundary into chat-compatible usage and SessionDB accounting without altering input/output/total tokens or double-counting; verified by RED/GREEN reproduction, strict contract audit, and exact tree reconstruction. Merged at 621047dc1c10cceb2825013cc8bb611b4d0e8de1 but deferred for RC16 (selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d) and not yet adopted by the effective runtime, hence MAINTAINED_FORK_ONLY.
+- `HLP-435`: HLP-435 corrects the two observed normalized-only quote imbalances in maintained-fork source. PR #19 merged as b287195d63d47d73788653bdd012c2fbfe00c0ac with tree identical to reviewed f459cfa0. Keep deferred at unchanged RC16 pin 58f8c37a49b341f25b8fdd6310542fe932031b8d; no RC17, runtime adoption or upstream retirement is claimed.
 
 ## Qualified upstream equivalents
 
@@ -166,6 +167,9 @@ Source ledger SHA-256: `f473972a00a054a678a71dd52a614799e4a09c909833be78edc22083
 - `HLP-433` (uncertainty): Upstream hermes-agent lacks reasoning token preservation across the Responses adapter boundary.
 - `HLP-433` (uncertainty): The regression test module tests/agent/test_auxiliary_client_responses_reasoning_433.py is introduced by this patch and does not exist at selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d, making its absence visible in candidate reconciliation.
 - `HLP-433` (uncertainty): The merged maintained-fork revision 621047dc1c10cceb2825013cc8bb611b4d0e8de1 carrying this behavior is a descendant of the selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d and has not been adopted by the effective Aether runtime; live adoption and effective-runtime qualification remain deferred successors under issue #433, so no installed behavior is asserted.
+- `HLP-435` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-435` (uncertainty): Both modified paths exist at the frozen RC16 selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d, but path presence is not proof of the #435 fix. The repair is only in later maintained-fork source b287195d63d47d73788653bdd012c2fbfe00c0ac; it has not been adopted by the installed runtime.
+- `HLP-435` (uncertainty): The accepted fork candidate retains the pre-existing escaped-quote bypass difference documented against newer upstream and the baseline-shared real-binary test failure; neither is repaired by this patch.
 
 ## Artifact integrity
 
@@ -202,6 +206,7 @@ Source ledger SHA-256: `f473972a00a054a678a71dd52a614799e4a09c909833be78edc22083
 - `HLP-427`: unavailable
 - `HLP-428`: unavailable
 - `HLP-433`: unavailable
+- `HLP-435`: passed
 
 ## Selected maintained-fork source
 
@@ -209,7 +214,7 @@ Selected source: `https://github.com/DarkArty07/aether-hermes@58f8c37a49b341f25b
 
 | Verdict | Entries |
 | --- | --- |
-| present | 30 |
+| present | 31 |
 | partial | 0 |
 | absent | 1 |
 | unverified | 2 |

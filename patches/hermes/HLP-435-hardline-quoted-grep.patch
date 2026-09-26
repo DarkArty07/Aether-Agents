@@ -1,0 +1,193 @@
+diff --git a/tests/tools/test_hardline_blocklist.py b/tests/tools/test_hardline_blocklist.py
+index 40b1c56755..7cb37b1ad0 100644
+--- a/tests/tools/test_hardline_blocklist.py
++++ b/tests/tools/test_hardline_blocklist.py
+@@ -670,3 +670,162 @@ def test_sudo_stdin_guard_container_bypass(clean_session):
+         for cmd in _SUDO_STDIN_BLOCK:
+             result = check_all_command_guards(cmd, env)
+             assert result["approved"] is True, f"container {env} should bypass sudo guard on {cmd!r}"
++
++
++# =========================================================================
++# Issue #435: Quoted and escaped grep syntax vs hardline malformed-payload
++# =========================================================================
++
++# Exact sanitized shell-byte shapes from the 2026-09-14 incident.
++# Command A length: 138 bytes; Command B length: 95 bytes.
++_ISSUE_435_CMD_A = (
++    r'cd /tmp/safe-repo && grep -n "for edge in" -A 3 harness.py | '
++    r'head -20; echo "=== check other spot ==="; grep -n "edges\", \[\]" harness.py'
++)
++_ISSUE_435_CMD_B = (
++    r'cd /tmp/safe-repo && grep -n "PATTERN\|regex\|r\"" scripts/check_public_artifacts.py | head -30'
++)
++
++
++def test_issue_435_exact_shell_byte_properties():
++    """Verify byte length, syntax, and lexer boundaries without executing shell."""
++    import shlex
++    from tools.approval import (
++        _command_parser_limit_exceeded,
++        _normalize_command_for_detection,
++        _quoted_grep_pattern_spans,
++    )
++
++    # Byte lengths match exact Supervisor receipt
++    assert len(_ISSUE_435_CMD_A) == 138, f"expected 138 bytes, got {len(_ISSUE_435_CMD_A)}"
++    assert len(_ISSUE_435_CMD_B) == 95, f"expected 95 bytes, got {len(_ISSUE_435_CMD_B)}"
++
++    # POSIX shell lexer parses both successfully (balanced quotes)
++    tokens_a = shlex.split(_ISSUE_435_CMD_A)
++    assert tokens_a is not None and len(tokens_a) > 0
++    tokens_b = shlex.split(_ISSUE_435_CMD_B)
++    assert tokens_b is not None and len(tokens_b) > 0
++
++    # Below parser limits
++    assert _command_parser_limit_exceeded(_ISSUE_435_CMD_A) is False
++    assert _command_parser_limit_exceeded(_ISSUE_435_CMD_B) is False
++
++    # Original syntax-preserving command has balanced quotes (malformed is False)
++    spans_a, malformed_a = _quoted_grep_pattern_spans(_ISSUE_435_CMD_A)
++    assert malformed_a is False
++    spans_b, malformed_b = _quoted_grep_pattern_spans(_ISSUE_435_CMD_B)
++    assert malformed_b is False
++
++    # Prove baseline failure mechanism: normalization strips backslash-escapes
++    # creating a normalized-only unbalanced quote that is NOT raw malformation
++    norm_a = _normalize_command_for_detection(_ISSUE_435_CMD_A)
++    _, norm_a_malformed = _quoted_grep_pattern_spans(norm_a)
++    assert norm_a_malformed is True, "normalized-only string has stripped-backslash quote imbalance"
++
++    norm_b = _normalize_command_for_detection(_ISSUE_435_CMD_B)
++    _, norm_b_malformed = _quoted_grep_pattern_spans(norm_b)
++    assert norm_b_malformed is True, "normalized-only string has stripped-backslash quote imbalance"
++
++
++@pytest.mark.parametrize(
++    "command",
++    [_ISSUE_435_CMD_A, _ISSUE_435_CMD_B],
++    ids=["cmd_a_length_138", "cmd_b_length_95"],
++)
++def test_issue_435_original_commands_not_hardline(command, tmp_path, monkeypatch):
++    """The two valid read-only grep commands are no longer classified as malformed or hardline."""
++    # Isolated HOME / HERMES_HOME to prevent writing blocked-scripts cache
++    monkeypatch.setenv("HOME", str(tmp_path))
++    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
++
++    is_hl, hl_desc = detect_hardline_command(command)
++    assert is_hl is False, f"unexpected hardline block: {hl_desc}"
++    assert hl_desc is None
++
++    is_dang, key, dang_desc = detect_dangerous_command(command)
++    assert is_dang is False, f"unexpected dangerous classification: {dang_desc}"
++
++    # Full guard chain does not unconditionally block as hardline
++    result = check_all_command_guards(command, "local")
++    assert result.get("hardline") is not True
++    assert result.get("approved") is True
++
++
++@pytest.mark.parametrize(
++    "command",
++    [
++        'grep "unclosed harness.py',
++        "grep 'unclosed harness.py",
++        "grep -A",
++        "grep -B",
++        "grep -C",
++        "grep --context",
++        "grep --after-context",
++        'egrep "unclosed harness.py',
++        'gr\\ep "unclosed harness.py',
++        "gr''ep 'unclosed harness.py",
++    ],
++    ids=[
++        "unclosed_double_quote",
++        "unclosed_single_quote",
++        "missing_short_opt_A",
++        "missing_short_opt_B",
++        "missing_short_opt_C",
++        "missing_long_opt_context",
++        "missing_long_opt_after_context",
++        "egrep_unclosed_quote",
++        "obfuscated_backslash_grep_unclosed",
++        "obfuscated_emptyquote_grep_unclosed",
++    ],
++)
++def test_issue_435_genuine_malformed_grep_fails_closed(command):
++    """Genuinely malformed grep quotes and missing option arguments remain hardline fail-closed."""
++    from tools.approval import _MALFORMED_EXEC_DESCRIPTION
++
++    is_hl, desc = detect_hardline_command(command)
++    assert is_hl is True, f"expected hardline block for malformed grep: {command!r}"
++    assert desc == _MALFORMED_EXEC_DESCRIPTION
++
++
++def test_issue_435_genuine_malformed_grep_hardline_in_yolo(clean_session):
++    """Hardline malformed grep remains blocked even under YOLO mode."""
++    enable_session_yolo("hardline_test")
++    try:
++        is_hl, desc = detect_hardline_command('grep "unclosed file.txt')
++        assert is_hl is True
++        result = check_dangerous_command('grep "unclosed file.txt', "local")
++        assert result["approved"] is False
++        assert result.get("hardline") is True
++    finally:
++        disable_session_yolo("hardline_test")
++
++
++def test_issue_435_grep_masking_inert_single_quoted_pcre():
++    """Inert single-quoted PCRE patterns in grep are masked and do not trigger hardline."""
++    # Pattern containing root delete text is inert single-quoted grep regex
++    safe_pcre = "grep -P 'rm -rf --no-preserve-root /' audit.log"
++    is_hl, _ = detect_hardline_command(safe_pcre)
++    assert is_hl is False
++
++    # Composite command: safe PCRE pattern combined with valid escaped quotes
++    composite = (
++        "grep -P 'rm -rf --no-preserve-root /' audit.log && "
++        r'grep -n "edges\", \[\]" harness.py'
++    )
++    is_hl, _ = detect_hardline_command(composite)
++    assert is_hl is False
++
++
++def test_issue_435_grep_masking_does_not_hide_executable_constructs():
++    """Double quotes, command substitutions, and separators in grep are never masked as inert."""
++    # Command substitution inside grep argument is executable, not inert
++    sub_cmd = 'grep -P "$(rm -rf /)" audit.log'
++    is_hl, desc = detect_hardline_command(sub_cmd)
++    assert is_hl is True
++    assert "root" in desc.lower() or "delete" in desc.lower()
++
++    # Semicolon separator with real destructive command after grep
++    sep_cmd = "grep -P 'rm -rf --no-preserve-root /' audit.log; rm -rf /"
++    is_hl, desc = detect_hardline_command(sep_cmd)
++    assert is_hl is True
++    assert "root" in desc.lower() or "delete" in desc.lower()
+diff --git a/tools/approval.py b/tools/approval.py
+index ac8b34e442..ca53bbf2da 100644
+--- a/tools/approval.py
++++ b/tools/approval.py
+@@ -583,8 +583,8 @@ def detect_hardline_command(command: str) -> tuple:
+     """
+     if _command_parser_limit_exceeded(command):
+         return (True, _PARSER_LIMIT_DESCRIPTION)
+-    normalized = _normalize_command_for_detection(command)
+-    _, malformed_grep = _grep_safe_detection_variant(normalized)
++    raw_syntax = _mask_quoted_newlines(command)
++    _, malformed_grep = _grep_safe_detection_variant(raw_syntax)
+     if malformed_grep:
+         return (True, _MALFORMED_EXEC_DESCRIPTION)
+     for command_variant in _command_detection_variants(command):
+@@ -2203,7 +2203,9 @@ def _command_detection_variants(command: str):
+     # unterminated quote), so masking the normalized text could swallow a
+     # REAL unquoted newline separator that follows. The raw command carries
+     # faithful shell quote state.
+-    normalized = _normalize_command_for_detection(_mask_quoted_newlines(command))
++    raw_syntax = _mask_quoted_newlines(command)
++    grep_masked_raw, _ = _grep_safe_detection_variant(raw_syntax)
++    normalized = _normalize_command_for_detection(grep_masked_raw)
+     # Quote-aware grep parsing hides only structurally identified pattern
+     # operands. Malformed/ambiguous input remains byte-for-byte intact.
+     grep_safe, _ = _grep_safe_detection_variant(normalized)
