@@ -1,0 +1,64 @@
+{
+  "aether": {
+    "distribution": "aether-agents",
+    "git_commit": "20f3a2cb8a3360be050c13a0a9c73ed1d17456e2",
+    "git_tag": "v1.0.0-rc.15",
+    "observation_compatibility": {
+      "event_read_versions": [
+        "aether.observation.event.v1"
+      ],
+      "event_write_version": "aether.observation.event.v1",
+      "projection_schema_version": "aether.observation.projection.v1",
+      "segment_manifest_read_versions": [
+        "aether.observation.segment-manifest.v1"
+      ],
+      "segment_manifest_write_version": "aether.observation.segment-manifest.v1",
+      "summary_read_versions": [
+        "aether.observation.summary.v1"
+      ],
+      "summary_write_version": "aether.observation.summary.v1"
+    },
+    "observer": {
+      "group": "hermes_agent.plugins",
+      "plugin_name": "aether-contract-observer",
+      "target": "aether_agents.observation.capture.hermes_plugin"
+    },
+    "observer_requirements_sha256": "798d9f1fd1d61134b8960c3b9306f0f4f080084bf66844108063055d021f24f6",
+    "package_version": "1.0.0rc15",
+    "python_requires": ">=3.11,<3.14",
+    "version": "1.0.0-rc.15",
+    "wheel_sha256": "5dc9cd69da8d18f394dd2e7a85ed341e76315caea4a7bacd210d213e54f358d2"
+  },
+  "hermes": {
+    "artifacts": [
+      {
+        "filename": "aether-hermes-source-5b2b6ba543680c6fe8a62de4b467d1107be3abf4.tar.gz",
+        "kind": "source",
+        "provenance_url": "https://github.com/DarkArty07/Aether-Agents/releases/tag/v1.0.0-rc.15",
+        "sha256": "06ebee63b3f1ef69dc431d9c191a5c9bd48d5557141ba6089e221d0628675a6e",
+        "url": "https://github.com/DarkArty07/Aether-Agents/releases/download/v1.0.0-rc.15/aether-hermes-source-5b2b6ba543680c6fe8a62de4b467d1107be3abf4.tar.gz"
+      }
+    ],
+    "branch": "aether-main",
+    "commit": "5b2b6ba543680c6fe8a62de4b467d1107be3abf4",
+    "extras": [
+      "mcp"
+    ],
+    "python_requires": ">=3.11,<3.14",
+    "repository": "https://github.com/DarkArty07/aether-hermes",
+    "source_mode": "maintained_fork",
+    "source_tree_sha256": "adf77d5840028f490818a3f78304a9f3835bff176df3ad34255aea2f9882aba2",
+    "tag": "5b2b6ba543680c6fe8a62de4b467d1107be3abf4",
+    "version": "0.20.1"
+  },
+  "profile_bundle": {
+    "roles": [
+      "morfeo",
+      "supervisor",
+      "implementer"
+    ],
+    "sha256": "3035442374298fcbe7baae914aa033f946dcc3e7a09815978c2734440312e113",
+    "version": "2"
+  },
+  "schema_version": 5
+}
