@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.0.0rc16 — #494 adoption and exact maintained-fork runtime pin
+
+Package identity `1.0.0rc16` / display `1.0.0-rc.16` / local annotated tag identity
+`v1.0.0-rc.16`; `release_impact=patch`, `release_action=prepare`,
+`release_channel=prerelease`. This local-only candidate carries the RC16 surface forward;
+no tag is pushed or published, no stable `1.0.0` is claimed, and no deployment is authorized.
+
+- Selected maintained-fork Hermes runtime source is bound under release-lock schema 5
+  mode `maintained_fork` to repository `https://github.com/DarkArty07/aether-hermes`,
+  branch `aether-main`, exact commit `58f8c37a49b341f25b8fdd6310542fe932031b8d`,
+  tree `a93162c1a867202b03c12fa372c71029152fdcf7`, and deterministic source-tree
+  digest `a2a9b374bd2022c7f96242b0ab2c95691119262c925389eb3820ca627c581144`.
+- HLP-428 becomes a required candidate HLP and is present at the pinned commit.
+- HLP-433 stays deferred, absent, unretired, and unadopted.
+- Retained RC15 Supervisor SOUL and canonical review guidance work from their documented
+  durable-history fallback because the selected earlier fork commit lacks the optional
+  `Previous review returns (this task)` context line.
+- Focused deterministic tests cover candidate packaging, identity, and transition.
+  No measured review-speed improvement or broad agent-behavior qualification is claimed.
+
 ## 1.0.0rc15 — bounded Supervisor review and visible return count
 
 Package identity `1.0.0rc15` / display `1.0.0-rc.15` / annotated tag identity

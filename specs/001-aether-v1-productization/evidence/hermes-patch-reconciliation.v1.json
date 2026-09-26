@@ -1,5 +1,5 @@
 {
-  "observed_at_utc": "2026-09-24T18:43:51Z",
+  "observed_at_utc": "2026-09-26T00:15:00Z",
   "overall_blockers": [
     {
       "detail": "Retirement gate status is failed.",
@@ -557,7 +557,12 @@
       "kind": "uncertainty"
     },
     {
-      "detail": "The patch reconstructs exactly in the maintained fork and is integrated at merged revision 621047dc1c10cceb2825013cc8bb611b4d0e8de1 (PR #17) with the aggregate pinned there; only a public upstream equivalent is still missing, which is why this entry stays unavailable rather than passed. The merged source has not been installed, reloaded or otherwise adopted by the effective Aether runtime.",
+      "detail": "The optional 'Previous review returns (this task)' context line introduced in RC15 does not exist at selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d; retained RC15 review guidance uses its documented durable-history fallback when this optional context is absent. This absence is a disclosed candidate limitation, not an enforcement gate or retirement claim.",
+      "id": "HLP-428",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "The patch reconstructs exactly in the maintained fork and candidate checks pass, but public upstream equivalence is unavailable: inspected upstream revisions reconstruct only flat prompt/completion/total tokens from Responses usage. Merged revision 621047dc1c10cceb2825013cc8bb611b4d0e8de1 (PR #17) is a descendant of the selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d; the merged source has not been installed, reloaded or otherwise adopted by the effective Aether runtime.",
       "id": "HLP-433",
       "kind": "artifact"
     },
@@ -567,12 +572,22 @@
       "kind": "retirement_gate"
     },
     {
+      "detail": "Declared source path(s) missing at the selected revision 58f8c37a49b341f25b8fdd6310542fe932031b8d: tests/agent/test_auxiliary_client_responses_reasoning_433.py.",
+      "id": "HLP-433",
+      "kind": "selected_source"
+    },
+    {
       "detail": "Upstream hermes-agent lacks reasoning token preservation across the Responses adapter boundary.",
       "id": "HLP-433",
       "kind": "uncertainty"
     },
     {
-      "detail": "The merged maintained-fork revision carrying this behavior has not been adopted by the effective Aether runtime; live adoption and effective-runtime qualification remain deferred successors under issue #433, so no installed behavior is asserted.",
+      "detail": "The regression test module tests/agent/test_auxiliary_client_responses_reasoning_433.py is introduced by this patch and does not exist at selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d, making its absence visible in candidate reconciliation.",
+      "id": "HLP-433",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "The merged maintained-fork revision 621047dc1c10cceb2825013cc8bb611b4d0e8de1 carrying this behavior is a descendant of the selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d and has not been adopted by the effective Aether runtime; live adoption and effective-runtime qualification remain deferred successors under issue #433, so no installed behavior is asserted.",
       "id": "HLP-433",
       "kind": "uncertainty"
     }
@@ -620,7 +635,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Exact upstream source has the initial blocked status but not the durable sticky event. The isolated behavioral probe showed auto-promotion without unblock, so the local guarantee remains required.",
@@ -697,7 +712,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Upstream already supports max_retries in the database layer but does not expose or forward it through kanban_create. With no executed full gate, the local interface guarantee remains required.",
@@ -804,7 +819,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Upstream can escalate repeated blocks to triage but still treats all triage tasks as auto-decomposition candidates and lacks the durable recovery boundary. The local human gate must remain.",
@@ -917,7 +932,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Upstream has a name-based stop nudge and a clean-exit backstop, but it lacks durable exactly-one receipt validation and EX_PROTOCOL=76. The local terminal-handoff guarantee remains required.",
@@ -1001,7 +1016,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-198. Exact-target source and a disposable behavioral gate reproduce the stale claimed-task branch mismatch in ready and review dispatch.",
@@ -1111,7 +1126,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-204. The target retains only the uniform cap, while the required asymmetric override interface remains solely in an open upstream PR.",
@@ -1191,7 +1206,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "The exact upstream target contains and behaviorally passes the HLP-209 directory exemption, but the recorded runtime retirement gate remains incomplete.",
@@ -1307,7 +1322,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain both HLP-211 and HLP-211b. The exact public snapshot lacks prerequisite runtime interfaces, and the linked open PR is a narrower same-task resumption change. The tracked HLP-211b patch checksum, parser check, and read-only effective-checkout byte reconstruction passed; only the ignored backup input remains unavailable.",
@@ -1470,7 +1485,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-226, HLP-226b and HLP-226c. Exact upstream lacks the affinity-terminal Project-source variant as well as the explicit-worktree and conflicting-Project behavior. The portable HLP-226b patch checksum and parser controls pass, but the documented reconstruction input and overall artifact verification remain unavailable. The new portable HLP-226c patch is bound by digest and reconstructs the reviewed fork candidate 7980bbf1f9f75efdcbee2196ae910bb77138541d byte for byte from maintained fork base 415056fee527c5a2302370bd6dba56f84b9a4202 with git apply --check and all three changed files matching on file SHA-256 and Git blob identity.",
@@ -1553,7 +1568,7 @@
         "paths": [],
         "presence": "unverified",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": "no repository-relative component path or declared portable patch path is recorded for this entry"
       },
       "summary": "Retain HLP-246. The exact public snapshot accepts a synthetic truncated payload with valid base64 and has no sender identity claims, SHA-256 persistence, or readback verification.",
@@ -1614,7 +1629,7 @@
         "paths": [],
         "presence": "unverified",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": "no repository-relative component path or declared portable patch path is recorded for this entry"
       },
       "summary": "Retain HLP-247. The exact public snapshot still promotes an eventless blocked child on parent archive, while the required todo and non-sticky compatibility controls remain promotable.",
@@ -1706,7 +1721,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-262. Exact upstream has neither the origin_signal block API prerequisite nor sticky predicate support for origin_signal, and the portable patch checksum and parser controls pass without establishing full-patch reconstruction from unavailable inputs.",
@@ -1798,7 +1813,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-275. The auxiliary vision path now applies the repository's existing embed policy before the first request, so oversized small-byte images are normalized by the existing resizer with scale disclosure and within-policy images stay byte-identical. Upstream already carries a stricter-threshold variant of the same mechanism, so this entry is a retirement candidate only after oracle requalification.",
@@ -1881,7 +1896,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain the bounded HLP-280 recovery. Local 15 recovery probes, 129 affected tests with one Windows skip, 44 notifier tests and a native-origin canary passed. This records a downstream repair, not the rejected v4/v5 architecture or a Hermes release upgrade.",
@@ -1982,7 +1997,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-305 in maintained fork c185ee3bb. Source hash readback and normal SessionDB activation passed after consistent backup/quick_check/SHA-256. Live owner TUI tool result retains complete11576-character message with8203-character index(prefix+metadata), proving writer-side activation without restarting TUI. Existing Python processes still require graceful reload for their cached code paths. Expanded testing retains baseline failure #349.",
@@ -2085,7 +2100,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-310. Inspected upstream does not exclude delegated child identity or Kanban environment variables from terminal snapshots. Maintained fork commit 25cabeb25327199a03aa3cf1613ed2f815f646cb provides the causal repair in PR #4.",
@@ -2206,7 +2221,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-334. Optional native collaboration adds an adjunct same-board table, optional create/comment arguments, and origin-bound TUI/gateway delivery without replacing the terminal-notification cursor or promoting peer evidence to owner authority.",
@@ -2283,7 +2298,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-335. The local respawn-guard recovery releases only independently verifiable CLOSED/MERGED PR references so Graphify closeout can resume; OPEN/unknown/auth failures stay guarded. This records a downstream repair, not a Hermes upgrade or a Graphify product delivery.",
@@ -2379,7 +2394,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-354. Inspected upstream lacks worktree_base_ref materialization and fail-closed validation. Maintained fork commit 7d3173e1f3dba107f9a389d4e35c95f215775ee1 provides the causal repair in PR #4.",
@@ -2475,7 +2490,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-362. Initial same-card review requires an explicit independent reviewer; self-review is rejected and legacy unassigned review claims remain parked. Verified by regression tests on the maintained fork and candidate testing in Aether.",
@@ -2591,7 +2606,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-369. Exact upstream retains the circular goal-mode review gate and recovery-kind mismatch; maintained-fork PR #6 merge 415056fee527c5a2302370bd6dba56f84b9a4202 separates review readiness from completion, preserves independent review and completion gates, and accepts only the exact pending controller recovery signal while retaining origin attention.",
@@ -2712,7 +2727,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-372. Cron scripts and monitor scripts resolve dynamically through one effective profile-scoped root at call time with fail-closed confinement on traversal, symlink escapes, and non-regular files.",
@@ -2812,7 +2827,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-382. Transcript publication is now bounded and atomic: staged batches in the existing store, exact-once preservation of interleaved concurrent appends, one metadata-only cutover, and bounded target-local cleanup. The unchanged oracle is deterministically RED at the fork base and green on the candidate and integrated tree.",
@@ -2912,7 +2927,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-385. Guidance in KANBAN_GUIDANCE explicitly states that terminal integration or release children alone do not replace unit review, requiring an explicit review/QA phase child before kanban_complete is called as an implementation handoff.",
@@ -3003,7 +3018,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-388. The framework persists the verified cron launch workdir in the session row before tools run, preventing ungrounded contract authoring while keeping null cwd when unset.",
@@ -3103,7 +3118,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-389. Referenced-script discovery now uses a syntax-aware view for inert interpreter heredoc bodies while direct detection keeps the original text, so the harmless log-read path is accepted and every recorded executable control remains blocked.",
@@ -3219,7 +3234,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-393. Cron jobs commissioned from TUI or gateway capture durable origin, restored at fire time as request-local context so spawned Kanban root tasks auto-subscribe and wake the exact origin upon completion.",
@@ -3321,7 +3336,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-420. The auxiliary Responses adapter now preserves phase, top-level and item status, incomplete reason, output-text fallback and tool calls, never turns incomplete/cancelled output into finish_reason=stop, keeps commentary/analysis narration out of assistant content, and carries tool_choice through call_llm/_build_call_kwargs without sending the unsupported Router fields.",
@@ -3454,7 +3469,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-425. The maintained fork and active Aether runtime now preserve one flow-bound Supervisor conversation across same-card review while keeping the candidate workspace and generic Hermes semantics separate.",
@@ -3566,7 +3581,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-426. The maintained fork now terminates a worker whose run has ended and is no longer current before the dispatcher can spawn a successor on the same workspace, with elapsed time never a criterion; no upstream equivalent was found at the inspected revision, so this remains a downstream-only correction for the maintained fork.",
@@ -3673,7 +3688,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-427. The maintained fork preserves the latest explicit review/ready retry phase across a phase-less Aether recovery signal, with exact source, runtime bootstrap and live same-card review evidence; no equivalent public upstream interaction exists.",
@@ -3733,9 +3748,10 @@
       },
       "blocking_uncertainty": [
         "Upstream hermes-agent lacks board-level Project recovery and origin-signal bounding for review-lane containment.",
-        "The regression test module tests/hermes_cli/test_kanban_project_provenance.py is introduced by this patch and does not exist at pre-merge base aed6591a69. It is now declared as a component and resolves present at the merged revision 58f8c37a49b341f25b8fdd6310542fe932031b8d that the aggregate is pinned to."
+        "The regression test module tests/hermes_cli/test_kanban_project_provenance.py is introduced by this patch and does not exist at pre-merge base aed6591a69. It is now declared as a component and resolves present at the merged revision 58f8c37a49b341f25b8fdd6310542fe932031b8d that the aggregate is pinned to.",
+        "The optional 'Previous review returns (this task)' context line introduced in RC15 does not exist at selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d; retained RC15 review guidance uses its documented durable-history fallback when this optional context is absent. This absence is a disclosed candidate limitation, not an enforcement gate or retirement claim."
       ],
-      "candidate_requirement": "deferred",
+      "candidate_requirement": "required",
       "components": [
         "HLP-428",
         "hermes_cli/kanban_db.py",
@@ -3775,7 +3791,7 @@
         ],
         "presence": "present",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
       "summary": "Retain HLP-428. The maintained fork recovers canonical Project provenance for non-affinity direct parent worktree children, refuses cross-project mismatches before task persistence, and cleanly bounds review failure containment without unverified notifications; verified by RED/GREEN reproduction, four-round strict contract audit, and exact tree reconstruction.",
@@ -3826,17 +3842,17 @@
             "result": "passed"
           }
         ],
-        "blocker": "The patch reconstructs exactly in the maintained fork and is integrated at merged revision 621047dc1c10cceb2825013cc8bb611b4d0e8de1 (PR #17) with the aggregate pinned there; only a public upstream equivalent is still missing, which is why this entry stays unavailable rather than passed. The merged source has not been installed, reloaded or otherwise adopted by the effective Aether runtime.",
+        "blocker": "The patch reconstructs exactly in the maintained fork and candidate checks pass, but public upstream equivalence is unavailable: inspected upstream revisions reconstruct only flat prompt/completion/total tokens from Responses usage. Merged revision 621047dc1c10cceb2825013cc8bb611b4d0e8de1 (PR #17) is a descendant of the selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d; the merged source has not been installed, reloaded or otherwise adopted by the effective Aether runtime.",
         "status": "unavailable"
       },
       "blocking_uncertainty": [
         "Upstream hermes-agent lacks reasoning token preservation across the Responses adapter boundary.",
-        "The merged maintained-fork revision carrying this behavior has not been adopted by the effective Aether runtime; live adoption and effective-runtime qualification remain deferred successors under issue #433, so no installed behavior is asserted."
+        "The regression test module tests/agent/test_auxiliary_client_responses_reasoning_433.py is introduced by this patch and does not exist at selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d, making its absence visible in candidate reconciliation.",
+        "The merged maintained-fork revision 621047dc1c10cceb2825013cc8bb611b4d0e8de1 carrying this behavior is a descendant of the selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d and has not been adopted by the effective Aether runtime; live adoption and effective-runtime qualification remain deferred successors under issue #433, so no installed behavior is asserted."
       ],
       "candidate_requirement": "deferred",
       "components": [
         "HLP-433",
-        "agent/auxiliary_client.py",
         "tests/agent/test_auxiliary_client_responses_reasoning_433.py"
       ],
       "id": "HLP-433",
@@ -3863,20 +3879,16 @@
       "selected_source": {
         "paths": [
           {
-            "path": "agent/auxiliary_client.py",
-            "present": true
-          },
-          {
             "path": "tests/agent/test_auxiliary_client_responses_reasoning_433.py",
-            "present": true
+            "present": false
           }
         ],
-        "presence": "present",
+        "presence": "absent",
         "repository": "https://github.com/DarkArty07/aether-hermes",
-        "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+        "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
         "unverified_reason": null
       },
-      "summary": "Retain HLP-433. The maintained fork preserves provider reasoning tokens across the Responses adapter boundary into chat-compatible usage and SessionDB accounting without altering input/output/total tokens or double-counting; verified by RED/GREEN reproduction, strict contract audit, and exact tree reconstruction. Merged at 621047dc1c10cceb2825013cc8bb611b4d0e8de1 but not yet adopted by the effective runtime, hence MAINTAINED_FORK_ONLY.",
+      "summary": "Retain HLP-433. The maintained fork preserves provider reasoning tokens across the Responses adapter boundary into chat-compatible usage and SessionDB accounting without altering input/output/total tokens or double-counting; verified by RED/GREEN reproduction, strict contract audit, and exact tree reconstruction. Merged at 621047dc1c10cceb2825013cc8bb611b4d0e8de1 but deferred for RC16 (selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d) and not yet adopted by the effective runtime, hence MAINTAINED_FORK_ONLY.",
       "upstream": {
         "disposition": "upstream_missing",
         "evidence": [
@@ -3904,15 +3916,15 @@
   ],
   "schema_version": "aether.hermes-patch-reconciliation.v1",
   "selected_source": {
-    "absent": 0,
+    "absent": 1,
     "partial": 0,
-    "present": 31,
+    "present": 30,
     "repository": "https://github.com/DarkArty07/aether-hermes",
     "resolved_from_checkout": true,
-    "revision": "621047dc1c10cceb2825013cc8bb611b4d0e8de1",
+    "revision": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
     "unverified": 2
   },
-  "source_ledger_sha256": "1d1122bdf016c17147988fbb9616e64bcd8a26615350cfc5330071f46fc9cd8d",
+  "source_ledger_sha256": "f473972a00a054a678a71dd52a614799e4a09c909833be78edc22083db805956",
   "upstream": {
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
     "repository": "https://github.com/NousResearch/hermes-agent"

@@ -4,14 +4,17 @@ Aether is a multi-agent software-engineering product built on [Hermes Agent](htt
 
 This index is navigation only and routes reader questions to the appropriate guide, reference, or authority artifact. For the complete reader-facing placement and conflict-resolution map across all artifact classes, see [Authority and artifact ownership](authority.md).
 
-This source tree defines the local-only `1.0.0rc14` forward candidate. It
-keeps the rc13 Morfeo MCP surface and release-lock schema 5 with the closed
-Hermes extra `mcp`, while still reading schema 4. Candidate preparation qualifies
-required HLP coverage at Hermes `aed6591a69f453a1867b73628603e7b53ba40ffc`;
-HLP-428 and HLP-433 remain deferred.
-An external host can enact the canonical Morfeo role through
-[Morfeo MCP](guides/morfeo-mcp.md). Source and local tags do not prove runtime
-activation or agent behavior. Consult `aether doctor` and a verified cutover receipt.
+This source tree defines the local-only `1.0.0rc16` candidate (display
+`1.0.0-rc.16`, local annotated tag `v1.0.0-rc.16`). It binds maintained-fork
+Hermes commit `58f8c37a49b341f25b8fdd6310542fe932031b8d` (tree
+`a93162c1a867202b03c12fa372c71029152fdcf7`, source-tree digest
+`a2a9b374bd2022c7f96242b0ab2c95691119262c925389eb3820ca627c581144`), qualifying
+HLP-428 as a required candidate HLP with HLP-433 deferred, absent, and unretired.
+Retained RC15 Supervisor review instructions fall back to durable task history
+when the optional context count is absent. It emits release-lock schema 5 with
+Hermes extra `mcp`, still reads schema 4, and serves the canonical Morfeo role
+through [Morfeo MCP](guides/morfeo-mcp.md). Source and local tags do not prove
+runtime activation or agent behavior. Consult `aether doctor` and a verified cutover receipt.
 The executable Hermes source is Aether's maintained fork
 `DarkArty07/aether-hermes` branch `aether-main`, bound
 by release-lock schema 4 or 5 `maintained_fork` and installed through `aether update`.

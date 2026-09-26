@@ -311,3 +311,24 @@ latest-session selection. Test resource consistency and loading; observe behavio
 efficacy later in real sessions. Neither missing `todo` nor failure to invoke `/plan`
 has been established as the quantitative cause of the incident. Keeping the local
 plan in `.aether/plans/` preserves project identity without publishing private state.
+
+## #426 / #459 instruction maintenance: fidelity without a new campaign
+
+Direct upstream inspection at Spec Kit revision
+`c00dc0551583428a10a94443c58c6a41e5e0138c` confirms:
+
+- `templates/commands/plan.md:23,64-72`: consider user input, load owning specification
+  and constitution, resolve material unknowns and check design against governing gates.
+- `templates/commands/tasks.md:64-79`: derive tasks from available design artifacts and
+  organize by user story; optional documents are not mandatory filler for every project.
+- `templates/commands/checklist.md:11-22`: requirements-quality checklists are not
+  implementation/behavior tests. Their existence cannot prove the delivered behavior.
+
+Aether retains that distinction and artifact ownership. The gap is the unattended
+translation across roles and an owner objective that can span multiple effect boundaries.
+The correction makes that translation preserve alternatives, destinations and exclusions,
+requires a reason for added verification machinery, and uses useful contract boundaries
+without a fixed quota. No upstream plumbing, new workflow engine or extra review phase is
+adopted. Resource checks verify the authored instructions; the owner explicitly chose later
+ordinary-use observation instead of E2E qualification for this maintenance. A source edit
+does not establish runtime adoption or behavior improvement.

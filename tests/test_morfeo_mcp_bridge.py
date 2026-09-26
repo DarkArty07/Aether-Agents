@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -139,3 +140,69 @@ def test_snapshot_redacts_secrets_and_logs_omit_text() -> None:
     logged = log_records(snapshot)
     assert "text" not in logged[0]
     assert "super-secret" not in str(logged)
+
+
+def test_bootstrap_preserves_packaged_soul_task_instructions() -> None:
+    soul = (
+        Path(__file__).resolve().parents[1] / "src/aether_agents/resources/profiles/morfeo/SOUL.md"
+    ).read_text(encoding="utf-8")
+    assert "task-coverage evidence" in soul
+    assert "task-relevant Aether Canonical Skills" in soul
+
+    snapshot = build_snapshot(
+        sections={"soul": soul},
+        role="morfeo",
+        mode="chatbot",
+        project_id="project",
+        project_root="/tmp/project",
+        tool_names=[],
+    )
+    delivered = snapshot["sections"]["soul"]
+    assert "task-coverage evidence" in delivered["text"]
+    assert "task-relevant Aether Canonical Skills" in delivered["text"]
+    assert delivered["redacted_lines"] == 0
+
+
+def test_mixed_bootstrap_redacts_only_synthetic_secrets_and_logs_metadata() -> None:
+    mixed = "\n".join(
+        [
+            "task-coverage evidence",
+            "api_key=" + "A" * 16,
+            "task-relevant Aether Canonical Skills",
+            "Bearer sk-" + "B" * 16,
+            "authorization: Bearer " + "C" * 16,
+            "123456:" + "D" * 24,
+        ]
+    )
+    snapshot = build_snapshot(
+        sections={"soul": mixed, "memory": "ordinary memory note"},
+        role="morfeo",
+        mode="chatbot",
+        project_id="project",
+        project_root="/tmp/project",
+        tool_names=[],
+    )
+    soul = snapshot["sections"]["soul"]
+    assert soul["text"].splitlines() == [
+        "task-coverage evidence",
+        "[redacted]",
+        "task-relevant Aether Canonical Skills",
+        "[redacted]",
+        "[redacted]",
+        "[redacted]",
+    ]
+    assert soul["redacted_lines"] == 4
+    assert soul["bytes"] == len(soul["text"].encode("utf-8"))
+    assert soul["sha256"] == hashlib.sha256(soul["text"].encode("utf-8")).hexdigest()
+    assert snapshot["sections"]["memory"]["text"] == "ordinary memory note"
+    assert snapshot["sections"]["memory"]["redacted_lines"] == 0
+    for name in ("user", "project_context", "skills"):
+        assert snapshot["sections"][name]["text"] == ""
+        assert snapshot["sections"][name]["redacted_lines"] == 0
+    from aether_agents.mcp.context import log_records
+
+    logged = log_records(snapshot)
+    assert all("text" not in record for record in logged)
+    assert next(record for record in logged if record["section"] == "soul")["redacted_lines"] == 4
+    assert "A" * 16 not in str(logged)
+    assert "B" * 16 not in str(logged)

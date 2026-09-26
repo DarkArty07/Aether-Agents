@@ -87,8 +87,9 @@ reviewed laboratory constructors and refuse a context that resolves outside thei
 private roots before the first native writer. Accidental mutation of a live or shared
 board is preserved as evidence and escalated through the supported lifecycle: direct
 SQL deletion of tasks, comments, events or runs is never cleanup. Isolation defects are
-reproduced against disposable copies, and the fixing unit reports a byte/row-stable
-live-board fingerprint.
+reproduced against disposable copies. Preservation evidence needs an independently retained
+prestate and attribution of expected/concurrent changes; comparing hashes of an actively
+written live board is not proof of isolation.
 
 ## Review convergence
 
@@ -121,6 +122,21 @@ instructional consistency, not observed improvement; the open-ended observation
 gate in #317 was closed at owner direction without claiming organic PASS, and
 unverified behavioral efficacy remains explicit.
 See PD-73 and R7 FR-703, FR-734 and FR-736b–e for the owning requirements.
+
+## Scope fidelity and proportionate qualification
+
+The three roles preserve alternatives, quantities, destinations, conditions and exclusions
+from owner intent through contract, unit, test and review. A green test of an invented
+interpretation is not acceptance. Morfeo keeps mandatory checks traceable to an accepted
+outcome or existing project gate and sizes contracts around useful independent outcomes;
+Supervisor returns an inflated material obligation to its owner rather than silently
+waiving it; Implementer raises contradictions before encoding them in code/tests.
+
+Use existing checks first, reuse applicable revision-bound evidence and justify broad reruns
+by changed risk. New oracles and live rollback campaigns are not automatic release chores.
+For #426/#459 the owner accepts direct source/instruction maintenance, with documentary
+checks and ordinary-use observation instead of an E2E or agent campaign. Closing those
+issues records that decision, not proof of obedience or active-profile adoption.
 
 ## Contract/execution procedure adoption
 

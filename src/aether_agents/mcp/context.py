@@ -8,7 +8,7 @@ from typing import Any
 
 _SECRET_LINE = re.compile(
     r"(?i)(?:api[_-]?key|token|secret|password|authorization)\s*[:=]\s*\S+"
-    r"|sk-[A-Za-z0-9]{8,}"
+    r"|\bsk-[A-Za-z0-9]{8,}"
     r"|\b\d{6,}:[A-Za-z0-9_-]{20,}\b"
 )
 
