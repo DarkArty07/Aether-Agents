@@ -160,3 +160,44 @@ the annotated tag is local-only and is never pushed.
 Recorded after the fact, because a commit cannot contain the identity of the tag that points at
 it: see the closing section appended by the integration lane once the protected merge and the
 local tag exist.
+
+| Item | Value |
+| --- | --- |
+| Pull request | #524 (`release(rc16): adopt HLP-428, qualify effective Project/review flow and close #494`) |
+| Reviewed head | `1038b0a9a93627a8771437aef9e6290f0b55e053` |
+| Merge commit on `main` | `d9e396462948ef3721612f6909371e22efb10115` |
+| Merge method | merge commit (no squash, rebase, force or history rewrite) |
+| Required checks | all seven passed without bypass: `pull-request-target`, `policy` 3.11/3.12/3.13, `observation-qualification` 3.11/3.12/3.13 |
+| Local annotated tag | `v1.0.0-rc.16` → `d9e396462948ef3721612f6909371e22efb10115`, created locally and **not pushed** (verified absent from the remote) |
+| Release tags at the merged commit | exactly one release tag |
+| Release bundle | built and verified at the integrated source revision; lock binds schema 5, `maintained_fork`, the pinned commit and digest |
+
+### Bounded CI correction on this lane
+
+The first CI run on this branch failed one required check,
+`observation-qualification (3.11)`, at the coverage step: five tests in
+`tests/test_rc16_transition_qualification.py` assumed an *installed* Aether predecessor release
+and the operator's maintained-fork checkout, neither of which exists on a CI runner, and the
+entry's availability refusal for the missing store was raised before its own containment checks,
+masking the actionable diagnostic. That is an objective-caused defect of the new oracle's test
+surface, and this lane corrected it within PD-73:
+
+- `scripts/qualify_rc16_transition.py` — the refusals an invocation can decide from its own
+  arguments (non-temp work root, live-root overlap, escaped derived destination) are now ordered
+  before the environmental availability preconditions, so the safety diagnostic is never masked.
+- `tests/test_rc16_transition_qualification.py` — the decisive scenario that copies the installed
+  predecessor release is now reported as **skipped** where no such installation exists, matching
+  the repository's existing convention for environment-dependent tests. The committed contract,
+  isolation and confinement controls still execute everywhere.
+
+Re-verified after the correction: the CI-equivalent environment (no installed store, no default
+fork checkout) passes 16 tests with 1 skip; the operator environment passes all 17 including the
+decisive run; and the seven required checks then passed on the corrected head.
+
+### Inherited failures recorded, not absorbed
+
+- `Website Pages` fails on `main` after this merge for an inherited reason: the site's canonical
+  document map (`website/src/lib/docs.ts`) omits `guides/morfeo-mcp`. The same workflow already
+  failed on the three preceding `main` merges (#517, #520 and the rc13 merge), so it is not
+  objective-caused. Pages is not one of the seven required status checks.
+- The pre-existing `[skip ci]` identity oracles repaired in commit `ac293ef1` are recorded above.
