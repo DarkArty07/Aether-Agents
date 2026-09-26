@@ -7,7 +7,7 @@
     "tests/hermes_cli/test_kanban_project_provenance.py"
   ],
   "required_behavior": "A non-affinity child task created with an explicit direct parent worktree recovers the board's canonical Project and receives a fresh project worktree instead of a null-Project scratch directory; explicit cross-project mismatches on recognized Aether boards fail closed before database insertion; and review failure containment cleanly unblocks with gave_up, clears worker/claim ownership, and bounds notifications to verified subscribers without emitting unverified origin signals.",
-  "candidate_requirement": "deferred",
+  "candidate_requirement": "required",
   "local_status": "MAINTAINED_FORK_ONLY / UPSTREAM_MISSING",
   "upstream": {
     "repository": "https://github.com/NousResearch/hermes-agent",
@@ -76,7 +76,8 @@
   "retirement_recommendation": "retain",
   "blocking_uncertainty": [
     "Upstream hermes-agent lacks board-level Project recovery and origin-signal bounding for review-lane containment.",
-    "The regression test module tests/hermes_cli/test_kanban_project_provenance.py is introduced by this patch and does not exist at pre-merge base aed6591a69. It is now declared as a component and resolves present at the merged revision 58f8c37a49b341f25b8fdd6310542fe932031b8d that the aggregate is pinned to."
+    "The regression test module tests/hermes_cli/test_kanban_project_provenance.py is introduced by this patch and does not exist at pre-merge base aed6591a69. It is now declared as a component and resolves present at the merged revision 58f8c37a49b341f25b8fdd6310542fe932031b8d that the aggregate is pinned to.",
+    "The optional 'Previous review returns (this task)' context line introduced in RC15 does not exist at selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d; retained RC15 review guidance uses its documented durable-history fallback when this optional context is absent. This absence is a disclosed candidate limitation, not an enforcement gate or retirement claim."
   ],
   "summary": "Retain HLP-428. The maintained fork recovers canonical Project provenance for non-affinity direct parent worktree children, refuses cross-project mismatches before task persistence, and cleanly bounds review failure containment without unverified notifications; verified by RED/GREEN reproduction, four-round strict contract audit, and exact tree reconstruction."
 }

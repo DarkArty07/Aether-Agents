@@ -1,7 +1,7 @@
 ---
 name: contract-result-review
 description: Use when Morfeo receives a completed contract result.
-version: 0.1.1
+version: 0.1.2
 author: Christopher, Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -51,6 +51,9 @@ proof of the rendered or running result. Use only the existing permitted tool su
    contract, not a paraphrase from the delivery. Identify every material criterion and
    preservation/authority obligation. Mark examples as examples. If the contract itself
    loses the owner's intent, report that conflict; do not certify against a weaker target.
+   Also reject an inflated interpretation: preserve alternatives, quantities, destinations,
+   conditions and exclusions. Successful checks prove their observations, not that the
+   behavior they tested was requested.
 2. **Bind the exact delivery.** Read durable board state and identify project, contract
    version, exact revision, PR/artifact and evidence producer. A test log from an earlier
    commit is not final-revision proof. Reuse it only with inspected change-impact evidence
@@ -61,8 +64,10 @@ proof of the rendered or running result. Use only the existing permitted tool su
    missing requirement. Inspect content fidelity as well as build/test correctness.
 4. **Check proportionately.** Choose checks from the agreed testing standard and the
    unresolved risk: not a fixed sample quota and not an automatic full-suite rerun. Reuse
-   traceable Supervisor/Implementer evidence where appropriate; directly test decisive
-   outcomes and doubts with authorized tools. A check that cannot be exercised is
+   traceable Supervisor/Implementer evidence where appropriate; directly inspect decisive
+   outcomes and test unresolved doubts with authorized tools. Explain the invalidation/risk
+   before repeating broad verification; reception is not a replay of every pipeline check.
+   A check that cannot be exercised is
    unverified, or blocking if material. Never invent a passing output to fill the table.
 5. **Record a compact reception.** Use the objective's existing evidence location and
    ordinary reversible workflow, not a new registry, mandatory schema or copy of the
@@ -78,10 +83,7 @@ proof of the rendered or running result. Use only the existing permitted tool su
    authorized omissions and who authorized them. Keep private identities, paths, runtime
    state, credentials and raw logs out of public evidence. Reference existing evidence
    rather than duplicating it; update verification applicability if reception adds a commit.
-6. **Decide and report.** Early advice is not final result acceptance. Intermediate
-   collaboration advice, sound continuation acknowledgments, or proactive lifecycle
-   notices exchanged during execution do not replace independent terminal review or
-   final contract-result acceptance. Accept only when material outcomes have sufficient
+6. **Decide and report.** Accept only when material outcomes have sufficient
    evidence and no unresolved material mismatch. Summarize what was delivered, direct
    versus reused verification and remaining limits. Distinguish execution complete,
    objective accepted and publication/deployment authorized; do not invent a completion
@@ -145,7 +147,7 @@ actually performed and makes any unverified requirement visible. Confirm support
 routing of material discrepancies, or finish honestly when acceptance is supported.
 
 Metadata, package-byte and instruction-presence tests verify resources, not agent
-obedience. Qualify behavior separately through authorized real reception: observe missing
-requirements despite green status, stale evidence, inaccessible material checks, justified
-reuse and a correct delivery accepted without redundant full-suite execution. Do not
-claim those cases were exercised merely because this list exists.
+obedience. Observe behavior through authorized real work; respect an owner-chosen
+ordinary-use observation path rather than creating an E2E campaign for an instruction edit.
+Neither source integration nor this list proves behavioral qualification. Preserve any
+behavioral checks required for a different objective; do not generalize a local omission.

@@ -1,7 +1,7 @@
 ---
 name: implementation-evidence
 description: Use when Implementer executes a contract-derived unit.
-version: 0.1.1
+version: 0.1.2
 author: Morfeo (Aether role), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -61,6 +61,9 @@ Supervisor-owned delivery defines scope; reading more context does not enlarge i
    the canonical obligation, interface or verified source, surface that contradiction
    through the existing collaboration/review path before changing code or tests to make
    the derived interpretation pass.
+   Preserve alternatives, quantities, destinations, conditions and exclusions: for example,
+   a requirement to use one selected destination does not authorize sending to all available
+   destinations. This is an illustrative semantic contrast, not a new interface requirement.
 3. **Make a short local execution approach.** Identify the smallest behavior changes
    and tests needed for this unit, using the existing code and conventions. This is
    working reasoning, not another authoritative `plan.md` or `tasks.md`. Do not require
@@ -69,10 +72,10 @@ Supervisor-owned delivery defines scope; reading more context does not enlarge i
    framework or absorb incidental defects that do not block acceptance.
 4. **Implement with the resolved test discipline.** Follow test-first only when the
    project's standard requires it. Reproduce a defect when that is the acceptance
-   basis. Exercise normal and required negative/boundary cases. Before encoding a test
-   oracle, verify that the required state or transition is possible in the actual
-   interface; ask a bounded, source-backed question when the agreed design contradicts
-   that interface. Keep changes within the unit, preserve shared interfaces, and avoid
+   basis. Exercise normal and required negative/boundary cases using the oracle checks
+   in step 2. Prefer existing tests; add a harness only for a concrete uncovered obligation,
+   not to turn a narrow correction into a general verification framework.
+   Keep changes within the unit, preserve shared interfaces, and avoid
    mass staging or unrelated cleanup. A mock is useful for its stated boundary; it
    does not prove a required real integration.
 5. **Verify behavior, not just buildability.** Run the assigned checks using the actual
@@ -146,10 +149,8 @@ acceptance criteria, or bypasses unit review.
 
 ## Verification
 
-Use a unit whose acceptance contains a normal outcome, a negative case and a preservation
-obligation. Verify that incomplete evidence cannot be reported as complete, that a
-reversible local choice proceeds without a decision-card ceremony, and that a material
-interface question reaches Supervisor. Inspect actual changed state and test results.
-A later independent reviewer must be able to reproduce or inspect the claim without
-recovering the Implementer's conversation. Static wording checks alone do not prove
-this behavior, and self-review must never be labelled independent review.
+For the assigned unit, inspect required outcomes, negative cases and preservation where
+applicable. Keep reversible choices local and return material interface questions to
+Supervisor. An independent reviewer must be able to inspect or reproduce the claim without
+the Implementer's conversation. This does not require a sample-agent run to edit the skill:
+static resource checks do not prove behavior, and self-review is not independent review.
