@@ -7,6 +7,13 @@ derived from an explicit disposable work root, and it refuses to run when any re
 destination could overlap the operator's live install, live selector, live unit, or
 operator configuration.
 
+Service boundary confinement:
+The disposable work root must resolve under a system temporary directory (/tmp, /var/tmp, etc.)
+so that the Hermes CLI service installation guard (_refuse_temp_home_service_write) is triggered,
+positively confining the gateway unit materialization and preventing any live user systemd daemon
+reloads or bus communication. A work root resolving outside system temp roots is refused with exit 2
+before any mutation.
+
 What it proves with real artifacts:
 1. isolation: Confinement witnesses for live unit, active pointer, selector, operator
    configs, ensuring zero mutation of live stores or boards.
@@ -88,6 +95,23 @@ SCENARIOS = (
     "review-fallback",
     "fork-regression",
 )
+
+SYSTEM_TEMP_ROOTS = (
+    Path(tempfile.gettempdir()).resolve(),
+    Path("/tmp"),
+    Path("/var/tmp"),
+    Path("/private/tmp"),
+    Path("/private/var/tmp"),
+)
+
+
+def is_under_system_temp(path: Path) -> bool:
+    """Return True if path resolves under one of the system temporary directory roots."""
+    try:
+        resolved = path.expanduser().resolve()
+    except OSError:
+        return False
+    return any(resolved == root or root in resolved.parents for root in SYSTEM_TEMP_ROOTS)
 
 
 class Refusal(RuntimeError):
@@ -194,6 +218,13 @@ class Isolation:
                 overlaps.append(f"work_root is inside live root: {live}")
             elif resolved_live.is_relative_to(self.work_root):
                 overlaps.append(f"live root {live} is inside work_root")
+
+            if self.receipts_root == resolved_live:
+                overlaps.append(f"receipts_root exactly equals live root: {live}")
+            elif self.receipts_root.is_relative_to(resolved_live):
+                overlaps.append(f"receipts_root is inside live root: {live}")
+            elif resolved_live.is_relative_to(self.receipts_root):
+                overlaps.append(f"live root {live} is inside receipts_root")
         return overlaps
 
     def prepare_directories(self) -> None:
@@ -309,6 +340,11 @@ class Inputs:
             raise Refusal(f"Maintained fork path is not a Git repository: {resolved_fork}")
 
         isolation = Isolation(work_root=work_root, receipts_root=receipts_root)
+        if not is_under_system_temp(isolation.work_root):
+            raise Refusal(
+                f"Isolation refuses non-temp work root: work root must resolve under a system temp directory "
+                f"({tempfile.gettempdir()}, /tmp, /var/tmp) to guarantee service boundary confinement; got: {isolation.work_root}"
+            )
         overlaps = isolation.live_overlaps()
         if overlaps:
             raise Refusal(f"Isolation refuses live directory overlap: {'; '.join(overlaps)}")
@@ -344,6 +380,10 @@ def capture_live_witnesses() -> list[Witness]:
 # --------------------------------------------------------------------------------------
 def scenario_isolation(inputs: Inputs, result: ScenarioResult) -> None:
     isolation = inputs.isolation
+    if not is_under_system_temp(isolation.work_root):
+        raise ScenarioFailure(
+            f"work_root {isolation.work_root} does not resolve under system temp root"
+        )
     overlaps = isolation.live_overlaps()
     if overlaps:
         raise ScenarioFailure(f"live overlap detected: {overlaps}")
@@ -1245,8 +1285,8 @@ def run_qualification(inputs: Inputs, scenarios: Sequence[str]) -> dict[str, Any
     receipt_path = (
         inputs.isolation.receipts_root / f"rc16-transition-receipt-{int(time.time())}.json"
     )
-    receipt_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     report["receipt_path"] = str(receipt_path)
+    receipt_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
     return report
 

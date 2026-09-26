@@ -37,7 +37,7 @@ All eight decisive scenarios implemented in `scripts/qualify_rc16_transition.py`
 
 | Scenario | Objective obligation | Observed result | Status |
 | --- | --- | --- | --- |
-| `isolation` | Derived paths strictly under disposable work root; refusal of live overlap; scrubbed environment | 0 live directory overlaps; all 12 paths relative to work root; operator environment variables scrubbed | PASS |
+| `isolation` | Derived paths strictly under disposable work root; refusal of live overlap; scrubbed environment | 0 filesystem directory overlaps detected against configured live directories by path-listing; all 12 derived paths relative to temp work root; service boundary positively confined under system temp; operator environment variables scrubbed | PASS |
 | `rc15-immutability` | RC15 active-record and release-lock bytes readable, coherent, and byte-immutable | Initial SHA-256 recorded; verified identical across forward transition, rollback, and reselection | PASS |
 | `candidate-identity` | RC16 candidate release-lock and record bind exact pin `58f8c37a49...` and digest `a2a9b374...` | Verified `schema_version: 5`, Hermes commit `58f8c37a49...`, source tree digest `a2a9b374...`, extras `["mcp"]`, package version `1.0.0rc16`, display `1.0.0-rc.16`, tag `v1.0.0-rc.16` | PASS |
 | `transition-cycle` | RC15 -> RC16 transition with mutable state preserved; rollback target RC15 coherent; RC16 reselection | Complete cycle executed: RC15 initial -> RC16 update -> RC15 rollback -> RC16 reselect; profile memory, session data, project registry, and board database bytes 100% preserved; record and lock bytes immutable | PASS |
@@ -45,6 +45,26 @@ All eight decisive scenarios implemented in `scripts/qualify_rc16_transition.py`
 | `hlp-reconciliation` | HLP-428 required/present; HLP-433 deferred/absent (presence=absent) and unretired | `--candidate-check` passed with `status: qualified`; `HLP-428` in `required_hlps`; `HLP-433` in `deferred_hlps` with `presence: absent` and missing regression module visible; `refusing_hlps: []` | PASS |
 | `review-fallback` | Retained RC15 review guidance absence-tolerant path verified; durable-history fallback when context line absent | Verified fallback phrasing in `SOUL.md` and `SKILL.md`; verified absence of context line at pin `58f8c37a49`; verified deterministic fallback counts prior returns from durable task runs without claiming behavior qualification | PASS |
 | `fork-regression` | Maintained-fork regression module and affected kanban battery at exact pin `58f8c37a49...` | `tests/hermes_cli/test_kanban_project_provenance.py` + 4 related kanban tests executed via `scripts/run_tests.sh`: 5 test files, 30 tests passed, 0 failed, exit 0 | PASS |
+
+## Environment limits
+
+1. **Service manager and bus boundary confinement**:
+   - The isolated transition qualification confines gateway unit materialization through the product's temp-root guard: `HERMES_HOME` resolves under a system temporary directory (`/tmp`, `/var/tmp`, `tempfile.gettempdir()`), triggering `hermes_cli/gateway.py:3465 _refuse_temp_home_service_write`. This guard prevents writing real systemd service units to disk and avoids invoking `systemctl --user daemon-reload` or connecting to the D-Bus user scope bus.
+   - Any work root resolving outside system temp roots is fail-closed refused with exit code 2 before any filesystem mutation occurs (`test_entry_refuses_non_temp_work_root_to_confine_service_boundary`).
+   - **What this lane does NOT prove**: No real user-systemd unit materialization, service reload, or live D-Bus session interaction was executed or claimed. This qualification lane does not prove host systemd service supervisor behavior, unit file validation by an active systemd daemon, or user-bus activation under a live operator session manager.
+
+2. **Filesystem path-listing isolation scope**:
+   - The isolation check verifies path resolution against configured live data/state/config/service directories (`~/.local/share/aether`, `~/.local/state/aether`, `~/.config/aether`, `~/.hermes`, `/etc/systemd/user`).
+   - This check is strictly a filesystem path-listing and environment-scrubbing check; it does not probe or monitor the host service manager, active IPC sockets, or background daemons.
+
+3. **Durable private receipts root**:
+   - Raw qualification receipts are stored in a durable private root (`.aether/receipts/rc16-trans/`, ignored by Git) rather than an ephemeral `/tmp` location. The temporary work root containing candidate builds, isolated stores, and clones remains strictly disposable and temp-confined.
+
+4. **Candidate tag timing and git boundaries**:
+   - The candidate tag `v1.0.0-rc.16` was tested exclusively inside a disposable Git clone under the temporary work root. No release tag was created in the shared primary checkout. The real annotated release tag is created once after merge by integration unit `RC16-INT`.
+
+5. **Unit-level evidence only**:
+   - This evidence certifies unit-level contract compliance for the RC15 -> RC16 isolated transition, rollback, immutable release records, and refusal matrix. It does NOT constitute independent review, integration, live managed cutover, canary verification, activation, publication, deployment, or agent-behavior qualification.
 
 ## Exact execution commands and verification receipts
 
@@ -57,10 +77,11 @@ uv run --frozen python scripts/run_tests.py -- tests/test_rc16_transition_qualif
 
 Result:
 ```text
-.............                                                            [100%]
-13 passed in 95.16s (0:01:35)
+...............                                                          [100%]
+15 passed in 93.60s (0:01:33)
 ```
 Exit code: `0`.
+Includes the service boundary confinement control asserting that non-temp work roots are refused before mutation (`test_entry_refuses_non_temp_work_root_to_confine_service_boundary`).
 
 ### 2. Mixed-version lifecycle and projection regression suites
 
@@ -72,7 +93,7 @@ uv run --frozen python scripts/run_tests.py -- tests/test_mixed_version_lifecycl
 Result:
 ```text
 .....................................................................    [100%]
-69 passed in 42.38s
+69 passed in 50.39s
 ```
 Exit code: `0`.
 Confirms that neither `scripts/qualify_mixed_version_lifecycle.py` nor `tests/test_lifecycle_projections.py` was modified or weakened.
@@ -83,7 +104,7 @@ Command:
 ```bash
 uv run --frozen python scripts/qualify_rc16_transition.py run \
     --work-root <disposable-work-root> \
-    --receipts-root <private-receipts-root> \
+    --receipts-root <durable-private-receipts-root> \
     --json
 ```
 
@@ -91,9 +112,9 @@ Raw JSON receipt output:
 ```json
 {
   "schema_version": "aether.rc16-transition-qualification.v1",
-  "timestamp_utc": "2026-09-26T02:00:50.975026+00:00",
+  "timestamp_utc": "2026-09-26T03:00:39.737039+00:00",
   "overall_status": "passed",
-  "total_duration_s": 85.067,
+  "total_duration_s": 91.766,
   "scenarios_selected": [
     "isolation",
     "rc15-immutability",
@@ -117,7 +138,7 @@ Raw JSON receipt output:
     {
       "name": "rc15-immutability",
       "passed": true,
-      "duration_s": 5.372,
+      "duration_s": 3.164,
       "details": {
         "rc15_record_sha256": "a4b584c06cac60482bac5203ebb24e7948626d2e213162df12518dadc67534c6",
         "rc15_lock_sha256": "ebd5a85a3851bff49156a70988996880bcd79ac71031348f0dde90a2d753f1c7",
@@ -128,9 +149,9 @@ Raw JSON receipt output:
     {
       "name": "candidate-identity",
       "passed": true,
-      "duration_s": 13.251,
+      "duration_s": 14.712,
       "details": {
-        "candidate_commit": "03f78d607f3aded907953e890d716771e002b537",
+        "candidate_commit": "<candidate-commit>",
         "candidate_lock": "<disposable-work-root>/candidate-staging/release-lock.json",
         "candidate_wheel": "<disposable-work-root>/candidate-staging/dist/aether_agents-1.0.0rc16-py3-none-any.whl",
         "derived_fork_tree_digest": "a2a9b374bd2022c7f96242b0ab2c95691119262c925389eb3820ca627c581144"
@@ -140,7 +161,7 @@ Raw JSON receipt output:
     {
       "name": "transition-cycle",
       "passed": true,
-      "duration_s": 42.488,
+      "duration_s": 47.822,
       "details": {
         "cycle_steps": [
           "rc15_initial",
@@ -155,7 +176,7 @@ Raw JSON receipt output:
     {
       "name": "refusal-matrix",
       "passed": true,
-      "duration_s": 12.622,
+      "duration_s": 13.725,
       "details": {
         "refusals_tested": [
           "wrong_commit",
@@ -171,7 +192,7 @@ Raw JSON receipt output:
     {
       "name": "hlp-reconciliation",
       "passed": true,
-      "duration_s": 0.252,
+      "duration_s": 0.278,
       "details": {
         "required_hlps_count": 32,
         "deferred_hlps": [
@@ -183,7 +204,7 @@ Raw JSON receipt output:
     {
       "name": "review-fallback",
       "passed": true,
-      "duration_s": 0.443,
+      "duration_s": 0.465,
       "details": {
         "fallback_phrases_verified": [
           "If the field is absent, consult existing durable history.",
@@ -197,7 +218,7 @@ Raw JSON receipt output:
     {
       "name": "fork-regression",
       "passed": true,
-      "duration_s": 10.637,
+      "duration_s": 11.599,
       "details": {
         "test_files": [
           "tests/hermes_cli/test_kanban_project_provenance.py",
@@ -210,7 +231,7 @@ Raw JSON receipt output:
         "runner": "<disposable-work-root>/fork-pin-clone/scripts/run_tests.sh",
         "exit_code": 0,
         "stdout_summary": [
-          "=== Summary: 5 files, 30 tests passed, 0 failed (100% complete) in 3.1s (48 workers) ==="
+          "=== Summary: 5 files, 30 tests passed, 0 failed (100% complete) in 3.5s (48 workers) ==="
         ]
       },
       "error": null
@@ -224,7 +245,7 @@ Raw JSON receipt output:
     "rc16_hermes_commit": "58f8c37a49b341f25b8fdd6310542fe932031b8d",
     "rc16_hermes_tree_sha256": "a2a9b374bd2022c7f96242b0ab2c95691119262c925389eb3820ca627c581144"
   },
-  "receipt_path": "<private-receipts-root>/rc16-transition-receipt-1790388050.json"
+  "receipt_path": "<durable-private-receipts-root>/rc16-transition-receipt-1790391639.json"
 }
 ```
 Exit code: `0`.
@@ -285,8 +306,8 @@ Recipe: `aether_agents.lifecycle._materialize_git_archive` followed by `aether_a
 ## Modified surface and preservation audit
 
 ### Writable surface (this unit):
-- `scripts/qualify_rc16_transition.py` (new isolated qualification entry for RC15 -> RC16 transition)
-- `tests/test_rc16_transition_qualification.py` (new test suite verifying qualification entry contract and oracles)
+- `scripts/qualify_rc16_transition.py` (isolated qualification entry with service boundary confinement)
+- `tests/test_rc16_transition_qualification.py` (test suite verifying entry contract, oracles, and non-temp work root refusal)
 - `tests/fixtures/rc16-transition/rc15-record.json` (published RC15 active record fixture)
 - `tests/fixtures/rc16-transition/rc15-release-lock.json` (published RC15 release lock fixture)
 - `specs/issue-494-project-provenance/evidence/RC16-TRANS.md` (this evidence document)

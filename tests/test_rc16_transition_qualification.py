@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -96,6 +97,42 @@ def test_entry_refuses_missing_aether_repo(tmp_path: Path) -> None:
     )
     assert completed.returncode == 2
     assert "not a git worktree" in (completed.stderr + completed.stdout).lower()
+
+
+def test_entry_refuses_non_temp_work_root_to_confine_service_boundary(tmp_path: Path) -> None:
+    non_temp_work_root = Path.home() / ".aether-test-non-temp-work-root"
+    if non_temp_work_root.exists():
+        shutil.rmtree(non_temp_work_root, ignore_errors=True)
+
+    try:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(ENTRY_SCRIPT),
+                "run",
+                "--work-root",
+                str(non_temp_work_root),
+                "--receipts-root",
+                str(tmp_path / "receipts"),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=str(REPO_ROOT),
+        )
+        assert completed.returncode == 2
+        output = (completed.stderr + completed.stdout).lower()
+        assert "must resolve under a system temp directory" in output
+        assert not non_temp_work_root.exists()
+    finally:
+        if non_temp_work_root.exists():
+            shutil.rmtree(non_temp_work_root, ignore_errors=True)
+
+
+def test_is_under_system_temp_confinement_helper(entry: Any, tmp_path: Path) -> None:
+    assert entry.is_under_system_temp(tmp_path / "sub") is True
+    assert entry.is_under_system_temp(Path("/tmp/arbitrary")) is True
+    assert entry.is_under_system_temp(Path.home() / "non-temp-root") is False
 
 
 def test_unknown_scenario_is_refused(entry: Any) -> None:
