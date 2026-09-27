@@ -1,5 +1,5 @@
 {
-  "observed_at_utc": "2026-09-27T11:39:07Z",
+  "observed_at_utc": "2026-09-27T13:25:51Z",
   "overall_blockers": [
     {
       "detail": "Retirement gate status is failed.",
@@ -607,7 +607,7 @@
       "kind": "retirement_gate"
     },
     {
-      "detail": "Source-only. The reviewed candidate 34a7f1e5678ba78cb011147a7462370e5b7343bb is a maintained-fork branch tip and is not merged into aether-main; the aggregate remains pinned at the already-merged revision 58750d6cf8182c0ff5093719b9e7cc5026621fbf, where tests/hermes_cli/test_kanban_collaboration.py exists from the earlier HLP-334 work. No fork pull request, merge, runtime restart, installed-behavior claim, tag, RC17 or credential change is made by this unit.",
+      "detail": "Source-only. Reviewed implementation 34a7f1e5678ba78cb011147a7462370e5b7343bb (tree b26638974fc134da866b821ab3c4b34ab430aeb3) merged into maintained-fork aether-main through PR #23 at 007cfb77676b6b024d2c0986f4585e6cfdcf18d6 with the same tree. The selected installed/release pin remains 58750d6cf8182c0ff5093719b9e7cc5026621fbf; the aggregate deliberately evaluates HLP coverage at that unchanged pin and HLP-460 remains deferred there. Fork PR reports no checks (Actions run count 0; branch not protected), not a green CI claim. No runtime restart, installed-behavior qualification, tag, RC17 or credential change.",
       "id": "HLP-460",
       "kind": "uncertainty"
     },
@@ -4101,7 +4101,7 @@
         "status": "passed"
       },
       "blocking_uncertainty": [
-        "Source-only. The reviewed candidate 34a7f1e5678ba78cb011147a7462370e5b7343bb is a maintained-fork branch tip and is not merged into aether-main; the aggregate remains pinned at the already-merged revision 58750d6cf8182c0ff5093719b9e7cc5026621fbf, where tests/hermes_cli/test_kanban_collaboration.py exists from the earlier HLP-334 work. No fork pull request, merge, runtime restart, installed-behavior claim, tag, RC17 or credential change is made by this unit.",
+        "Source-only. Reviewed implementation 34a7f1e5678ba78cb011147a7462370e5b7343bb (tree b26638974fc134da866b821ab3c4b34ab430aeb3) merged into maintained-fork aether-main through PR #23 at 007cfb77676b6b024d2c0986f4585e6cfdcf18d6 with the same tree. The selected installed/release pin remains 58750d6cf8182c0ff5093719b9e7cc5026621fbf; the aggregate deliberately evaluates HLP coverage at that unchanged pin and HLP-460 remains deferred there. Fork PR reports no checks (Actions run count 0; branch not protected), not a green CI claim. No runtime restart, installed-behavior qualification, tag, RC17 or credential change.",
         "Upstream hermes-agent lacks the ancestor-root helpers, collaboration-root query and Aether opt-in corroboration at the historical inspected revision, inspected v2026.9.24 release (commit f97608f178d1ffeca59860195ab7da295f7c8e5f) and main f039f028f2bd5c6e2131b4ffaa4b200c81db68a3 at review; retirement remains unqualified.",
         "Full fork test suite and cross-platform/Windows CI are NOT RUN by this unit; the focused 3-file hermetic reproduction above plus the parent unit's independently reviewed RED/GREEN are the whole verification basis."
       ],
@@ -4448,7 +4448,7 @@
     "revision": "58750d6cf8182c0ff5093719b9e7cc5026621fbf",
     "unverified": 2
   },
-  "source_ledger_sha256": "f300d1c325a1a8750da9a5106ff7267ad7d9073e66637a0116064868dead6321",
+  "source_ledger_sha256": "ed2a6a27184dee253f2b3e6d86f83907ae7a2ab18061ec112a8dc88e6b05c84a",
   "upstream": {
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
     "repository": "https://github.com/NousResearch/hermes-agent"
