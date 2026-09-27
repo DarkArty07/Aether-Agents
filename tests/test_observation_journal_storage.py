@@ -1108,8 +1108,19 @@ def test_checkpoint_sink_resolves_morfeo_from_coherent_active_release(tmp_path) 
 
 
 def test_checkpoint_sink_derives_review_authority_from_durable_native_assignment(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path,
 ) -> None:
+    # This test exercises checkpoint authority derivation from durable native
+    # assignment evidence, not supervised flusher scheduling. Keep all three
+    # Collectors in this test synchronous: the final one's flusher could race
+    # the explicit flush below for the writer lock and make the legitimate
+    # approval's bounded snapshot read fail closed. Each earlier Collector
+    # stops and performs its final flush before the next one starts.
+    monkeypatch.setattr(
+        "aether_agents.observation.capture.collector.Flusher.start",
+        lambda _self, _spawn_task=None: None,
+    )
     state_root = tmp_path / "aether"
     _activate_test_release(state_root, tmp_path)
     factory = EventFactory()
