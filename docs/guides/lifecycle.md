@@ -156,6 +156,18 @@ Active release installation (`aether update`) provisions release-owned runtime p
 
 ## Recovery surfaces
 
+Detached managed cutovers must carry the verified project identity explicitly.
+Before switching, resolve the portable marker and registry for the intended project
+and pass `AETHER_PROJECT_ID` to the independent launcher/unit. Do not infer a project
+from recency or assume that `AETHER_PROJECT_ROOT` alone reaches older lifecycle
+readers: target managers run in the release directory rather than the caller's cwd.
+The current source resolves the existing caller binding before sending projection
+prepare/validation requests; an ambiguous binding still refuses. If recovery also
+fails, diagnostics retain both the original transition error and compensation error.
+For an already registered candidate, preview and select its version through
+`aether update VERSION --dry-run --json` then the authorized `--yes` operation;
+do not rebuild the candidate or rewrite its tag to repair a launch-context failure.
+
 Three supported surfaces act on an existing installation, and none of them installs a package, acquires credentials, or rolls user state backward. `aether doctor` and `aether reconcile --to active` inspect or repair the release that is already active; `aether rollback` is the one surface that selects a different release, switching the product-owned runtime, launcher and service pointers to the most recent prior coherent release or to an explicitly named one.
 
 - `aether doctor [--project PATH] [--json]` is the read-only coherence inspection: active-release record, `runtime/current`, packaged launcher, desktop entries, the Hermes-owned gateway service selection, profiles, observation counters, projection compatibility, and platform constraints. A non-zero integrity result is an honest diagnostic, not an instruction to install, authenticate, or activate anything.

@@ -1711,6 +1711,101 @@ class LifecycleManager:
 '''
 
 
+@pytest.mark.parametrize("operation", ["prepare", "validate"])
+@pytest.mark.parametrize("caller_bound", [True, False])
+def test_target_projection_subprocess_preserves_verified_caller_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str, caller_bound: bool
+) -> None:
+    """A detached manager must not rediscover the project from its release cwd."""
+    from aether_agents.observation.context import ProjectRegistry
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("AETHER_PROJECT_ID", raising=False)
+    monkeypatch.delenv("AETHER_PROJECT_ROOT", raising=False)
+    manager = _manager(tmp_path)
+    project = manager.project_root
+    assert project is not None
+    manager.project_root = None
+    other = tmp_path / "other-project"
+    registry = ProjectRegistry(manager.store.state_root)
+    for path, project_id in (
+        (project, "11111111-1111-4111-8111-111111111111"),
+        (other, "22222222-2222-4222-8222-222222222222"),
+    ):
+        (path / ".aether").mkdir(parents=True, exist_ok=True)
+        (path / ".aether/project.toml").write_text(
+            f'schema_version = 1\nproject_id = "{project_id}"\nname = "fixture"\n'
+            'initialized_by = "1.0.0-rc.17"\nforge = "local"\ncontract_root = "specs"\n'
+        )
+        registry.register(project_id, path, name="fixture")
+        assert registry.verify_with_marker(project_id)
+    monkeypatch.chdir(project)
+    target = _record(manager.store, "1.0.0rc17-" + "d" * 16)
+    _install_record(manager, target)
+    _release_manager_python(manager.store, target)
+    if not caller_bound:
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(IntegrityError, match="EXECUTION_FAILED"):
+            if operation == "prepare":
+                manager._prepare_target_projections_subprocess(target.release_id, target)
+            else:
+                manager._validate_target_projections_subprocess(target.release_id)
+        assert not manager.store.active_pointer.exists()
+        return
+    expected = manager.projection_spec(target)
+    if operation == "prepare":
+        plan = manager._prepare_target_projections_subprocess(target.release_id, target)
+        assert plan.desktop_bytes == expected.desktop_bytes
+        assert str(project).encode() in plan.desktop_bytes
+    else:
+        for path, content in (
+            (expected.launcher_path, expected.launcher_bytes),
+            (expected.desktop_path, expected.desktop_bytes),
+            *((path, content) for path, content in expected.wsl_shortcuts.values()),
+        ):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        result = manager._validate_target_projections_subprocess(target.release_id)
+        assert result["mismatches"] == []
+    assert not manager.store.active_pointer.exists()
+
+
+def test_compensation_failure_retains_the_original_transition_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    manager = _activation_manager(tmp_path, monkeypatch)
+    prior = _record(manager.store, "1.0.0rc1-" + "a" * 16)
+    target = _record(manager.store, "1.0.0rc1-" + "b" * 16)
+    _install_record(manager, prior)
+    _install_record(manager, target)
+    _release_manager_python(manager.store, prior)
+    _release_manager_python(manager.store, target)
+    manager.activate_existing(
+        prior.release_id, transition_kind="install", expected_active_release_id=None
+    )
+
+    def fail_plan(*args, **kwargs):
+        raise IntegrityError("original project binding failure")
+
+    def fail_compensation(*args, **kwargs):
+        raise IntegrityError("secondary projection recovery failure")
+
+    monkeypatch.setattr(manager, "_prepare_target_projections_subprocess", fail_plan)
+    monkeypatch.setattr(manager, "_reconcile_release_projections_locked", fail_compensation)
+    with pytest.raises(IntegrityError) as failure:
+        with manager.store.mutation_lock():
+            manager._activate_existing_locked(
+                target.release_id,
+                transition_kind="update",
+                expected_active_release_id=prior.release_id,
+            )
+    assert "original project binding failure" in str(failure.value)
+    assert "secondary projection recovery failure" in str(failure.value)
+    active = manager.store.active()
+    assert active is not None and active.release_id == prior.release_id
+
+
 def test_target_runner_answers_only_from_the_target_release_not_the_invoking_directory(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
