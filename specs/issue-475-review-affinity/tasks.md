@@ -29,7 +29,7 @@ Card bodies are the executable deliveries and native board state is the durable 
 | Maintained-fork pin | `origin/aether-main` is `30b4846a2c8063528d491f48950b3b341b0ce7d7` (tree `49189104a6888ef604ff0733d97b6b05e25b0d33`), equal to the contract's inspected revision; **no fork pull request is open** and no branch named for `#475` exists locally or remotely |
 | Loss point re-verified | `hermes_cli/kanban_db.py` `dispatch_once` calls `reserve_session_affinity` for direct-affinity cards with key `(board, project_id, flow_id, current_assignee)`. When `current_assignee` changes to a distinct reviewer on `request_review`, lookup fails and raises `AffinityRegistrationError("session affinity lease is missing or stale")`. No lease timeout is checked in that branch |
 | Baseline file digests at the pin | `hermes_cli/kanban_db.py` git blob `3a0998054144a39963abdf4e2f61ee0174c5b5fe`, SHA-256 `9ed38688acba3d039985139a0b3cd928dd9ac1d65280c073bee87c384ed03af1`; `tests/hermes_cli/test_kanban_session_affinity.py` git blob `b253834b4949d2281b38af766888a4cda7e52f5b`, SHA-256 `0372fd675c04088d940e8a22363c6cc98fd225333dab78e6b4d77852d29c7cf9` |
-| Fork execution environment | Supervisor materialized an isolated fork worktree at `/home/darkarty/Desktop/03_PROYECTOS/01_ACTIVOS/aether-hermes/.worktrees/fix-475-review-affinity` on branch `fix/475-review-affinity` at the exact pin, clean including untracked files, with working runner: `HERMES_TEST_FILE_RETRIES=0 scripts/run_tests.sh tests/hermes_cli/test_kanban_session_affinity.py -q` → 1 file, 73 passed, 0 failed, exit 0 (Python 3.11.15, pytest 9.1.1, 48 workers) |
+| Fork execution environment | Supervisor materialized an isolated clean fork worktree under repository `https://github.com/DarkArty07/aether-hermes.git` on branch `fix/475-review-affinity` at the exact pin, clean including untracked files, with working runner: `HERMES_TEST_FILE_RETRIES=0 scripts/run_tests.sh tests/hermes_cli/test_kanban_session_affinity.py -q` → 1 file, 73 passed, 0 failed, exit 0 (Python 3.11.15, pytest 9.1.1, 48 workers) |
 | Next free audit identifier | `HLP-475` verified free in Aether and the fork; ledger sections end at `HLP-474` and reconciliation roster holds 37 entries |
 | Aether baseline | On the untouched root: `scripts/check_documentation.py` passed; `scripts/check_public_artifacts.py --root .` passed; `scripts/check_hermes_baseline_drift.py --json` passed; `uv run --frozen python scripts/run_tests.py -- tests/test_hermes_patch_reconciliation.py -q` → 33 passed; git diff --check clean |
 | Objective-caused manifest defect | The contract commit `79a08278` tracked `.aether/objective-contracts/oc_de8365729879a0cd/v1.md` but did **not** add it to the `policy.yml` expected-manifest list, so the `Validate canonical base manifest` step fails on this branch. Recorded as a bounded integration repair for `INT-475` (see shared decision 9), not a unit deliverable |
@@ -41,7 +41,7 @@ Card bodies are the executable deliveries and native board state is the durable 
 
 | Concern | Settled conclusion | Execution consequence |
 | --- | --- | --- |
-| Dual repository | The maintained fork owns the behavior and its focused tests. Aether owns the portable patch, ledger/reconciliation records, the public-artifact surfaces and its own PR | Fork work happens only in the isolated worktree at `/home/darkarty/Desktop/03_PROYECTOS/01_ACTIVOS/aether-hermes/.worktrees/fix-475-review-affinity`. The checkout whose branch is `aether-main`, the loaded editable runtime and the installed release are never edited or activated |
+| Dual repository | The maintained fork owns the behavior and its focused tests. Aether owns the portable patch, ledger/reconciliation records, the public-artifact surfaces and its own PR | Fork work happens only in the isolated worktree on branch `fix/475-review-affinity` at the exact pin. The checkout whose branch is `aether-main`, the loaded editable runtime and the installed release are never edited or activated |
 | Fork hotspot | The whole fix is localized to `hermes_cli/kanban_db.py` (`dispatch_once`, review provenance verification, and `_default_spawn` override suppression) plus its tests | **One** fork unit (`HF-475`). Two units editing `hermes_cli/kanban_db.py` on parallel branches is a declared collision under current policy |
 | Portable bytes | The Aether patch, its digest and the reconciliation truth depend on the accepted exact fork delta | `AE-475` is serialized after same-card review of `HF-475`; the accepted commit is its required input, not an ordering preference |
 | Fork ledger | The fork's `AETHER_FORK.md` is the fork-side record | `HF-475` preserves it and supplies the exact proposed paragraph; `INT-475` applies it on the branch it merges |
@@ -76,7 +76,7 @@ Card bodies are the executable deliveries and native board state is the durable 
 3. Fork product work starts only in the isolated worktree of
    `https://github.com/DarkArty07/aether-hermes.git` at exact revision
    `30b4846a2c8063528d491f48950b3b341b0ce7d7`, branch `fix/475-review-affinity`, prepared by
-   Supervisor at `/home/darkarty/Desktop/03_PROYECTOS/01_ACTIVOS/aether-hermes/.worktrees/fix-475-review-affinity`
+   Supervisor in that repository under `.worktrees/fix-475-review-affinity` on branch `fix/475-review-affinity`
    and reserved for `HF-475` as the single writer. Locate the repository by its remote URL.
    Never edit the checkout whose branch is `aether-main`, the loaded editable runtime, or another
    worker's worktree.
@@ -167,8 +167,7 @@ in this dependency chain, and none is manufactured.
   6. Existing unit review (FR-735a/737c) and generic Hermes review remain green.
   7. Subprocess argv/env inspection proves reviewer isolation.
   Excludes Aether portable artifacts, ledgers, publication and activation.
-- **Inputs:** the isolated fork worktree at `/home/darkarty/Desktop/03_PROYECTOS/01_ACTIVOS/aether-hermes/.worktrees/fix-475-review-affinity`
-  at `30b4846a...` (tree `49189104...`) with the working documented runner; baseline digests in receipt;
+- **Inputs:** the isolated fork worktree at `30b4846a…` (tree `49189104…`) on branch `fix/475-review-affinity` with the working documented runner; baseline digests in receipt;
   spec.md, plan.md and research.md as technical references.
 - **Boundaries:** writable `hermes_cli/kanban_db.py` and `tests/hermes_cli/test_kanban_session_affinity.py`
   (and/or one new focused test module). Preserve existing affinity fencing, `register_session_affinity`,
