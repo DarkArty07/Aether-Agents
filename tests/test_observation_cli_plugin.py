@@ -2358,22 +2358,33 @@ def test_ae422_foreign_owned_or_public_session_database_is_never_read(
     assert Path(os.environ["HERMES_KANBAN_DB"]) == board
     _ae422_assert_disposable_board(board)
 
-    owned = os.stat(state)
-    try:
-        os.chown(state, 0 if owned.st_uid != 0 else 1, -1)
-    except (OSError, PermissionError):
-        pytest.skip("cannot create a foreign-owned database in this environment")
-    try:
-        for mode in (0o600, 0o644):
-            os.chmod(state, mode)
+    # CI cannot chown the fixture. Substitute only the target descriptor's
+    # fstat ownership during this read, leaving the real private file/parent and
+    # every other inode untouched. The production validator is not mocked: it
+    # must refuse before any SessionDB query, at either native file mode.
+    original_fstat = os.fstat
+    other_uid = 1 if os.getuid() == 0 else 0
+    for mode in (0o600, 0o644):
+        state.chmod(mode)
+        target = state.stat()
+        seen: list[int] = []
+
+        def foreign_file_fstat(descriptor: int) -> os.stat_result:
+            observed = original_fstat(descriptor)
+            if (observed.st_dev, observed.st_ino) != (target.st_dev, target.st_ino):
+                return observed
+            seen.append(descriptor)
+            fields = list(observed)
+            fields[4] = other_uid  # stat_result's st_uid slot
+            return os.stat_result(fields)
+
+        with monkeypatch.context() as ownership:
+            ownership.setattr(hermes_plugin.os, "fstat", foreign_file_fstat)
             verified, available = hermes_plugin._verified_native_session_ids({"session-native"})
-            assert verified == frozenset()
-            assert available is False
-    finally:
-        try:
-            os.chown(state, owned.st_uid, owned.st_gid)
-        except (OSError, PermissionError):
-            pass
+        assert seen, "the held native SessionDB descriptor was not checked"
+        assert verified == frozenset()
+        assert available is False
+        assert state.stat().st_uid == os.getuid()
 
 
 def test_u396_negative_tuple_conflict(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
