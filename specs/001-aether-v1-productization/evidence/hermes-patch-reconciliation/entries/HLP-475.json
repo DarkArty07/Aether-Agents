@@ -1,0 +1,66 @@
+{
+  "id": "HLP-475",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-475--review-affinity-dispatch-maintained-fork-2026-09-26",
+  "components": [
+    "HLP-475",
+    "hermes_cli/kanban_db.py",
+    "tests/hermes_cli/test_kanban_session_affinity.py"
+  ],
+  "candidate_requirement": "deferred",
+  "required_behavior": "Dispatch fresh reviewer under its own profile with affinity=None and suppressed Supervisor skill/model overrides when a direct-affinity Supervisor card transitions to review under corroborated Aether opt-in and board identity. Restore Supervisor assignee and session on request_changes; fail closed without fallback on damaged identity.",
+  "local_status": "MAINTAINED_FORK_ONLY / UPSTREAM_MISSING",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/475"
+      }
+    ],
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "hermes_cli/kanban_db.py:dispatch_once",
+        "result": "Inspected upstream kanban_db.py lacks Aether review opt-in corroboration and cross-profile dispatch exception for affinity-bound cards."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Retire only after an adopted upstream release supports cross-profile review dispatch on affinity-bound cards or native review delegation without lease corruption.",
+    "status": "not_executed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "specs/issue-475-review-affinity/evidence/HLP-475.md",
+        "result": "Causal RED reproduced at base 30b4846a (73 passed, 1 failed with lease missing or stale); candidate commit f21c733b passed 88 tests in test_kanban_session_affinity.py and 41 regression tests without lease corruption."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "passed",
+    "blocker": null,
+    "artifacts": [
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-475-review-affinity-dispatch.patch",
+        "ledger_sha256": "63cdbe85e7a29d05b8132629df5f11b3187cf38eb8a1d09c150c76cb2fcd1ff8",
+        "computed_sha256": "63cdbe85e7a29d05b8132629df5f11b3187cf38eb8a1d09c150c76cb2fcd1ff8",
+        "checksum_status": "passed",
+        "parse_status": "passed",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "30b4846a2c8063528d491f48950b3b341b0ce7d7 -> c69e40e7c9f362458833778b89f88430fb9e10c4; reverse -> 49189104a6888ef604ff0733d97b6b05e25b0d33",
+        "result": "passed"
+      }
+    ]
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "Source-only. Pinned at 30b4846a2c8063528d491f48950b3b341b0ce7d7. Declared paths can exist at that pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified."
+  ],
+  "summary": "Base 30b4846a2c8063528d491f48950b3b341b0ce7d7; candidate implementation f21c733b800a2dcc8a29639c90e5f84eb7d6278b; reviewed implementation tree c69e40e7c9f362458833778b89f88430fb9e10c4. Source-only. Pinned at 30b4846a2c8063528d491f48950b3b341b0ce7d7. Declared paths exist at that pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified."
+}

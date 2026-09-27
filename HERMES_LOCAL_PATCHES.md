@@ -61,6 +61,7 @@ This file prevents a Hermes update from silently removing local repairs. An Aeth
 | `HLP-435` | `#435` | judge grep quote structure before escape-stripping normalization while retaining the protected guard chain | historical public reference has the defect; upstream `e383c28d` and v2026.9.21+ contain the false-positive fix plus additional bypass protection | `MAINTAINED_FORK_ONLY / UPSTREAM_PARTIAL` |
 | `HLP-473` | `#473` | rebind TypeHandler after lazy SDK loading; refuse incomplete dependencies | equivalent binding exists at upstream `4f225435` | `MAINTAINED_FORK_ONLY / UPSTREAM_VERIFIED` |
 | `HLP-474` | `#474` | retain parent review auth only for the same provider and exact endpoint | routed fallback absent at inspected upstream | `MAINTAINED_FORK_ONLY / UPSTREAM_MISSING` |
+| `HLP-475` | `#475` | dispatch fresh reviewer on affinity-bound Supervisor card under verified Aether review opt-in | no equivalent in `NousResearch/hermes-agent` at contract inspection | `MAINTAINED_FORK_ONLY / UPSTREAM_MISSING` |
 
 ## HLP-473 — Telegram lazy TypeHandler (maintained fork, 2026-09-26)
 
@@ -79,6 +80,15 @@ This file prevents a Hermes update from silently removing local repairs. An Aeth
 - **Evidence:** causal RED through the actual custom resolver with synthetic auth; 50 hermetic tests GREEN and reversible tree proof in `specs/issue-474-background-review-auth/evidence/HLP-474.md`.
 - **Disposition:** deferred at the same RC16 pin. No model request, credential change, runtime update or RC17. The inspected upstream routed selector still lacks this fallback.
 - **Rollback/retirement:** reverse the implementation patch or revert its commit; retire only after an adopted exact upstream release passes same-endpoint inheritance and the non-leakage controls.
+
+## HLP-475 — Review affinity dispatch (maintained fork, 2026-09-26)
+
+- **Source:** candidate commit `f21c733b800a2dcc8a29639c90e5f84eb7d6278b`, base `30b4846a2c8063528d491f48950b3b341b0ce7d7`.
+- **Behavior:** dispatch a fresh reviewer under its own profile in the candidate worktree with `affinity=None` and suppressed Supervisor skill/model overrides when a direct-affinity Supervisor card transitions to review under corroborated Aether opt-in and board identity. Preserve persisted card configuration and affinity on disk; restore Supervisor assignee and session on `request_changes`.
+- **Artifact:** `patches/hermes/HLP-475-review-affinity-dispatch.patch`, SHA-256 `63cdbe85e7a29d05b8132629df5f11b3187cf38eb8a1d09c150c76cb2fcd1ff8`; reconstructs the implementation tree `c69e40e7c9f362458833778b89f88430fb9e10c4` against base `30b4846a2c8063528d491f48950b3b341b0ce7d7`.
+- **Evidence:** causal RED (`session affinity lease is missing or stale`) reproduced at unchanged base (73 passed, 1 failed); candidate commit GREEN with 88 passed in `tests/hermes_cli/test_kanban_session_affinity.py` plus 41 regression tests; fail-closed negative matrix, rework/re-review cycle, subprocess argv/env isolation, and untouched outer board in `specs/issue-475-review-affinity/evidence/HLP-475.md`.
+- **Disposition:** candidate implementation in fork worktree `fix/475-review-affinity`; PR, merge, and aggregate re-pin owned by INT-475. Inspected upstream lacks Aether review opt-in corroboration and cross-profile affinity exception.
+- **Rollback/retirement:** reverse the patch or revert the implementation commit; retire only after an adopted upstream release supports cross-profile review dispatch on affinity-bound cards or native review delegation without lease corruption.
 
 ## HLP-188 — sticky `initial_status=blocked`
 

@@ -369,6 +369,7 @@ jobs:
           patches/hermes/HLP-435-hardline-quoted-grep.patch
           patches/hermes/HLP-473-telegram-lazy-typehandler.patch
           patches/hermes/HLP-474-background-review-auth.patch
+          patches/hermes/HLP-475-review-affinity-dispatch.patch
           patches/hermes/tests/test_hlp280_live_routing_probe.py
           patches/hermes/tests/test_hlp280_recovery_compatibility.py
           policy/hooks/README.md
