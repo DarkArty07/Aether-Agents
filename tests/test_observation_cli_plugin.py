@@ -2218,8 +2218,10 @@ def _ae422_scrub_native_identity(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _ae422_assert_disposable_board(board: Path) -> None:
     metadata = json.loads((board.parent / "board.json").read_text(encoding="utf-8"))
-    assert metadata["slug"] == board.parent.name == execution_board_slug(
-        PROJECT_ID, "oc_1234567890abcdef", 1
+    assert (
+        metadata["slug"]
+        == board.parent.name
+        == execution_board_slug(PROJECT_ID, "oc_1234567890abcdef", 1)
     )
     assert metadata["project_id"] == PROJECT_ID
     assert metadata["aether_project_id"] == PROJECT_ID
@@ -2286,9 +2288,7 @@ def test_ae422_native_session_provenance_survives_a_readable_non_owner_only_data
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX permission and inode contract")
-@pytest.mark.parametrize(
-    "link_kind", ["symlink", "hardlink", "fifo", "ancestor"]
-)
+@pytest.mark.parametrize("link_kind", ["symlink", "hardlink", "fifo", "ancestor"])
 def test_ae422_native_session_provenance_still_refuses_untrusted_readable_databases(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, link_kind: str
 ) -> None:
@@ -2366,9 +2366,7 @@ def test_ae422_foreign_owned_or_public_session_database_is_never_read(
     try:
         for mode in (0o600, 0o644):
             os.chmod(state, mode)
-            verified, available = hermes_plugin._verified_native_session_ids(
-                {"session-native"}
-            )
+            verified, available = hermes_plugin._verified_native_session_ids({"session-native"})
             assert verified == frozenset()
             assert available is False
     finally:

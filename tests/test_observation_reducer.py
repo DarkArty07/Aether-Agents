@@ -1769,9 +1769,7 @@ def test_native_run_started_reconciliation_refines_hook_snapshot_without_conflic
         assert len(report.events) == 1
         assert report.events[0]["source_kind"] == "hermes_hook"
         assert report.events[0]["work_unit"]["task_status"] == "unknown"
-        assert "NATIVE_IDENTITY_CONFLICT" not in {
-            gap["reason_code"] for gap in derive_gaps(report)
-        }
+        assert "NATIVE_IDENTITY_CONFLICT" not in {gap["reason_code"] for gap in derive_gaps(report)}
         summaries.append(
             reduce_events(
                 ReductionInput(

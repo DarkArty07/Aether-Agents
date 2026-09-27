@@ -2251,9 +2251,7 @@ class _Observer:
                     ),
                     state_event,
                 )
-                task_session = native_pseudonym_ref(
-                    task.get("session_id"), kind="session"
-                )
+                task_session = native_pseudonym_ref(task.get("session_id"), kind="session")
                 if not collector.ensure_trace_opened(
                     trace_id,
                     session_lineage=(task_session,) if task_session else (),
