@@ -2204,6 +2204,178 @@ def _u396_summarise(project_id: str, trace_id: str) -> dict[str, Any]:
     }
 
 
+def _ae422_scrub_native_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in (
+        "HERMES_DELEGATED_CHILD_CONTEXT",
+        "HERMES_KANBAN_DB",
+        "HERMES_KANBAN_BOARD",
+        "HERMES_KANBAN_TASK",
+        "HERMES_SESSION_ID",
+        "AETHER_PROJECT_ID",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+
+def _ae422_assert_disposable_board(board: Path) -> None:
+    metadata = json.loads((board.parent / "board.json").read_text(encoding="utf-8"))
+    assert (
+        metadata["slug"]
+        == board.parent.name
+        == execution_board_slug(PROJECT_ID, "oc_1234567890abcdef", 1)
+    )
+    assert metadata["project_id"] == PROJECT_ID
+    assert metadata["aether_project_id"] == PROJECT_ID
+    assert metadata["aether_contract_id"] == "oc_1234567890abcdef"
+    assert metadata["aether_contract_version"] == 1
+    assert metadata["observation_trace_id"] == TRACE_ID
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission and inode contract")
+def test_ae422_native_session_provenance_survives_a_readable_non_owner_only_database(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """AE-422: a valid isolated handoff must not lose truthfully present session provenance.
+
+    The native SessionDB is a store the observer is required to read read-only
+    (OBS-FR-025/OBS-FR-032); its own permission bits are the runtime's choice, not an
+    Aether precondition.  The 0600 requirement is a *product-owned* file rule
+    (specs/002-aether-contract-observation/spec.md line 218), and the secure-read
+    contract here is separately expressed by the exact owned private directory,
+    ``O_NOFOLLOW`` regular file, held descriptor, ownership and pre/post inode
+    revalidation.  A self-owned single-link regular database that is merely readable
+    by its group still satisfies every one of those invariants, so refusing it
+    manufactures a provenance gap the board does not actually have.
+    """
+    from aether_agents.observation.capture import hermes_plugin
+
+    _ae422_scrub_native_identity(monkeypatch)
+    _, paths = _install_project(monkeypatch, tmp_path)
+    board, state_home = _create_native_databases(monkeypatch, tmp_path)
+    state = state_home / "state.db"
+    # The locked Hermes runtime creates its SessionDB at the process umask default,
+    # which is 0644 on the supported POSIX runtime.
+    state.chmod(0o644)
+    monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
+    monkeypatch.setenv("HERMES_KANBAN_DB", str(board))
+    monkeypatch.setenv("HERMES_HOME", str(state_home))
+    assert Path(os.environ["HERMES_KANBAN_DB"]) == board
+    _ae422_assert_disposable_board(board)
+    monkeypatch.setattr(hermes_plugin._NativeReconciliationWorker, "start", lambda self: None)
+
+    verified, available = hermes_plugin._verified_native_session_ids({"session-native"})
+    assert available is True
+    assert "session-native" in verified
+
+    observer = hermes_plugin._Observer(FakePluginContext())
+    assert observer._collector is not None
+    observer._reconcile_native()
+    health = observer._collector.health.read()
+    observer.unload()
+
+    events = _journal_events(paths)
+    opened = next(event for event in events if event["event_type"] == "trace.opened")
+    assert opened["contract"]["origin_message_id"] == 7
+    assert any(event.get("session_id") is not None for event in events)
+    assert "NATIVE_HERMES_SESSION_PROVENANCE_UNAVAILABLE" not in health
+    summary = query.load_summary(paths, TRACE_ID)
+    assert "NATIVE_HERMES_SESSION_PROVENANCE_UNAVAILABLE" not in {
+        gap["reason_code"] for gap in summary["coverage"]["gaps"]
+    }
+    journal_bytes = b"".join(canonical_json_bytes(event) for event in events)
+    assert b"PRIVATE_SYSTEM_PROMPT" not in journal_bytes
+    assert b"PRIVATE_ORIGIN" not in journal_bytes
+    assert b"PRIVATE_MESSAGE_CONTENT" not in journal_bytes
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission and inode contract")
+@pytest.mark.parametrize("link_kind", ["symlink", "hardlink", "fifo", "ancestor"])
+def test_ae422_native_session_provenance_still_refuses_untrusted_readable_databases(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, link_kind: str
+) -> None:
+    """AE-422 negative controls: readability never substitutes for the secure read.
+
+    Accepting a non-0600 file must not relax anything else.  Every unsound topology
+    still refuses, the task's ``session_id`` is dropped rather than kept as an
+    unverifiable claim, and the resulting gap is truthful about why.
+    """
+    from aether_agents.observation.capture import hermes_plugin
+
+    _ae422_scrub_native_identity(monkeypatch)
+    _, paths = _install_project(monkeypatch, tmp_path)
+    board, state_home = _create_native_databases(monkeypatch, tmp_path)
+    external = _make_session_db_unsafe(state_home, tmp_path, link_kind)
+    if external.is_file():
+        external.chmod(0o644)
+    monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
+    monkeypatch.setenv("HERMES_KANBAN_DB", str(board))
+    monkeypatch.setenv("HERMES_HOME", str(state_home))
+    assert Path(os.environ["HERMES_KANBAN_DB"]) == board
+    _ae422_assert_disposable_board(board)
+    monkeypatch.setattr(hermes_plugin._NativeReconciliationWorker, "start", lambda self: None)
+
+    verified, available = hermes_plugin._verified_native_session_ids({"session-native"})
+    assert verified == frozenset()
+    assert available is False
+
+    observer = hermes_plugin._Observer(FakePluginContext())
+    assert observer._collector is not None
+    observer._reconcile_native()
+    health = observer._collector.health.read()
+    observer.unload()
+
+    events = _journal_events(paths)
+    opened = next(event for event in events if event["event_type"] == "trace.opened")
+    assert opened["contract"]["origin_message_id"] is None
+    assert opened["contract"].get("session_lineage", []) == []
+    assert all(
+        event.get("work_unit") is None or event["work_unit"].get("session_id") is None
+        for event in events
+    )
+    assert health.get("NATIVE_HERMES_SESSION_PROVENANCE_UNAVAILABLE") == 2
+    summary = query.load_summary(paths, TRACE_ID)
+    assert "NATIVE_HERMES_SESSION_PROVENANCE_UNAVAILABLE" in {
+        gap["reason_code"] for gap in summary["coverage"]["gaps"]
+    }
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission and inode contract")
+def test_ae422_foreign_owned_or_public_session_database_is_never_read(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """AE-422: ownership is still the decisive control, independent of the file mode.
+
+    A database the current user does not own is refused at 0600 and at 0644 alike, so
+    widening the read to the umask default cannot become a cross-user read.
+    """
+    from aether_agents.observation.capture import hermes_plugin
+
+    _ae422_scrub_native_identity(monkeypatch)
+    board, state_home = _create_native_databases(monkeypatch, tmp_path)
+    state = state_home / "state.db"
+    monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
+    monkeypatch.setenv("HERMES_KANBAN_DB", str(board))
+    monkeypatch.setenv("HERMES_HOME", str(state_home))
+    assert Path(os.environ["HERMES_KANBAN_DB"]) == board
+    _ae422_assert_disposable_board(board)
+
+    owned = os.stat(state)
+    try:
+        os.chown(state, 0 if owned.st_uid != 0 else 1, -1)
+    except (OSError, PermissionError):
+        pytest.skip("cannot create a foreign-owned database in this environment")
+    try:
+        for mode in (0o600, 0o644):
+            os.chmod(state, mode)
+            verified, available = hermes_plugin._verified_native_session_ids({"session-native"})
+            assert verified == frozenset()
+            assert available is False
+    finally:
+        try:
+            os.chown(state, owned.st_uid, owned.st_gid)
+        except (OSError, PermissionError):
+            pass
+
+
 def test_u396_negative_tuple_conflict(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Hook result names a board slug that matches no canonical tuple on disk."""
     from aether_agents.observation.capture import hermes_plugin

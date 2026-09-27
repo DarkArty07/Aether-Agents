@@ -367,12 +367,28 @@ def _same_owned_private_native_db(
     observed: os.stat_result,
     expected: os.stat_result,
 ) -> bool:
-    """Return whether two stats describe one current-user private DB inode."""
+    """Return whether two stats describe one current-user private DB inode.
+
+    The invariants this enforces are the ones that actually make a read secure: the
+    object is a regular file, it is not aliased, it belongs to the current user, and it
+    did not change underneath the reader.  ``expected`` is the authoritative baseline
+    and is compared by inode identity, so a mode check against it would be self-referential.
+
+    The permission-bits check that previously lived here encoded the *product-owned
+    file* rule (spec #002 section 6.2: Aether's own journal/key/DB files are ``0600``)
+    as if it were a precondition the native store must satisfy.  Hermes creates its
+    SessionDB at the process umask default, ``0644`` on the supported POSIX runtime, so
+    that check made the mandated OBS-FR-025/OBS-FR-032 read of a healthy store fail and
+    produced ``NATIVE_HERMES_SESSION_PROVENANCE_UNAVAILABLE`` for provenance the board
+    really does carry.  Ownership, aliasing, topology and the pre/post inode
+    revalidation remain unchanged and still refuse; a group-readable file owned by the
+    current user is not an unsafe read and is not made one by relaxing a rule about
+    Aether's own bytes.
+    """
     return (
         stat.S_ISREG(observed.st_mode)
         and observed.st_nlink == 1
         and observed.st_uid == os.getuid()
-        and observed.st_mode & (stat.S_IRWXG | stat.S_IRWXO) == 0
         and (observed.st_dev, observed.st_ino) == (expected.st_dev, expected.st_ino)
     )
 
@@ -2235,7 +2251,6 @@ class _Observer:
                     ),
                     state_event,
                 )
-
             current_task = native_kanban_task_ref(os.environ.get("HERMES_KANBAN_TASK"))
             if current_task is not None:
                 current_trace = collector.binder.trace_for(current_task)
