@@ -2352,17 +2352,11 @@ def test_ae422_advancing_task_status_keeps_distinct_native_identity(
     """AE-422: advancing a task's authoritative status must not collide with its own past.
 
     A task that is claimed while its parent is still running keeps a fixed
-    ``started_at``; when the parent completes the lane recomputation promotes the task
-    from ``todo`` to ``ready``.  Both are real, non-contradictory native facts.  The
-    native identity key of ``work_unit.status`` is committed to the transition
-    coordinates (task, run, occurred_at), and for a not-running task ``occurred_at``
-    falls back to ``started_at or created_at`` -- neither of which moves on a lane
-    promotion.  One producer cycle therefore wrote both ``todo`` and ``ready`` under
-    one key, and the reducer was right to refuse picking between them: that is a
-    manufactured ``NATIVE_IDENTITY_CONFLICT`` for a handoff that is not contradicted at
-    all.  The producer must project the authoritative state transition with an identity
-    that separates it, so a valid isolated handoff keeps truthful coverage instead of a
-    self-inflicted conflict.
+    ``started_at``. When the parent completes, the authoritative native store records
+    the ``todo`` -> ``ready`` promotion in ``task_events``; the producer must use that
+    event's timestamp rather than reuse the old task/run timestamp. The complete native
+    identity remains (task, run, occurred_at), so a real promotion gets a distinct key
+    while an incompatible terminal claim at the same coordinates remains ambiguous.
     """
     from aether_agents.observation.capture import hermes_plugin
 
@@ -2410,10 +2404,36 @@ def test_ae422_advancing_task_status_keeps_distinct_native_identity(
     observer = context.unload_callbacks[-1].__self__
     try:
         observer._reconcile_native()
-        # The parent completes; the lane recomputation promotes the child todo -> ready.
+        # The parent completes and Hermes records the child-lane promotion at its
+        # authoritative task-event timestamp.
         with sqlite3.connect(db_path) as db:
             db.execute(
                 "UPDATE tasks SET status='ready' WHERE id='t_10000002'"
+            )
+            db.execute(
+                "INSERT INTO task_events (task_id, kind, payload, created_at) "
+                "VALUES (?, 'promoted', NULL, 120)",
+                ("t_10000002",),
+            )
+            db.commit()
+        observer._reconcile_native()
+        # Exercise a repeated state after an intervening transition. Each observation
+        # has a real task-event timestamp and must survive producer-side idempotence.
+        with sqlite3.connect(db_path) as db:
+            db.execute("UPDATE tasks SET status='todo' WHERE id='t_10000002'")
+            db.execute(
+                "INSERT INTO task_events (task_id, kind, payload, created_at) "
+                "VALUES (?, 'dependency_wait', '{}', 130)",
+                ("t_10000002",),
+            )
+            db.commit()
+        observer._reconcile_native()
+        with sqlite3.connect(db_path) as db:
+            db.execute("UPDATE tasks SET status='ready' WHERE id='t_10000002'")
+            db.execute(
+                "INSERT INTO task_events (task_id, kind, payload, created_at) "
+                "VALUES (?, 'promoted', NULL, 140)",
+                ("t_10000002",),
             )
             db.commit()
         observer._reconcile_native()
@@ -2426,7 +2446,7 @@ def test_ae422_advancing_task_status_keeps_distinct_native_identity(
             if event["event_type"] == "work_unit.status"
             and (event.get("work_unit") or {}).get("task_ref") == "t_10000002"
         ]
-        assert len(statuses) == 2
+        assert len(statuses) == 4
         identities = {
             (
                 event["work_unit"]["task_status"],
@@ -2437,7 +2457,9 @@ def test_ae422_advancing_task_status_keeps_distinct_native_identity(
         }
         assert identities == {
             ("todo", 1, "1970-01-01T00:01:59.000Z"),
-            ("ready", 1, "1970-01-01T00:01:59.000Z"),
+            ("ready", 1, "1970-01-01T00:02:00.000Z"),
+            ("todo", 1, "1970-01-01T00:02:10.000Z"),
+            ("ready", 1, "1970-01-01T00:02:20.000Z"),
         }
         # Distinct envelopes of the same native identity must not be reported as one
         # contradiction, and the authoritative promotion must survive.
@@ -2450,6 +2472,7 @@ def test_ae422_advancing_task_status_keeps_distinct_native_identity(
         reasons = {gap["reason_code"] for gap in summary["coverage"]["gaps"]}
         assert "NATIVE_IDENTITY_CONFLICT" not in reasons
         assert "NATIVE_TERMINAL_CONFLICT" not in reasons
+        assert "TASK_STATUS_TRANSITION_UNRESOLVED" not in reasons
         current = {
             unit["task_ref"]: unit
             for unit in summary["work_graph"]["units"]
@@ -2481,6 +2504,12 @@ def test_ae422_missing_and_conflicting_provenance_still_fails_closed(
         kanban_home, PROJECT_ID, _U396_CONTRACT_A, 1, _U396_TRACE_A
     )
     _u396_seed_root(db_path, PROJECT_ID, _U396_TRACE_A, child_id="t_10000002")
+    # A task row can legitimately lack completed_at; observation must report the
+    # missing native state timestamp instead of treating the first snapshot as a
+    # transition conflict.
+    with sqlite3.connect(db_path) as db:
+        db.execute("UPDATE tasks SET completed_at=NULL WHERE id='t_10000001'")
+        db.commit()
 
     context = FakePluginContext()
     hermes_plugin.register(context)
@@ -2490,8 +2519,24 @@ def test_ae422_missing_and_conflicting_provenance_still_fails_closed(
     observer = context.unload_callbacks[-1].__self__
     try:
         observer._reconcile_native()
-        # Strip the transition evidence out of the authoritative store: the task is
-        # now untimestamped and unclaimed, so no distinct transition may be invented.
+
+        paths = ObservationPaths.for_project(PROJECT_ID)
+        ingest_pending(paths)
+        reduce_trace(paths, _U396_TRACE_A)
+        first_summary = query.load_summary(paths, _U396_TRACE_A)
+        first_reasons = {gap["reason_code"] for gap in first_summary["coverage"]["gaps"]}
+        assert "TASK_STATUS_TRANSITION_UNRESOLVED" not in first_reasons
+        assert "TASK_STATE_UNRESOLVED" in first_reasons
+        root_state = next(
+            event
+            for event in _journal_events(paths)
+            if event["event_type"] == "work_unit.status"
+            and (event.get("work_unit") or {}).get("task_ref") == "t_10000001"
+        )
+        assert root_state["timestamp_source"] == "collector"
+
+        # Remove any ready-promotion event while retaining old task/run timestamps.
+        # They identify older facts, not the later authoritative status transition.
         with sqlite3.connect(db_path) as db:
             db.execute(
                 "UPDATE tasks SET started_at=NULL, last_heartbeat_at=NULL,"
@@ -2500,12 +2545,21 @@ def test_ae422_missing_and_conflicting_provenance_still_fails_closed(
             db.commit()
         observer._reconcile_native()
 
-        paths = ObservationPaths.for_project(PROJECT_ID)
         ingest_pending(paths)
         reduce_trace(paths, _U396_TRACE_A)
         summary = query.load_summary(paths, _U396_TRACE_A)
         reasons = {gap["reason_code"] for gap in summary["coverage"]["gaps"]}
         assert "NATIVE_IDENTITY_CONFLICT" not in reasons
+        assert "TASK_STATUS_TRANSITION_UNRESOLVED" in reasons
+        changed_state = [
+            event
+            for event in _journal_events(paths)
+            if event["event_type"] == "work_unit.status"
+            and (event.get("work_unit") or {}).get("task_ref") == "t_10000002"
+            and (event.get("work_unit") or {}).get("task_status") == "ready"
+        ]
+        assert changed_state[-1]["occurred_at"] is not None
+        assert changed_state[-1]["timestamp_source"] == "collector"
 
         # Two incompatible native terminals under one complete native identity stay
         # ambiguous: the reducer preserves both and resolves neither of them.

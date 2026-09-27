@@ -553,7 +553,7 @@ class _Observer:
         self._diagnosed_traces: set[str] = set()
         self._diagnosed_unbound_tasks: set[str] = set()
         self._diagnosed_native_rejections: set[tuple[str, str]] = set()
-        self._diagnosed_task_states: dict[tuple[str, str], tuple[Any, Any]] = {}
+        self._diagnosed_task_states: dict[tuple[str, str], str] = {}
         self._native_seen: set[tuple[Any, ...]] = set()
         self._retained_restored_projects: set[str] = set()
         self._pending_spans: OrderedDict[tuple[str, str], dict[str, Any]] = OrderedDict()
@@ -1284,6 +1284,47 @@ class _Observer:
                         )
                     ),
                 )
+
+            # A task's latest native event can supply the status-transition time
+            # even when the task row retains an older started_at/created_at. Project
+            # only the event kind, NULL-payload bit and timestamp; never read event
+            # payload text into the observer.
+            task_ids = sorted(tasks)
+            for offset in range(0, len(task_ids), 400):
+                chunk = task_ids[offset : offset + 400]
+                marks = ",".join("?" for _ in chunk)
+                for row in connection.execute(
+                    "SELECT e.task_id, e.kind, e.payload IS NULL AS empty_payload, e.created_at "
+                    "FROM task_events AS e JOIN ("
+                    "SELECT task_id, MAX(id) AS id FROM task_events "
+                    f"WHERE task_id IN ({marks}) GROUP BY task_id"
+                    ") AS latest ON latest.id=e.id",
+                    chunk,
+                ):
+                    task_id = native_kanban_task_ref(row["task_id"])
+                    if task_id is None or task_id not in tasks:
+                        continue
+                    task_status = safe_ref(tasks[task_id].get("status"))
+                    event_kind = row["kind"]
+                    empty_payload = bool(row["empty_payload"])
+                    transition_matches = (
+                        (
+                            task_status == "ready"
+                            and event_kind in {"promoted", "unblocked"}
+                            and empty_payload
+                        )
+                        or (task_status == "todo" and event_kind == "dependency_wait")
+                        or (task_status == "blocked" and event_kind == "blocked")
+                        or (task_status == "triage" and event_kind == "block_loop_detected")
+                        or (
+                            task_status == "done"
+                            and event_kind in {"completed", "flow_terminal"}
+                        )
+                    )
+                    if transition_matches:
+                        tasks[task_id]["status_transition_at"] = _native_datetime(
+                            row["created_at"]
+                        )
 
             parents: dict[str, list[str]] = {task_id: [] for task_id in tasks}
             runs: dict[str, list[dict[str, Any]]] = {task_id: [] for task_id in tasks}
@@ -2202,20 +2243,34 @@ class _Observer:
                     else None
                 )
                 task_status = safe_ref(task.get("status")) or "unknown"
-                occurred_at = _native_datetime(
-                    task.get("completed_at")
-                    if task_status == "done"
-                    else task.get("last_heartbeat_at")
-                    if task_status == "running"
-                    else (latest or {}).get("ended_at")
+                state_key = (trace_id, task_id)
+                previous_status = self._diagnosed_task_states.get(state_key)
+                status_changed = previous_status is not None and previous_status != task_status
+                fallback_at = _native_datetime(
+                    (latest or {}).get("ended_at")
                     if latest is not None
                     else task.get("started_at") or task.get("created_at")
                 )
-                transition_reason_code = (
-                    "TASK_STATE_UNRESOLVED"
-                    if occurred_at is None
-                    else "TASK_STATUS_TRANSITION_UNRESOLVED"
-                )
+                if task_status == "done":
+                    transition_at = _native_datetime(task.get("completed_at")) or task.get(
+                        "status_transition_at"
+                    )
+                    occurred_at = transition_at
+                elif task_status == "running":
+                    transition_at = _native_datetime(task.get("last_heartbeat_at"))
+                    occurred_at = transition_at
+                elif task_status in {"ready", "todo", "blocked", "triage"}:
+                    transition_at = task.get("status_transition_at")
+                    occurred_at = (
+                        transition_at
+                        if transition_at is not None
+                        else None
+                        if status_changed
+                        else fallback_at
+                    )
+                else:
+                    transition_at = None
+                    occurred_at = None if status_changed else fallback_at
                 event_status = {
                     "done": "completed",
                     "running": "started",
@@ -2233,7 +2288,11 @@ class _Observer:
                     run_status=run_status,
                     run_outcome=run_outcome,
                     occurred_at=occurred_at,
-                    timestamp_source="native",
+                    timestamp_source=(
+                        "collector"
+                        if transition_at is None and (status_changed or occurred_at is None)
+                        else "native"
+                    ),
                     monotonic=False,
                     source_kind="native_reconciliation",
                     source_hook="kanban_read",
@@ -2253,7 +2312,7 @@ class _Observer:
                         task_status,
                         run_status,
                         run_outcome,
-                        transition_reason_code,
+                        transition_at if task_status != "running" else None,
                     ),
                     state_event,
                 )
@@ -2269,28 +2328,17 @@ class _Observer:
                     source_hook="kanban_read",
                 ):
                     continue
-                if occurred_at is None:
+                state_gap = None
+                if status_changed and transition_at is None:
+                    state_gap = "TASK_STATUS_TRANSITION_UNRESOLVED"
+                elif occurred_at is None and previous_status != task_status:
+                    state_gap = "TASK_STATE_UNRESOLVED"
+                self._diagnosed_task_states[state_key] = task_status
+                if state_gap is not None:
                     collector.emit(
                         builder.coverage_gap(
                             gap_class=CoverageClass.NATIVE_SOURCE_UNAVAILABLE,
-                            reason_code="TASK_STATE_UNRESOLVED",
-                            source_kind="native_reconciliation",
-                            source_hook="kanban_read",
-                            monotonic=False,
-                        )
-                    )
-                elif self._diagnosed_task_states.get((trace_id, task_id)) != (
-                    task_status,
-                    current_run_id,
-                ):
-                    self._diagnosed_task_states[(trace_id, task_id)] = (
-                        task_status,
-                        current_run_id,
-                    )
-                    collector.emit(
-                        builder.coverage_gap(
-                            gap_class=CoverageClass.NATIVE_SOURCE_UNAVAILABLE,
-                            reason_code="TASK_STATUS_TRANSITION_UNRESOLVED",
+                            reason_code=state_gap,
                             source_kind="native_reconciliation",
                             source_hook="kanban_read",
                             monotonic=False,

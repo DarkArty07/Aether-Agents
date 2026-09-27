@@ -1708,17 +1708,18 @@ def test_same_native_status_coordinates_with_incompatible_outcomes_are_ambiguous
     completed["timestamp_source"] = "native"
     completed["producer_epoch"] = "prd_" + "a" * 32
     completed["producer_seq"] = 0
-    failed = deepcopy(completed)
-    failed["event_id"] = "evt_" + "f" * 32
-    failed["producer_epoch"] = "prd_" + "f" * 32
-    failed["status"] = "failed"
-    failed["work_unit"]["run_status"] = "failed"
-    failed["work_unit"]["run_outcome"] = "failed"
+    blocked = deepcopy(completed)
+    blocked["event_id"] = "evt_" + "f" * 32
+    blocked["producer_epoch"] = "prd_" + "f" * 32
+    blocked["status"] = "blocked"
+    blocked["work_unit"]["task_status"] = "blocked"
+    blocked["work_unit"]["run_status"] = "blocked"
+    blocked["work_unit"]["run_outcome"] = "blocked"
     validate_event(completed)
-    validate_event(failed)
+    validate_event(blocked)
 
     summaries = []
-    for pair in permutations((completed, failed)):
+    for pair in permutations((completed, blocked)):
         report = dedupe(deepcopy(pair))
         assert "NATIVE_TERMINAL_CONFLICT" in {gap["reason_code"] for gap in derive_gaps(report)}
         summaries.append(
@@ -1739,6 +1740,51 @@ def test_same_native_status_coordinates_with_incompatible_outcomes_are_ambiguous
         assert root["task_status"] == "unknown"
         assert root["latest_run_status"] == "unknown"
         assert root["latest_run_outcome"] == "unknown"
+
+
+def test_native_run_started_reconciliation_refines_hook_snapshot_without_conflict() -> None:
+    fixture = EventFactory()
+    fixture.opened(0)
+    hook = fixture.unit(
+        "run.started",
+        "started",
+        1,
+        task_ref="t_deadbeef",
+        relation="root",
+        task_status="unknown",
+        run_status="running",
+        run_id=1,
+    )
+    hook["source_kind"] = "hermes_hook"
+    hook["source_hook"] = "on_kanban_worker_spawned"
+    native = deepcopy(hook)
+    native["event_id"] = "evt_" + "f" * 32
+    native["producer_epoch"] = "prd_" + "f" * 32
+    native["source_kind"] = "native_reconciliation"
+    native["source_hook"] = "kanban_read"
+    native["work_unit"]["task_status"] = "running"
+
+    summaries = []
+    for pair in permutations((hook, native)):
+        report = dedupe(deepcopy(pair))
+        assert len(report.events) == 1
+        assert report.events[0]["source_kind"] == "hermes_hook"
+        assert report.events[0]["work_unit"]["task_status"] == "unknown"
+        assert "NATIVE_IDENTITY_CONFLICT" not in {
+            gap["reason_code"] for gap in derive_gaps(report)
+        }
+        summaries.append(
+            reduce_events(
+                ReductionInput(
+                    trace_id=fixture.trace_id,
+                    project_id=fixture.project_id,
+                    events=deepcopy([*fixture.events[:1], *pair]),
+                    producer_count=2,
+                    authority_context=AuthorityContext.product_default(),
+                )
+            )
+        )
+    assert summaries[0] == summaries[1]
 
 
 def _conflicting_envelopes(verification: dict) -> list[dict]:

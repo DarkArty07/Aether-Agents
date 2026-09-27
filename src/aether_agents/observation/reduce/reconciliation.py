@@ -87,17 +87,6 @@ def native_key(event: dict[str, Any]) -> str | None:
             # timestamp distinguishes repeated states without a fuzzy window.
             "run": event.get("run_id") or "not_available",
             "at": event.get("occurred_at"),
-            # A task's `status` advances while every other coordinate above stays
-            # fixed: a task claimed while its parent is still running keeps a
-            # constant `started_at`, and promoting it `todo` -> `ready` when that
-            # parent finishes moves none of them.  Without the observed state the
-            # projection identity cannot tell an advance from a repeat, so two
-            # true snapshots of one task collide and the reducer -- correctly, from
-            # its side -- reports an ambiguity the store never had.  The state is
-            # authoritative native data, so it belongs to the identity tuple; a
-            # genuinely incompatible pair still produces distinct keys and still
-            # surfaces as a real conflict.
-            "state": unit.get("task_status") or "unknown",
         }
     elif event_type in ("work_unit.bound", "work_unit.unbound"):
         unit = event.get("work_unit") or {}
@@ -468,7 +457,10 @@ def native_disposition(event: dict[str, Any]) -> tuple[Any, ...]:
         return ("tool", event_type, tool.get("name"), tool.get("category"))
     if event_type == "run.started":
         unit = event.get("work_unit") or {}
-        return ("run", event_type, unit.get("task_status"), unit.get("run_status"))
+        # The hook and the later native row describe the same run start, but only
+        # the row can carry the task's current status. That mutable task snapshot
+        # is not a disposition of the run.started fact.
+        return ("run", event_type, unit.get("run_status"))
     if event_type == "work_unit.status":
         unit = event.get("work_unit") or {}
         return (
