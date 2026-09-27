@@ -13,3 +13,4 @@ patches/hermes/HLP-427-routed-recovery-review-phase.patch whitespace=-trailing-s
 patches/hermes/HLP-428-project-provenance-and-bounded-failure.patch whitespace=-trailing-space
 patches/hermes/HLP-433-responses-reasoning-usage.patch whitespace=-trailing-space
 patches/hermes/HLP-475-review-affinity-dispatch.patch whitespace=-trailing-space
+patches/hermes/HLP-460-rooted-parentage.patch whitespace=-trailing-space
