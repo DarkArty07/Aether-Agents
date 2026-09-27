@@ -271,6 +271,23 @@ state; otherwise the final evidence records why no issue or milestone applies.
 
 ### Canonical skills and project guidance
 
+**Owner-approved portable methodology (#541):** Aether carries a method for adopting
+projects, not a copy of this repository. Morfeo inspects existing guidance, confirms
+the constitution and establishes a concise project-relative operating map usable by
+another file-capable harness. Product specs, technical plans/research, documentation,
+code and deliverables stay in the project's structure outside `.aether`; Aether-specific
+identity, contracts, procedures, continuity and discretionary auxiliaries use `.aether`.
+Respect tool-managed/external locations and existing instructions; create only useful
+artifacts, with no migration or mandatory empty tree. R2 FR-204g–i and R9 §3.1 own the
+detailed requirements. The Morfeo-only explicit planning entry is `/aether-plan`.
+
+Exploratory `.aether/observations/<topic>.md` notes preserve unresolved predelivery
+context without becoming requirements or execution authority. Transfer enduring
+decisions/evidence before retiring a resolved note. This is distinct from runtime
+contract observation and from research within an accepted specification. A reader-facing
+expected-behavior catalogue explains the actual instruction sources and conditions;
+documented expectation, installed wording and observed conduct remain separate claims.
+
 Skills are reusable procedure, never authority. Aether Canonical Skills are public,
 versioned, package-owned procedures at
 `src/aether_agents/resources/skills/<skill-name>/SKILL.md`. Project Canonical Skills are
@@ -428,6 +445,9 @@ Aether assigns ownership by semantic question, not by a single linear document h
 | Worktree and workspace state | Local isolation (not an authority) | A worktree is mutable write isolation, not an intent or status store; source overlap is reconciled by the integration process. |
 | Executable role-local prompt wording | Versioned `SOUL` resources | Owns prompt wording for a role only; it is derived operational context and cannot redefine role responsibility, authority, or project decisions. |
 | Private user context and durable preferences/recall | Private `USER`/`MEMORY` | Local/private only; it never owns project principles or decisions and its contents are never placed in public artifacts. |
+| Exploratory predesign context | Local `.aether/observations/<topic>.md` | Sourced facts, hypotheses, questions and continuity; no normative or execution authority. Transfer enduring content before retiring a resolved note under R9 §3.1. |
+| Objective route and continuity | Local `.aether/plans/<objective-slug>.md` | Relates destination, route and evidence across sessions; not a technical plan, contract or board. Explicit planning uses `aether-plan`. |
+| Discretionary project scratch work | Local `.aether/tmp/<work-scope>/` | Identifiable owned auxiliaries, not product deliverables or automatically disposable evidence. Tool-managed external locations retain their rules. |
 | Reusable procedure | Aether Canonical Skills, Project Canonical Skills, and Learned Profile Skills | Own reusable procedure only; Aether skills live under `src/aether_agents/resources/skills/<skill-name>/SKILL.md`, project skills under `.aether/skills/<skill-name>/SKILL.md`, and private learned skills never become authority or auto-promote. |
 | Checkout and repository operating instructions | `AGENTS.md` | Owns repository-local operating guidance; it does not duplicate or override product and stage truth. |
 | Current-build behavior and use guidance | `docs/` | Describes behavior available in the current build and how to use or diagnose it; it does not own conceptual design, normative requirements, or live runtime state. |
@@ -439,6 +459,7 @@ Aether assigns ownership by semantic question, not by a single linear document h
 | Implemented behavior and reproducible runtime facts | Evidentiary: source and direct execution | These reveal what is implemented or observed and may expose drift, but cannot redefine normative intent. |
 | Project mappings, profile homes, XDG state, configured services/providers, sessions, and private effective runtime observations | Local/private environment and runtime state | Remains outside public artifacts. Public documentation may describe the class and its boundary, never its contents, identifiers, credentials, bindings, machine paths, or live-runtime claims. |
 | Reader-facing placement and conflict explanation | Derived: `docs/authority.md` | Explains this section for readers and must not compete with the owners above. `docs/index.md` is navigation only and owns no semantic project truth. |
+| Reader-facing agent expectations | Derived: `docs/guides/expected-behavior.md` | Explains triggers, responsible roles, limits, instruction sources and observable signs. Does not create obligations, assert runtime adoption or certify agent behavior. |
 
 Authority precedence is current owner instruction → constitution/design/stage specs/Objective Contract → repository operating rules. Within the procedural tier only, a compatible Project Canonical Skill outranks an Aether Canonical Skill, which outranks a Learned Profile Skill; none can grant authority or replace intent or acceptance.
 

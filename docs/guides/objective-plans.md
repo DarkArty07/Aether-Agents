@@ -27,23 +27,43 @@ another session. Do not require it for a simple question or routine bounded chan
 Morfeo recognizes the need; the user need not remember to invoke a planning command.
 An explicit planning-only request still ends at the proposal, not implementation.
 
-Aether packages an Aether-owned canonical skill named `plan`, delivered **only to Morfeo**
-through the role-scoped release bundle. It resolves as literal `/plan` on the selected
-maintained fork `aed6591a69f453a1867b73628603e7b53ba40ffc`, planning-only, writing one
-stable `.aether/plans/<objective-slug>.md` inside the explicitly resolved project. A skill
-is package-wide procedure; its **outputs live inside each selected project**.
+Aether's canonical explicit planning skill is **`aether-plan`**, delivered only to
+Morfeo through the role-scoped release bundle. Its intended native invocation is
+`/aether-plan`, planning-only, writing one stable `.aether/plans/<objective-slug>.md`
+inside the explicitly resolved project. A skill is package-wide procedure; its
+**outputs live inside each selected project**. The #541 rename is source maintenance;
+it does not claim that a running installation already exposes the new command.
 
-The generic Hermes `/plan` is not this behaviour. Generic Hermes planning carries
-different defaults and unbounded execution recipes, whereas Aether's project-local
-procedure governs Objective Plans without rewriting skills for every Hermes user or adding
-global plan pickers.
+The stable package/profile directory is `skills/plan/`, preserving RC16 updater
+compatibility; frontmatter exposes `aether-plan` and native name-based loading selects
+it. Storage identity is not a command alias. RC17's bounded release evidence is separate
+from the source-only #541 maintenance and historical #504 qualification.
 
-Supervisor and Implementer retain their previous inventories and do not receive `plan`;
-their role boundaries do not include objective-level planning. A future Hermes version
-with a built-in `/plan` requires a separate compatibility decision rather than an assumed
-alias; compatibility is qualified for the pinned fork commit only. A source change or
-merge does not constitute an active-profile installation, release cutover, or universal
-model behavioral guarantee.
+The generic Hermes `/plan` is not an alias for this behavior and is not replaced.
+Historical Aether `plan` qualification on fork commit
+`aed6591a69f453a1867b73628603e7b53ba40ffc` remains evidence for that old name only.
+The renamed resource avoids relying on precedence over a homonymous learned skill;
+source/reference changes alone do not qualify native dispatch or agent behavior.
+
+Supervisor and Implementer do not receive `aether-plan`; their role boundaries do not
+include objective-level planning. Older release inventories remain historical inputs,
+not reasons to rewrite installed profiles during documentation work. A source change
+or merge is not active-profile installation, release cutover or a behavioral guarantee.
+
+## Exploration before a plan
+
+Reuse relevant `.aether/observations/<topic>.md` notes when they exist, without requiring
+an observation or loading every note. Separate accepted decisions from hypotheses and
+unresolved questions; references do not turn a proposal into approved scope. A topic may
+end with an answer rather than a plan. Research within an accepted specification remains
+in its `research.md`, and product specifications/technical plans stay outside `.aether`.
+See [project adoption](project-initialization.md#methodology-after-initialization) and
+the [expected planning behavior](expected-behavior.md#plan-explicitly-without-silently-starting-execution).
+
+`aether-plan` is the focused explicit entry; `objective-contract-design` owns the shared
+adoption/planning method and authorized continuity without a command. Both use the same
+project-local plan convention. Explicit planning still stops without implementation or
+dispatch, even when its route forecasts future execution.
 
 ## A compact outline
 

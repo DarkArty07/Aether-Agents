@@ -1,7 +1,7 @@
 ---
 name: objective-contract-design
-description: Use when Morfeo plans objectives or pipeline contracts.
-version: 0.2.1
+description: Use when Morfeo adopts projects or designs objectives.
+version: 0.2.2
 author: Morfeo (Aether role), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -13,14 +13,16 @@ metadata:
 
 # Objective Contract Design
 
-Turn approved intent into discoverable requirements, material technical design and
-observable acceptance before a pipeline handoff. This is Morfeo's procedure, not a
+Establish project-local methodology and turn approved intent into discoverable
+requirements, material technical design and observable acceptance before a pipeline
+handoff. This is Morfeo's procedure, not a
 new source of requirements or a competing artifact format. It cannot grant authority.
 The owner and canonical artifacts govern; Supervisor owns independent receipt review
 and decomposition, and Implementer retains reversible unit-local judgement.
 
 ## When to Use
 
+- Use the project-adoption and predesign entry when arriving at a new or existing project, reconciling its operating guidance, or preserving a useful exploratory topic. This does not require a contract.
 - Use the objective-planning entry below when work needs a route or cross-session continuity, including a planning-only request. It is not required for a simple question or routine bounded adjustment.
 - Use the full contract procedure when Morfeo designs, checks or supersedes a pipeline Objective Contract.
 - Use for resolving a contract defect returned by Supervisor at its owning artifact.
@@ -32,13 +34,20 @@ and decomposition, and Implementer retains reversible unit-local judgement.
 ## Prerequisites
 
 Read the owner instruction, constitution, relevant design/specifications and root
-`AGENTS.md`. Discover relevant Project Canonical Skills through their named
+`AGENTS.md`. For initial adoption, inspect what exists: missing principles/guidance
+are onboarding questions, not permission to invent them or a prerequisite to reading
+the folder. Discover relevant Project Canonical Skills through their named
 project-relative `.aether/skills/<name>/SKILL.md` paths and Aether Canonical Skills
 through native discovery. Preserve brownfield guidance and confirm the actual Project.
 Resolve testing standard, authority and convergence bounds explicitly from the owner
 or their delegated project policy; a skill does not supply universal defaults.
 
 ## Objective planning and continuity
+
+Use the project-adoption and predesign entry below when guidance or exploratory
+context needs attention; do not repeat adoption for every objective. Explicit
+`/aether-plan` invokes the focused `aether-plan` skill, which uses this same method
+and stops at planning. Generic `/plan` is not an Aether entry.
 
 This entry does not require a contract or authorize execution. Honor a planning-only
 request. For authorized work, missing material intent is resolved before execution;
@@ -78,6 +87,53 @@ do not add routine confirmation gates to an already delegated route.
    acceptance, absorb unrelated work or require the owner to supervise every command.
 
 ## Procedure
+
+### Project adoption and predesign
+
+This entry is independent of pipeline extraction. Its output is sufficient local
+guidance or exploratory context, not a mandatory contract, folder tree or task board.
+
+1. **Inspect before prescribing.** Resolve the actual folder/project, current sources,
+   constitution and existing harness instructions. Distinguish an empty folder,
+   brownfield project and continuation. Do not initialize Git, register a Project or
+   start workers merely to make a documentation step possible. Confirm missing
+   principles with the owner; tool availability is not product intent.
+2. **Establish a concise operating map.** After constitution confirmation, create or
+   reconcile root `AGENTS.md` from what exists: governing documents, code/spec/doc
+   locations, applicable procedures and actual setup/run/test/distribution guidance.
+   State unknowns rather than inventing commands or a testing standard. Distribution
+   guidance does not authorize publication. Preserve other harnesses' instructions;
+   use project-relative references, not copies of another project's history, a SOUL,
+   or every installed skill. Another file-capable harness must be able to locate the
+   necessary obligations without private memory or native Aether tools. State any
+   genuine capability requirement instead of inventing an equivalent.
+3. **Separate product artifacts from methodology.** Product code, tests, specs, technical
+   plans, research and deliverables stay outside `.aether`, in the project's established
+   structure (`specs/` and `docs/` are examples, not mandatory retroactive migrations).
+   Use `.aether/project.toml`, `objective-contracts/` and `skills/` for their existing
+   portable roles; `drafts/`, `plans/` and `observations/` for their local purposes;
+   `.aether/tmp/<work-scope>/` for discretionary scratch work. Create only needed
+   artifacts. Check the existing privacy/versioning policy: `.aether` is neither all
+   public nor all disposable. Never force-add local continuity or rewrite identity.
+   Tool-managed runtime, worktrees, caches and externally required research locations
+   retain their own rules; no implicit migration or broad cleanup is authorized.
+4. **Preserve useful exploration without committing work.** Use one local, ignored
+   `.aether/observations/<topic>.md` per unresolved topic that warrants continuity.
+   Reuse it, with a descriptive name; no registry, numbered IDs or empty template is
+   needed. Keep the originating concern, sourced facts, hypotheses, questions,
+   decisions and last meaningful update/next step distinguishable. `noted`,
+   `investigating` and `ready` are optional descriptive dispositions, not workflow
+   states or proof that an agent is running. Mark unsupported claims unverified.
+   Do not create a note for every simple question or read all observations by default.
+5. **Transfer, then retire.** An exploration may end with an answer, an accepted decision
+   recorded in its owning artifact, or a justified objective. Hypotheses never become
+   requirements by being copied into a plan. Research inside an accepted specification
+   remains in its `research.md`; memory destinations retain their existing ownership.
+   Before removing a resolved observation, preserve enduring decisions and necessary
+   evidence in their proper destinations and confirm no consumer still needs the note.
+   Remove only the eligible owned note; do not erase source evidence or sweep the folder.
+
+### Pipeline extraction
 
 The following full extraction procedure applies to pipeline handoffs only. If an
 Objective Plan exists, locate the contract's milestone there before proceeding;

@@ -943,6 +943,7 @@ _CANONICAL_SKILLS = (
     "project-knowledge",
     "work-memory",
 )
+# Stable distribution key; SKILL.md exposes the public name/command aether-plan.
 _PLAN_SKILL = "plan"
 _ALL_CANONICAL_SKILLS = _CANONICAL_SKILLS + (_PLAN_SKILL,)
 _HISTORICAL_ROLE_SKILLS: dict[str, tuple[str, ...]] = {

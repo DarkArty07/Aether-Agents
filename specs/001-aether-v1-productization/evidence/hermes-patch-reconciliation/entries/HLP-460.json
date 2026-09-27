@@ -8,7 +8,7 @@
     "tests/hermes_cli/test_kanban_session_affinity.py"
   ],
   "required_behavior": "New prospective parentage that would give an opted-in Aether flow anything other than its same exact corroborated canonical root is refused inside the native write transaction, with no task row, link, event, subscription or workspace side effect escaping: create_task(parents=[canonical_root, independent_decision]) and link_tasks(independent_decision, child_of_root) both fail atomically, and an edge into the opted-in root or into an ancestor of affected descendants cannot replace that root. Opt-in is corroborated only from the actual connection's own board metadata plus a persisted advisory collaboration event carrying the exact Project/contract/version identity; a lone Aether-looking key or ambient/default board cannot establish Aether opt-in, while a persisted Aether opt-in snapshot with mismatched or missing current board identity is a damaged claim whose affected parentage fails closed. Generic multi-root Hermes DAGs, valid rootless promotion and legitimate root->decision->unit insertion are unchanged, and a pre-damaged Aether graph still fails review.",
-  "candidate_requirement": "deferred",
+  "candidate_requirement": "required",
   "local_status": "MAINTAINED_FORK_ONLY / UPSTREAM_MISSING",
   "upstream": {
     "repository": "https://github.com/NousResearch/hermes-agent",

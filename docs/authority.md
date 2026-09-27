@@ -56,8 +56,30 @@ Keep these operational plans local and ignored by default. Record accepted norma
 decisions in their owning canonical artifacts, not only in a plan. Publishing a plan
 requires a separate privacy/portability decision; it does not become public merely
 because the convention is documented here. Morfeo's user-invoked planning entry is
-the canonical `plan` skill (scoped to Morfeo only); `objective-contract-design` retains
+the canonical `aether-plan` skill (`/aether-plan`, scoped to Morfeo only); `objective-contract-design` retains
 the substantive contract method. R2 §3.1 owns this distinction.
+
+## Exploratory context, placement and expected behaviors
+
+Product specifications, technical plans/research, docs, code and deliverables belong
+outside `.aether` in the project's structure. Aether-owned identity, coordination,
+project procedures and local auxiliaries use `.aether`; this is not a complete project
+template, permission to migrate existing files or a rule to move tool-managed state.
+
+Local `.aether/observations/<topic>.md` notes preserve unresolved predesign context:
+sourced facts, hypotheses, questions, decisions and continuity. They are not personal
+memory, approved requirements, execution state or the runtime `aether observe` projection.
+Transfer enduring decisions/evidence before retiring only an eligible owned resolved note.
+Discretionary scratch uses `.aether/tmp/<work-scope>/`; being inside `.aether` does not
+make a file disposable or public. [R9 §3.1](../specs/r9-state-and-recovery/spec.md#31-portable-methodology-and-exploratory-observations-541)
+owns these rules and [project adoption](guides/project-initialization.md#methodology-after-initialization)
+explains the operating map for other harnesses.
+
+The [expected-behavior catalogue](guides/expected-behavior.md) explains meaningful
+instruction triggers, roles, limits, sources and observable signs. It is a derived
+reader guide, not a new authority, implementation-status registry, testing mandate or
+compliance score. Keep source instructions, installed wording and observed conduct
+separate; public procedure does not publish private continuity or prove live adoption.
 
 ## Derived project knowledge and role experiences
 

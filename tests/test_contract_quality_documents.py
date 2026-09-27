@@ -23,7 +23,7 @@ SKILLS = {
     "implementation-evidence": "Implementer",
 }
 SKILL_VERSIONS = {
-    "objective-contract-design": "0.2.1",
+    "objective-contract-design": "0.2.2",
     "contract-result-review": "0.1.2",
     "supervisor-decomposition": "0.1.6",
     "implementation-evidence": "0.1.3",
@@ -184,8 +184,8 @@ def test_objective_planning_is_project_local_and_not_another_authority() -> None
         ".aether/plans/",
         "local and ignored",
         "not automatically carried into an independent new session",
-        "delivered **only to Morfeo**",
-        "generic Hermes `/plan` is not this behaviour",
+        "**`aether-plan`**, delivered only to Morfeo",
+        "generic Hermes `/plan` is not an alias",
         "No new tool",
     ):
         assert phrase in guide

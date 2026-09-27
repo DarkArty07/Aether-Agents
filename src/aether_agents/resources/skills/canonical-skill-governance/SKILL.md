@@ -1,7 +1,7 @@
 ---
 name: canonical-skill-governance
 description: Govern portable canonical skills without granting authority.
-version: 0.1.0
+version: 0.1.1
 author: Christopher, Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -62,6 +62,11 @@ Do not add a skill index, registry, generic loader, daemon, or framework patch.
    reads of `.aether/skills/<skill-name>/SKILL.md`. Discover Aether procedures through
    the package/native profile mechanism already provided by the product. Load only what
    the task needs; do not maintain a stale per-project list.
+   Keep essential project guidance discoverable to another file-capable harness through
+   root instructions and actual project-relative files. A private Hermes skill reference
+   alone is insufficient for shared obligations. Preserve other harness instructions;
+   do not copy a SOUL, every package skill or a sample project's content. Add a Project
+   Canonical Skill only for a useful project-specific procedure, not to fill a template.
 3. Resolve precedence for compatible procedures: current owner instruction,
    constitution/design/stage specifications/Objective Contract and repository rules
    govern first; a more-specific Project Canonical Skill outranks an Aether Canonical
@@ -69,6 +74,10 @@ Do not add a skill index, registry, generic loader, daemon, or framework patch.
 4. Maintain a canonical skill by preserving its name and location, tightening its
    trigger, keeping procedure non-overlapping, documenting pitfalls, and adding an
    executable verification path. Change the owning repository file, not private copies.
+   An explicit owner-directed rename must reconcile resource registration, references
+   and historical-name claims without rewriting immutable evidence or claiming live
+   adoption. When wording changes a documented user expectation, reconcile the project's
+   existing expected-behavior guide in the same change; a guide is not new authority.
 5. Promote a learned procedure only after sanitization, generalization, focused
    verification, independent review, commit, and pull request. Remove private text,
    identities, machine paths, runtime state, providers, models, repository details,

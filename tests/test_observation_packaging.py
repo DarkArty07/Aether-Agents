@@ -389,18 +389,21 @@ def test_wheel_and_sdist_include_valid_portable_canonical_skill_resources(
             frontmatter = yaml.safe_load(match.group("frontmatter"))
             assert isinstance(frontmatter, dict)
             assert re.fullmatch(r"[a-z0-9-]{1,64}", frontmatter["name"])
-            assert frontmatter["name"] == skill_name
+            expected_name = "aether-plan" if skill_name == "plan" else skill_name
+            assert frontmatter["name"] == expected_name
             assert isinstance(frontmatter["description"], str)
             assert len(frontmatter["description"]) <= 60
             assert frontmatter["description"].endswith(".")
             # Packaged canonical resources carry an explicit, intentional version per
             # skill: a bump must be recorded here so accidental drift stays caught.
             expected_version = {
-                "objective-contract-design": "0.2.1",
+                "objective-contract-design": "0.2.2",
                 "contract-result-review": "0.1.2",
                 "supervisor-decomposition": "0.1.6",
                 "implementation-evidence": "0.1.3",
-                "git-github-closeout": "0.1.1",
+                "git-github-closeout": "0.1.2",
+                "canonical-skill-governance": "0.1.1",
+                "plan": "0.2.0",
                 "semver-release": "0.1.1",
                 "project-knowledge": "0.1.1",
             }.get(skill_name, "0.1.0")

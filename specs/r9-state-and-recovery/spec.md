@@ -60,6 +60,44 @@ Inside data, each immutable `releases/<aether-semver>/` owns its release lock, i
 - **FR-907**: Large or binary products MUST be attached to their card rather than pasted, linked from a temporary location, or left in a workspace that will be deleted.
 - **FR-908**: Secrets, tokens, credentials, and raw personal data MUST NOT be written into completion summaries, structured metadata, comments, or attachments. Those fields are durable and are read by every downstream role.
 
+### 3.1 Portable methodology and exploratory observations (#541)
+
+The owner adopts the local predesign practice as portable instruction-level methodology.
+Transfer the method, not this repository's history, stage numbering or directory tree.
+
+- **FR-908a**: Product specifications, technical plans, research, code, tests, documentation
+  and deliverables belong to the project's established structure outside `.aether`.
+  `.aether` contains Aether-owned identity, coordination, procedures and local auxiliaries.
+  Create only needed artifacts; preserve brownfield and other harness conventions.
+  Tool-managed runtime state, worktrees, caches and required external research locations
+  retain their own placement. Adoption does not authorize migration or broad cleanup.
+- **FR-908b**: Keep the existing portable `.aether/project.toml`, finalized
+  `.aether/objective-contracts/` and Project Canonical `.aether/skills/` conventions.
+  Drafts, Objective Plans, exploratory observations and scratch remain local/ignored by
+  default under the project's accepted privacy policy. Do not ignore or publish the
+  whole `.aether` tree indiscriminately. A delegated obligation must not depend on
+  access to private continuity.
+- **FR-908c**: An unresolved topic that merits continuity MAY use one
+  `.aether/observations/<topic>.md`, with a descriptive name and no additional registry,
+  numbered ID or required empty template. Keep the originating concern, sourced facts,
+  hypotheses, open questions, decisions and meaningful continuity distinguishable.
+  `noted`, `investigating` and `ready` MAY describe disposition; they grant no authority
+  and do not mean a process is active. Simple questions require no note by ceremony.
+- **FR-908d**: Exploratory observations are neither accepted requirements nor memory,
+  task state, a contract, or the runtime `aether observe` projection. On resolution,
+  transfer enduring decisions/evidence to their owning artifacts before retiring only
+  the eligible owned note. Preserve outstanding consumers and original evidence;
+  never sweep the observation directory or rewrite its sources as cleanup.
+- **FR-908e**: Discretionary Aether scratch work in a project MUST use identifiable
+  `.aether/tmp/<work-scope>/` paths rather than littering the project root. Apply the
+  existing lifetime/ownership discipline; location alone does not prove disposability.
+  An externally required temporary location retains the same scoped cleanup duty.
+- **FR-908f**: Root operating guidance MUST expose a concise project-relative map for
+  other file-capable harnesses. Preserve their instructions; do not copy private SOULs,
+  every package skill or another project's specifics. A public expected-behavior guide
+  MAY explain instruction triggers, limits and sources, but MUST remain derived: it is
+  neither another authority nor a capability registry or proof of compliance.
+
 ## 4. Morfeo's Memory
 
 Owner preferences are Aether's only personalization mechanism (PD-12, PD-22). Everything else is per project.

@@ -1,10 +1,10 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-09-27T13:25:51Z`
+Observation timestamp: `2026-09-27T21:16:47Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `ed2a6a27184dee253f2b3e6d86f83907ae7a2ab18061ec112a8dc88e6b05c84a`
+Source ledger SHA-256: `be67067cf963a9f1b51a8569a29150d9402b4326748634895fc1aca01dc09fa2`
 
 ## Remaining local guarantees
 
@@ -228,7 +228,7 @@ Source ledger SHA-256: `ed2a6a27184dee253f2b3e6d86f83907ae7a2ab18061ec112a8dc88e
 
 ## Selected maintained-fork source
 
-Selected source: `https://github.com/DarkArty07/aether-hermes@58750d6cf8182c0ff5093719b9e7cc5026621fbf` (presence resolved from a checkout: `true`)
+Selected source: `https://github.com/DarkArty07/aether-hermes@007cfb77676b6b024d2c0986f4585e6cfdcf18d6` (presence resolved from a checkout: `true`)
 
 | Verdict | Entries |
 | --- | --- |

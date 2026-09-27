@@ -1,7 +1,7 @@
 ---
 name: git-github-closeout
 description: Close GitHub work and manage owned temporary storage.
-version: 0.1.1
+version: 0.1.2
 author: Christopher, Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -101,6 +101,15 @@ This is an instruction-level responsibility using existing tools, not a runtime 
 Each role owns the disposable resources it creates; Morfeo owns direct-route worktree
 retirement and Supervisor owns terminal pipeline retirement. Keep only the necessary
 path/consumer notes in existing working context or handoff; do not add a registry or card.
+
+For discretionary project scratch work, use project-relative
+`.aether/tmp/<work-scope>/` with distinct ownership when concurrent work needs isolation.
+Do not scatter exploratory reports or disposable scripts through the repository root.
+Product deliverables belong in the project's structure outside `.aether`; exploratory
+notes and plans retain their own conventions, not the temporary directory's lifetime.
+Tool-managed worktrees, caches, runtime state and required external research locations
+retain their existing rules. Do not relocate them or migrate historical residue merely
+to impose this convention. `.aether` is neither wholly disposable nor wholly public.
 
 1. **Check the destination before growth.** Before a large clone, extraction, build,
    test batch or repeated attempt, inspect available capacity on the filesystem actually

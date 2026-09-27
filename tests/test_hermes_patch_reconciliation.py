@@ -888,27 +888,27 @@ def test_canonical_check_stays_stricter_than_candidate_check(tmp_path: Path) -> 
     assert _summary_json(candidate)["status"] == "qualified"
 
 
-def test_repository_hlp428_is_required_and_hlp433_is_deferred() -> None:
+def test_repository_hlp428_and_hlp433_are_required_for_rc17() -> None:
     hlp428 = json.loads((ENTRIES_PATH / "HLP-428.json").read_text(encoding="utf-8"))
     hlp433 = json.loads((ENTRIES_PATH / "HLP-433.json").read_text(encoding="utf-8"))
     assert hlp428["candidate_requirement"] == "required"
     assert hlp428["local_status"] == "MAINTAINED_FORK_ONLY / UPSTREAM_MISSING"
-    assert hlp433["candidate_requirement"] == "deferred"
+    assert hlp433["candidate_requirement"] == "required"
     assert hlp433["local_status"] == "MAINTAINED_FORK_ONLY / UPSTREAM_MISSING"
     assert hlp428["retirement_gate"]["status"] == "not_executed"
     assert hlp433["retirement_gate"]["status"] == "not_executed"
 
 
 @pytest.mark.parametrize("identifier", ["HLP-435", "HLP-473", "HLP-474", "HLP-475", "HLP-460"])
-def test_source_only_fixes_keep_release_selection(identifier: str) -> None:
+def test_rc17_selects_integrated_fixes_without_retiring_them(identifier: str) -> None:
     record = json.loads((ENTRIES_PATH / f"{identifier}.json").read_text(encoding="utf-8"))
     aggregate = json.loads(
         (ENTRIES_PATH.parent.parent / "hermes-patch-reconciliation.v1.json").read_text(
             encoding="utf-8"
         )
     )
-    assert record["candidate_requirement"] == "deferred"
+    assert record["candidate_requirement"] == "required"
     assert record["local_status"].startswith("MAINTAINED_FORK_ONLY / ")
     assert record["retirement_gate"]["status"] == "not_executed"
     assert record["artifact_verification"]["status"] == "passed"
-    assert aggregate["selected_source"]["revision"] == "58750d6cf8182c0ff5093719b9e7cc5026621fbf"
+    assert aggregate["selected_source"]["revision"] == "007cfb77676b6b024d2c0986f4585e6cfdcf18d6"

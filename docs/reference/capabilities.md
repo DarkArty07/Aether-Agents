@@ -1064,6 +1064,7 @@ Ten Aether Canonical Skills are explicitly registered for packaging and native p
 
 ### Current documentation
 - [docs/authority.md](../authority.md)
+- [docs/guides/expected-behavior.md](../guides/expected-behavior.md)
 - [docs/guides/objective-plans.md](../guides/objective-plans.md)
 - [docs/guides/project-initialization.md](../guides/project-initialization.md)
 
@@ -1091,7 +1092,7 @@ Ten Aether Canonical Skills are explicitly registered for packaging and native p
 
 ### Notes / current limits
 
-The resource mechanism and explicit ten-skill inventory (with plan delivered only to Morfeo) are covered by wheel, sdist, profile-bundle, native-directory, byte-identity and privacy checks. The three contract/execution procedures had their open-ended observation requirement in issue #317 closed at owner direction without claiming organic PASS; knowledge-skill and plan-skill packaging does not establish live-agent adoption. Private live-profile activation is separate runtime evidence, and the public installed lifecycle remains unqualified.
+The current source inventory contains ten skills, with aether-plan only in Morfeo. Prior wheel, sdist, profile-bundle, native-directory, byte-identity and privacy checks remain historical evidence for their inspected revisions. The #541 rename and portable-methodology guidance received diff/reference inspection only at owner direction: no new tests, builds, CI, native-command qualification or runtime adoption is claimed. RC17 (#542) retains the exact plan storage key while exposing aether-plan through frontmatter; a disposable native-name check confirmed command discovery and name lookup. Exact release/cutover evidence remains separate. The three contract/execution procedures had their open-ended observation requirement in #317 closed at owner direction without claiming organic PASS. Packaging does not establish model compliance; private live-profile activation and public installed lifecycle qualification remain separate.
 
 ## `skills.project-canonical-discovery`
 

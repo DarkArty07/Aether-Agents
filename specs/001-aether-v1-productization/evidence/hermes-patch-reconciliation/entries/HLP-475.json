@@ -6,7 +6,7 @@
     "hermes_cli/kanban_db.py",
     "tests/hermes_cli/test_kanban_session_affinity.py"
   ],
-  "candidate_requirement": "deferred",
+  "candidate_requirement": "required",
   "required_behavior": "Dispatch fresh reviewer under its own profile with affinity=None and suppressed Supervisor skill/model overrides when a direct-affinity Supervisor card transitions to review under corroborated Aether opt-in and board identity. Restore Supervisor assignee and session on request_changes; fail closed without fallback on damaged identity.",
   "local_status": "MAINTAINED_FORK_ONLY / UPSTREAM_MISSING",
   "upstream": {

@@ -44,6 +44,40 @@ trackable while leaving drafts and other local `.aether/` state ignored. It does
 create a skill registry, loader, or stale list of skill names. Skills provide procedure
 only and cannot grant authority.
 
+## Methodology after initialization
+
+Initialization binds identity; Morfeo establishes working guidance from the actual
+project after inspecting its existing instructions and confirming the constitution.
+It does not copy Aether-Agents, invent product decisions, or create a complete empty tree.
+The `objective-contract-design` project-adoption/predesign entry owns this procedure.
+
+Keep root `AGENTS.md` concise: governing documents and their locations, relevant project
+procedures, actual setup/run/test/distribution guidance and preservation boundaries.
+Mark unknowns instead of inventing commands. Distribution instructions do not authorize
+publication. Preserve other harness instructions and use accessible project-relative
+references; a private Hermes memory or skill is not a portable source of obligations.
+
+| Information | Project location / boundary |
+| --- | --- |
+| Product code, tests, specs, technical plans, research, docs and deliverables | Outside `.aether`, using the project's structure; `specs/` and `docs/` are examples, not migration orders. |
+| Portable Aether identity, finalized contracts and project procedures | `.aether/project.toml`, `.aether/objective-contracts/`, `.aether/skills/`; retain their existing versioned roles. |
+| Draft contracts and Objective Plans | Local `.aether/drafts/` and `.aether/plans/`; ignore by default under the accepted privacy policy. |
+| Unresolved exploration that merits continuity | One local `.aether/observations/<topic>.md`, not a requirement, board or runtime-observation projection. |
+| Discretionary project scratch | Owned `.aether/tmp/<work-scope>/`, not scattered through the root; preserve necessary evidence before cleanup. |
+
+An observation distinguishes concern, facts/sources, hypotheses, questions, decisions and
+continuity. Resolve it by answering, transferring a decision to its owning artifact, or
+justifying an objective; only then retire an eligible owned note after preserving what
+is still needed. No observation, plan or new Project Canonical Skill is mandatory for
+a trivial task. Do not publish or discard the whole `.aether` tree indiscriminately.
+Tool-managed runtime state, worktrees, caches and required external research locations
+retain their rules. This convention grants no retrospective migration or broad cleanup.
+
+Other file-capable harnesses can follow this map without reproducing Aether's runtime.
+If a step genuinely needs an Aether capability, state that dependency rather than
+inventing an equivalent. See [expected behaviors](expected-behavior.md) and the
+[authority map](../authority.md).
+
 ## Greenfield limit
 
 `aether init` supports empty directories initialized by the owner with `git init`, but it does **not** run `git init` itself. Run `git init` in an empty or brownfield directory first, then run `aether init`. This keeps Git creation under the owner's explicit control.

@@ -280,6 +280,7 @@ jobs:
           docs/capabilities.toml
           docs/getting-started.md
           docs/guides/execution.md
+          docs/guides/expected-behavior.md
           docs/guides/lifecycle.md
           docs/guides/morfeo-mcp.md
           docs/guides/morfeo-tool-configuration.md

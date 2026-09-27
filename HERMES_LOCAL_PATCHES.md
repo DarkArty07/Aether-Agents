@@ -2,6 +2,13 @@
 
 **Status:** canonical operational record of the functional differences that Aether maintains over its loaded Hermes.
 
+**RC17 candidate selection (#542):** reviewed maintained-fork commit
+`007cfb77676b6b024d2c0986f4585e6cfdcf18d6` includes HLP-433, HLP-435, HLP-460,
+HLP-473, HLP-474 and HLP-475, now required alongside the prior required set. Earlier
+source-only/RC16 deferral statements are historical; no upstream retirement is inferred.
+The aggregate records source presence at this pin. Only the managed cutover receipt
+establishes live adoption; patches are never replayed onto installed code.
+
 This file prevents a Hermes update from silently removing local repairs. An Aether issue may be closed because the effective runtime is fixed, even though its entry remains `ACTIVE_LOCAL` until an equivalent upstream revision is integrated and verified.
 
 ## Reference runtime

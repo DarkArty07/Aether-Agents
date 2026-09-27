@@ -77,6 +77,49 @@ This principle is owned canonically by `specs/r0-design-governance/spec.md` and 
 
 ## Project guidance and canonical skills
 
+**RC17 local release (#542):** source integration and one managed local cutover are
+authorized with bounded verification, reusing reviewed fixes and required CI rather
+than duplicating a full local suite or creating an agent campaign. The exact fork pin
+is `007cfb77676b6b024d2c0986f4585e6cfdcf18d6`. The public skill is `aether-plan`, but its
+internal `skills/plan/` key is retained for RC16 reader compatibility. Preserve private
+configuration and RC16; no tag push, public release or live rollback rehearsal. This
+separate release supersedes earlier candidate-local fork deferrals only for its own lane;
+see `specs/rc17-local-release/spec.md`. Historical evidence and the #541 delivery below
+keep their original limits.
+
+**Current bounded maintenance (#541):** the owner authorizes direct Morfeo instruction
+and documentation work for portable project methodology, expected behaviors and the
+`aether-plan` rename. Review the actual diff and affected references only; do not run
+test suites, builds, linters, additional validation campaigns or CI for this local
+delivery. The minimal resource-name registration and test/reference reconciliation
+needed by the rename are in scope. No pipeline, runtime activation, publication,
+workflow disabling or protected-check bypass is authorized. This objective-specific
+boundary is recorded in R2 §3.1 and `CONTRIBUTING.md`; other objectives retain their gates.
+
+Use the project-adoption and predesign entry of `objective-contract-design` when
+establishing or reconciling project guidance. Transfer the methodology, not this
+repository's content or history. Product code, tests, specifications, technical plans,
+research and documentation stay outside `.aether` in the project's established structure.
+Aether identity, finalized contracts and project procedures retain their existing
+`.aether/project.toml`, `.aether/objective-contracts/` and `.aether/skills/` conventions.
+Local drafts, plans and exploratory observations are ignored by default; `.aether`
+is neither wholly disposable nor wholly public. Preserve other harness instructions
+and tool-managed runtime, worktree, cache and external research locations.
+
+For unresolved exploration that warrants continuity, use one descriptive
+`.aether/observations/<topic>.md`. Separate sourced facts, hypotheses, questions,
+decisions and continuity; the note is not an accepted requirement or execution authority,
+and is unrelated to runtime `aether observe`. Transfer enduring decisions/evidence before
+retiring only an eligible owned resolved note. Put discretionary project scratch under
+`.aether/tmp/<work-scope>/`, not throughout the repository root. Create only useful
+artifacts; no required empty tree, bulk migration or blanket cleanup follows from these
+conventions. See R9 §3.1 and [project adoption](docs/guides/project-initialization.md#methodology-after-initialization).
+
+The [expected-behavior guide](docs/guides/expected-behavior.md) explains meaningful
+instruction triggers, limits, sources and observable signs. Reconcile affected entries
+when changing those expectations; the guide is not another authority or proof of
+compliance. Source instructions, installed wording and observed conduct remain distinct.
+
 For objective planning and cross-session continuation, see
 [`docs/guides/objective-plans.md`](docs/guides/objective-plans.md) and the
 `objective-contract-design` canonical procedure's planning entry. Keep one local
@@ -85,6 +128,12 @@ do not select by recency, duplicate canonical obligations, or add plan ceremony 
 simple bounded work. Plans remain local/ignored unless publication is explicitly
 decided. A session or contract boundary does not reset failed approaches or the
 reasoning needed to justify continuation. Source instructions do not prove live adoption.
+
+The explicit Morfeo planning entry is `/aether-plan`, using the canonical `aether-plan`
+skill and stopping after planning without implementation, contracts, cards or workers.
+Generic `/plan` is not an alias. Reuse relevant observations as attributed context,
+without treating hypotheses as approved scope. The source rename does not establish
+that an older running profile already exposes the new command.
 
 Every project root has operating guidance. Morfeo establishes missing root `AGENTS.md`
 guidance only after inspecting the repository and confirming its constitution; `aether init`

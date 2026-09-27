@@ -7,6 +7,36 @@
 **Revision state at inspection**: working tree clean, HEAD verified against the recorded revision.  
 **Boundary**: the checkout is outside Aether and is research evidence only.
 
+## #541: portable adoption, exploratory observations and aether-plan
+
+**Owner decision:** formalize the methodology already used locally rather than copy
+Aether-Agents into other projects. Product specs/docs remain outside `.aether`; Aether
+auxiliaries belong inside, subject to established tool-managed/external locations.
+Rename the explicit Morfeo skill to `aether-plan`; retain implicit objective planning.
+The owner requests direct instruction maintenance with diff/reference inspection only,
+not a new implementation pipeline, CI or behavioral campaign.
+
+**Upstream inspected directly:** GitHub Spec Kit revision
+`c00dc0551583428a10a94443c58c6a41e5e0138c`, refreshed through the upstream API:
+`templates/commands/specify.md:80–111` and `templates/plan-template.md:45–56` place
+feature specifications outside framework state; `templates/commands/plan.md:114–159`
+keeps research, data model/interfaces and runnable validation in the feature artifact
+set. Aether keeps that intellectual contract, not a competing specification tree.
+
+**Actual gap:** persistent exploration before committing a feature, a project-local
+operating map discoverable by other harnesses, and ownership/lifetime for discretionary
+Aether auxiliaries. Local observation notes are examples of the need, not portable
+source to copy or private evidence to publish. R9 §3.1 now owns the convention; the
+`objective-contract-design` adoption entry teaches it. `aether-plan` stays the focused
+planning-only entry; a reader-facing expected-behavior guide links to the actual
+instructions without becoming authority or claiming compliance.
+
+**Deliberate limits:** no automatic scaffolder, required empty templates, registry,
+loader, scheduler, bulk migration, new role or runtime guard. The rename only adjusts
+resource identities and preserves recognized old inventories; historical qualification
+is retained as historical. Source, installed instructions and observed conduct remain
+separate. The renamed native command and runtime transition are not exercised here.
+
 ## Accepted contract-quality refinement
 
 Objective: [#312](https://github.com/DarkArty07/Aether-Agents/issues/312). The owner accepted the joint proposal: contract-design, Supervisor decomposition/coordination and Implementer unit-evidence procedures; focused guidance for all three roles; reconciliation of design ownership; and isolated behavioral qualification before scoped activation. The Objective Contract schema, tool availability, delegation authority, concurrency, models and providers remain unchanged. Morfeo personally authors the intellectual content; independent qualification is still required before activation. The detailed objective, integration boundary and runnable qualification are owned by `../006-contract-execution-quality/`.
