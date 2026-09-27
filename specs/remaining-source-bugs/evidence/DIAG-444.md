@@ -3,17 +3,18 @@
 - Objective Contract: `oc_3f280963213d234e@v1` (AC1/AC3/AC5)
 - Plan: `specs/remaining-source-bugs/plan.md` §#444
 - Supervisor breakdown: `specs/remaining-source-bugs/tasks.md` at `dabeeb6af25d18d3e2dc7307673159d418c49ac0`
-- Aether base: `8721f54b9a2d3be4638812f5fd660800ed07bd41`, tree digest
-  `2b10b433911293a00879aba0c48d24c895012b79ccbb5e0bb9a91c60bd1adfa0` (verified at receipt)
+- Aether base: `8721f54b9a2d3be4638812f5fd660800ed07bd41`;
+  Objective Contract SHA-256: `2b10b433911293a00879aba0c48d24c895012b79ccbb5e0bb9a91c60bd1adfa0`
+  (verified at receipt)
 - Worktree branch: `aether-agents-2/t_78e06a92-diag-444-bounded-python-3.12-checkpoint`
 - Issue: [#444](https://github.com/DarkArty07/Aether-Agents/issues/444) — OPEN at receipt
 
 ## Disposition
 
-**Fixture synchronization defect — proven, corrected, bounded.** The reported
-Python 3.12-only intermittent failure is a test-side flusher race, not a product
-defect in `src/aether_agents/observation/checkpoint.py` or
-`src/aether_agents/observation/capture/journal.py`. No product source changed.
+**Fixture synchronization defect — reproduced and corrected in source.** A test-side
+flusher race produces the reported `CHECKPOINT_AUTHORITY_UNVERIFIED` refusal under
+controlled fsync delay; the historical Python 3.12 CI occurrence has no retained
+lock-timing measurement proving it followed this same route. No product source changed.
 The fail-closed review-authority contract is unchanged and the original
 assertions, tolerances and timeout constants are untouched.
 
@@ -52,27 +53,24 @@ writer lock with the identical `acquire(timeout=DURABLE_SNAPSHOT_LOCK_TIMEOUT_S)
 call recorded a timeout on `MainThread` only during the legitimate emission, and
 only when the live flusher was active.
 
-The race is timing-dependent rather than version-dependent — the failure needs
-fsync latency that exceeds 5 ms inside the wake window. That is why the node
-passed on 3.11 and 3.13 in the same CI matrix, and why it now passes on this
-machine's local filesystems, where an explicit `writer.flush()` releases the lock
-quickly. CI's loaded, slower-disk runner was the environment that made the window
-probable. This is a scheduling/latency race, not a CPython-version semantic
-difference: no 3.12-specific behavior in this path was identified or needed for
-the diagnosis.
+The reproduced race is timing-dependent: a 50 ms injected fsync spans the 5 ms
+snapshot-lock limit inside the flusher wake window. No 3.12-specific branch in
+this code path was identified. The CI 3.12-only observation is consistent with
+that mechanism, but its disk latency and lock ownership were not measured; the
+historical event cannot be attributed exclusively to this cause.
 
 ## Correction (smallest complete)
 
 Apply the precedent already established in the same file by `84d83dc1`
-("test(observation): isolate checkpoint flusher") to the final Collector of the
-#444 node: keep that Collector synchronous so its background flusher cannot race
-the explicit flush for the writer lock.
+("test(observation): isolate checkpoint flusher") to the #444 node: keep
+all three short-lived Collectors synchronous within this test, so the final
+Collector's background flusher cannot race the explicit flush for the writer lock.
 
-`tests/test_observation_journal_storage.py:1110-1123`
+`tests/test_observation_journal_storage.py:1110-1125`
 
-The two earlier Collectors in the same node (native assignment and
-classification) are left with their ordinary supervised lifecycle; each is closed
-before the next starts, so their final flushes still execute.
+The earlier native-assignment and classification Collectors still stop and
+perform their final flush before the next one starts; their *supervised
+background loops* are also disabled by the function-scoped monkeypatch.
 
 The change is a fixture synchronization correction only. It does not alter any
 asserted outcome, any tolerance, any timeout constant, or the fail-closed
@@ -139,15 +137,24 @@ added `XDG_DATA_HOME` fixture line at 2701). The #444 node body itself and
 
 ## Residual and compatibility impact
 
-- Residual: none for this failure mode. The mechanism, the exact site and the
-  correction are established by an instrumented reproduction, not inference.
+- Residual: the controlled fsync-delay reproduction and fixture correction cover the
+  identified flusher-lock race. The historical CI event did not retain lock timing,
+  so equivalence of that event and the injected case remains unproved. Terminal
+  integration owns issue disposition against the actual PR/check result.
 - `release_impact: none` — a test fixture synchronization change only, with no
   product source delta, no public interface change, no dependency change and no
   new behavior. `release_action: defer`, `release_channel: none`.
 
-## Commit
+## Commits and review attribution
 
-One scoped commit on `aether-agents-2/t_78e06a92-diag-444-bounded-python-3.12-checkpoint`
-touching only `tests/test_observation_journal_storage.py`. No canonical Objective
-Contract, plan or tasks file was modified, copied, staged or committed. No push,
-PR, tag, release or remote action was performed.
+Implementer candidate `e3ff191f55e5577da03432c365e2bfde4d6d5805`
+on `aether-agents-2/t_78e06a92-diag-444-bounded-python-3.12-checkpoint`
+added this evidence file and changed only `tests/test_observation_journal_storage.py`
+for executable behavior. Supervisor's separate, documentation/comment-only follow-up
+corrected this record's mislabeled contract hash and inaccurate statement that the
+function-scoped monkeypatch affected only the final Collector. The reviewer
+independently inspected the original source delta and ran the named node and full
+affected file on Python 3.12.13; verification of the Supervisor-authored correction
+is separately attributed, not an independent review of that correction. No canonical
+Objective Contract, plan or tasks file was modified, copied, staged or committed.
+No push, PR, tag, release or remote action was performed by this unit.

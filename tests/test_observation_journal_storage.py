@@ -1112,13 +1112,11 @@ def test_checkpoint_sink_derives_review_authority_from_durable_native_assignment
     tmp_path,
 ) -> None:
     # This test exercises checkpoint authority derivation from durable native
-    # assignment evidence, not journal durability. Keep the final Collector
-    # synchronous so its supervised flusher cannot race the explicit flush
-    # below for the writer lock and make the legitimate approval's bounded
-    # snapshot read time out, which fails closed to
-    # ``CHECKPOINT_AUTHORITY_UNVERIFIED``. The earlier native and
-    # classification Collectors each close before the next one starts, so
-    # their ordinary lifecycle still runs.
+    # assignment evidence, not supervised flusher scheduling. Keep all three
+    # Collectors in this test synchronous: the final one's flusher could race
+    # the explicit flush below for the writer lock and make the legitimate
+    # approval's bounded snapshot read fail closed. Each earlier Collector
+    # stops and performs its final flush before the next one starts.
     monkeypatch.setattr(
         "aether_agents.observation.capture.collector.Flusher.start",
         lambda _self, _spawn_task=None: None,
