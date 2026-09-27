@@ -8,6 +8,16 @@ Technical permission does not reassign work: Implementer produces local commits 
 
 The canonical source contains policy only. It contains no credentials, sessions, memories, profile configuration, databases, logs, or other runtime state.
 
+### Known merged-branch cleanup limitation
+
+The current source and installed pre-tool hook block `git push --delete` even
+when the work branch has been independently verified as merged. This conflicts
+with the routine merged-branch cleanup described above; [#539](https://github.com/DarkArty07/Aether-Agents/issues/539)
+owns that policy correction. If the guard denies cleanup, preserve the remote
+branch and report the uncompleted effect. Do not retry it through another
+flag, tool, API or profile, and do not edit a live hook to finish closeout.
+This note changes no permission or installed hook behavior.
+
 ### Local path names versus credential values
 
 The generic `sk-` detector makes one conservative distinction for non-durable tool
