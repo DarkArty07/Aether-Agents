@@ -1,10 +1,10 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-09-26T23:04:04Z`
+Observation timestamp: `2026-09-27T02:55:00Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `1255e6a4f1ead752e9b372ac32e67c80fc4f5e8554d588fa79b0e4b24ca72c84`
+Source ledger SHA-256: `deee36e56994814ed81bc7db0733c586906be9f27cbfa32eb2c4208eadd43df0`
 
 ## Remaining local guarantees
 
@@ -44,6 +44,7 @@ Source ledger SHA-256: `1255e6a4f1ead752e9b372ac32e67c80fc4f5e8554d588fa79b0e4b2
 - `HLP-435`: HLP-435 corrects the two observed normalized-only quote imbalances in maintained-fork source. PR #19 merged as b287195d63d47d73788653bdd012c2fbfe00c0ac with tree identical to reviewed f459cfa0. Keep deferred at unchanged RC16 pin 58f8c37a49b341f25b8fdd6310542fe932031b8d; no RC17, runtime adoption or upstream retirement is claimed.
 - `HLP-473`: Base 54abacd1c38ce6300997289628fe2f2a7569df18; implementation c81053679cd57a24f5a7a6c93b6cd450eee47343; reviewed implementation tree 49189104a6888ef604ff0733d97b6b05e25b0d33; merged source 30b4846a2c8063528d491f48950b3b341b0ce7d7 (fork PR #21). Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
 - `HLP-474`: Base b287195d63d47d73788653bdd012c2fbfe00c0ac; implementation 7755f82df15786285378732ef17544b4736c4b81; reviewed implementation tree 105071996d00bfbb361771d82d0863552380fccb; merged source 54abacd1c38ce6300997289628fe2f2a7569df18 (fork PR #20). Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
+- `HLP-475`: Base 30b4846a2c8063528d491f48950b3b341b0ce7d7; candidate implementation f21c733b800a2dcc8a29639c90e5f84eb7d6278b; reviewed implementation tree c69e40e7c9f362458833778b89f88430fb9e10c4. Source-only. Pinned at 30b4846a2c8063528d491f48950b3b341b0ce7d7. Declared paths exist at that pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
 
 ## Qualified upstream equivalents
 
@@ -166,7 +167,6 @@ Source ledger SHA-256: `1255e6a4f1ead752e9b372ac32e67c80fc4f5e8554d588fa79b0e4b2
 - `HLP-428` (uncertainty): The optional 'Previous review returns (this task)' context line introduced in RC15 does not exist at selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d; retained RC15 review guidance uses its documented durable-history fallback when this optional context is absent. This absence is a disclosed candidate limitation, not an enforcement gate or retirement claim.
 - `HLP-433` (artifact): The patch reconstructs exactly in the maintained fork and candidate checks pass, but public upstream equivalence is unavailable: inspected upstream revisions reconstruct only flat prompt/completion/total tokens from Responses usage. Merged revision 621047dc1c10cceb2825013cc8bb611b4d0e8de1 (PR #17) is a descendant of the selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d; the merged source has not been installed, reloaded or otherwise adopted by the effective Aether runtime.
 - `HLP-433` (retirement_gate): Retirement gate status is not_executed.
-- `HLP-433` (selected_source): Declared source path(s) missing at the selected revision 58f8c37a49b341f25b8fdd6310542fe932031b8d: tests/agent/test_auxiliary_client_responses_reasoning_433.py.
 - `HLP-433` (uncertainty): Upstream hermes-agent lacks reasoning token preservation across the Responses adapter boundary.
 - `HLP-433` (uncertainty): The regression test module tests/agent/test_auxiliary_client_responses_reasoning_433.py is introduced by this patch and does not exist at selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d, making its absence visible in candidate reconciliation.
 - `HLP-433` (uncertainty): The merged maintained-fork revision 621047dc1c10cceb2825013cc8bb611b4d0e8de1 carrying this behavior is a descendant of the selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d and has not been adopted by the effective Aether runtime; live adoption and effective-runtime qualification remain deferred successors under issue #433, so no installed behavior is asserted.
@@ -177,6 +177,8 @@ Source ledger SHA-256: `1255e6a4f1ead752e9b372ac32e67c80fc4f5e8554d588fa79b0e4b2
 - `HLP-473` (uncertainty): Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
 - `HLP-474` (retirement_gate): Retirement gate status is not_executed.
 - `HLP-474` (uncertainty): Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
+- `HLP-475` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-475` (uncertainty): Source-only. Pinned at 30b4846a2c8063528d491f48950b3b341b0ce7d7. Declared paths can exist at that pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
 
 ## Artifact integrity
 
@@ -216,21 +218,21 @@ Source ledger SHA-256: `1255e6a4f1ead752e9b372ac32e67c80fc4f5e8554d588fa79b0e4b2
 - `HLP-435`: passed
 - `HLP-473`: passed
 - `HLP-474`: passed
+- `HLP-475`: passed
 
 ## Selected maintained-fork source
 
-Selected source: `https://github.com/DarkArty07/aether-hermes@58f8c37a49b341f25b8fdd6310542fe932031b8d` (presence resolved from a checkout: `true`)
+Selected source: `https://github.com/DarkArty07/aether-hermes@30b4846a2c8063528d491f48950b3b341b0ce7d7` (presence resolved from a checkout: `true`)
 
 | Verdict | Entries |
 | --- | --- |
-| present | 33 |
+| present | 35 |
 | partial | 0 |
-| absent | 1 |
+| absent | 0 |
 | unverified | 2 |
 
 - `HLP-246`: unverified — no repository-relative component path or declared portable patch path is recorded for this entry
 - `HLP-247`: unverified — no repository-relative component path or declared portable patch path is recorded for this entry
-- `HLP-433`: absent — missing: tests/agent/test_auxiliary_client_responses_reasoning_433.py
 
 ## Safe next decisions
 
