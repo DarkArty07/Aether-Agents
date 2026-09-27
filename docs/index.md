@@ -4,17 +4,16 @@ Aether is a multi-agent software-engineering product built on [Hermes Agent](htt
 
 This index is navigation only and routes reader questions to the appropriate guide, reference, or authority artifact. For the complete reader-facing placement and conflict-resolution map across all artifact classes, see [Authority and artifact ownership](authority.md).
 
-This source tree defines the local-only `1.0.0rc16` candidate (display
-`1.0.0-rc.16`, local annotated tag `v1.0.0-rc.16`). It binds maintained-fork
-Hermes commit `58f8c37a49b341f25b8fdd6310542fe932031b8d` (tree
-`a93162c1a867202b03c12fa372c71029152fdcf7`, source-tree digest
-`a2a9b374bd2022c7f96242b0ab2c95691119262c925389eb3820ca627c581144`), qualifying
-HLP-428 as a required candidate HLP with HLP-433 deferred, absent, and unretired.
-Retained RC15 Supervisor review instructions fall back to durable task history
-when the optional context count is absent. It emits release-lock schema 5 with
-Hermes extra `mcp`, still reads schema 4, and serves the canonical Morfeo role
-through [Morfeo MCP](guides/morfeo-mcp.md). Source and local tags do not prove
-runtime activation or agent behavior. Consult `aether doctor` and a verified cutover receipt.
+This source tree defines local-only `1.0.0rc17` (display `1.0.0-rc.17`, local
+annotated tag `v1.0.0-rc.17`), pinned to reviewed maintained-fork Hermes commit
+`007cfb77676b6b024d2c0986f4585e6cfdcf18d6` (tree
+`b26638974fc134da866b821ab3c4b34ab430aeb3`). It includes the integrated
+HLP-433/435/460/473/474/475 fixes and portable methodology with `/aether-plan`.
+The internal planning resource key stays `plan` for RC16 updater compatibility.
+Release-lock schema 5, Hermes extra `mcp`, schema 4 readers and
+[Morfeo MCP](guides/morfeo-mcp.md) remain. See the [RC17 scope](../specs/rc17-local-release/spec.md).
+Source and local tags do not prove runtime activation or agent behavior; consult
+`aether doctor` and exact cutover evidence. No public tag or release is authorized.
 The executable Hermes source is Aether's maintained fork
 `DarkArty07/aether-hermes` branch `aether-main`, bound
 by release-lock schema 4 or 5 `maintained_fork` and installed through `aether update`.
@@ -42,6 +41,9 @@ issue #261 stays open with those publication and platform gates outstanding. See
   See [Roles and authority](roles-and-authority.md).
 
 ### Getting started and project setup
+- **What should Aether do without repeated reminders, and where are those instructions?**
+  See [Expected behavior of Aether agents](guides/expected-behavior.md), including triggers,
+  limits and the distinction between source instructions, installation and observed conduct.
 - **How do I explore Aether locally without provider calls or credentials?**
   See [Getting started](getting-started.md).
 - **How do I launch Aether in an already initialized project, and which commands recover an active installation?**
@@ -56,6 +58,9 @@ issue #261 stays open with those publication and platform gates outstanding. See
   See the same guide's experience, storage and tool sections, plus [Plugins and tools](reference/plugins-and-tools.md).
 
 ### Objective handoffs, execution, and lifecycle
+- **What does explicit `/aether-plan` planning produce, and how does exploration differ?**
+  See [Objective Plans](guides/objective-plans.md#exploration-before-a-plan). Generic `/plan`
+  is not the Aether planning entry.
 - **How does one objective keep its route, stop conditions and continuity across sessions and contracts?**
   See [Objective Plans](guides/objective-plans.md).
 - **How are objective outcomes, acceptance criteria, and handoffs structured?**

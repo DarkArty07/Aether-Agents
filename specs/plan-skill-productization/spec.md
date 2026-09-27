@@ -1,5 +1,27 @@
 # Canonical project-local `/plan` for Morfeo (#504)
 
+## Current name amendment (#541)
+
+The owner now names the Morfeo-only canonical skill `aether-plan`, with the native
+entry `/aether-plan`; generic `/plan` is not an alias. RC17 (#542) keeps the stable
+source/distribution key `src/aether_agents/resources/skills/plan/SKILL.md` because the
+installed RC16 reader requires that exact resource inventory. Native Hermes resolves
+the public name from frontmatter. This amendment supersedes the
+literal resource/command names in PS-001, PS-002 and the corresponding current naming
+claims below, while preserving planning-only behavior, project-local continuity and
+role boundaries. Existing `plan` release inventories remain authenticated historical
+inputs; new bundles preserve that storage key with the `aether-plan` public name. No
+new resource shape, alias or intermediary release is required.
+
+The original #504 scope, rationale, quickstart and evidence below remain historical,
+including same-name learned-skill selection and the exact old runtime qualification.
+They do not qualify the renamed command or permit rewriting old contract/evidence bytes.
+The #541 local maintenance uses diff/reference inspection only, no suites/builds/CI or
+runtime activation; R2 §3.1 owns that current bounded instruction. An installed older
+profile may still expose `plan` until a separately authorized managed adoption.
+
+## Original #504 source objective
+
 **Status:** owner-approved objective; candidate implementation independently reviewed; source merge in progress. Scope corrected by owner: source merge, not historical release qualification.
 **Decision owner:** project owner. **Route:** Morfeo design → Supervisor → Implementer(s).
 **Owning higher requirements:** R2-FR-204b–f, R1-FR-116a/121a, R5 role isolation, R7 convergence, `DESIGN.md` §10.

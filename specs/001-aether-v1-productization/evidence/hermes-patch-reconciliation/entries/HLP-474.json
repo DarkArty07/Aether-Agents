@@ -6,7 +6,7 @@
     "agent/background_review.py",
     "tests/run_agent/test_background_review_cost_controls.py"
   ],
-  "candidate_requirement": "deferred",
+  "candidate_requirement": "required",
   "required_behavior": "A different-model background review may reuse already-bound parent auth only for the same resolved provider and exact requested/resolved base URL when the resolved key is missing or no-key-required. Explicit task/resolved keys, pools and other destinations retain precedence.",
   "local_status": "MAINTAINED_FORK_ONLY / UPSTREAM_MISSING",
   "upstream": {

@@ -24,7 +24,7 @@
     "blocker": "The patch reconstructs exactly in the maintained fork and candidate checks pass, but public upstream equivalence is unavailable: inspected upstream revisions reconstruct only flat prompt/completion/total tokens from Responses usage. Merged revision 621047dc1c10cceb2825013cc8bb611b4d0e8de1 (PR #17) is a descendant of the selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d; the merged source has not been installed, reloaded or otherwise adopted by the effective Aether runtime.",
     "status": "unavailable"
   },
-  "candidate_requirement": "deferred",
+  "candidate_requirement": "required",
   "blocking_uncertainty": [
     "Upstream hermes-agent lacks reasoning token preservation across the Responses adapter boundary.",
     "The regression test module tests/agent/test_auxiliary_client_responses_reasoning_433.py is introduced by this patch and does not exist at selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d, making its absence visible in candidate reconciliation.",

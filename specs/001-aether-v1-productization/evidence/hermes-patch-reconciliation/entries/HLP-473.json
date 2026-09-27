@@ -6,7 +6,7 @@
     "plugins/platforms/telegram/adapter.py",
     "tests/gateway/test_telegram_connect.py"
   ],
-  "candidate_requirement": "deferred",
+  "candidate_requirement": "required",
   "required_behavior": "Rebind TypeHandler when the Telegram SDK becomes available after the adapter was imported without it. Missing TypeHandler leaves the dependency unavailable; handler registration must not instantiate typing.Any.",
   "local_status": "MAINTAINED_FORK_ONLY / UPSTREAM_VERIFIED",
   "upstream": {

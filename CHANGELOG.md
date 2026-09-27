@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.0.0rc17 — portable methodology and accumulated source fixes
+
+Package `1.0.0rc17` / display `1.0.0-rc.17` / local annotated tag `v1.0.0-rc.17`.
+`release_impact=major` for the incompatible Aether command rename;
+`release_action=prepare`, `release_channel=prerelease`. This remains the ongoing
+pre-1.0 candidate line, not a stable major release. No tag push or public release.
+
+- Morfeo's explicit planning entry is now `/aether-plan`; generic `/plan` is not an
+  Aether alias. The internal `skills/plan/` key remains unchanged for RC16 reader
+  compatibility. The method stays planning-only and project-local.
+- Portable project adoption, exploratory `.aether/observations/`, scoped scratch and
+  worktree/temporary hygiene are explicit in role instructions and canonical skills.
+  The expected-behavior guide lists triggers, limits, sources and observable evidence.
+- Includes integrated Aether fixes for observer contention, generated-doc freshness,
+  source workdir binding, skill transport integrity and reviewed policy/source repairs.
+- Hermes is pinned to reviewed `aether-main` commit
+  `007cfb77676b6b024d2c0986f4585e6cfdcf18d6`, including reasoning-usage preservation,
+  guard parsing, Telegram lazy handler binding, review credential scoping, review
+  affinity and rooted Aether parentage. Existing source evidence is reused; no new
+  agent-behavior campaign or blanket upstream-equivalence claim is made.
+- #542 authorizes bounded package/transition/name checks and local activation. Exact
+  cutover evidence, not this source declaration, establishes installation. Operator
+  configuration remains private; the instruction-file approval setting is not changed
+  as a product default. RC16 and earlier releases remain immutable.
+
 ## 1.0.0rc16 — #494 adoption and exact maintained-fork runtime pin
 
 Package identity `1.0.0rc16` / display `1.0.0-rc.16` / local annotated tag identity

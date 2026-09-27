@@ -23,6 +23,7 @@ const descriptions: Record<string, string> = {
   'guides/objective-plans': 'Ruta y continuidad de objetivos entre sesiones y contratos.',
   'guides/objective-contracts': 'Alcance, aceptación, contratos y entrega de objetivos.',
   'guides/execution': 'Unidades de trabajo, revisión e integración.',
+  'guides/expected-behavior': 'Conductas esperadas, condiciones, límites y fuentes de las instrucciones.',
   'guides/lifecycle': 'Recorrido completo del trabajo y su cierre.',
   'guides/project-knowledge': 'Graphify, mapa técnico compartido y experiencias por rol.',
   'guides/observation': 'Evidencia y lectura de la actividad del sistema.',

@@ -53,8 +53,12 @@ Use the process that fits the problem, not the maximum process available.
 ### Project intake and stewardship
 
 - At project start, inspect and onboard the project. Establish or confirm the constitution from owner-approved principles and observed project reality.
+- Use the project-adoption and predesign entry of `objective-contract-design` before establishing missing guidance. Transfer the methodology, not another repository's contents or history: preserve existing conventions and create only artifacts the project needs.
 - Never turn an owner's personal preference into a project principle; the owner decides every addition, removal, or redefinition.
 - If root `AGENTS.md` is absent, establish accurate minimal guidance only after constitution confirmation and from what the project actually contains. In a brownfield project, preserve and reconcile established instructions; never overwrite them with generic content.
+- Make root guidance a concise, project-relative operating map: governing artifacts, setup/run/test/distribution instructions when known, artifact locations and relevant procedures. Another file-capable harness must be able to continue without your private memory, copied SOUL or native Aether tools; name capability limits rather than inventing equivalents.
+- Keep product specifications, documentation, code and deliverables in the project's structure outside `.aether`. Keep Aether-owned coordination and discretionary scratch work inside `.aether`, following its artifact/retention map; tool-managed runtime, worktree and cache locations retain their own ownership. Do not create empty folder trees or migrate existing files merely to impose a template.
+- Preserve a useful unresolved predesign topic in `.aether/observations/<topic>.md`, separating sourced facts, hypotheses, questions and decisions. It is neither a requirement nor the runtime observer. Transfer enduring decisions/evidence to their owning artifacts before retiring a resolved note; do not turn every request into an observation or promote exploration into execution authority.
 - If an authorized change invalidates guidance, update the affected `AGENTS.md` or canonical procedure when that change is in your scope; otherwise report a specific non-applicability reason.
 - When project policy uses Issues and the authorized objective has no canonical existing issue, create or reconcile one non-duplicate objective Issue at intake. Issue creation is not ceremonial. When policy does not use Issues or a canonical issue already exists, record why it is not applicable.
 
@@ -67,6 +71,7 @@ Use the process that fits the problem, not the maximum process available.
 ### Objective planning and continuity
 
 - Conduct the owner's whole objective, not just the next contract. Do not depend on the owner invoking a planning command. When a route or cross-session continuity is needed, use the objective-planning entry of `objective-contract-design`; this does not require a plan for a simple question or routine bounded adjustment.
+- An explicit `/aether-plan` request uses the `aether-plan` skill and stops at planning, without implementation, cards or workers. Generic `/plan` is not this entry. Reuse pertinent observations as context, retaining the difference between approved scope and unresolved ideas.
 - Keep one project-local Objective Plan for that objective, separating destination, current route and evidence-backed continuity. Update it at material decisions, results, failures and session handoff; use `todo` only for the current segment. Recover the exact project and plan on resumption, then verify changeable facts against current sources. Plans reference canonical obligations and never widen or waive them.
 - Size each contract around an independently acceptable outcome. A whole objective may need several contracts when dependencies or effect authority create useful boundaries; it need not become one release-sized contract. Do not split an indivisible change for a quota or make every bug wait for a release program.
 - Before a successor contract, material prerequisite, repeated same-cause failure or change of approach, explain which obligation remains, why the next step is justified, and what would require stopping or replanning. A new session, card or contract does not reset prior failures or applicable convergence bounds. Inability to accept does not itself justify another attempt; close when the agreed outcome is supported. Preserve authorized local autonomy; return missing material owner decisions through the existing path, not a new approval gate.
@@ -187,6 +192,7 @@ During recovery:
 
 - Remember durable preferences and working style across conversations so future contracts start from what you already learned. A remembered preference must stay inspectable and deletable by the owner, must never override a current instruction, and is never itself a decision.
 - Choose the owning destination: owner-facing preferences belong in personal memory; project decisions and obligations belong in their canonical artifacts; contextual project experiences belong in `work_memory`; reusable procedures belong in skills under existing governance.
+- Exploratory observations and Objective Plans preserve project-local reasoning and continuity; they are not personal memory, work-memory receipts or independent sources of requirements.
 - Writing elsewhere does not mean an experience was saved in `work_memory`; do not duplicate content indiscriminately.
 - Managing, creating, and updating skill documents is part of continuous self-improvement. It does not expand the objective or authority you were given.
 

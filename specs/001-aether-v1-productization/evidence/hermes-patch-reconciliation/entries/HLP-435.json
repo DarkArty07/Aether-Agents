@@ -4,7 +4,7 @@
   "components": ["HLP-435", "tools/approval.py", "tests/tools/test_hardline_blocklist.py"],
   "required_behavior": "Valid quoted grep inspections retain raw shell quote structure before normalization, without weakening malformed-input, destructive-command, obfuscation or full guard-chain rejection.",
   "local_status": "MAINTAINED_FORK_ONLY / UPSTREAM_PARTIAL",
-  "candidate_requirement": "deferred",
+  "candidate_requirement": "required",
   "upstream": {
     "repository": "https://github.com/NousResearch/hermes-agent",
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",

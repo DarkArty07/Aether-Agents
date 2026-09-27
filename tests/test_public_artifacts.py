@@ -41,6 +41,7 @@ ACCEPTED_PACKAGE_IDENTITIES = (
     "1.0.0rc14",
     "1.0.0rc15",
     "1.0.0rc16",
+    "1.0.0rc17",
     "2.30.4",
     "1.0.0.dev3",
 )
@@ -161,8 +162,8 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     assert "releases/tag/v1.0.0-rc.7" not in readme
     assert "releases/tag/v1.0.0-rc.6" not in readme
     assert "releases/tag/v1.0.0-rc.5" not in readme
-    assert "`1.0.0rc16` / `1.0.0-rc.16`" in readme
-    assert "local annotated tag identity is `v1.0.0-rc.16`" in readme
+    assert "`1.0.0rc17` / `1.0.0-rc.17`" in readme
+    assert "local annotated tag identity is `v1.0.0-rc.17`" in readme
     assert "restores the new Morfeo SOUL and canonical contract skills" in readme
     assert (
         "neither this source nor a local tag proves what is installed or that agent behavior improved"
@@ -186,7 +187,7 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     assert "releases/tag/v1.0.0-rc.7" not in status[0]
     assert "releases/tag/v1.0.0-rc.6" not in status[0]
     assert "releases/tag/v1.0.0-rc.5" not in status[0]
-    assert "release_impact = patch" in status[0]
+    assert "release_impact = major" in status[0]
     assert "release_action = prepare" in status[0]
     assert "release_channel = prerelease" in status[0]
     for time_bound in ("will be published", "not yet", "pending", "to be superseded"):

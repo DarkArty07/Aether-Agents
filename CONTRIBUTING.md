@@ -30,6 +30,21 @@ replace these repository rules.
 
 ## Test with the locked Hermes baseline
 
+### Owner-directed instruction maintenance (#541)
+
+For the portable-methodology, expected-behavior documentation and `aether-plan`
+rename objective, the owner explicitly selects direct Morfeo work and diff/reference
+inspection only. Do not run test suites, builds, linters, extra validation campaigns
+or CI for this local maintenance. The scope includes the minimal resource-name and
+test-expectation reconciliation required by the rename, not new execution machinery.
+Report all unexecuted checks honestly; this is not runtime or agent-behavior qualification.
+
+This objective-specific instruction supersedes the execution of the checks listed
+below for this local delivery only. It does not disable a workflow, change repository
+protection, authorize a bypass, or permit push, merge, publication or runtime adoption.
+Other objectives retain their existing verification obligations. The owning amendment
+is in `specs/r2-contract-and-handoff/spec.md`.
+
 The full exact-Hermes suite is run through the repository bootstrap. It recreates and
 verifies the selected public Hermes source and supplies it to the tests, so do not set
 `PYTHONPATH` by hand:
@@ -60,6 +75,17 @@ Kanban fixtures must isolate dispatcher routing and execution identity, not only
 board or workspace. Use a scoped environment change with temporary destinations and
 verify that the outer board is unchanged. Subprocess probes can reuse
 `aether_agents.lab.isolated_hermes_env`; never test isolation against a live board.
+
+### RC17 bounded release verification (#542)
+
+The owner separately authorizes RC17 source integration and one local managed cutover.
+Reuse reviewed fixes and their attributed evidence; run focused resource/name/old-reader
+checks and normal package preparation, followed by one post-cutover coherence check.
+Do not repeat the full suite locally before required PR checks, add agent campaigns,
+stress loops or a live rollback rehearsal. A required check failure still needs concrete
+diagnosis; this direction neither disables CI nor permits a protected-check bypass.
+The #541 no-test instruction continues to describe that earlier local source delivery,
+not this separately authorized release. Keep its evidence attribution unchanged.
 
 ## Quality checks
 
@@ -126,6 +152,12 @@ the exact tag-object/commit gate.
 ## Prepare a contribution
 
 ### Documentation impact
+
+A change to a meaningful agent expectation must reconcile
+`docs/guides/expected-behavior.md` in the same change, or state why no entry is affected.
+That guide explains triggers, limits, sources and observable signs; it is not another
+authority, capability registry or record of behavioral PASS. Preserve the distinction
+between source instructions, installed instructions and observed conduct.
 
 A change to a public or user-visible surface must update the applicable current page and
 `docs/capabilities.toml`, including its generated reference. If no update is applicable,

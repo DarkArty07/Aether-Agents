@@ -1,4 +1,7 @@
-"""Native slash dispatch and project-local planning qualification on the selected Hermes fork.
+"""Historical /plan qualification for the frozen #504 candidate and selected Hermes fork.
+
+This module retains the old name, bytes and runtime evidence. It is not qualification
+of the #541 aether-plan rename; current resource inventories are covered elsewhere.
 
 Qualifies:
 - Outcome: AC (d); US-PS-1, US-PS-3; PS-001, PS-009.
@@ -60,29 +63,17 @@ def _resolve_hermes_python() -> Path:
 
 
 def _get_candidate_plan_skill_bytes() -> bytes:
-    """Read the candidate plan skill bytes from the tree or from PLAN-CANDIDATE."""
-    repo_file = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "aether_agents"
-        / "resources"
-        / "skills"
-        / "plan"
-        / "SKILL.md"
+    """Read frozen #504 bytes; current source intentionally exposes aether-plan."""
+    proc = subprocess.run(
+        [
+            "git",
+            "show",
+            f"{CANDIDATE_COMMIT}:src/aether_agents/resources/skills/plan/SKILL.md",
+        ],
+        capture_output=True,
+        check=True,
     )
-    if repo_file.is_file():
-        data = repo_file.read_bytes()
-    else:
-        proc = subprocess.run(
-            [
-                "git",
-                "show",
-                f"{CANDIDATE_COMMIT}:src/aether_agents/resources/skills/plan/SKILL.md",
-            ],
-            capture_output=True,
-            check=True,
-        )
-        data = proc.stdout
+    data = proc.stdout
     digest = hashlib.sha256(data).hexdigest()
     assert digest == CANDIDATE_PLAN_SHA256, (
         f"candidate plan skill digest mismatch: expected {CANDIDATE_PLAN_SHA256}, got {digest}"
