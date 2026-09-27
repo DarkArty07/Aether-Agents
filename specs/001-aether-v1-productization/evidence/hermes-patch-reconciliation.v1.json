@@ -1,5 +1,5 @@
 {
-  "observed_at_utc": "2026-09-27T11:27:30Z",
+  "observed_at_utc": "2026-09-27T11:39:07Z",
   "overall_blockers": [
     {
       "detail": "Retirement gate status is failed.",
@@ -612,7 +612,7 @@
       "kind": "uncertainty"
     },
     {
-      "detail": "Upstream hermes-agent lacks the ancestor-root helpers, the collaboration-root query and the Aether opt-in corroboration at the inspected revision, the latest released artifact and refreshed upstream main, so retirement is not qualified.",
+      "detail": "Upstream hermes-agent lacks the ancestor-root helpers, collaboration-root query and Aether opt-in corroboration at the historical inspected revision, inspected v2026.9.24 release (commit f97608f178d1ffeca59860195ab7da295f7c8e5f) and main f039f028f2bd5c6e2131b4ffaa4b200c81db68a3 at review; retirement remains unqualified.",
       "id": "HLP-460",
       "kind": "uncertainty"
     },
@@ -4102,7 +4102,7 @@
       },
       "blocking_uncertainty": [
         "Source-only. The reviewed candidate 34a7f1e5678ba78cb011147a7462370e5b7343bb is a maintained-fork branch tip and is not merged into aether-main; the aggregate remains pinned at the already-merged revision 58750d6cf8182c0ff5093719b9e7cc5026621fbf, where tests/hermes_cli/test_kanban_collaboration.py exists from the earlier HLP-334 work. No fork pull request, merge, runtime restart, installed-behavior claim, tag, RC17 or credential change is made by this unit.",
-        "Upstream hermes-agent lacks the ancestor-root helpers, the collaboration-root query and the Aether opt-in corroboration at the inspected revision, the latest released artifact and refreshed upstream main, so retirement is not qualified.",
+        "Upstream hermes-agent lacks the ancestor-root helpers, collaboration-root query and Aether opt-in corroboration at the historical inspected revision, inspected v2026.9.24 release (commit f97608f178d1ffeca59860195ab7da295f7c8e5f) and main f039f028f2bd5c6e2131b4ffaa4b200c81db68a3 at review; retirement remains unqualified.",
         "Full fork test suite and cross-platform/Windows CI are NOT RUN by this unit; the focused 3-file hermetic reproduction above plus the parent unit's independently reviewed RED/GREEN are the whole verification basis."
       ],
       "candidate_requirement": "deferred",
@@ -4115,7 +4115,7 @@
       "id": "HLP-460",
       "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-460--rooted-aether-parentage-maintained-fork-2026-09-27",
       "local_status": "MAINTAINED_FORK_ONLY / UPSTREAM_MISSING",
-      "required_behavior": "New prospective parentage that would give an opted-in Aether flow anything other than its same exact corroborated canonical root is refused inside the native write transaction, with no task row, link, event, subscription or workspace side effect escaping: create_task(parents=[canonical_root, independent_decision]) and link_tasks(independent_decision, child_of_root) both fail atomically, and an edge into the opted-in root or into an ancestor of affected descendants cannot replace that root. Opt-in is corroborated only from the actual connection's own board metadata plus a persisted advisory collaboration event carrying the exact Project/contract/version identity; a lone Aether-looking key, an ambient/default board or a mismatched identity is recognized as malformed and fails closed on parentage that touches it. Generic multi-root Hermes DAGs, valid rootless promotion and legitimate root->decision->unit insertion are unchanged, and a pre-damaged Aether graph still fails review.",
+      "required_behavior": "New prospective parentage that would give an opted-in Aether flow anything other than its same exact corroborated canonical root is refused inside the native write transaction, with no task row, link, event, subscription or workspace side effect escaping: create_task(parents=[canonical_root, independent_decision]) and link_tasks(independent_decision, child_of_root) both fail atomically, and an edge into the opted-in root or into an ancestor of affected descendants cannot replace that root. Opt-in is corroborated only from the actual connection's own board metadata plus a persisted advisory collaboration event carrying the exact Project/contract/version identity; a lone Aether-looking key or ambient/default board cannot establish Aether opt-in, while a persisted Aether opt-in snapshot with mismatched or missing current board identity is a damaged claim whose affected parentage fails closed. Generic multi-root Hermes DAGs, valid rootless promotion and legitimate root->decision->unit insertion are unchanged, and a pre-damaged Aether graph still fails review.",
       "retirement_gate": {
         "evidence": [
           {
@@ -4169,7 +4169,7 @@
           },
           {
             "kind": "source",
-            "reference": "latest released artifact v2026.9.14 (commit 345cd2b057a452236de401d3534b8502a7465e8d) and refreshed upstream main 287c56e95afe5c528beacb7ca8f7ef0ad6216f2a",
+            "reference": "inspected released artifact v2026.9.24 (annotated tag object e3dd27ee2d8b011737a4eea8e3eb3d711ab78690, commit f97608f178d1ffeca59860195ab7da295f7c8e5f) and upstream main f039f028f2bd5c6e2131b4ffaa4b200c81db68a3 at review",
             "result": "Neither upstream revision contains the ancestor-root helpers, the collaboration-root query or the Aether opt-in corroboration, so no upstream equivalent of this atomic parentage guard exists to retire against."
           }
         ],
@@ -4448,7 +4448,7 @@
     "revision": "58750d6cf8182c0ff5093719b9e7cc5026621fbf",
     "unverified": 2
   },
-  "source_ledger_sha256": "44f3c4019b142526a591a3b90b0d36b6a1b1d505e5ca987aa6878881c711247a",
+  "source_ledger_sha256": "f300d1c325a1a8750da9a5106ff7267ad7d9073e66637a0116064868dead6321",
   "upstream": {
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
     "repository": "https://github.com/NousResearch/hermes-agent"

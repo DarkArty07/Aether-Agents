@@ -1,10 +1,10 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-09-27T11:27:30Z`
+Observation timestamp: `2026-09-27T11:39:07Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `44f3c4019b142526a591a3b90b0d36b6a1b1d505e5ca987aa6878881c711247a`
+Source ledger SHA-256: `f300d1c325a1a8750da9a5106ff7267ad7d9073e66637a0116064868dead6321`
 
 ## Remaining local guarantees
 
@@ -176,7 +176,7 @@ Source ledger SHA-256: `44f3c4019b142526a591a3b90b0d36b6a1b1d505e5ca987aa6878881
 - `HLP-435` (uncertainty): The accepted fork candidate retains the pre-existing escaped-quote bypass difference documented against newer upstream and the baseline-shared real-binary test failure; neither is repaired by this patch.
 - `HLP-460` (retirement_gate): Retirement gate status is not_executed.
 - `HLP-460` (uncertainty): Source-only. The reviewed candidate 34a7f1e5678ba78cb011147a7462370e5b7343bb is a maintained-fork branch tip and is not merged into aether-main; the aggregate remains pinned at the already-merged revision 58750d6cf8182c0ff5093719b9e7cc5026621fbf, where tests/hermes_cli/test_kanban_collaboration.py exists from the earlier HLP-334 work. No fork pull request, merge, runtime restart, installed-behavior claim, tag, RC17 or credential change is made by this unit.
-- `HLP-460` (uncertainty): Upstream hermes-agent lacks the ancestor-root helpers, the collaboration-root query and the Aether opt-in corroboration at the inspected revision, the latest released artifact and refreshed upstream main, so retirement is not qualified.
+- `HLP-460` (uncertainty): Upstream hermes-agent lacks the ancestor-root helpers, collaboration-root query and Aether opt-in corroboration at the historical inspected revision, inspected v2026.9.24 release (commit f97608f178d1ffeca59860195ab7da295f7c8e5f) and main f039f028f2bd5c6e2131b4ffaa4b200c81db68a3 at review; retirement remains unqualified.
 - `HLP-460` (uncertainty): Full fork test suite and cross-platform/Windows CI are NOT RUN by this unit; the focused 3-file hermetic reproduction above plus the parent unit's independently reviewed RED/GREEN are the whole verification basis.
 - `HLP-473` (retirement_gate): Retirement gate status is not_executed.
 - `HLP-473` (uncertainty): Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
