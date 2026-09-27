@@ -909,4 +909,4 @@ def test_source_only_fixes_keep_release_selection(identifier: str) -> None:
     assert record["local_status"].startswith("MAINTAINED_FORK_ONLY / ")
     assert record["retirement_gate"]["status"] == "not_executed"
     assert record["artifact_verification"]["status"] == "passed"
-    assert aggregate["selected_source"]["revision"] == "30b4846a2c8063528d491f48950b3b341b0ce7d7"
+    assert aggregate["selected_source"]["revision"] == "58750d6cf8182c0ff5093719b9e7cc5026621fbf"

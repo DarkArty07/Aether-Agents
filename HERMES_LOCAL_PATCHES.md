@@ -83,11 +83,11 @@ This file prevents a Hermes update from silently removing local repairs. An Aeth
 
 ## HLP-475 — Review affinity dispatch (maintained fork, 2026-09-26)
 
-- **Source:** candidate commit `f21c733b800a2dcc8a29639c90e5f84eb7d6278b`, base `30b4846a2c8063528d491f48950b3b341b0ce7d7`.
+- **Source:** fork PR #22, merge `58750d6cf8182c0ff5093719b9e7cc5026621fbf`, reviewed implementation `f21c733b800a2dcc8a29639c90e5f84eb7d6278b`, base `30b4846a2c8063528d491f48950b3b341b0ce7d7`.
 - **Behavior:** dispatch a fresh reviewer under its own profile in the candidate worktree with `affinity=None` and suppressed Supervisor skill/model overrides when a direct-affinity Supervisor card transitions to review under corroborated Aether opt-in and board identity. Preserve persisted card configuration and affinity on disk; restore Supervisor assignee and session on `request_changes`.
 - **Artifact:** `patches/hermes/HLP-475-review-affinity-dispatch.patch`, SHA-256 `63cdbe85e7a29d05b8132629df5f11b3187cf38eb8a1d09c150c76cb2fcd1ff8`; reconstructs the implementation tree `c69e40e7c9f362458833778b89f88430fb9e10c4` against base `30b4846a2c8063528d491f48950b3b341b0ce7d7`.
 - **Evidence:** causal RED (`session affinity lease is missing or stale`) reproduced at unchanged base (73 passed, 1 failed); candidate commit GREEN with 88 passed in `tests/hermes_cli/test_kanban_session_affinity.py` plus 41 regression tests; fail-closed negative matrix, rework/re-review cycle, subprocess argv/env isolation, and untouched outer board in `specs/issue-475-review-affinity/evidence/HLP-475.md`.
-- **Disposition:** candidate implementation in fork worktree `fix/475-review-affinity`; PR, merge, and aggregate re-pin owned by INT-475. Inspected upstream lacks Aether review opt-in corroboration and cross-profile affinity exception.
+- **Disposition:** merged maintained-fork source at `58750d6cf8182c0ff5093719b9e7cc5026621fbf` (tree `25912b5195ae21157fff70e644d0776b9197c48d`); the installed runtime remains on its prior pin, so runtime adoption is deferred. Inspected upstream lacks Aether review opt-in corroboration and cross-profile affinity exception.
 - **Rollback/retirement:** reverse the patch or revert the implementation commit; retire only after an adopted upstream release supports cross-profile review dispatch on affinity-bound cards or native review delegation without lease corruption.
 
 ## HLP-188 — sticky `initial_status=blocked`

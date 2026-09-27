@@ -60,7 +60,7 @@
   },
   "retirement_recommendation": "retain",
   "blocking_uncertainty": [
-    "Source-only. Pinned at 30b4846a2c8063528d491f48950b3b341b0ce7d7. Declared paths can exist at that pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified."
+    "Source-only. Selected maintained-fork revision 58750d6cf8182c0ff5093719b9e7cc5026621fbf contains the reviewed fix; installed runtime remains unchanged. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified."
   ],
-  "summary": "Base 30b4846a2c8063528d491f48950b3b341b0ce7d7; candidate implementation f21c733b800a2dcc8a29639c90e5f84eb7d6278b; reviewed implementation tree c69e40e7c9f362458833778b89f88430fb9e10c4. Source-only. Pinned at 30b4846a2c8063528d491f48950b3b341b0ce7d7. Declared paths exist at that pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified."
+  "summary": "Base 30b4846a2c8063528d491f48950b3b341b0ce7d7; reviewed implementation f21c733b800a2dcc8a29639c90e5f84eb7d6278b; implementation tree c69e40e7c9f362458833778b89f88430fb9e10c4; maintained-fork PR #22 merged at 58750d6cf8182c0ff5093719b9e7cc5026621fbf. Source-only. Selected fork source is merged; installed runtime remains unchanged. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified."
 }
