@@ -24,9 +24,11 @@ anchors the kanban roots on that native home (the operator's live root), never o
 ``HERMES_HOME`` itself.  It also models which board a writer resolves —
 ``kanban_db_path()`` and ``workspaces_root()`` anchor on the active board, selected by
 ``HERMES_KANBAN_BOARD`` then the persisted ``<kanban_home>/kanban/current`` file, so a
-named board outside the declared private roots is reported instead of waved through.  When
-a mapping cannot show which branch or board applies, the anchored roots are refused as
-unresolved instead of guessed.
+named board outside the declared private roots is reported instead of waved through.
+That model uses the native ``board_exists()`` existence test — an entry merely ``exists()``
+— so a persisted board with non-regular metadata cannot fall through to a
+different-looking board.  When a mapping cannot show which branch or board applies, the
+anchored roots are refused as unresolved instead of guessed.
 
 This module is behavior, not authority: it neither grants permissions nor replaces the
 native lifecycle.
@@ -261,11 +263,17 @@ def _normalized_board_slug(value: object) -> str | None:
 
 
 def _board_resolves(candidate: str, kanban_root: Path) -> bool:
-    """Model ``board_exists``: board metadata or a database on disk under the root."""
+    """Model ``board_exists``: board metadata or a database on disk under the root.
 
+    Native uses ``Path.exists()``, not ``is_file()``: a persisted board whose
+    ``board.json``/``kanban.db`` is a directory, a fifo or another non-regular entry
+    still resolves, and must not fall through to a different (contained-looking) board.
+    An unreadable entry is reported as non-resolving, which is the conservative reading
+    of a board this laboratory cannot inspect.
+    """
     directory = kanban_root / "kanban" / "boards" / candidate
     try:
-        return (directory / "board.json").is_file() or (directory / "kanban.db").is_file()
+        return (directory / "board.json").exists() or (directory / "kanban.db").exists()
     except OSError:
         return False
 

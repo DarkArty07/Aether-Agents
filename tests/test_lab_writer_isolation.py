@@ -966,3 +966,285 @@ def test_no_owned_writer_reaches_an_active_board_escaping_the_declared_roots(
         )
 
     assert _witness(escaped_db) == witness_digests["before"]
+
+
+def _malformed_metadata_named_board(run_root: Path, outside: Path, slug: str) -> None:
+    """Create an active board whose metadata is a directory, not a file.
+
+    ``board_exists`` uses ``.exists()``, so a ``board.json`` *directory* (or a
+    ``kanban.db`` directory) still makes native select that board.  The laboratory
+    declares ``run_root``/``run_root/hermes-home`` private; the board's real location
+    is outside them, so native resolves the database and workspaces outside too.
+    """
+
+    boards = run_root / "kanban" / "boards"
+    boards.mkdir(parents=True, exist_ok=True)
+    escaped = outside / "boards" / slug
+    escaped.mkdir(parents=True, exist_ok=True)
+    (escaped / "board.json").mkdir()
+    (escaped / "kanban.db").mkdir()
+    (boards / slug).symlink_to(escaped, target_is_directory=True)
+    (run_root / "kanban" / "current").write_text(f"{slug}\n", encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "selector",
+    [{"HERMES_KANBAN_BOARD": "oc-escape"}, {}],
+    ids=("hermes_kanban_board_env", "kanban_current_file"),
+)
+def test_board_existence_matches_native_for_malformed_metadata(
+    tmp_path: Path, selector: dict[str, str]
+) -> None:
+    """``_board_resolves`` must agree with ``board_exists`` on non-regular metadata.
+
+    ``board_exists`` reports a board as existing when its ``board.json`` *or*
+    ``kanban.db`` merely ``exists()``; the derived model required a regular file.  With
+    the active board's metadata stored as directories — still a persisted board —
+    ``get_current_board`` selects it and anchors the database and workspaces outside the
+    declared roots, while the derived form fell back to ``default`` inside them and the
+    gate then waved the context through.
+    """
+
+    if importlib.util.find_spec("hermes_cli") is None:
+        pytest.skip("native Hermes modules are unavailable to this interpreter")
+
+    from aether_agents.lab import isolation
+
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    hermes_root = run_root / "hermes-home"
+    hermes_root.mkdir()
+    (run_root / "kanban.db").write_bytes(b"")
+    _malformed_metadata_named_board(run_root, tmp_path / "outside", "oc-escape")
+
+    private = [run_root, hermes_root]
+    env = {name: value for name, value in isolation.scrub_inherited_identity(os.environ).items()}
+    env.update(
+        {
+            "HOME": str(tmp_path),
+            "HERMES_HOME": str(hermes_root),
+            "HERMES_KANBAN_HOME": str(run_root),
+        }
+    )
+    env.pop("HERMES_KANBAN_DB", None)
+    env.update(selector)
+
+    derived = isolation.resolve_writer_roots(env, native=False)
+    complete, native = isolation.probe_child_writer_roots(Path(sys.executable), env, cwd=tmp_path)
+    assert complete is True, "native probe did not resolve every root"
+
+    derived_problems = isolation.writer_root_problems(derived, private_roots=private)
+    native_problems = isolation.writer_root_problems(native, private_roots=private)
+    assert derived_problems == native_problems, (
+        f"derived={derived_problems} native={native_problems}"
+    )
+    assert derived_problems == ["kanban_db-escape", "workspaces_root-escape"], (
+        f"the board native actually resolves was not refused: {derived_problems}"
+    )
+    with pytest.raises(lab.HarnessError, match="escape"):
+        isolation.verify_writer_context(derived, private_roots=private)
+    with pytest.raises(lab.HarnessError, match="escape"):
+        isolation.require_verified_writer_context(
+            run_root=run_root, hermes_root=hermes_root, environ=env
+        )
+
+
+def test_non_resolving_selectors_still_fall_through_to_the_default_board(
+    tmp_path: Path,
+) -> None:
+    """Existence parity must not turn an absent or stale board into a blanket refusal.
+
+    ``board_exists`` is the selector's existence test: a slug whose board has neither
+    metadata nor a database does not resolve, exactly as before the correction.  The
+    active board then falls through to ``default`` (``<kanban_home>/kanban.db`` and
+    ``<kanban_home>/kanban/workspaces``), and the derived form agrees with native.
+    """
+
+    if importlib.util.find_spec("hermes_cli") is None:
+        pytest.skip("native Hermes modules are unavailable to this interpreter")
+
+    from aether_agents.lab import isolation
+
+    for selector, source in (
+        ("oc-absent", "HERMES_KANBAN_BOARD"),
+        ("oc-absent", "current"),
+    ):
+        run_root = tmp_path / f"run-{selector}-{source}"
+        run_root.mkdir()
+        hermes_root = run_root / "hermes-home"
+        hermes_root.mkdir()
+        (run_root / "kanban.db").write_bytes(b"")
+        (run_root / "kanban" / "boards").mkdir(parents=True)
+        if source == "current":
+            (run_root / "kanban" / "current").write_text(f"{selector}\n", encoding="utf-8")
+        # The board directory exists but holds neither metadata nor a database.
+        (run_root / "kanban" / "boards" / selector).mkdir()
+
+        private = [run_root, hermes_root]
+        env = {
+            name: value for name, value in isolation.scrub_inherited_identity(os.environ).items()
+        }
+        env.update(
+            {
+                "HOME": str(tmp_path),
+                "HERMES_HOME": str(hermes_root),
+                "HERMES_KANBAN_HOME": str(run_root),
+            }
+        )
+        env.pop("HERMES_KANBAN_DB", None)
+        if source == "HERMES_KANBAN_BOARD":
+            env["HERMES_KANBAN_BOARD"] = selector
+
+        derived = isolation.resolve_writer_roots(env, native=False)
+        assert not isolation._board_resolves(selector, run_root)
+        assert Path(str(derived["kanban_db"])).resolve() == (run_root / "kanban.db").resolve()
+        assert (
+            Path(str(derived["workspaces_root"])).resolve()
+            == (run_root / "kanban" / "workspaces").resolve()
+        )
+        complete, native = isolation.probe_child_writer_roots(
+            Path(sys.executable), env, cwd=tmp_path
+        )
+        assert complete is True
+        assert isolation.writer_root_problems(derived, private_roots=private) == []
+        assert isolation.writer_root_problems(native, private_roots=private) == []
+        isolation.verify_writer_context(derived, private_roots=private)
+
+
+def test_explicit_database_pin_outranks_the_malformed_active_board(tmp_path: Path) -> None:
+    """Native ``HERMES_KANBAN_DB`` precedence survives the existence correction."""
+
+    if importlib.util.find_spec("hermes_cli") is None:
+        pytest.skip("native Hermes modules are unavailable to this interpreter")
+
+    from aether_agents.lab import isolation
+
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    hermes_root = run_root / "hermes-home"
+    hermes_root.mkdir()
+    _malformed_metadata_named_board(run_root, tmp_path / "outside", "oc-escape")
+
+    private = [run_root, hermes_root]
+    env = {name: value for name, value in isolation.scrub_inherited_identity(os.environ).items()}
+    env.update(
+        {
+            "HOME": str(tmp_path),
+            "HERMES_HOME": str(hermes_root),
+            "HERMES_KANBAN_HOME": str(run_root),
+        }
+    )
+    pinned = run_root / "pinned.db"
+    pinned.write_bytes(b"")
+    env["HERMES_KANBAN_DB"] = str(pinned)
+
+    derived = isolation.resolve_writer_roots(env, native=False)
+    assert Path(str(derived["kanban_db"])) == pinned, "the explicit pin lost to the board branch"
+    complete, native = isolation.probe_child_writer_roots(Path(sys.executable), env, cwd=tmp_path)
+    assert complete is True
+    # The pin outranks the board branch for the database only: ``workspaces_root``
+    # still anchors on the active board, so that root's own override stays responsible.
+    assert (
+        Path(str(derived["workspaces_root"])).resolve()
+        == Path(str(native["workspaces_root"])).resolve()
+    )
+    with pytest.raises(lab.HarnessError, match="workspaces_root-escape"):
+        isolation.verify_writer_context(derived, private_roots=private)
+
+    # With the workspaces pin present too, the disposable context verifies.
+    env["HERMES_KANBAN_WORKSPACES_ROOT"] = str(run_root / "worktrees")
+    (run_root / "worktrees").mkdir()
+    receipt = isolation.require_verified_writer_context(
+        run_root=run_root, hermes_root=hermes_root, environ=env
+    )
+    assert receipt["child_probe"] == "unavailable"
+    assert (
+        isolation.writer_root_problems(
+            isolation.resolve_writer_roots(env, native=False), private_roots=private
+        )
+        == []
+    )
+
+
+def test_no_owned_writer_reaches_a_malformed_active_board_escaping_the_declared_roots(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each write-capable helper refuses a board with non-regular metadata outside.
+
+    The same escaping shape reaches the writer entry points.  With no interpreter
+    available to probe, the gate falls back to the environment-derived form, which
+    must refuse before the first native writer and leave the escaping board's
+    database directory untouched.
+    """
+
+    if importlib.util.find_spec("hermes_cli") is None:
+        pytest.skip("native Hermes modules are unavailable to this interpreter")
+
+    from aether_agents.lab import isolation
+
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    hermes_root = run_root / "hermes-home"
+    hermes_root.mkdir()
+    _malformed_metadata_named_board(run_root, tmp_path / "outside", "oc-escape")
+    escaped_dir = (run_root / "kanban" / "boards" / "oc-escape" / "kanban.db").resolve()
+    witness = sorted(str(path) for path in escaped_dir.rglob("*"))
+
+    # The provisioned interpreter cannot resolve the native roots here, so the gate
+    # verifies the environment-derived form: the fallback must be the safety net.
+    monkeypatch.setattr(isolation, "probe_child_writer_roots", lambda *a, **k: (False, {}))
+
+    hermes = _fake_hermes(tmp_path / "hermes", marker=tmp_path / "DISPATCH_INVOKED")
+    env = lab.isolated_hermes_env(run_root, hermes_root, hermes)
+    env.pop("HERMES_KANBAN_DB", None)
+    env["HERMES_KANBAN_HOME"] = str(run_root)
+
+    with pytest.raises(lab.HarnessError, match="escape"):
+        dispatch.dispatch_until_settled(
+            hermes,
+            cwd=tmp_path,
+            env=env,
+            commands_log=tmp_path / "commands.jsonl",
+            evidence_dir=tmp_path / "evidence",
+            max_passes=1,
+            timeout_seconds=5,
+            run_root=run_root,
+            hermes_root=hermes_root,
+        )
+    assert not (tmp_path / "DISPATCH_INVOKED").exists()
+
+    session_marker = tmp_path / "SESSION_INVOKED.ran"
+    script = tmp_path / "session.py"
+    script.write_text(_SESSION_CHILD, encoding="utf-8")
+    with pytest.raises(lab.HarnessError, match="escape"):
+        persistent.run_persistent_session(
+            [sys.executable, str(script), str(session_marker)],
+            owner_message="one owner message",
+            env=env,
+            run_root=run_root,
+            hermes_root=hermes_root,
+            timeout_seconds=2,
+            poll_seconds=0.02,
+        )
+    assert not session_marker.exists()
+
+    with pytest.raises(lab.HarnessError, match="escape"):
+        runner._observe_native_affinity_controls(
+            board=run_root / "kanban.db",
+            supervisor_db=tmp_path / "supervisor.db",
+            implementer_db=tmp_path / "implementer.db",
+            flow_id="test-flow",
+            project_id="test-project",
+            first_session_id=None,
+            resumed_session_id=None,
+            first_generation=1,
+            workspace_path=str(tmp_path / "worktrees" / "worker"),
+            hermes_home=hermes_root,
+            hermes=Path(sys.executable),
+            task_id=None,
+            env=env,
+        )
+
+    assert sorted(str(path) for path in escaped_dir.rglob("*")) == witness, (
+        "the escaping board's database directory was written"
+    )
