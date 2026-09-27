@@ -2212,6 +2212,21 @@ def test_rc12_reader_accepts_rc14_schema5_and_activates_forward(
     records = [
         json.loads(path.read_text(encoding="utf-8")) for path in sorted(entries.glob("HLP-*.json"))
     ]
+    # This historical transition exercises RC14's deferred HLP-433 case, not the
+    # current release's selection policy. RC17 requires HLP-433; keep the old
+    # scenario explicit and confined instead of weakening the current ledger.
+    from shutil import copy2, copytree
+
+    fixture_root = tmp_path / "rc14-reconciliation"
+    fixture_root.mkdir()
+    copy2(repo / "HERMES_LOCAL_PATCHES.md", fixture_root / "HERMES_LOCAL_PATCHES.md")
+    copytree(repo / "patches", fixture_root / "patches")
+    fixture_entries = fixture_root / "entries"
+    fixture_entries.mkdir()
+    for record in records:
+        if record["id"] == "HLP-433":
+            record["candidate_requirement"] = "deferred"
+        (fixture_entries / f"{record['id']}.json").write_text(json.dumps(record), encoding="utf-8")
     fork = tmp_path / "fork"
     fork.mkdir()
     _git(fork, "init", "-q", "-b", "aether-main")
@@ -2234,9 +2249,11 @@ def test_rc12_reader_accepts_rc14_schema5_and_activates_forward(
             sys.executable,
             str(repo / "scripts" / "validate_hermes_patch_reconciliation.py"),
             "--root",
-            str(repo),
+            str(fixture_root),
             "--candidate-check",
             "--json",
+            "--entries-dir",
+            str(fixture_entries),
             "--selected-revision",
             revision,
             "--fork-checkout",
