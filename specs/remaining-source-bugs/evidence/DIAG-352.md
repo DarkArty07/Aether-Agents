@@ -10,7 +10,8 @@ green runs and did **not** repeat them, per `plan.md` §"#352 and #444 — bound
 diagnosis" and the contract's stop conditions. Instead it inspected current source and
 history for a concrete clue, then executed **one** focused discriminating check with a
 **proven-to-fail negative control**. No causal product or fixture defect was reproduced, so
-no correction was made. Nothing was committed: this is an evidence-only diagnosis.
+no correction was made. Only this evidence file was committed; no product or fixture
+source was changed.
 
 Unit compatibility impact: `none` (diagnosis only; `src/aether_agents/lifecycle.py` and
 `tests/test_observation_lifecycle.py` are byte-unchanged from the base commit).
@@ -21,8 +22,9 @@ Unit compatibility impact: `none` (diagnosis only; `src/aether_agents/lifecycle.
 - Contract SHA-256: `2b10b433911293a00879aba0c48d24c895012b79ccbb5e0bb9a91c60bd1adfa0`
   (recomputed from `.aether/objective-contracts/oc_3f280963213d234e/v1.md` at run time)
 - Aether base: `8721f54b9a2d3be4638812f5fd660800ed07bd41`
-- Candidate revision for this diagnosis: `8721f54b9a2d3be4638812f5fd660800ed07bd41`
-  (evidence file only; no source delta)
+- Source revision examined: `8721f54b9a2d3be4638812f5fd660800ed07bd41`.
+- Evidence-file commit: `5ece4f76af71325b487e6dee15edcb9a6c67d7c5`
+  (no product or fixture source delta).
 - Supervisor breakdown: `dabeeb6af25d18d3e2dc7307673159d418c49ac0`
 - Changed files in this unit: this evidence file only.
 - Issue source: https://github.com/DarkArty07/Aether-Agents/issues/352 (observed `OPEN`
@@ -63,7 +65,9 @@ Relevant source anchors (HEAD):
 `git show ba100d1470ee79e7f7de60e53a5f4f4c8e8098e7:tests/test_observation_lifecycle.py`
 lines 2690-2743 are byte-identical to HEAD lines 3023-3076. The FU-352 1/1, 20/20
 sequential and 16/16 bounded-concurrent passes therefore describe **this** fixture.
-`src/aether_agents/lifecycle.py` is **not** byte-identical: the critical section is.
+`src/aether_agents/lifecycle.py` is **not** byte-identical. The relevant critical
+section now calls `_target_active_payload`, so the older green runs do not cover
+its current implementation even though the named fixture body is unchanged.
 
 ## Concrete current-source clue (found by inspection, not by rerunning the green test)
 
@@ -128,12 +132,14 @@ Established (direct, this unit, current source):
 1. On the current source, the named test's critical section meets its **unchanged** 10 s
    deadline by roughly two orders of magnitude (max observed 0.1263 s of 10 s) in an idle
    environment, and preserves the one-commit / one-`ACTIVE_RELEASE_CAS_MISMATCH` invariant.
-2. A product refusal raised **inside the cross-process mutation lock at the newest
-   post-qualification seam** still results in both children publishing a queue result and
-   both exiting 0. The lifecycle lock, the CAS check, the transition journals, and
-   `_target_active_payload` record semantics therefore **cannot** be the cause of a missing
-   `results.get` value: `_run_cas_transition` funnels every exception from the whole locked
-   critical section into `results.put(outcome)`.
+2. In the injected non-`IntegrityError` case **inside the cross-process mutation lock at
+   the newest post-qualification seam**, both children published a queue result and
+   exited 0 in six idle-context trials. The current helper catches exceptions raised
+   within its `try` block and attempts `results.put(outcome)` afterward. These trials
+   do not exclude a lock stall beyond the deadline, an exception before that `try`
+   (`ReleaseStore` construction, `ready.set` or `start.wait`), process termination,
+   or a delayed/failed queue publication. No component is eliminated as the historical
+   cause without the missing failure-time stage and exit evidence.
 
 Not established (and cannot be established on this machine with the retained evidence):
 
@@ -145,12 +151,10 @@ Not established (and cannot be established on this machine with the retained evi
    captured it, and no later recurrence has been recorded. The named test has no
    per-stage instrumentation upstream, and none was added (adding it would be a fixture
    change this unit is not authorized to make without a causal RED).
-5. The remaining candidate causes identified by inspection — a child process hard death
-   (SIGKILL / OOM-kill), an unblockable stall inside the child, or a queue flush failure at
-   child teardown — are all **outside** the lifecycle product surface. The first two are
-   outside the product surface and the unit's writable files; the third is CPython
-   `multiprocessing.queues.Queue FeederThread` teardown, outside `src/aether_agents`
-   entirely.
+5. A child process hard death, lock/child stall, or queue publication/flush delay are
+   **unresolved hypotheses**, not an exhaustive list or a determination that the
+   lifecycle product surface is uninvolved. This unit did not establish which mechanism
+   occurred in the historical full-suite failure.
 
 ## Exact residual question (the next investigation's target)
 
@@ -188,18 +192,19 @@ plus this unit's Arm A 10/10 and Arm B 6/6).
 | Patch whitespace | `git diff --check` | Passed; no trailing whitespace or blank-line-at-EOF defects |
 
 NOT RUN in this unit (declared, not claimed): full canonical runner, affected-module
-90-test run, MyPy across `src/aether_agents`, documentation gate, public-artifact scan, the
-stress/concurrent repetitions, and any live-board/profile/runtime/resource effect.
+90-test run, MyPy across `src/aether_agents`, stress/concurrent repetitions, and any
+live-board/profile/runtime/resource effect. The documentation gate was run (above);
+the public-artifact scan was reported in the unit's review handoff, not in this table.
 `scripts/run_tests.sh` does not exist in this repository; the Aether wrapper is
 `scripts/run_tests.py`, which is what the exact-Hermes invocations above used.
 
 ## Remaining risk
 
-- The historical mechanism is uncharacterized. This unit has narrowed it to "not the
-  lifecycle lock, CAS, transition journals, or `_target_active_payload` record semantics;
-  and not a full critical-section latency on an idle machine" — but has **not** narrowed it
-  further, because the discriminating observation (a recurrence with per-stage capture) does
-  not exist.
+- The historical mechanism is uncharacterized. This unit observed a short critical
+  section and successful publication from an injected exception at one seam in an idle
+  environment. Neither result excludes a lifecycle stall, exception before the helper's
+  `try`, child failure or queue delay in the failing full-suite context. The required
+  discriminating observation (a recurrence with per-stage capture) does not exist.
 - The probe's environment (idle, 24-core, CPython 3.13.15, not inside a full pytest process)
   differs from the historical failure's environment. Load-sensitive starvation remains a
   live hypothesis that this unit cannot test without repeating the full-suite campaign the
@@ -207,3 +212,20 @@ stress/concurrent repetitions, and any live-board/profile/runtime/resource effec
 - No live profile, board, database, provider, credential, activation, publication, push,
   PR, merge, or issue mutation was performed. No Objective Contract or plan file was
   created, copied, staged, committed or modified.
+
+## Supervisor review correction
+
+The original evidence candidate was commit `5ece4f76af71325b487e6dee15edcb9a6c67d7c5`.
+In same-card review, Supervisor independently inspected the unchanged fixture and
+lifecycle source, and ran the named test once on the candidate (`1 passed in 1.92s`).
+Supervisor then made a bounded **documentation-only correction**: the original text
+incorrectly said nothing had been committed, listed a passing documentation check as
+NOT RUN, called a changed critical section identical, and inferred from idle fault
+injection that lifecycle code could not cause a missing queue result. The final text
+limits that conclusion to what the worker-reported probe observed; it does not certify
+those probe measurements independently or claim the historical flake is fixed.
+After the correction, `scripts/check_documentation.py`,
+`scripts/check_public_artifacts.py --root .` and `git diff --check` all passed.
+This verification of the Supervisor-authored delta is **not** an independent review
+of that delta. The #352 issue remains OPEN. Unit conclusions: `release_impact=none`,
+`release_action=defer`, `release_channel=none`.
