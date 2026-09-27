@@ -457,10 +457,7 @@ def native_disposition(event: dict[str, Any]) -> tuple[Any, ...]:
         return ("tool", event_type, tool.get("name"), tool.get("category"))
     if event_type == "run.started":
         unit = event.get("work_unit") or {}
-        # The hook and the later native row describe the same run start, but only
-        # the row can carry the task's current status. That mutable task snapshot
-        # is not a disposition of the run.started fact.
-        return ("run", event_type, unit.get("run_status"))
+        return ("run", event_type, unit.get("task_status"), unit.get("run_status"))
     if event_type == "work_unit.status":
         unit = event.get("work_unit") or {}
         return (

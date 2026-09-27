@@ -2251,17 +2251,6 @@ class _Observer:
                     ),
                     state_event,
                 )
-                task_session = native_pseudonym_ref(task.get("session_id"), kind="session")
-                if not collector.ensure_trace_opened(
-                    trace_id,
-                    session_lineage=(task_session,) if task_session else (),
-                    materialized_at=occurred_at,
-                    materialization_ref=binding_ref(trace_id, task_id),
-                    source_kind="native_reconciliation",
-                    source_hook="kanban_read",
-                ):
-                    continue
-
             current_task = native_kanban_task_ref(os.environ.get("HERMES_KANBAN_TASK"))
             if current_task is not None:
                 current_trace = collector.binder.trace_for(current_task)
