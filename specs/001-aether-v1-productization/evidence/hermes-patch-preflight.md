@@ -1,10 +1,10 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-09-27T02:55:00Z`
+Observation timestamp: `2026-09-27T03:40:48Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `deee36e56994814ed81bc7db0733c586906be9f27cbfa32eb2c4208eadd43df0`
+Source ledger SHA-256: `f222788717a9b42928f940699f12728feaf142067dcc1b271a23865d897bc6af`
 
 ## Remaining local guarantees
 
@@ -44,7 +44,7 @@ Source ledger SHA-256: `deee36e56994814ed81bc7db0733c586906be9f27cbfa32eb2c4208e
 - `HLP-435`: HLP-435 corrects the two observed normalized-only quote imbalances in maintained-fork source. PR #19 merged as b287195d63d47d73788653bdd012c2fbfe00c0ac with tree identical to reviewed f459cfa0. Keep deferred at unchanged RC16 pin 58f8c37a49b341f25b8fdd6310542fe932031b8d; no RC17, runtime adoption or upstream retirement is claimed.
 - `HLP-473`: Base 54abacd1c38ce6300997289628fe2f2a7569df18; implementation c81053679cd57a24f5a7a6c93b6cd450eee47343; reviewed implementation tree 49189104a6888ef604ff0733d97b6b05e25b0d33; merged source 30b4846a2c8063528d491f48950b3b341b0ce7d7 (fork PR #21). Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
 - `HLP-474`: Base b287195d63d47d73788653bdd012c2fbfe00c0ac; implementation 7755f82df15786285378732ef17544b4736c4b81; reviewed implementation tree 105071996d00bfbb361771d82d0863552380fccb; merged source 54abacd1c38ce6300997289628fe2f2a7569df18 (fork PR #20). Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
-- `HLP-475`: Base 30b4846a2c8063528d491f48950b3b341b0ce7d7; candidate implementation f21c733b800a2dcc8a29639c90e5f84eb7d6278b; reviewed implementation tree c69e40e7c9f362458833778b89f88430fb9e10c4. Source-only. Pinned at 30b4846a2c8063528d491f48950b3b341b0ce7d7. Declared paths exist at that pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
+- `HLP-475`: Base 30b4846a2c8063528d491f48950b3b341b0ce7d7; reviewed implementation f21c733b800a2dcc8a29639c90e5f84eb7d6278b; implementation tree c69e40e7c9f362458833778b89f88430fb9e10c4; maintained-fork PR #22 merged at 58750d6cf8182c0ff5093719b9e7cc5026621fbf. Source-only. Selected fork source is merged; installed runtime remains unchanged. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
 
 ## Qualified upstream equivalents
 
@@ -178,7 +178,7 @@ Source ledger SHA-256: `deee36e56994814ed81bc7db0733c586906be9f27cbfa32eb2c4208e
 - `HLP-474` (retirement_gate): Retirement gate status is not_executed.
 - `HLP-474` (uncertainty): Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
 - `HLP-475` (retirement_gate): Retirement gate status is not_executed.
-- `HLP-475` (uncertainty): Source-only. Pinned at 30b4846a2c8063528d491f48950b3b341b0ce7d7. Declared paths can exist at that pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
+- `HLP-475` (uncertainty): Source-only. Selected maintained-fork revision 58750d6cf8182c0ff5093719b9e7cc5026621fbf contains the reviewed fix; installed runtime remains unchanged. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
 
 ## Artifact integrity
 
@@ -222,7 +222,7 @@ Source ledger SHA-256: `deee36e56994814ed81bc7db0733c586906be9f27cbfa32eb2c4208e
 
 ## Selected maintained-fork source
 
-Selected source: `https://github.com/DarkArty07/aether-hermes@30b4846a2c8063528d491f48950b3b341b0ce7d7` (presence resolved from a checkout: `true`)
+Selected source: `https://github.com/DarkArty07/aether-hermes@58750d6cf8182c0ff5093719b9e7cc5026621fbf` (presence resolved from a checkout: `true`)
 
 | Verdict | Entries |
 | --- | --- |
