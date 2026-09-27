@@ -1,7 +1,7 @@
 ---
 name: supervisor-decomposition
 description: Use when Supervisor decomposes or reviews units.
-version: 0.1.5
+version: 0.1.6
 author: Morfeo (Aether role), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -64,6 +64,8 @@ current limits and authority as constraints, not settings to tune during decompo
    Identify shared writable files; concurrent edits to the same file are not independent
    under the current Aether policy. Split behavior at an already agreed boundary or
    serialize the conflict; do not redesign a module just to make the graph look parallel.
+   Identify consumers of shared workspaces or large intermediate artifacts in the same
+   breakdown; a done parent does not release a path still used by a `dir` child.
 4. **Find useful parallelism.** Mark units independent only when prerequisites,
    interfaces and file ownership permit separate implementation and tests. Explain a
    materially concentrated unit's non-splittable dependency or collision, not merely
@@ -109,6 +111,11 @@ current limits and authority as constraints, not settings to tune during decompo
    when the trusted runtime graph explicitly supplies it. The terminal integration
    card consumes reviewed units; it does not replace unit review. Integrate and close
    out under existing procedures, preserving accepted commits and release conclusions.
+   Apply the Workspace and temporary-storage hygiene section of `git-github-closeout`
+   during your own review/integration as well as at closeout. Retire unneeded temporary
+   copies promptly; retire worktrees only after their dependencies and evidence gates
+   are satisfied. Reconcile workers' retained-path notes and report specific exceptions
+   in the existing terminal handoff, without a separate cleanup task or registry.
    A write-capable probe refuses destinations outside its disposable roots before the first
    writer. Apply the accidental-mutation procedure below if isolation fails.
 

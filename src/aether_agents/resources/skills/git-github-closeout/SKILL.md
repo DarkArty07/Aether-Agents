@@ -1,7 +1,7 @@
 ---
 name: git-github-closeout
-description: Close authorized GitHub work with verified evidence.
-version: 0.1.0
+description: Close GitHub work and manage owned temporary storage.
+version: 0.1.1
 author: Christopher, Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -14,7 +14,8 @@ metadata:
 # Git/GitHub Closeout Skill
 
 Use this procedure for an owner-authorized GitHub-backed objective that must reach a
-verified terminal repository state. It describes reusable closeout mechanics only; the
+verified terminal repository state, or its local hygiene subprocedure during authorized
+work. It describes reusable closeout and storage-hygiene mechanics only; the
 current owner instruction, Objective Contract, repository rules, and protected-effect
 policy decide whether an effect is allowed. This skill cannot grant authority.
 
@@ -23,6 +24,9 @@ policy decide whether an effect is allowed. This skill cannot grant authority.
 - Use when acceptance is complete and the authorized objective requires a GitHub PR or
   terminal repository closeout.
 - Use for normal branch, PR, required-check, merge, issue, milestone, and cleanup work.
+- All three roles may use the Workspace and temporary-storage hygiene section during
+  authorized work, before terminal closeout. That local subprocedure neither requires
+  GitHub publication nor grants Implementer any publication or integration authority.
 - Do not use for choosing SemVer impact, release action, or release channel; use the
   SemVer/release procedure for that decision.
 - Do not use for credentials, repository settings, force operations, bypassing checks,
@@ -35,6 +39,10 @@ policy decide whether an effect is allowed. This skill cannot grant authority.
 - Repository guidance and applicable project canonical skills have been read.
 - GitHub authentication is already provisioned; never acquire, widen, or expose it.
 - A clean-enough working tree and the required local verification commands are known.
+
+For local temporary-storage hygiene alone, apply ownership, preservation and workspace
+checks; do not require GitHub authentication or a completed objective merely to retire
+an unneeded disposable intermediate.
 
 ## How to Run
 
@@ -80,10 +88,65 @@ corresponding external step. Keep all evidence redacted and project-relative.
    authorized. Remove all objective-owned merged child/root branches and worktrees
    identified by the audit. Preserve active, unmerged, blocked, review-active, concurrent,
    unknown, unrelated, and pre-existing branches, worktrees, stashes, and processes; report
-   preserved residue separately.
+   preserved residue separately. Use the checks below, including shared `dir` children.
+   Apply only the evidence gates relevant to the actual route: no board or PR is invented
+   for direct local work that did not require one.
 10. Report the terminal result from Git, GitHub, board, and test state. Include the
     commit, PR/check result, issue disposition, cleanup audit, omissions, and residual
     risk; local integration alone is not closure.
+
+## Workspace and temporary-storage hygiene
+
+This is an instruction-level responsibility using existing tools, not a runtime collector.
+Each role owns the disposable resources it creates; Morfeo owns direct-route worktree
+retirement and Supervisor owns terminal pipeline retirement. Keep only the necessary
+path/consumer notes in existing working context or handoff; do not add a registry or card.
+
+1. **Check the destination before growth.** Before a large clone, extraction, build,
+   test batch or repeated attempt, inspect available capacity on the filesystem actually
+   receiving the data, including the configured temporary root. `/tmp` may be a bounded
+   memory-backed filesystem independent of the repository disk. Prefer existing usable
+   checkouts/caches over redundant copies where that preserves isolation. If space is
+   inadequate, reclaim only your eligible residue or choose an already permitted
+   destination with enough capacity; do not expand a mount, move a shared temp root or
+   purge global caches as an implicit repair.
+2. **Bound the lifetime at creation.** Use a unique owned temporary directory and the
+   host's normal scoped cleanup facility (for example a temporary-directory context or
+   a finally/exit cleanup for that exact directory). Keep deliverables out of disposable
+   storage or transfer them to their durable destination before cleanup. Avoid repeated
+   full clones or environments when the same isolated copy is still usable.
+3. **Retire intermediates promptly.** After the creating operation or its last consumer
+   finishes, preserve the needed result, evidence and failure diagnosis, then remove
+   unneeded owned copies, extracted archives and build/test environments. Do not wait for
+   the whole project or release to finish. A failure justifies retaining the material
+   needed to diagnose/reproduce it, not every cache by default. Keep review inputs and
+   unique uncommitted data; list any necessary leftover and who/what still needs it.
+4. **Audit a worktree before retirement.** Bind its exact repository, path, branch and
+   relevant board references. Inspect Git status including untracked files, retained
+   commits/artifacts, nested repositories/worktrees and actual process use (including
+   CWDs and open files). Check every consumer sharing the path, especially nonterminal
+   `dir` children and active reviewers. Preserve source branches until their own gate is
+   satisfied: removing a worktree directory is not permission to delete history. An idle
+   shell is not a worker, but do not delete its CWD or terminate it implicitly. A stale
+   running/blocked card is not proof of liveness; neither does a merged PR authorize
+   marking that card done or abandoning its remaining obligation.
+5. **Remove and verify only the audited set.** Recheck concurrent consumers immediately
+   before removal, leave the target CWD, and use ordinary `git worktree remove` for
+   worktrees (including any nested worktree's own Git registration), not recursive raw
+   deletion. If Git refuses, inspect the reason instead of adding force. Delete only the
+   exact owned disposable directories already shown to contain no needed data or active
+   consumers. Confirm removal and reclaimed capacity; report retained paths with their
+   reason and condition for removing them, not a blanket "cleanup done".
+6. **Resume without accumulating.** After interruption or on resumption, recheck the
+   owned leftovers named in existing continuity against current sources. Reclaim those
+   now eligible before creating replacements. Unknown or historical nonterminal work
+   requires reconciliation with its owning objective, not deletion by age or inference.
+
+Never sweep an entire shared temporary root, infer ownership from a filename prefix or
+age alone, or remove other sessions' data. Required logs, board rows, durable evidence,
+credentials, active releases and rollback backups are not disposable intermediates.
+Historical-residue cleanup is separately scoped; these instructions do not abandon old
+contracts or introduce a new human approval gate for clearly owned disposable files.
 
 ## Pitfalls
 
@@ -108,3 +171,6 @@ corresponding external step. Keep all evidence redacted and project-relative.
   the evidence gate while active, unmerged, blocked, review-active, concurrent, unknown,
   unrelated, and pre-existing residue remains.
 - Preserve the exact commands, observed outputs, and remaining risk in the handoff.
+- For an actual cleanup, distinguish verified removals from necessary retained residue.
+  Editing this procedure requires documentary/resource coherence, not a new live cleanup
+  campaign or proof of model obedience; behavioral feedback comes from ordinary use.

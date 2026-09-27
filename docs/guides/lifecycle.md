@@ -101,6 +101,43 @@ Implementer makes local commits and evidence but never publishes, pushes, opens
 or merges a pull request, mutates issues, tags, or releases. Morfeo owns the
 same routine closeout only for an authorized direct route.
 
+## Workspace and temporary-storage hygiene
+
+Cleanup is ongoing work, not something left until the disk is full. Before a large
+clone, extraction, build or test batch, the creating role checks free space on the
+actual destination, including the temporary filesystem. `/tmp` may have a smaller,
+memory-backed limit even when the repository disk has space. Reuse usable isolated
+copies where safe rather than multiplying them across attempts.
+
+Each role keeps disposable directories identifiable, preserves useful results and
+failure evidence, and removes them after their last consumer finishes. Do not retain
+all temporary clones, archives or environments merely because the wider objective
+has not closed. Scoped cleanup does not include shared caches, persistent records,
+credentials, active releases, rollback backups or another session's data.
+
+| Role | Responsibility |
+| --- | --- |
+| Morfeo | Own direct-work temporaries and final worktree retirement; reconcile its recorded leftovers on resumption. Inspect a pipeline cleanup receipt without taking over Supervisor's closeout. |
+| Implementer | Reclaim unneeded local intermediates while working; retain the assigned worktree and review inputs, and hand off necessary leftover paths and consumers. |
+| Supervisor | Reclaim review/integration temporaries and retire eligible objective worktrees after terminal evidence; account for child tasks sharing a path. |
+
+Before worktree removal, check Git changes/untracked data, retained history, all
+workspace consumers, nested repositories and actual process use. A done parent does
+not release a path still used by a `dir` child. An old card does not prove a live
+process, but a merged PR does not authorize silently abandoning that card either.
+Move out of the target directory and use ordinary `git worktree remove`; inspect a
+refusal rather than forcing it. Report what remains and its concrete reason in the
+existing handoff, then revisit it when that reason no longer applies.
+
+The shared procedure is the **Workspace and temporary-storage hygiene** section of
+the `git-github-closeout` canonical skill. Its local cleanup subprocedure grants no
+publication authority to Implementer. There is no new collector, cron or broad
+temporary-root sweep. [#502](https://github.com/DarkArty07/Aether-Agents/issues/502)
+is addressed by these instructions: the owner accepts source maintenance and will
+observe ordinary use, without an E2E or agent campaign. Source integration does not
+prove model compliance, retire existing historical work or activate updated profiles.
+The owning retention boundary remains [R9 §6](../../specs/r9-state-and-recovery/spec.md#6-retention).
+
 ## Managed runtime projections and release-owned TUI
 
 During release preparation, the exact installed candidate manager materializes

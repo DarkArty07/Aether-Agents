@@ -169,6 +169,7 @@ Every durable surface grows without bound by default. Retention is therefore a d
 | Observation projections/quarantine indexes | Versioned, rebuildable, non-authoritative; may be replaced only by deterministic rebuild while source/unknown bytes remain untouched |
 | Observation fingerprint keys | Private persistent project state across update/rollback/uninstall-preserve; never published or included in ordinary export |
 | Download cache | Freely replaceable after integrity verification and activation |
+| Owned disposable intermediates | Remove after their last consumer finishes and necessary results/evidence are preserved; not a reason to retain every clone, extraction or test environment until project closure |
 
 - **FR-920**: Retention MUST distinguish the acceptance record from execution telemetry. Board rows, Git commits, pull requests, and final evidence preserve the record; events, logs, and worktrees are telemetry and may be pruned only after terminal evidence is durable.
 - **FR-921**: A retention sweep MUST NOT remove anything an unfinished unit depends on. Pruning is only ever applied to terminal work.
@@ -176,6 +177,38 @@ Every durable surface grows without bound by default. Retention is therefore a d
 - **FR-923**: Retention values are calibration, not architecture, and MUST be recorded when set.
 - **FR-923a**: Observation has no pruning path. Compaction MUST preserve exact uncompressed event bytes, final schema-valid summaries, invariant results, coverage/gap declarations, safe evidence references, and decision references; raw content never enters any retained layer. Explicit purge deletes the selected observation state rather than manufacturing a reduced historical record.
 - **FR-923b**: Remote merged-branch cleanup and local objective branch/worktree cleanup are terminal closeout steps, not independent product state. They MUST use ordinary non-destructive operations and MUST NOT rewrite history or delete evidence for unfinished or unrelated work.
+
+### Workspace and temporary-storage discipline (#502)
+
+The owner chooses instruction-level maintenance for #502: the three role SOULs and
+existing canonical procedures jointly own storage hygiene, without a new collector,
+cron, registry or Hermes lifecycle change. Each role cleans the disposable resources it
+creates. Morfeo owns direct-work retirement; Supervisor owns pipeline worktree retirement;
+Implementer retains its assigned worktree and review inputs for Supervisor.
+
+Before storage-intensive operations, inspect capacity on the actual destination filesystem,
+including the temporary root (`/tmp` can be independently bounded or memory-backed).
+Use identifiable owned temporary directories and scoped cleanup. Remove no-longer-needed
+intermediates after preserving useful results and failure evidence, rather than waiting
+for final publication. This does not prune a unit's required workspace or acceptance record
+under FR-920–922: any artifact still needed by review, recovery or another consumer remains.
+
+Worktree retirement retains the existing terminal-evidence gates. Reconcile Git state,
+board obligations, shared `dir` children, nested worktrees and real process use before
+removal. A done parent, stale card, closed issue, directory age or filename prefix alone
+does not establish eligibility. Do not terminate human sessions, discard unknown files,
+delete other sessions' temporaries or sweep a shared temporary root. Preserve active
+releases, rollback backups and durable records. Record necessary leftovers and their
+consumer/reason in existing handoffs; revisit them when the dependency ends or work resumes.
+Historical nonterminal contracts still need their own disposition, not automatic abandonment.
+
+For this maintenance, acceptance is source integration and documentary/resource coherence.
+The owner explicitly declines a behavioral/E2E cleanup campaign and will observe ordinary
+use, reopening the issue if needed. This closes the instruction adjustment, not evidence
+of automatic reclamation, cleaned historical residue, or live profile adoption. It grants
+no runtime update, release or bypass of required repository checks. Detailed procedure
+lives in `git-github-closeout`'s Workspace and temporary-storage hygiene section; the role
+skills refer there instead of maintaining competing cleanup protocols.
 
 ## 7. Boards Are the Project Boundary
 

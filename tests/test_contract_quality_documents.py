@@ -25,8 +25,8 @@ SKILLS = {
 SKILL_VERSIONS = {
     "objective-contract-design": "0.2.1",
     "contract-result-review": "0.1.2",
-    "supervisor-decomposition": "0.1.5",
-    "implementation-evidence": "0.1.2",
+    "supervisor-decomposition": "0.1.6",
+    "implementation-evidence": "0.1.3",
 }
 
 

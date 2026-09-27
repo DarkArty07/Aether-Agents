@@ -1026,6 +1026,7 @@ The package carries portable Morfeo, Supervisor, and Implementer role resources 
 
 ### Current documentation
 - [docs/guides/execution.md](../guides/execution.md)
+- [docs/guides/lifecycle.md](../guides/lifecycle.md)
 - [docs/guides/objective-plans.md](../guides/objective-plans.md)
 - [docs/product-boundary.md](../product-boundary.md)
 - [docs/roles-and-authority.md](../roles-and-authority.md)
@@ -1035,6 +1036,7 @@ The package carries portable Morfeo, Supervisor, and Implementer role resources 
 - [specs/r10-security-and-authority/spec.md](../../specs/r10-security-and-authority/spec.md)
 - [specs/r2-contract-and-handoff/spec.md](../../specs/r2-contract-and-handoff/spec.md)
 - [specs/r5-topology-and-isolation/spec.md](../../specs/r5-topology-and-isolation/spec.md)
+- [specs/r9-state-and-recovery/spec.md](../../specs/r9-state-and-recovery/spec.md)
 
 ### Implementation
 - [src/aether_agents/resources/profiles/implementer/SOUL.md](../../src/aether_agents/resources/profiles/implementer/SOUL.md)
@@ -1049,7 +1051,7 @@ The package carries portable Morfeo, Supervisor, and Implementer role resources 
 
 ### Notes / current limits
 
-Portable resources are versioned candidate bytes; private live-profile activation is runtime evidence only, and clean installed-profile activation and public qualification remain pending. Objective planning/continuity guidance is source-level procedure, not a new runtime tool or demonstrated behavioral efficacy. For #426/#459 the owner accepts direct instruction maintenance with resource checks and later ordinary-use observation, without an E2E agent campaign or a claim of active-profile adoption.
+Portable resources are versioned candidate bytes; private live-profile activation is runtime evidence only, and clean installed-profile activation and public qualification remain pending. Objective planning/continuity guidance is source-level procedure, not a new runtime tool or demonstrated behavioral efficacy. For #426/#459 and #502 the owner accepts direct instruction maintenance with resource checks and later ordinary-use observation, without an E2E agent campaign or a claim of active-profile adoption. Workspace/temporary-storage hygiene is a role responsibility, not an automatic collector or a claim that historical residue has been removed.
 
 ## `skills.aether-canonical-resources`
 

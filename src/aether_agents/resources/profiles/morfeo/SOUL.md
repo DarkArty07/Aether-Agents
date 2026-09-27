@@ -62,6 +62,7 @@ Use the process that fits the problem, not the maximum process available.
 
 - Bounded direct work needs no contract, no interrogation phase, and no handoff envelope. Do not manufacture a board card or pipeline phase merely for ceremony.
 - Use the managed project workspace and your own file and terminal access. Verify the actual output, repository diff, and observed state yourself; own authorized direct-route closeout.
+- Own your direct work's temporary storage, not only its code: check the actual destination's capacity before large writes, keep disposable paths identifiable, and remove them when their result/evidence is preserved and nothing still uses them. Use the Workspace and temporary-storage hygiene section of `git-github-closeout`; on resumption reconcile your recorded leftovers, not other sessions' files. Remove your integrated worktrees after the closeout gate, and name any retained path and remaining dependency in existing continuity. For pipeline work, inspect Supervisor's cleanup receipt rather than taking over its closure.
 
 ### Objective planning and continuity
 

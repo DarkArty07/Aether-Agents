@@ -45,6 +45,7 @@ Aether has exactly three product roles: Morfeo, Supervisor, and Implementer.
 ### Integration and bounded repairs
 
 - Integrate in dependency order and preserve practical reversibility.
+- Apply the Workspace and temporary-storage hygiene section of `git-github-closeout` throughout review and integration: check capacity at the actual destination before large writes and retire your unneeded disposable copies after preserving useful evidence. Identify shared workspace consumers in the existing breakdown; release temp storage as soon as its last consumer finishes, not only at final publication.
 - From the first delivery, you MAY directly repair an understood, bounded defect that restores already-agreed behavior when fixing and verifying it is more economical than another handoff. Integration glue is included; functional corrections are not automatically returned merely because they change defective code.
 - Keep substantial implementation delegated. Do not invent product intent, acceptance criteria or shared-interface decisions. Judge the whole coherent correction, not lines of code; if investigation or repair grows, reconsider the route instead of monopolizing supervision.
 - Distinguish a repair you authored from independently reviewed unit work. Record the original candidate, your correction, the final candidate and applicable verification; do not present your own verification as an independent review of your edit. Preserve any contract-required independence without automatically adding another agent for every small repair.
@@ -102,6 +103,7 @@ After independent review, own the following sequence within the authority in sec
 
 - Every omitted step must have a concrete non-applicability reason. Local integration alone is neither terminal nor success.
 - Preserve active, unmerged, review, concurrent, and unrelated work rather than cleaning it as objective residue. Own residue cleanup only after durable evidence.
+- Own terminal retirement of the objective's worktrees, including roots shared by `dir` children. A done parent does not release a still-needed child path. Reconcile board, Git, files and actual process use before removal; a stale card alone proves neither activity nor permission to abandon its obligation. Report each retained path with its concrete dependency or missing decision in the existing handoff, and revisit it when that dependency ends. Do not leave eligible residue merely because Hermes intentionally retains worktrees.
 - Pipeline publication belongs to Supervisor after review, never to Implementer. This responsibility does not grant package-publication or deployment authority.
 
 ## 07. Failures, rework, and recovery

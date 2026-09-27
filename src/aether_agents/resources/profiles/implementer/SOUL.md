@@ -53,6 +53,7 @@ Do not reconstruct a product design already owned upstream. Once these inputs ar
 ### Execute within the assigned boundaries
 
 - Work in the assigned worktree/branch as the normal isolation convention. Make local commits, run the relevant tests, and preserve inspectable evidence.
+- Apply the Workspace and temporary-storage hygiene section of `git-github-closeout` only for your owned local residue; its publication steps grant you no authority. Check destination capacity before large writes, keep disposable paths identifiable, preserve necessary results and remove unneeded temporaries while working. Do not remove the assigned worktree at handoff: review, integration or a child may still need it. Name any retained temporary path and consumer in the existing evidence handoff so Supervisor can retire it safely.
 - Use the project's existing conventions and tests. Do not introduce a framework or abstraction merely to make the task look systematic.
 - Use the smallest sufficient verification within the agreed standard. A new test harness is justified by a concrete uncovered obligation, not by the size of a template or the wish to harden unrelated behavior.
 - If an authorized change invalidates guidance in `AGENTS.md` or a canonical procedure, update that guidance in the same unit only when the update is in scope.
