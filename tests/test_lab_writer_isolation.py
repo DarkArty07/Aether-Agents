@@ -782,3 +782,187 @@ def test_dispatch_writer_verifies_the_declared_disposable_roots(tmp_path: Path) 
         hermes_root=hermes_root,
     )
     assert result.reason == "no_tasks"
+
+
+def _escaping_named_board(run_root: Path, outside: Path, slug: str) -> None:
+    """Create ``run_root``'s active board as a symlink into ``outside``.
+
+    The laboratory declares ``run_root``/``run_root/hermes-home`` private.  A named
+    board that resolves outside them is exactly what an inherited
+    ``HERMES_KANBAN_BOARD`` (or an on-disk ``kanban/current`` file) selects.
+    """
+
+    boards = run_root / "kanban" / "boards"
+    boards.mkdir(parents=True, exist_ok=True)
+    escaped = outside / "boards" / slug
+    escaped.mkdir(parents=True, exist_ok=True)
+    (escaped / "board.json").write_text(
+        json.dumps({"slug": slug, "name": slug, "archived": False}), encoding="utf-8"
+    )
+    (escaped / "kanban.db").write_bytes(b"")
+    (boards / slug).symlink_to(escaped, target_is_directory=True)
+    (run_root / "kanban" / "current").write_text(f"{slug}\n", encoding="utf-8")
+
+
+def test_fallback_models_the_active_board_branch_of_the_loaded_revision(tmp_path: Path) -> None:
+    """The derived fallback must model which board a writer actually resolves.
+
+    ``kanban_db_path()``/``workspaces_root()`` anchor on the *active* board, not
+    only on the default board.  A laboratory whose declared roots are correct for
+    the default board escapes when the active board is a named board resolving
+    outside them: the derived fallback must report the escape, not wave it through.
+    """
+
+    if importlib.util.find_spec("hermes_cli") is None:
+        pytest.skip("native Hermes modules are unavailable to this interpreter")
+
+    from aether_agents.lab import isolation
+
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    hermes_root = run_root / "hermes-home"
+    hermes_root.mkdir()
+    (run_root / "kanban.db").write_bytes(b"")
+    _escaping_named_board(run_root, tmp_path / "outside", "oc-escape")
+
+    private = [run_root, hermes_root]
+    for label, extra in (
+        ("board selector file", {}),
+        ("HERMES_KANBAN_BOARD", {"HERMES_KANBAN_BOARD": "oc-escape"}),
+        ("current file", {}),
+    ):
+        env = {
+            name: value for name, value in isolation.scrub_inherited_identity(os.environ).items()
+        }
+        env.update(
+            {
+                "HOME": str(tmp_path),
+                "HERMES_HOME": str(hermes_root),
+                "HERMES_KANBAN_HOME": str(run_root),
+            }
+        )
+        env.pop("HERMES_KANBAN_DB", None)
+        env.update(extra)
+
+        derived = isolation.resolve_writer_roots(env, native=False)
+        complete, native = isolation.probe_child_writer_roots(
+            Path(sys.executable), env, cwd=tmp_path
+        )
+        assert complete is True, f"{label}: native probe did not resolve every root"
+
+        derived_problems = isolation.writer_root_problems(derived, private_roots=private)
+        native_problems = isolation.writer_root_problems(native, private_roots=private)
+        assert derived_problems == native_problems, (
+            f"{label}: derived={derived_problems} native={native_problems}"
+        )
+        assert derived_problems == ["kanban_db-escape", "workspaces_root-escape"], (
+            f"{label}: the escaping active board was not refused: {derived_problems}"
+        )
+        with pytest.raises(lab.HarnessError, match="escape"):
+            isolation.verify_writer_context(derived, private_roots=private)
+        with pytest.raises(lab.HarnessError, match="escape"):
+            isolation.require_verified_writer_context(
+                run_root=run_root, hermes_root=hermes_root, environ=env
+            )
+
+    # A contained named board must still verify: the branch is modelled, not blanket-refused.
+    (run_root / "kanban" / "current").write_text("oc-contained\n", encoding="utf-8")
+    contained = run_root / "kanban" / "boards" / "oc-contained"
+    contained.mkdir()
+    (contained / "board.json").write_text(
+        json.dumps({"slug": "oc-contained", "name": "oc-contained"}), encoding="utf-8"
+    )
+    (contained / "kanban.db").write_bytes(b"")
+    env = {name: value for name, value in isolation.scrub_inherited_identity(os.environ).items()}
+    env.update(
+        {
+            "HOME": str(tmp_path),
+            "HERMES_HOME": str(hermes_root),
+            "HERMES_KANBAN_HOME": str(run_root),
+        }
+    )
+    derived = isolation.resolve_writer_roots(env, native=False)
+    complete, native = isolation.probe_child_writer_roots(Path(sys.executable), env, cwd=tmp_path)
+    assert complete is True
+    assert isolation.writer_root_problems(derived, private_roots=private) == []
+    assert isolation.writer_root_problems(native, private_roots=private) == []
+    assert Path(str(derived["kanban_db"])).resolve() == (contained / "kanban.db").resolve()
+
+
+def test_no_owned_writer_reaches_an_active_board_escaping_the_declared_roots(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each write-capable helper refuses an active board outside the declared roots.
+
+    The escaping board is a disposable copy the declared laboratory never owns; the
+    native writers it points at must never be reached.
+    """
+
+    if importlib.util.find_spec("hermes_cli") is None:
+        pytest.skip("native Hermes modules are unavailable to this interpreter")
+
+    witness_digests: dict[str, str] = {}
+
+    def _witness(path: Path) -> str:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    hermes_root = run_root / "hermes-home"
+    hermes_root.mkdir()
+    _escaping_named_board(run_root, tmp_path / "outside", "oc-escape")
+    escaped_db = (run_root / "kanban" / "boards" / "oc-escape" / "kanban.db").resolve()
+    witness_digests["before"] = _witness(escaped_db)
+
+    hermes = _fake_hermes(tmp_path / "hermes", marker=tmp_path / "DISPATCH_INVOKED")
+    env = lab.isolated_hermes_env(run_root, hermes_root, hermes)
+    env.pop("HERMES_KANBAN_DB", None)
+    env["HERMES_KANBAN_HOME"] = str(run_root)
+
+    with pytest.raises(lab.HarnessError, match="escape"):
+        dispatch.dispatch_until_settled(
+            hermes,
+            cwd=tmp_path,
+            env=env,
+            commands_log=tmp_path / "commands.jsonl",
+            evidence_dir=tmp_path / "evidence",
+            max_passes=1,
+            timeout_seconds=5,
+            run_root=run_root,
+            hermes_root=hermes_root,
+        )
+    assert not (tmp_path / "DISPATCH_INVOKED").exists()
+
+    session_marker = tmp_path / "SESSION_INVOKED.ran"
+    script = tmp_path / "session.py"
+    script.write_text(_SESSION_CHILD, encoding="utf-8")
+    with pytest.raises(lab.HarnessError, match="escape"):
+        persistent.run_persistent_session(
+            [sys.executable, str(script), str(session_marker)],
+            owner_message="one owner message",
+            env=env,
+            run_root=run_root,
+            hermes_root=hermes_root,
+            timeout_seconds=2,
+            poll_seconds=0.02,
+        )
+    assert not session_marker.exists()
+
+    with pytest.raises(lab.HarnessError, match="escape"):
+        runner._observe_native_affinity_controls(
+            board=run_root / "kanban.db",
+            supervisor_db=tmp_path / "supervisor.db",
+            implementer_db=tmp_path / "implementer.db",
+            flow_id="test-flow",
+            project_id="test-project",
+            first_session_id=None,
+            resumed_session_id=None,
+            first_generation=1,
+            workspace_path=str(tmp_path / "worktrees" / "worker"),
+            hermes_home=hermes_root,
+            hermes=Path(sys.executable),
+            task_id=None,
+            env=env,
+        )
+
+    assert _witness(escaped_db) == witness_digests["before"]

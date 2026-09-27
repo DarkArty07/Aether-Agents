@@ -21,8 +21,12 @@ roots.  The environment-derived fallback used when that probe is unavailable mod
 loaded revision's resolution exactly, including the platform-native-home branch of
 ``get_default_hermes_root()``: a ``HERMES_HOME`` that resolves under the native home
 anchors the kanban roots on that native home (the operator's live root), never on
-``HERMES_HOME`` itself.  When a mapping cannot show which branch applies, the anchored
-roots are refused as unresolved instead of guessed.
+``HERMES_HOME`` itself.  It also models which board a writer resolves —
+``kanban_db_path()`` and ``workspaces_root()`` anchor on the active board, selected by
+``HERMES_KANBAN_BOARD`` then the persisted ``<kanban_home>/kanban/current`` file, so a
+named board outside the declared private roots is reported instead of waved through.  When
+a mapping cannot show which branch or board applies, the anchored roots are refused as
+unresolved instead of guessed.
 
 This module is behavior, not authority: it neither grants permissions nor replaces the
 native lifecycle.
@@ -242,6 +246,68 @@ def _kanban_home_from_env(environ: Mapping[str, str], default_root: Path | None)
     return default_root
 
 
+_BOARD_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9\-_]{0,63}$")
+
+
+def _normalized_board_slug(value: object) -> str | None:
+    """Model ``hermes_cli.kanban_db._normalize_board_slug`` for one value."""
+
+    if value is None:
+        return None
+    candidate = str(value).strip().casefold()
+    if not candidate or _BOARD_SLUG_RE.match(candidate) is None:
+        return None
+    return candidate
+
+
+def _board_resolves(candidate: str, kanban_root: Path) -> bool:
+    """Model ``board_exists``: board metadata or a database on disk under the root."""
+
+    directory = kanban_root / "kanban" / "boards" / candidate
+    try:
+        return (directory / "board.json").is_file() or (directory / "kanban.db").is_file()
+    except OSError:
+        return False
+
+
+def _persisted_board_selector(kanban_root: Path) -> str | None:
+    """Model reading ``<kanban_home>/kanban/current``; ``None`` when it is unreadable."""
+
+    try:
+        selector_file = (kanban_root / "kanban" / "current").resolve()
+    except OSError:
+        return None
+    if not selector_file.is_file():
+        return None
+    try:
+        return selector_file.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def _active_board_from_env(environ: Mapping[str, str], kanban_root: Path | None) -> str | None:
+    """Model ``hermes_cli.kanban_db.get_current_board()`` for a mapping.
+
+    Highest precedence first: the native ``HERMES_KANBAN_BOARD`` selector, then the
+    persisted ``<kanban_home>/kanban/current`` file, then the default board.  A
+    selector that does not normalize or does not resolve to an existing board falls
+    through, exactly as the loaded revision does.  ``None`` means the mapping cannot
+    show which board a writer resolves, so the anchored roots are refused as
+    unresolved instead of guessed.
+    """
+
+    if kanban_root is None:
+        return None
+    for selector in (
+        environ.get("HERMES_KANBAN_BOARD"),
+        _persisted_board_selector(kanban_root),
+    ):
+        candidate = _normalized_board_slug(selector)
+        if candidate is not None and _board_resolves(candidate, kanban_root):
+            return candidate
+    return "default"
+
+
 def _native_root(qualified: str) -> Path | None:
     """Resolve one native root through the loaded writer module, or report unresolved."""
 
@@ -288,10 +354,23 @@ def _environment_root(
         return None
     if name == "boards_root":
         return kanban_root / "kanban" / "boards"
+    # ``kanban_db_path()``/``workspaces_root()`` anchor on the *active* board: the
+    # explicit override when present, else the resolved selector's board directory.
+    # The default board keeps the legacy paths directly under ``<kanban_home>``.
+    active_board = _active_board_from_env(environ, kanban_root)
+    if active_board is None:
+        return None
+    if active_board == "default":
+        if name == "kanban_db":
+            return kanban_root / "kanban.db"
+        if name == "workspaces_root":
+            return kanban_root / "kanban" / "workspaces"
+        return None
+    board_root = kanban_root / "kanban" / "boards" / active_board
     if name == "kanban_db":
-        return kanban_root / "kanban.db"
+        return board_root / "kanban.db"
     if name == "workspaces_root":
-        return kanban_root / "kanban" / "workspaces"
+        return board_root / "workspaces"
     return None
 
 
