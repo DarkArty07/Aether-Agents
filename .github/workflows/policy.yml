@@ -177,6 +177,7 @@ jobs:
           .aether/objective-contracts/oc_291b2fb34b413d92/v2.md
           .aether/objective-contracts/oc_3397f9f05d780f8e/v1.md
           .aether/objective-contracts/oc_3879332591e50500/v1.md
+          .aether/objective-contracts/oc_3f280963213d234e/v1.md
           .aether/objective-contracts/oc_3fdf70ccc94e14b1/v1.md
           .aether/objective-contracts/oc_42aa0438fefb4143/v1.md
           .aether/objective-contracts/oc_42aa0438fefb4143/v2.md
@@ -371,6 +372,7 @@ jobs:
           patches/hermes/HLP-473-telegram-lazy-typehandler.patch
           patches/hermes/HLP-474-background-review-auth.patch
           patches/hermes/HLP-475-review-affinity-dispatch.patch
+          patches/hermes/HLP-460-rooted-parentage.patch
           patches/hermes/tests/test_hlp280_live_routing_probe.py
           patches/hermes/tests/test_hlp280_recovery_compatibility.py
           policy/hooks/README.md

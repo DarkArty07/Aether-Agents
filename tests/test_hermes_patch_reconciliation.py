@@ -72,6 +72,7 @@ EXPECTED_ACTIVE_IDS = (
     "HLP-428",
     "HLP-433",
     "HLP-435",
+    "HLP-460",
     "HLP-473",
     "HLP-474",
     "HLP-475",
@@ -109,6 +110,7 @@ PATCH_DIGESTS = {
     "HLP-473": ("c3f7776d457b1cec5c1dd4c1fa31a65e0f6af7d694de4ad303ce93d7bc7ea13d",),
     "HLP-474": ("399409050eb82c5c9a16aac33231670b84bf50be63b579ed2229f03757ccff67",),
     "HLP-475": ("63cdbe85e7a29d05b8132629df5f11b3187cf38eb8a1d09c150c76cb2fcd1ff8",),
+    "HLP-460": ("d003224941f40835cddd9625d95a34b0fec1e8a7c189f3a023234ac2c5e5ac03",),
 }
 
 
@@ -311,11 +313,11 @@ def test_repository_fragments_cover_active_ledger_and_bind_patch_digests(
             assert artifact["computed_sha256"] == artifact["ledger_sha256"]
             assert artifact["checksum_status"] == "passed"
             assert artifact["parse_status"] == "passed"
-        # HLP-435 has an accepted exact-tree reconstruction; older receipts retain
-        # their unavailable artifact status. Neither status grants runtime adoption.
+        # HLP-435 and later have an accepted exact-tree reconstruction; older receipts
+        # retain their unavailable artifact status. Neither status grants runtime adoption.
         expected_status = (
             "passed"
-            if identifier in {"HLP-435", "HLP-473", "HLP-474", "HLP-475"}
+            if identifier in {"HLP-435", "HLP-473", "HLP-474", "HLP-475", "HLP-460"}
             else "unavailable"
         )
         assert records[identifier]["artifact_verification"]["status"] == expected_status
@@ -897,7 +899,7 @@ def test_repository_hlp428_is_required_and_hlp433_is_deferred() -> None:
     assert hlp433["retirement_gate"]["status"] == "not_executed"
 
 
-@pytest.mark.parametrize("identifier", ["HLP-435", "HLP-473", "HLP-474", "HLP-475"])
+@pytest.mark.parametrize("identifier", ["HLP-435", "HLP-473", "HLP-474", "HLP-475", "HLP-460"])
 def test_source_only_fixes_keep_release_selection(identifier: str) -> None:
     record = json.loads((ENTRIES_PATH / f"{identifier}.json").read_text(encoding="utf-8"))
     aggregate = json.loads(

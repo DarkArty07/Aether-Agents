@@ -110,10 +110,18 @@ The 2026-08-26 simplification clarifies what **blocks** means. A normal implemen
 The existing decision-card mechanism remains useful when the choice affects shared execution or requires Supervisor judgement. It is no longer mandatory ceremony for every unanswered detail.
 
 1. Implementer states the material question, candidate answers and consequences.
-2. It creates a decision card addressed to Supervisor and links it as a parent of its own card.
+2. It creates a decision card addressed to Supervisor and links it as a parent of its own card. In a verified opted-in Aether flow, the decision card first has the exact canonical collaboration root as a parent; it must not introduce an independent root into that flow. If that root cannot be corroborated, use the existing Supervisor question path instead of guessing it.
 3. The dependency gate returns the implementation unit to waiting.
 4. Supervisor decides from the canonical contract and completes the decision card with a binding summary.
 5. The implementation unit promotes and resumes with the decision.
+
+The #460 source correction preserves that root at both native parentage boundaries
+(`create_task(parents=...)` and `link_tasks`): reject atomically a change that would
+make a verified Aether flow ambiguous or replace its canonical root. Do not attach
+edges implicitly, repair historical graphs, weaken review identity checks, or ban
+generic Hermes multi-root DAGs. This specifies the source correction; it is not an
+installed-runtime claim. See `specs/remaining-source-bugs/plan.md` for its bounded
+regression and disposition scope.
 
 - **FR-718**: Tier 1 SHOULD use the verified decision-card pattern rather than a human-visible block.
 - **FR-719**: Implementer MUST NOT fan out product implementation or create sibling execution work on its own authority. This is a semantic/review rule under PD-73, not a pre-tool permission rule under R10.
