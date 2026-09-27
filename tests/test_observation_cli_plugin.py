@@ -30,6 +30,7 @@ from aether_agents.observation import query, report
 from aether_agents.observation.brief import observe as observe_brief
 from aether_agents.observation.capture.journal import JournalWriter, list_segments, read_segment
 from aether_agents.observation.capture.retained_index import get_retained_index
+from aether_agents.observation.checkpoint import AuthorityContext
 from aether_agents.observation.context import ProjectRegistry
 from aether_agents.observation.contracts import (
     canonical_json_bytes,
@@ -39,6 +40,7 @@ from aether_agents.observation.contracts import (
 from aether_agents.observation.identity import correlation_token
 from aether_agents.observation.privacy import assert_clean, safe_error_class
 from aether_agents.observation.reduce.ingest import ingest_pending, reduce_trace
+from aether_agents.observation.reduce.reconciliation import dedupe, derive_gaps
 from aether_agents.observation.reduce.reducer import ReductionInput, reduce_events
 from aether_agents.paths import ObservationPaths
 
@@ -2202,6 +2204,361 @@ def _u396_summarise(project_id: str, trace_id: str) -> dict[str, Any]:
         "relations": sorted(f"{unit.get('task_ref')}:{unit.get('relation')}" for unit in units),
         "summary_project_id": summary.get("project_id"),
     }
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission and inode contract")
+def test_ae422_native_session_provenance_survives_a_readable_non_owner_only_database(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """AE-422: a valid isolated handoff must not lose truthfully present session provenance.
+
+    The native SessionDB is a store the observer is required to read read-only
+    (OBS-FR-025/OBS-FR-032); its own permission bits are the runtime's choice, not an
+    Aether precondition.  The 0600 requirement is a *product-owned* file rule
+    (specs/002-aether-contract-observation/spec.md line 218), and the secure-read
+    contract here is separately expressed by the exact owned private directory,
+    ``O_NOFOLLOW`` regular file, held descriptor, ownership and pre/post inode
+    revalidation.  A self-owned single-link regular database that is merely readable
+    by its group still satisfies every one of those invariants, so refusing it
+    manufactures a provenance gap the board does not actually have.
+    """
+    from aether_agents.observation.capture import hermes_plugin
+
+    _, paths = _install_project(monkeypatch, tmp_path)
+    board, state_home = _create_native_databases(monkeypatch, tmp_path)
+    state = state_home / "state.db"
+    # The locked Hermes runtime creates its SessionDB at the process umask default,
+    # which is 0644 on the supported POSIX runtime.
+    state.chmod(0o644)
+    monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
+    monkeypatch.setenv("HERMES_KANBAN_DB", str(board))
+    monkeypatch.setenv("HERMES_HOME", str(state_home))
+    monkeypatch.setattr(hermes_plugin._NativeReconciliationWorker, "start", lambda self: None)
+
+    verified, available = hermes_plugin._verified_native_session_ids({"session-native"})
+    assert available is True
+    assert "session-native" in verified
+
+    observer = hermes_plugin._Observer(FakePluginContext())
+    assert observer._collector is not None
+    observer._reconcile_native()
+    health = observer._collector.health.read()
+    observer.unload()
+
+    events = _journal_events(paths)
+    opened = next(event for event in events if event["event_type"] == "trace.opened")
+    assert opened["contract"]["origin_message_id"] == 7
+    assert any(event.get("session_id") is not None for event in events)
+    assert "NATIVE_HERMES_SESSION_PROVENANCE_UNAVAILABLE" not in health
+    summary = query.load_summary(paths, TRACE_ID)
+    assert "NATIVE_HERMES_SESSION_PROVENANCE_UNAVAILABLE" not in {
+        gap["reason_code"] for gap in summary["coverage"]["gaps"]
+    }
+    journal_bytes = b"".join(canonical_json_bytes(event) for event in events)
+    assert b"PRIVATE_SYSTEM_PROMPT" not in journal_bytes
+    assert b"PRIVATE_ORIGIN" not in journal_bytes
+    assert b"PRIVATE_MESSAGE_CONTENT" not in journal_bytes
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission and inode contract")
+@pytest.mark.parametrize(
+    "link_kind", ["symlink", "hardlink", "fifo", "ancestor"]
+)
+def test_ae422_native_session_provenance_still_refuses_untrusted_readable_databases(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, link_kind: str
+) -> None:
+    """AE-422 negative controls: readability never substitutes for the secure read.
+
+    Accepting a non-0600 file must not relax anything else.  Every unsound topology
+    still refuses, the task's ``session_id`` is dropped rather than kept as an
+    unverifiable claim, and the resulting gap is truthful about why.
+    """
+    from aether_agents.observation.capture import hermes_plugin
+
+    _, paths = _install_project(monkeypatch, tmp_path)
+    board, state_home = _create_native_databases(monkeypatch, tmp_path)
+    external = _make_session_db_unsafe(state_home, tmp_path, link_kind)
+    if external.is_file():
+        external.chmod(0o644)
+    monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
+    monkeypatch.setenv("HERMES_KANBAN_DB", str(board))
+    monkeypatch.setenv("HERMES_HOME", str(state_home))
+    monkeypatch.setattr(hermes_plugin._NativeReconciliationWorker, "start", lambda self: None)
+
+    verified, available = hermes_plugin._verified_native_session_ids({"session-native"})
+    assert verified == frozenset()
+    assert available is False
+
+    observer = hermes_plugin._Observer(FakePluginContext())
+    assert observer._collector is not None
+    observer._reconcile_native()
+    health = observer._collector.health.read()
+    observer.unload()
+
+    events = _journal_events(paths)
+    opened = next(event for event in events if event["event_type"] == "trace.opened")
+    assert opened["contract"]["origin_message_id"] is None
+    assert opened["contract"].get("session_lineage", []) == []
+    assert all(
+        event.get("work_unit") is None or event["work_unit"].get("session_id") is None
+        for event in events
+    )
+    assert health.get("NATIVE_HERMES_SESSION_PROVENANCE_UNAVAILABLE") == 2
+    summary = query.load_summary(paths, TRACE_ID)
+    assert "NATIVE_HERMES_SESSION_PROVENANCE_UNAVAILABLE" in {
+        gap["reason_code"] for gap in summary["coverage"]["gaps"]
+    }
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission and inode contract")
+def test_ae422_foreign_owned_or_public_session_database_is_never_read(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """AE-422: ownership is still the decisive control, independent of the file mode.
+
+    A database the current user does not own is refused at 0600 and at 0644 alike, so
+    widening the read to the umask default cannot become a cross-user read.
+    """
+    from aether_agents.observation.capture import hermes_plugin
+
+    board, state_home = _create_native_databases(monkeypatch, tmp_path)
+    state = state_home / "state.db"
+    monkeypatch.setenv("HERMES_HOME", str(state_home))
+
+    owned = os.stat(state)
+    try:
+        os.chown(state, 0 if owned.st_uid != 0 else 1, -1)
+    except (OSError, PermissionError):
+        pytest.skip("cannot create a foreign-owned database in this environment")
+    try:
+        for mode in (0o600, 0o644):
+            os.chmod(state, mode)
+            verified, available = hermes_plugin._verified_native_session_ids(
+                {"session-native"}
+            )
+            assert verified == frozenset()
+            assert available is False
+    finally:
+        try:
+            os.chown(state, owned.st_uid, owned.st_gid)
+        except (OSError, PermissionError):
+            pass
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission and inode contract")
+def test_ae422_advancing_task_status_keeps_distinct_native_identity(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """AE-422: advancing a task's authoritative status must not collide with its own past.
+
+    A task that is claimed while its parent is still running keeps a fixed
+    ``started_at``; when the parent completes the lane recomputation promotes the task
+    from ``todo`` to ``ready``.  Both are real, non-contradictory native facts.  The
+    native identity key of ``work_unit.status`` is committed to the transition
+    coordinates (task, run, occurred_at), and for a not-running task ``occurred_at``
+    falls back to ``started_at or created_at`` -- neither of which moves on a lane
+    promotion.  One producer cycle therefore wrote both ``todo`` and ``ready`` under
+    one key, and the reducer was right to refuse picking between them: that is a
+    manufactured ``NATIVE_IDENTITY_CONFLICT`` for a handoff that is not contradicted at
+    all.  The producer must project the authoritative state transition with an identity
+    that separates it, so a valid isolated handoff keeps truthful coverage instead of a
+    self-inflicted conflict.
+    """
+    from aether_agents.observation.capture import hermes_plugin
+
+    xdg = tmp_path / "xdg"
+    kanban_home = tmp_path / "hermes-home"
+    monkeypatch.setenv("XDG_STATE_HOME", str(xdg))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
+    monkeypatch.setenv("HERMES_KANBAN_HOME", str(kanban_home))
+    monkeypatch.setenv("HERMES_HOME", str(kanban_home / "profiles" / "morfeo"))
+    for key in (
+        "HERMES_DELEGATED_CHILD_CONTEXT",
+        "HERMES_KANBAN_DB",
+        "HERMES_KANBAN_BOARD",
+        "HERMES_KANBAN_TASK",
+        "HERMES_SESSION_ID",
+        "AETHER_PROJECT_ID",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setattr(
+        "aether_agents.observation.capture.hermes_plugin._NativeReconciliationWorker.start",
+        lambda self: None,
+    )
+
+    project = _u396_make_project(tmp_path, "ae", PROJECT_ID)
+    ProjectRegistry().register(PROJECT_ID, project, "ae", hermes_project_id=PROJECT_ID)
+    slug, _, db_path = _u396_make_board(
+        kanban_home, PROJECT_ID, _U396_CONTRACT_A, 1, _U396_TRACE_A
+    )
+    _u396_seed_root(db_path, PROJECT_ID, _U396_TRACE_A, child_id="t_10000002")
+    # Claimed while its parent is still running, so `started_at` is already stamped and
+    # the occurred_at fallback for a non-running task will not move on promotion.
+    with sqlite3.connect(db_path) as db:
+        db.execute(
+            "UPDATE tasks SET started_at=110, status='todo' WHERE id='t_10000002'"
+        )
+        db.commit()
+
+    context = FakePluginContext()
+    hermes_plugin.register(context)
+    prepare = context.hooks["post_tool_call"][0]
+    _u396_fire_handoff(
+        prepare, PROJECT_ID, _U396_CONTRACT_A, 1, _U396_TRACE_A, slug
+    )
+
+    observer = context.unload_callbacks[-1].__self__
+    try:
+        observer._reconcile_native()
+        # The parent completes; the lane recomputation promotes the child todo -> ready.
+        with sqlite3.connect(db_path) as db:
+            db.execute(
+                "UPDATE tasks SET status='ready' WHERE id='t_10000002'"
+            )
+            db.commit()
+        observer._reconcile_native()
+
+        paths = ObservationPaths.for_project(PROJECT_ID)
+        events = _journal_events(paths)
+        statuses = [
+            event
+            for event in events
+            if event["event_type"] == "work_unit.status"
+            and (event.get("work_unit") or {}).get("task_ref") == "t_10000002"
+        ]
+        assert len(statuses) == 2
+        identities = {
+            (
+                event["work_unit"]["task_status"],
+                event.get("run_id"),
+                event.get("occurred_at"),
+            )
+            for event in statuses
+        }
+        assert identities == {
+            ("todo", 1, "1970-01-01T00:01:59.000Z"),
+            ("ready", 1, "1970-01-01T00:01:59.000Z"),
+        }
+        # Distinct envelopes of the same native identity must not be reported as one
+        # contradiction, and the authoritative promotion must survive.
+        for event in events:
+            validate_event(event)
+            assert_clean(event)
+        ingest_pending(paths)
+        reduce_trace(paths, _U396_TRACE_A)
+        summary = query.load_summary(paths, _U396_TRACE_A)
+        reasons = {gap["reason_code"] for gap in summary["coverage"]["gaps"]}
+        assert "NATIVE_IDENTITY_CONFLICT" not in reasons
+        assert "NATIVE_TERMINAL_CONFLICT" not in reasons
+        current = {
+            unit["task_ref"]: unit
+            for unit in summary["work_graph"]["units"]
+            if unit.get("task_ref") == "t_10000002"
+        }
+        assert current["t_10000002"]["task_status"] == "ready"
+        assert current["t_10000002"]["relation"] == "unknown"
+    finally:
+        context.unload_callbacks[-1]()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission and inode contract")
+def test_ae422_missing_and_conflicting_provenance_still_fails_closed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """AE-422 controls: distinct identities never excuse absent/contradictory evidence.
+
+    Making an advancing status separable must not become a licence to guess.  A status
+    projection whose transition evidence is genuinely missing still reports the
+    authoritative gap, and two incompatible terminals for one complete native identity
+    are still preserved as ambiguity rather than silently resolved.
+    """
+    from aether_agents.observation.capture import hermes_plugin
+
+    _, kanban_home = _u396_setup_env(monkeypatch, tmp_path)
+    project = _u396_make_project(tmp_path, "ae", PROJECT_ID)
+    ProjectRegistry().register(PROJECT_ID, project, "ae", hermes_project_id=PROJECT_ID)
+    slug, _, db_path = _u396_make_board(
+        kanban_home, PROJECT_ID, _U396_CONTRACT_A, 1, _U396_TRACE_A
+    )
+    _u396_seed_root(db_path, PROJECT_ID, _U396_TRACE_A, child_id="t_10000002")
+
+    context = FakePluginContext()
+    hermes_plugin.register(context)
+    prepare = context.hooks["post_tool_call"][0]
+    _u396_fire_handoff(prepare, PROJECT_ID, _U396_CONTRACT_A, 1, _U396_TRACE_A, slug)
+
+    observer = context.unload_callbacks[-1].__self__
+    try:
+        observer._reconcile_native()
+        # Strip the transition evidence out of the authoritative store: the task is
+        # now untimestamped and unclaimed, so no distinct transition may be invented.
+        with sqlite3.connect(db_path) as db:
+            db.execute(
+                "UPDATE tasks SET started_at=NULL, last_heartbeat_at=NULL,"
+                " status='ready' WHERE id='t_10000002'"
+            )
+            db.commit()
+        observer._reconcile_native()
+
+        paths = ObservationPaths.for_project(PROJECT_ID)
+        ingest_pending(paths)
+        reduce_trace(paths, _U396_TRACE_A)
+        summary = query.load_summary(paths, _U396_TRACE_A)
+        reasons = {gap["reason_code"] for gap in summary["coverage"]["gaps"]}
+        assert "NATIVE_IDENTITY_CONFLICT" not in reasons
+
+        # Two incompatible native terminals under one complete native identity stay
+        # ambiguous: the reducer preserves both and resolves neither of them.
+        factory = EventFactory()
+        factory.opened(0)
+        factory.unit(
+            "work_unit.bound",
+            "reported",
+            0.5,
+            task_ref="t_deadbeef",
+            relation="root",
+            task_status="running",
+            run_status="running",
+        )
+        completed = factory.unit(
+            "work_unit.status",
+            "completed",
+            1,
+            task_ref="t_deadbeef",
+            relation="root",
+            task_status="done",
+            run_status="done",
+            run_outcome="completed",
+            run_id=1,
+        )
+        completed["source_kind"] = "native_reconciliation"
+        completed["source_hook"] = "kanban_read"
+        completed["timestamp_source"] = "native"
+        failed = deepcopy(completed)
+        failed["event_id"] = "evt_" + "f" * 32
+        failed["producer_epoch"] = "prd_" + "f" * 32
+        failed["status"] = "failed"
+        failed["work_unit"]["run_status"] = "failed"
+        failed["work_unit"]["run_outcome"] = "failed"
+        report = dedupe(deepcopy([completed, failed]))
+        assert report.duplicates_dropped == 0
+        assert "NATIVE_TERMINAL_CONFLICT" in {
+            gap["reason_code"] for gap in derive_gaps(report)
+        }
+        summary = reduce_events(
+            ReductionInput(
+                trace_id=factory.trace_id,
+                project_id=factory.project_id,
+                events=deepcopy([*factory.events[:2], completed, failed]),
+                producer_count=3,
+                authority_context=AuthorityContext.product_default(),
+            )
+        )
+        [root] = summary["work_graph"]["units"]
+        assert root["latest_run_status"] == "unknown"
+        assert root["latest_run_outcome"] == "unknown"
+    finally:
+        context.unload_callbacks[-1]()
 
 
 def test_u396_negative_tuple_conflict(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

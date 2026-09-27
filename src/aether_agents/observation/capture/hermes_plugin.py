@@ -367,12 +367,28 @@ def _same_owned_private_native_db(
     observed: os.stat_result,
     expected: os.stat_result,
 ) -> bool:
-    """Return whether two stats describe one current-user private DB inode."""
+    """Return whether two stats describe one current-user private DB inode.
+
+    The invariants this enforces are the ones that actually make a read secure: the
+    object is a regular file, it is not aliased, it belongs to the current user, and it
+    did not change underneath the reader.  ``expected`` is the authoritative baseline
+    and is compared by inode identity, so a mode check against it would be self-referential.
+
+    The permission-bits check that previously lived here encoded the *product-owned
+    file* rule (spec #002 section 6.2: Aether's own journal/key/DB files are ``0600``)
+    as if it were a precondition the native store must satisfy.  Hermes creates its
+    SessionDB at the process umask default, ``0644`` on the supported POSIX runtime, so
+    that check made the mandated OBS-FR-025/OBS-FR-032 read of a healthy store fail and
+    produced ``NATIVE_HERMES_SESSION_PROVENANCE_UNAVAILABLE`` for provenance the board
+    really does carry.  Ownership, aliasing, topology and the pre/post inode
+    revalidation remain unchanged and still refuse; a group-readable file owned by the
+    current user is not an unsafe read and is not made one by relaxing a rule about
+    Aether's own bytes.
+    """
     return (
         stat.S_ISREG(observed.st_mode)
         and observed.st_nlink == 1
         and observed.st_uid == os.getuid()
-        and observed.st_mode & (stat.S_IRWXG | stat.S_IRWXO) == 0
         and (observed.st_dev, observed.st_ino) == (expected.st_dev, expected.st_ino)
     )
 
@@ -537,6 +553,7 @@ class _Observer:
         self._diagnosed_traces: set[str] = set()
         self._diagnosed_unbound_tasks: set[str] = set()
         self._diagnosed_native_rejections: set[tuple[str, str]] = set()
+        self._diagnosed_task_states: dict[tuple[str, str], tuple[Any, Any]] = {}
         self._native_seen: set[tuple[Any, ...]] = set()
         self._retained_restored_projects: set[str] = set()
         self._pending_spans: OrderedDict[tuple[str, str], dict[str, Any]] = OrderedDict()
@@ -2194,6 +2211,11 @@ class _Observer:
                     if latest is not None
                     else task.get("started_at") or task.get("created_at")
                 )
+                transition_reason_code = (
+                    "TASK_STATE_UNRESOLVED"
+                    if occurred_at is None
+                    else "TASK_STATUS_TRANSITION_UNRESOLVED"
+                )
                 event_status = {
                     "done": "completed",
                     "running": "started",
@@ -2231,10 +2253,49 @@ class _Observer:
                         task_status,
                         run_status,
                         run_outcome,
-                        state_event.get("occurred_at"),
+                        transition_reason_code,
                     ),
                     state_event,
                 )
+                task_session = native_pseudonym_ref(
+                    task.get("session_id"), kind="session"
+                )
+                if not collector.ensure_trace_opened(
+                    trace_id,
+                    session_lineage=(task_session,) if task_session else (),
+                    materialized_at=occurred_at,
+                    materialization_ref=binding_ref(trace_id, task_id),
+                    source_kind="native_reconciliation",
+                    source_hook="kanban_read",
+                ):
+                    continue
+                if occurred_at is None:
+                    collector.emit(
+                        builder.coverage_gap(
+                            gap_class=CoverageClass.NATIVE_SOURCE_UNAVAILABLE,
+                            reason_code="TASK_STATE_UNRESOLVED",
+                            source_kind="native_reconciliation",
+                            source_hook="kanban_read",
+                            monotonic=False,
+                        )
+                    )
+                elif self._diagnosed_task_states.get((trace_id, task_id)) != (
+                    task_status,
+                    current_run_id,
+                ):
+                    self._diagnosed_task_states[(trace_id, task_id)] = (
+                        task_status,
+                        current_run_id,
+                    )
+                    collector.emit(
+                        builder.coverage_gap(
+                            gap_class=CoverageClass.NATIVE_SOURCE_UNAVAILABLE,
+                            reason_code="TASK_STATUS_TRANSITION_UNRESOLVED",
+                            source_kind="native_reconciliation",
+                            source_hook="kanban_read",
+                            monotonic=False,
+                        )
+                    )
 
             current_task = native_kanban_task_ref(os.environ.get("HERMES_KANBAN_TASK"))
             if current_task is not None:
