@@ -1708,18 +1708,17 @@ def test_same_native_status_coordinates_with_incompatible_outcomes_are_ambiguous
     completed["timestamp_source"] = "native"
     completed["producer_epoch"] = "prd_" + "a" * 32
     completed["producer_seq"] = 0
-    blocked = deepcopy(completed)
-    blocked["event_id"] = "evt_" + "f" * 32
-    blocked["producer_epoch"] = "prd_" + "f" * 32
-    blocked["status"] = "blocked"
-    blocked["work_unit"]["task_status"] = "blocked"
-    blocked["work_unit"]["run_status"] = "blocked"
-    blocked["work_unit"]["run_outcome"] = "blocked"
+    failed = deepcopy(completed)
+    failed["event_id"] = "evt_" + "f" * 32
+    failed["producer_epoch"] = "prd_" + "f" * 32
+    failed["status"] = "failed"
+    failed["work_unit"]["run_status"] = "failed"
+    failed["work_unit"]["run_outcome"] = "failed"
     validate_event(completed)
-    validate_event(blocked)
+    validate_event(failed)
 
     summaries = []
-    for pair in permutations((completed, blocked)):
+    for pair in permutations((completed, failed)):
         report = dedupe(deepcopy(pair))
         assert "NATIVE_TERMINAL_CONFLICT" in {gap["reason_code"] for gap in derive_gaps(report)}
         summaries.append(

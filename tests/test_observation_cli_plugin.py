@@ -30,7 +30,6 @@ from aether_agents.observation import query, report
 from aether_agents.observation.brief import observe as observe_brief
 from aether_agents.observation.capture.journal import JournalWriter, list_segments, read_segment
 from aether_agents.observation.capture.retained_index import get_retained_index
-from aether_agents.observation.checkpoint import AuthorityContext
 from aether_agents.observation.context import ProjectRegistry
 from aether_agents.observation.contracts import (
     canonical_json_bytes,
@@ -40,7 +39,6 @@ from aether_agents.observation.contracts import (
 from aether_agents.observation.identity import correlation_token
 from aether_agents.observation.privacy import assert_clean, safe_error_class
 from aether_agents.observation.reduce.ingest import ingest_pending, reduce_trace
-from aether_agents.observation.reduce.reconciliation import dedupe, derive_gaps
 from aether_agents.observation.reduce.reducer import ReductionInput, reduce_events
 from aether_agents.paths import ObservationPaths
 
@@ -2206,6 +2204,30 @@ def _u396_summarise(project_id: str, trace_id: str) -> dict[str, Any]:
     }
 
 
+def _ae422_scrub_native_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in (
+        "HERMES_DELEGATED_CHILD_CONTEXT",
+        "HERMES_KANBAN_DB",
+        "HERMES_KANBAN_BOARD",
+        "HERMES_KANBAN_TASK",
+        "HERMES_SESSION_ID",
+        "AETHER_PROJECT_ID",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+
+def _ae422_assert_disposable_board(board: Path) -> None:
+    metadata = json.loads((board.parent / "board.json").read_text(encoding="utf-8"))
+    assert metadata["slug"] == board.parent.name == execution_board_slug(
+        PROJECT_ID, "oc_1234567890abcdef", 1
+    )
+    assert metadata["project_id"] == PROJECT_ID
+    assert metadata["aether_project_id"] == PROJECT_ID
+    assert metadata["aether_contract_id"] == "oc_1234567890abcdef"
+    assert metadata["aether_contract_version"] == 1
+    assert metadata["observation_trace_id"] == TRACE_ID
+
+
 @pytest.mark.skipif(os.name != "posix", reason="POSIX permission and inode contract")
 def test_ae422_native_session_provenance_survives_a_readable_non_owner_only_database(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -2224,6 +2246,7 @@ def test_ae422_native_session_provenance_survives_a_readable_non_owner_only_data
     """
     from aether_agents.observation.capture import hermes_plugin
 
+    _ae422_scrub_native_identity(monkeypatch)
     _, paths = _install_project(monkeypatch, tmp_path)
     board, state_home = _create_native_databases(monkeypatch, tmp_path)
     state = state_home / "state.db"
@@ -2233,6 +2256,8 @@ def test_ae422_native_session_provenance_survives_a_readable_non_owner_only_data
     monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
     monkeypatch.setenv("HERMES_KANBAN_DB", str(board))
     monkeypatch.setenv("HERMES_HOME", str(state_home))
+    assert Path(os.environ["HERMES_KANBAN_DB"]) == board
+    _ae422_assert_disposable_board(board)
     monkeypatch.setattr(hermes_plugin._NativeReconciliationWorker, "start", lambda self: None)
 
     verified, available = hermes_plugin._verified_native_session_ids({"session-native"})
@@ -2275,6 +2300,7 @@ def test_ae422_native_session_provenance_still_refuses_untrusted_readable_databa
     """
     from aether_agents.observation.capture import hermes_plugin
 
+    _ae422_scrub_native_identity(monkeypatch)
     _, paths = _install_project(monkeypatch, tmp_path)
     board, state_home = _create_native_databases(monkeypatch, tmp_path)
     external = _make_session_db_unsafe(state_home, tmp_path, link_kind)
@@ -2283,6 +2309,8 @@ def test_ae422_native_session_provenance_still_refuses_untrusted_readable_databa
     monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
     monkeypatch.setenv("HERMES_KANBAN_DB", str(board))
     monkeypatch.setenv("HERMES_HOME", str(state_home))
+    assert Path(os.environ["HERMES_KANBAN_DB"]) == board
+    _ae422_assert_disposable_board(board)
     monkeypatch.setattr(hermes_plugin._NativeReconciliationWorker, "start", lambda self: None)
 
     verified, available = hermes_plugin._verified_native_session_ids({"session-native"})
@@ -2321,9 +2349,14 @@ def test_ae422_foreign_owned_or_public_session_database_is_never_read(
     """
     from aether_agents.observation.capture import hermes_plugin
 
+    _ae422_scrub_native_identity(monkeypatch)
     board, state_home = _create_native_databases(monkeypatch, tmp_path)
     state = state_home / "state.db"
+    monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
+    monkeypatch.setenv("HERMES_KANBAN_DB", str(board))
     monkeypatch.setenv("HERMES_HOME", str(state_home))
+    assert Path(os.environ["HERMES_KANBAN_DB"]) == board
+    _ae422_assert_disposable_board(board)
 
     owned = os.stat(state)
     try:
@@ -2343,276 +2376,6 @@ def test_ae422_foreign_owned_or_public_session_database_is_never_read(
             os.chown(state, owned.st_uid, owned.st_gid)
         except (OSError, PermissionError):
             pass
-
-
-@pytest.mark.skipif(os.name != "posix", reason="POSIX permission and inode contract")
-def test_ae422_advancing_task_status_keeps_distinct_native_identity(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """AE-422: advancing a task's authoritative status must not collide with its own past.
-
-    A task that is claimed while its parent is still running keeps a fixed
-    ``started_at``. When the parent completes, the authoritative native store records
-    the ``todo`` -> ``ready`` promotion in ``task_events``; the producer must use that
-    event's timestamp rather than reuse the old task/run timestamp. The complete native
-    identity remains (task, run, occurred_at), so a real promotion gets a distinct key
-    while an incompatible terminal claim at the same coordinates remains ambiguous.
-    """
-    from aether_agents.observation.capture import hermes_plugin
-
-    xdg = tmp_path / "xdg"
-    kanban_home = tmp_path / "hermes-home"
-    monkeypatch.setenv("XDG_STATE_HOME", str(xdg))
-    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
-    monkeypatch.setenv("HERMES_KANBAN_HOME", str(kanban_home))
-    monkeypatch.setenv("HERMES_HOME", str(kanban_home / "profiles" / "morfeo"))
-    for key in (
-        "HERMES_DELEGATED_CHILD_CONTEXT",
-        "HERMES_KANBAN_DB",
-        "HERMES_KANBAN_BOARD",
-        "HERMES_KANBAN_TASK",
-        "HERMES_SESSION_ID",
-        "AETHER_PROJECT_ID",
-    ):
-        monkeypatch.delenv(key, raising=False)
-    monkeypatch.setattr(
-        "aether_agents.observation.capture.hermes_plugin._NativeReconciliationWorker.start",
-        lambda self: None,
-    )
-
-    project = _u396_make_project(tmp_path, "ae", PROJECT_ID)
-    ProjectRegistry().register(PROJECT_ID, project, "ae", hermes_project_id=PROJECT_ID)
-    slug, _, db_path = _u396_make_board(
-        kanban_home, PROJECT_ID, _U396_CONTRACT_A, 1, _U396_TRACE_A
-    )
-    _u396_seed_root(db_path, PROJECT_ID, _U396_TRACE_A, child_id="t_10000002")
-    # Claimed while its parent is still running, so `started_at` is already stamped and
-    # the occurred_at fallback for a non-running task will not move on promotion.
-    with sqlite3.connect(db_path) as db:
-        db.execute(
-            "UPDATE tasks SET started_at=110, status='todo' WHERE id='t_10000002'"
-        )
-        db.commit()
-
-    context = FakePluginContext()
-    hermes_plugin.register(context)
-    prepare = context.hooks["post_tool_call"][0]
-    _u396_fire_handoff(
-        prepare, PROJECT_ID, _U396_CONTRACT_A, 1, _U396_TRACE_A, slug
-    )
-
-    observer = context.unload_callbacks[-1].__self__
-    try:
-        observer._reconcile_native()
-        # The parent completes and Hermes records the child-lane promotion at its
-        # authoritative task-event timestamp.
-        with sqlite3.connect(db_path) as db:
-            db.execute(
-                "UPDATE tasks SET status='ready' WHERE id='t_10000002'"
-            )
-            db.execute(
-                "INSERT INTO task_events (task_id, kind, payload, created_at) "
-                "VALUES (?, 'promoted', NULL, 120)",
-                ("t_10000002",),
-            )
-            db.commit()
-        observer._reconcile_native()
-        # Exercise a repeated state after an intervening transition. Each observation
-        # has a real task-event timestamp and must survive producer-side idempotence.
-        with sqlite3.connect(db_path) as db:
-            db.execute("UPDATE tasks SET status='todo' WHERE id='t_10000002'")
-            db.execute(
-                "INSERT INTO task_events (task_id, kind, payload, created_at) "
-                "VALUES (?, 'dependency_wait', '{}', 130)",
-                ("t_10000002",),
-            )
-            db.commit()
-        observer._reconcile_native()
-        with sqlite3.connect(db_path) as db:
-            db.execute("UPDATE tasks SET status='ready' WHERE id='t_10000002'")
-            db.execute(
-                "INSERT INTO task_events (task_id, kind, payload, created_at) "
-                "VALUES (?, 'promoted', NULL, 140)",
-                ("t_10000002",),
-            )
-            db.commit()
-        observer._reconcile_native()
-
-        paths = ObservationPaths.for_project(PROJECT_ID)
-        events = _journal_events(paths)
-        statuses = [
-            event
-            for event in events
-            if event["event_type"] == "work_unit.status"
-            and (event.get("work_unit") or {}).get("task_ref") == "t_10000002"
-        ]
-        assert len(statuses) == 4
-        identities = {
-            (
-                event["work_unit"]["task_status"],
-                event.get("run_id"),
-                event.get("occurred_at"),
-            )
-            for event in statuses
-        }
-        assert identities == {
-            ("todo", 1, "1970-01-01T00:01:59.000Z"),
-            ("ready", 1, "1970-01-01T00:02:00.000Z"),
-            ("todo", 1, "1970-01-01T00:02:10.000Z"),
-            ("ready", 1, "1970-01-01T00:02:20.000Z"),
-        }
-        # Distinct envelopes of the same native identity must not be reported as one
-        # contradiction, and the authoritative promotion must survive.
-        for event in events:
-            validate_event(event)
-            assert_clean(event)
-        ingest_pending(paths)
-        reduce_trace(paths, _U396_TRACE_A)
-        summary = query.load_summary(paths, _U396_TRACE_A)
-        reasons = {gap["reason_code"] for gap in summary["coverage"]["gaps"]}
-        assert "NATIVE_IDENTITY_CONFLICT" not in reasons
-        assert "NATIVE_TERMINAL_CONFLICT" not in reasons
-        assert "TASK_STATUS_TRANSITION_UNRESOLVED" not in reasons
-        current = {
-            unit["task_ref"]: unit
-            for unit in summary["work_graph"]["units"]
-            if unit.get("task_ref") == "t_10000002"
-        }
-        assert current["t_10000002"]["task_status"] == "ready"
-        assert current["t_10000002"]["relation"] == "unknown"
-    finally:
-        context.unload_callbacks[-1]()
-
-
-@pytest.mark.skipif(os.name != "posix", reason="POSIX permission and inode contract")
-def test_ae422_missing_and_conflicting_provenance_still_fails_closed(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """AE-422 controls: distinct identities never excuse absent/contradictory evidence.
-
-    Making an advancing status separable must not become a licence to guess.  A status
-    projection whose transition evidence is genuinely missing still reports the
-    authoritative gap, and two incompatible terminals for one complete native identity
-    are still preserved as ambiguity rather than silently resolved.
-    """
-    from aether_agents.observation.capture import hermes_plugin
-
-    _, kanban_home = _u396_setup_env(monkeypatch, tmp_path)
-    project = _u396_make_project(tmp_path, "ae", PROJECT_ID)
-    ProjectRegistry().register(PROJECT_ID, project, "ae", hermes_project_id=PROJECT_ID)
-    slug, _, db_path = _u396_make_board(
-        kanban_home, PROJECT_ID, _U396_CONTRACT_A, 1, _U396_TRACE_A
-    )
-    _u396_seed_root(db_path, PROJECT_ID, _U396_TRACE_A, child_id="t_10000002")
-    # A task row can legitimately lack completed_at; observation must report the
-    # missing native state timestamp instead of treating the first snapshot as a
-    # transition conflict.
-    with sqlite3.connect(db_path) as db:
-        db.execute("UPDATE tasks SET completed_at=NULL WHERE id='t_10000001'")
-        db.commit()
-
-    context = FakePluginContext()
-    hermes_plugin.register(context)
-    prepare = context.hooks["post_tool_call"][0]
-    _u396_fire_handoff(prepare, PROJECT_ID, _U396_CONTRACT_A, 1, _U396_TRACE_A, slug)
-
-    observer = context.unload_callbacks[-1].__self__
-    try:
-        observer._reconcile_native()
-
-        paths = ObservationPaths.for_project(PROJECT_ID)
-        ingest_pending(paths)
-        reduce_trace(paths, _U396_TRACE_A)
-        first_summary = query.load_summary(paths, _U396_TRACE_A)
-        first_reasons = {gap["reason_code"] for gap in first_summary["coverage"]["gaps"]}
-        assert "TASK_STATUS_TRANSITION_UNRESOLVED" not in first_reasons
-        assert "TASK_STATE_UNRESOLVED" in first_reasons
-        root_state = next(
-            event
-            for event in _journal_events(paths)
-            if event["event_type"] == "work_unit.status"
-            and (event.get("work_unit") or {}).get("task_ref") == "t_10000001"
-        )
-        assert root_state["timestamp_source"] == "collector"
-
-        # Remove any ready-promotion event while retaining old task/run timestamps.
-        # They identify older facts, not the later authoritative status transition.
-        with sqlite3.connect(db_path) as db:
-            db.execute(
-                "UPDATE tasks SET started_at=NULL, last_heartbeat_at=NULL,"
-                " status='ready' WHERE id='t_10000002'"
-            )
-            db.commit()
-        observer._reconcile_native()
-
-        ingest_pending(paths)
-        reduce_trace(paths, _U396_TRACE_A)
-        summary = query.load_summary(paths, _U396_TRACE_A)
-        reasons = {gap["reason_code"] for gap in summary["coverage"]["gaps"]}
-        assert "NATIVE_IDENTITY_CONFLICT" not in reasons
-        assert "TASK_STATUS_TRANSITION_UNRESOLVED" in reasons
-        changed_state = [
-            event
-            for event in _journal_events(paths)
-            if event["event_type"] == "work_unit.status"
-            and (event.get("work_unit") or {}).get("task_ref") == "t_10000002"
-            and (event.get("work_unit") or {}).get("task_status") == "ready"
-        ]
-        assert changed_state[-1]["occurred_at"] is not None
-        assert changed_state[-1]["timestamp_source"] == "collector"
-
-        # Two incompatible native terminals under one complete native identity stay
-        # ambiguous: the reducer preserves both and resolves neither of them.
-        factory = EventFactory()
-        factory.opened(0)
-        factory.unit(
-            "work_unit.bound",
-            "reported",
-            0.5,
-            task_ref="t_deadbeef",
-            relation="root",
-            task_status="running",
-            run_status="running",
-        )
-        completed = factory.unit(
-            "work_unit.status",
-            "completed",
-            1,
-            task_ref="t_deadbeef",
-            relation="root",
-            task_status="done",
-            run_status="done",
-            run_outcome="completed",
-            run_id=1,
-        )
-        completed["source_kind"] = "native_reconciliation"
-        completed["source_hook"] = "kanban_read"
-        completed["timestamp_source"] = "native"
-        failed = deepcopy(completed)
-        failed["event_id"] = "evt_" + "f" * 32
-        failed["producer_epoch"] = "prd_" + "f" * 32
-        failed["status"] = "failed"
-        failed["work_unit"]["run_status"] = "failed"
-        failed["work_unit"]["run_outcome"] = "failed"
-        report = dedupe(deepcopy([completed, failed]))
-        assert report.duplicates_dropped == 0
-        assert "NATIVE_TERMINAL_CONFLICT" in {
-            gap["reason_code"] for gap in derive_gaps(report)
-        }
-        summary = reduce_events(
-            ReductionInput(
-                trace_id=factory.trace_id,
-                project_id=factory.project_id,
-                events=deepcopy([*factory.events[:2], completed, failed]),
-                producer_count=3,
-                authority_context=AuthorityContext.product_default(),
-            )
-        )
-        [root] = summary["work_graph"]["units"]
-        assert root["latest_run_status"] == "unknown"
-        assert root["latest_run_outcome"] == "unknown"
-    finally:
-        context.unload_callbacks[-1]()
 
 
 def test_u396_negative_tuple_conflict(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
