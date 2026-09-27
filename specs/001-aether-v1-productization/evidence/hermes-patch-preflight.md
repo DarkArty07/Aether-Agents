@@ -1,10 +1,10 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-09-27T03:40:48Z`
+Observation timestamp: `2026-09-27T11:39:07Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `f222788717a9b42928f940699f12728feaf142067dcc1b271a23865d897bc6af`
+Source ledger SHA-256: `f300d1c325a1a8750da9a5106ff7267ad7d9073e66637a0116064868dead6321`
 
 ## Remaining local guarantees
 
@@ -42,6 +42,7 @@ Source ledger SHA-256: `f222788717a9b42928f940699f12728feaf142067dcc1b271a23865d
 - `HLP-428`: Retain HLP-428. The maintained fork recovers canonical Project provenance for non-affinity direct parent worktree children, refuses cross-project mismatches before task persistence, and cleanly bounds review failure containment without unverified notifications; verified by RED/GREEN reproduction, four-round strict contract audit, and exact tree reconstruction.
 - `HLP-433`: Retain HLP-433. The maintained fork preserves provider reasoning tokens across the Responses adapter boundary into chat-compatible usage and SessionDB accounting without altering input/output/total tokens or double-counting; verified by RED/GREEN reproduction, strict contract audit, and exact tree reconstruction. Merged at 621047dc1c10cceb2825013cc8bb611b4d0e8de1 but deferred for RC16 (selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d) and not yet adopted by the effective runtime, hence MAINTAINED_FORK_ONLY.
 - `HLP-435`: HLP-435 corrects the two observed normalized-only quote imbalances in maintained-fork source. PR #19 merged as b287195d63d47d73788653bdd012c2fbfe00c0ac with tree identical to reviewed f459cfa0. Keep deferred at unchanged RC16 pin 58f8c37a49b341f25b8fdd6310542fe932031b8d; no RC17, runtime adoption or upstream retirement is claimed.
+- `HLP-460`: Retain HLP-460. The maintained fork refuses prospective parentage that would give an opted-in Aether flow a second root, inside the native write transaction, while preserving generic multi-root DAGs, valid rootless promotion and review fail-closed behavior; the portable patch reconstructs the reviewed candidate tree exactly and reverses to the base tree exactly.
 - `HLP-473`: Base 54abacd1c38ce6300997289628fe2f2a7569df18; implementation c81053679cd57a24f5a7a6c93b6cd450eee47343; reviewed implementation tree 49189104a6888ef604ff0733d97b6b05e25b0d33; merged source 30b4846a2c8063528d491f48950b3b341b0ce7d7 (fork PR #21). Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
 - `HLP-474`: Base b287195d63d47d73788653bdd012c2fbfe00c0ac; implementation 7755f82df15786285378732ef17544b4736c4b81; reviewed implementation tree 105071996d00bfbb361771d82d0863552380fccb; merged source 54abacd1c38ce6300997289628fe2f2a7569df18 (fork PR #20). Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
 - `HLP-475`: Base 30b4846a2c8063528d491f48950b3b341b0ce7d7; reviewed implementation f21c733b800a2dcc8a29639c90e5f84eb7d6278b; implementation tree c69e40e7c9f362458833778b89f88430fb9e10c4; maintained-fork PR #22 merged at 58750d6cf8182c0ff5093719b9e7cc5026621fbf. Source-only. Selected fork source is merged; installed runtime remains unchanged. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
@@ -173,6 +174,10 @@ Source ledger SHA-256: `f222788717a9b42928f940699f12728feaf142067dcc1b271a23865d
 - `HLP-435` (retirement_gate): Retirement gate status is not_executed.
 - `HLP-435` (uncertainty): Both modified paths exist at the frozen RC16 selected pin 58f8c37a49b341f25b8fdd6310542fe932031b8d, but path presence is not proof of the #435 fix. The repair is only in later maintained-fork source b287195d63d47d73788653bdd012c2fbfe00c0ac; it has not been adopted by the installed runtime.
 - `HLP-435` (uncertainty): The accepted fork candidate retains the pre-existing escaped-quote bypass difference documented against newer upstream and the baseline-shared real-binary test failure; neither is repaired by this patch.
+- `HLP-460` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-460` (uncertainty): Source-only. The reviewed candidate 34a7f1e5678ba78cb011147a7462370e5b7343bb is a maintained-fork branch tip and is not merged into aether-main; the aggregate remains pinned at the already-merged revision 58750d6cf8182c0ff5093719b9e7cc5026621fbf, where tests/hermes_cli/test_kanban_collaboration.py exists from the earlier HLP-334 work. No fork pull request, merge, runtime restart, installed-behavior claim, tag, RC17 or credential change is made by this unit.
+- `HLP-460` (uncertainty): Upstream hermes-agent lacks the ancestor-root helpers, collaboration-root query and Aether opt-in corroboration at the historical inspected revision, inspected v2026.9.24 release (commit f97608f178d1ffeca59860195ab7da295f7c8e5f) and main f039f028f2bd5c6e2131b4ffaa4b200c81db68a3 at review; retirement remains unqualified.
+- `HLP-460` (uncertainty): Full fork test suite and cross-platform/Windows CI are NOT RUN by this unit; the focused 3-file hermetic reproduction above plus the parent unit's independently reviewed RED/GREEN are the whole verification basis.
 - `HLP-473` (retirement_gate): Retirement gate status is not_executed.
 - `HLP-473` (uncertainty): Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
 - `HLP-474` (retirement_gate): Retirement gate status is not_executed.
@@ -216,6 +221,7 @@ Source ledger SHA-256: `f222788717a9b42928f940699f12728feaf142067dcc1b271a23865d
 - `HLP-428`: unavailable
 - `HLP-433`: unavailable
 - `HLP-435`: passed
+- `HLP-460`: passed
 - `HLP-473`: passed
 - `HLP-474`: passed
 - `HLP-475`: passed
@@ -226,7 +232,7 @@ Selected source: `https://github.com/DarkArty07/aether-hermes@58750d6cf8182c0ff5
 
 | Verdict | Entries |
 | --- | --- |
-| present | 35 |
+| present | 36 |
 | partial | 0 |
 | absent | 0 |
 | unverified | 2 |

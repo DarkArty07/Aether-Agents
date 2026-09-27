@@ -1,0 +1,1092 @@
+diff --git a/AETHER_FORK.md b/AETHER_FORK.md
+index 189af638a..bb4cca291 100644
+--- a/AETHER_FORK.md
++++ b/AETHER_FORK.md
+@@ -496,6 +496,43 @@ Rollback reverts the implementation commit. Retire after an adopted upstream rel
+ cross-profile review dispatch on affinity-bound cards or native review delegation without lease
+ corruption; source tests do not establish installed runtime adoption.
+ 
++## Rooted Aether parentage (Aether #460)
++
++From exact fork base `58750d6cf8182c0ff5093719b9e7cc5026621fbf`, native
++`create_task(parents=...)` and `link_tasks` reject prospective Aether ancestry that
++would add or substitute a root. The guard corroborates persisted collaboration opt-in
++events against metadata attached to the connection's actual board database and
++requires the exact Aether Project, contract and version identity for a valid canonical
++root; an ambient/default board or isolated Aether-looking metadata key cannot opt a
++generic board into the rule. When an opt-in event carries the native Aether Project
++snapshot but the current board metadata is missing or inconsistent, the claim is treated
++as damaged and affected parentage is refused rather than falling back to generic DAG
++behavior.
++
++Validation runs inside each existing write transaction, before task/link/event/status/
++notification-subscription changes. `link_tasks` checks the child and its descendants
++against the prospective ancestry, including removal of a rootless node's old self-root
++when its first parent is attached. Thus a valid root-to-decision-to-unit chain retains
++the original root; unrelated generic Hermes multi-root DAGs remain valid. No historical
++edge is synthesized or rewritten, and the existing reviewer fail-closed guard remains
++responsible for pre-damaged graphs.
++
++The invariant is per node, not per graph: an affected node's corroborated root set must
++be unchanged — exactly one, the same one — rather than the final graph merely reaching
++at most one recognized root. A previously rootless node may be promoted under the
++canonical root (the supported root-to-decision-to-unit insertion), but an already
++rooted node may not be substituted: attaching a generic root or a second corroborated
++root above an existing opted-in root is refused before any link, status change, event or
++notification-subscription write, because either would give existing descendants a
++different collaboration root and leave the flow pre-damaged for the fail-closed review
++guard.
++
++The scoped regression surface is `tests/hermes_cli/test_kanban_collaboration.py` and
++`tests/hermes_cli/test_kanban_session_affinity.py`, alongside
++`hermes_cli/kanban_db.py`. This is fork-source behavior only: it does not change an
++installed runtime or release pin. Portable HLP-460 packaging and any later adoption are
++separate reviewed work.
++
+ ## Distribution identity and release binding
+ 
+ The fork keeps its own distribution and version identity: `hermes-agent` `0.20.1`
+diff --git a/hermes_cli/kanban_db.py b/hermes_cli/kanban_db.py
+index 8129a4981..eb9a5d25e 100644
+--- a/hermes_cli/kanban_db.py
++++ b/hermes_cli/kanban_db.py
+@@ -1407,6 +1407,309 @@ def _corroborate_aether_review_opt_in(
+     return opt_payload
+ 
+ 
++def _read_bound_board_metadata(conn: sqlite3.Connection) -> dict[str, Any]:
++    """Read board metadata anchored to this connection's actual database file.
++
++    Unlike ``read_board_metadata()``, this must not fall back to the ambient or
++    default board: parentage validation is a storage invariant and has to use
++    the board that owns ``conn``. An unrecognized/in-memory database has no
++    corroborating board metadata and therefore cannot opt into this guard.
++    """
++    try:
++        row = next(
++            (
++                r
++                for r in conn.execute("PRAGMA database_list").fetchall()
++                if r["name"] == "main"
++            ),
++            None,
++        )
++        if row is None or not row["file"]:
++            return {}
++        db_path = Path(row["file"]).expanduser().resolve(strict=False)
++    except (OSError, sqlite3.Error, TypeError, ValueError):
++        return {}
++
++    if db_path.parent.parent.name == "boards":
++        metadata_path = db_path.parent / "board.json"
++    elif db_path.name == "kanban.db":
++        # The legacy/default board keeps its DB at <Hermes root>/kanban.db,
++        # while its metadata lives beside other board metadata.
++        metadata_path = db_path.parent / "kanban" / "boards" / "default" / "board.json"
++    else:
++        return {}
++    try:
++        raw = json.loads(metadata_path.read_text(encoding="utf-8"))
++    except (OSError, UnicodeError, json.JSONDecodeError):
++        return {}
++    return raw if isinstance(raw, dict) else {}
++
++
++def _aether_root_identity_for_conn(
++    conn: sqlite3.Connection,
++) -> tuple[set[str], set[str], str]:
++    """Return valid canonical roots and malformed Aether claims for this board.
++
++    A lone Aether-looking metadata key is insufficient. Recognition requires
++    the connection's actual board file to contain the complete Aether
++    Project/contract/version binding plus a persisted opt-in event and task with
++    the same exact identity. Mismatched or malformed claims are returned
++    separately so unrelated generic DAG branches on the same board remain
++    usable while parentage that touches a damaged claim fails closed.
++    """
++    meta = _read_bound_board_metadata(conn)
++    contract_id = str(meta.get("aether_contract_id") or "").strip()
++    contract_version = str(meta.get("aether_contract_version") or "").strip()
++    project_id = str(meta.get("project_id") or "").strip()
++    aether_project_id = str(meta.get("aether_project_id") or "").strip()
++    complete_identity = all((
++        contract_id,
++        contract_version,
++        project_id,
++        aether_project_id,
++    ))
++
++    events = conn.execute(
++        """SELECT e.task_id, e.payload, t.project_id
++             FROM task_events e
++             JOIN tasks t ON t.id = e.task_id
++            WHERE e.kind = 'collaboration_opted_in'
++              AND e.id = (SELECT MAX(last.id) FROM task_events last
++                           WHERE last.task_id = e.task_id
++                             AND last.kind = 'collaboration_opted_in')"""
++    ).fetchall()
++    roots: set[str] = set()
++    invalid_claims: set[str] = set()
++    for event in events:
++        try:
++            payload = json.loads(event["payload"]) if event["payload"] else {}
++        except (TypeError, json.JSONDecodeError):
++            payload = None
++        event_project_id = (
++            str(payload.get("project_id") or "").strip()
++            if isinstance(payload, dict)
++            else ""
++        )
++        snapshot_project_id = (
++            str(payload.get("aether_project_id") or "").strip()
++            if isinstance(payload, dict)
++            else ""
++        )
++        # The snapshot is written only when native opt-in saw the complete
++        # Aether board binding. Keep recognizing that persisted claim if the
++        # binding is later removed or changed, but never treat it as valid
++        # unless the current board still corroborates the exact same identity.
++        if snapshot_project_id:
++            exact_identity = (
++                complete_identity
++                and event["project_id"] == project_id
++                and event_project_id == project_id
++                and str(payload.get("contract_id") or "").strip() == contract_id
++                and str(payload.get("contract_version") or "").strip()
++                == contract_version
++                and snapshot_project_id == aether_project_id
++            )
++            if (
++                not exact_identity
++                or payload.get("mode") != "advisory"
++                or parent_ids(conn, event["task_id"])
++            ):
++                invalid_claims.add(event["task_id"])
++            else:
++                roots.add(event["task_id"])
++            continue
++
++        # Legacy native opt-ins predate the Aether Project snapshot. They are
++        # recognized only while the actual board still supplies the full exact
++        # identity; a generic opt-in or a lone Aether-looking key stays generic.
++        relevant_to_board = bool(project_id) and (
++            event["project_id"] == project_id or event_project_id == project_id
++        )
++        if not complete_identity or not relevant_to_board:
++            continue
++        if (
++            not isinstance(payload, dict)
++            or payload.get("mode") != "advisory"
++            or event["project_id"] != project_id
++            or event_project_id != project_id
++            or str(payload.get("contract_id") or "").strip() != contract_id
++            or str(payload.get("contract_version") or "").strip() != contract_version
++            or parent_ids(conn, event["task_id"])
++        ):
++            invalid_claims.add(event["task_id"])
++        else:
++            roots.add(event["task_id"])
++    return roots, invalid_claims, project_id
++
++
++def _ancestor_task_ids(conn: sqlite3.Connection, task_id: str) -> set[str]:
++    rows = conn.execute(
++        """WITH RECURSIVE ancestors(id) AS (
++               SELECT ?
++               UNION
++               SELECT l.parent_id
++                 FROM task_links l
++                 JOIN ancestors a ON l.child_id = a.id
++           )
++           SELECT id FROM ancestors""",
++        (task_id,),
++    ).fetchall()
++    return {row["id"] for row in rows}
++
++
++def _find_ancestor_roots_with_prospective_parents(
++    conn: sqlite3.Connection,
++    task_id: str,
++    *,
++    linked_child_id: str,
++    new_parent_ids: Iterable[str],
++) -> set[str]:
++    """Find roots after adding parents to one existing node, without writing."""
++    prospective_parents = tuple(new_parent_ids)
++    visited: set[str] = set()
++    roots: set[str] = set()
++    queue = [task_id]
++    while queue:
++        current_id = queue.pop(0)
++        if current_id in visited:
++            continue
++        visited.add(current_id)
++        current_parents = parent_ids(conn, current_id)
++        if current_id == linked_child_id:
++            current_parents = tuple(
++                dict.fromkeys((*current_parents, *prospective_parents))
++            )
++        if not current_parents:
++            roots.add(current_id)
++        else:
++            queue.extend(
++                parent_id for parent_id in current_parents if parent_id not in visited
++            )
++    return roots
++
++
++def _validate_prospective_aether_parentage(
++    conn: sqlite3.Connection,
++    parents: Iterable[str],
++    *,
++    affected_task_id: Optional[str] = None,
++    prospective_project_id: Optional[str] = None,
++) -> None:
++    """Refuse a new edge that gives an Aether flow anything but its same root.
++
++    For ``create_task``, ``parents`` are the new node's incoming edges and
++    ``affected_task_id`` is omitted. For ``link_tasks``, the proposed parent is
++    passed in ``parents`` and the child plus all of its current descendants are
++    checked before any row, event, status, or subscription is written.
++
++    The invariant is per node, not per graph: an opted-in node must keep the
++    one corroborated canonical root it already had. Adding the child's first
++    parent is legitimate promotion (a rootless decision joining the canonical
++    root); adding a second root, or attaching an existing rooted flow under a
++    different root, is root substitution and is refused. Generic multi-root
++    DAGs never contain a corroborated root, so they stay usable.
++    """
++    aether_roots, invalid_claims, board_project_id = _aether_root_identity_for_conn(
++        conn
++    )
++    if not aether_roots and not invalid_claims:
++        return
++    parent_ids_to_check = tuple(str(parent_id) for parent_id in parents)
++    parent_roots: set[str] = set()
++    parent_ancestors: set[str] = set()
++    for parent_id in parent_ids_to_check:
++        parent_roots.update(_find_ancestor_roots(conn, parent_id))
++        parent_ancestors.update(_ancestor_task_ids(conn, parent_id))
++
++    if affected_task_id is None:
++        prospective_nodes: Iterable[Optional[str]] = (None,)
++    else:
++        prospective_nodes = _descendants_of(conn, affected_task_id)
++
++    for task_id in prospective_nodes:
++        if task_id is None:
++            prospective_roots = parent_roots
++        else:
++            prospective_roots = _find_ancestor_roots_with_prospective_parents(
++                conn,
++                task_id,
++                linked_child_id=affected_task_id,
++                new_parent_ids=parent_ids_to_check,
++            )
++        participating_aether_roots = prospective_roots & aether_roots
++        # The root this node already carries in the committed graph. A node
++        # that is not yet part of a corroborated flow has none.
++        current_aether_roots: set[str] = (
++            set()
++            if task_id is None
++            else _find_ancestor_roots(conn, task_id) & aether_roots
++        )
++        existing_ancestors = (
++            set() if task_id is None else _ancestor_task_ids(conn, task_id)
++        )
++        if (existing_ancestors | parent_ancestors) & invalid_claims:
++            raise ValueError(
++                "prospective parentage touches a malformed or mismatched Aether "
++                "collaboration claim; refusing to create an unreviewable flow"
++            )
++        if not current_aether_roots and not participating_aether_roots:
++            # Neither the current nor the prospective graph reaches a
++            # corroborated root: this branch stays generic.
++            continue
++        if task_id is None:
++            node_project_id = prospective_project_id
++        else:
++            task_row = conn.execute(
++                "SELECT project_id FROM tasks WHERE id = ?", (task_id,)
++            ).fetchone()
++            node_project_id = task_row["project_id"] if task_row is not None else None
++        if node_project_id != board_project_id:
++            raise ValueError(
++                "prospective parentage would change the canonical Aether collaboration "
++                f"Project for {task_id or 'new task'}; expected {board_project_id!r}, "
++                f"got {node_project_id!r}"
++            )
++        # An already rooted node keeps exactly the corroborated root it had: no
++        # substitution, no demotion to a generic or second root, no extra root.
++        # A node that was not yet part of a corroborated flow may be promoted
++        # under that one root and only that root, which is the supported
++        # root -> decision -> unit insertion.
++        preserved = (
++            current_aether_roots
++            and participating_aether_roots == current_aether_roots
++            and len(current_aether_roots) == 1
++            and prospective_roots == participating_aether_roots
++        )
++        promoted = (
++            not current_aether_roots
++            and len(participating_aether_roots) == 1
++            and prospective_roots == participating_aether_roots
++        )
++        if not (preserved or promoted):
++            affected = repr(task_id) if task_id is not None else "new task"
++            raise ValueError(
++                "prospective parentage would change the canonical Aether collaboration "
++                f"root for {affected}; expected exactly one corroborated Aether root "
++                f"but found {sorted(prospective_roots)!r} (existing "
++                f"{sorted(current_aether_roots)!r})"
++            )
++
++
++def _descendants_of(conn: sqlite3.Connection, root_id: str) -> set[str]:
++    rows = conn.execute(
++        """WITH RECURSIVE descendants(id) AS (
++               SELECT ?
++               UNION
++               SELECT l.child_id
++                 FROM task_links l
++                 JOIN descendants d ON d.id = l.parent_id
++           )
++           SELECT id FROM descendants""",
++        (root_id,),
++    ).fetchall()
++    return {row["id"] for row in rows}
++
++
+ def _qualify_cross_profile_affinity_review(
+     conn: sqlite3.Connection,
+     task: Task,
+@@ -4681,6 +4984,13 @@ def create_task(
+                     if missing:
+                         raise ValueError(f"unknown parent task(s): {', '.join(missing)}")
+ 
++                # Validate the full prospective ancestry before inserting any
++                # task, edge, event, subscription, or workspace-side state.
++                if parents:
++                    _validate_prospective_aether_parentage(
++                        conn, parents, prospective_project_id=project_id
++                    )
++
+                 # Project-linked worktree: a fresh worktree dir under the repo
+                 # plus a deterministic branch (project slug + task id). Together
+                 # these kill the random ``wt/<task-id>`` worker fallback and the
+@@ -5219,6 +5529,11 @@ def link_tasks(conn: sqlite3.Connection, parent_id: str, child_id: str) -> None:
+             raise ValueError(
+                 f"linking {parent_id} -> {child_id} would create a cycle"
+             )
++        # Check the child and every descendant before this edge can affect
++        # ancestry, status, events, or inherited notification subscriptions.
++        _validate_prospective_aether_parentage(
++            conn, (parent_id,), affected_task_id=child_id
++        )
+         conn.execute(
+             "INSERT OR IGNORE INTO task_links (parent_id, child_id) VALUES (?, ?)",
+             (parent_id, child_id),
+diff --git a/tests/hermes_cli/test_kanban_collaboration.py b/tests/hermes_cli/test_kanban_collaboration.py
+index f74dd8f72..fe26cccf5 100644
+--- a/tests/hermes_cli/test_kanban_collaboration.py
++++ b/tests/hermes_cli/test_kanban_collaboration.py
+@@ -857,3 +857,679 @@ def test_opt_in_origin_route_persist_match_and_refusal(
+     assert not kb.collaboration_origin_route_matches_sub(
+         route, {"platform": "telegram", "chat_id": "chat-other"}
+     )
++
++
++def _aether_parentage_fixture(
++    tmp_path: Path, conn: sqlite3.Connection
++) -> tuple[str, str, str]:
++    """Install one exact Aether board identity and return Project/workspace paths."""
++    from hermes_cli import projects_db
++
++    with projects_db.connect_closing() as pconn:
++        project_id = projects_db.create_project(
++            pconn, name=f"HF-460 {tmp_path.name}", primary_path=str(tmp_path)
++        )
++    board = "test_board"
++    metadata_path = kb.board_metadata_path(board)
++    metadata_path.parent.mkdir(parents=True, exist_ok=True)
++    metadata_path.write_text(
++        json.dumps({
++            "slug": board,
++            "aether_contract_id": "oc_hf460",
++            "aether_contract_version": 1,
++            "aether_project_id": "aether-project-hf460",
++            "project_id": project_id,
++        }),
++        encoding="utf-8",
++    )
++    assert kb._read_bound_board_metadata(conn)["project_id"] == project_id
++    return project_id, str(tmp_path / "canonical"), str(tmp_path / "candidate")
++
++
++def _parentage_snapshot(conn: sqlite3.Connection) -> tuple:
++    return (
++        tuple(
++            tuple(row)
++            for row in conn.execute(
++                "SELECT id, status, workspace_path FROM tasks ORDER BY id"
++            )
++        ),
++        tuple(
++            tuple(row)
++            for row in conn.execute(
++                "SELECT parent_id, child_id FROM task_links ORDER BY parent_id, child_id"
++            )
++        ),
++        tuple(
++            tuple(row)
++            for row in conn.execute(
++                "SELECT id, task_id, kind, payload FROM task_events ORDER BY id"
++            )
++        ),
++        tuple(
++            tuple(row)
++            for row in conn.execute(
++                "SELECT * FROM kanban_notify_subs ORDER BY task_id, platform, chat_id"
++            )
++        ),
++    )
++
++
++def test_aether_create_task_preserves_one_corroborated_root_atomically(
++    board_db: tuple[Path, sqlite3.Connection],
++) -> None:
++    """New Aether children cannot join an independent root or leave write residue."""
++    kanban_home, conn = board_db
++    project_id, canonical, candidate = _aether_parentage_fixture(kanban_home, conn)
++    Path(canonical).mkdir()
++    Path(candidate).mkdir()
++    root = kb.create_task(
++        conn,
++        title="canonical root",
++        assignee="supervisor",
++        project_id=project_id,
++        workspace_kind="dir",
++        workspace_path=canonical,
++    )
++    assert kb.opt_in_collaboration(
++        conn,
++        root,
++        contract_id="oc_hf460",
++        contract_version="1",
++        session_id="origin-session",
++        board="test_board",
++    )
++    decision = kb.create_task(
++        conn,
++        title="decision",
++        assignee="supervisor",
++        project_id=project_id,
++        parents=(root,),
++        workspace_kind="dir",
++        workspace_path=canonical,
++    )
++    unit = kb.create_task(
++        conn,
++        title="unit",
++        assignee="implementer",
++        project_id=project_id,
++        parents=(decision,),
++        workspace_kind="dir",
++        workspace_path=candidate,
++    )
++    assert kb.get_collaboration_root(conn, unit) == root
++
++    # An unrelated root is a valid generic task until a caller tries to join it
++    # to this exact persisted Aether flow.
++    independent = kb.create_task(
++        conn,
++        title="independent decision",
++        assignee="supervisor",
++        project_id=project_id,
++        workspace_kind="dir",
++        workspace_path=canonical,
++    )
++    conn.execute(
++        "INSERT INTO kanban_notify_subs "
++        "(task_id, platform, chat_id, thread_id, user_id, delivery_mode, created_at, last_event_id) "
++        "VALUES (?, 'tui', 'origin-chat', '', 'user-1', 'notify', ?, 0)",
++        (root, int(time.time())),
++    )
++    conn.commit()
++
++    before = _parentage_snapshot(conn)
++    rejected_workspace = Path(candidate) / "must-not-exist"
++    with pytest.raises(ValueError, match="canonical Aether collaboration root"):
++        kb.create_task(
++            conn,
++            title="ambiguous unit",
++            assignee="implementer",
++            project_id=project_id,
++            parents=(root, independent),
++            workspace_kind="dir",
++            workspace_path=str(rejected_workspace),
++        )
++    assert _parentage_snapshot(conn) == before
++    assert not rejected_workspace.exists()
++    assert kb.get_collaboration_root(conn, unit) == root
++
++
++@pytest.mark.parametrize("link_to_ancestor", [False, True])
++def test_aether_link_tasks_preserves_same_root_across_descendants_atomically(
++    board_db: tuple[Path, sqlite3.Connection],
++    link_to_ancestor: bool,
++) -> None:
++    """link_tasks rejects root replacement before links/status/events/subscriptions change."""
++    kanban_home, conn = board_db
++    project_id, canonical, candidate = _aether_parentage_fixture(kanban_home, conn)
++    Path(canonical).mkdir()
++    Path(candidate).mkdir()
++    root = kb.create_task(
++        conn,
++        title="canonical root",
++        assignee="supervisor",
++        project_id=project_id,
++        workspace_kind="dir",
++        workspace_path=canonical,
++    )
++    assert kb.opt_in_collaboration(
++        conn,
++        root,
++        contract_id="oc_hf460",
++        contract_version="1",
++        session_id="origin-session",
++        board="test_board",
++    )
++    decision = kb.create_task(
++        conn,
++        title="decision",
++        assignee="supervisor",
++        project_id=project_id,
++        parents=(root,),
++        workspace_kind="dir",
++        workspace_path=canonical,
++    )
++    unit = kb.create_task(
++        conn,
++        title="unit",
++        assignee="implementer",
++        project_id=project_id,
++        parents=(decision,),
++        workspace_kind="dir",
++        workspace_path=candidate,
++    )
++    independent = kb.create_task(
++        conn,
++        title="independent",
++        assignee="supervisor",
++        project_id=project_id,
++        workspace_kind="dir",
++        workspace_path=canonical,
++    )
++    conn.execute("UPDATE tasks SET status='running' WHERE id=?", (independent,))
++    conn.execute("UPDATE tasks SET status='ready' WHERE id=?", (unit,))
++    conn.execute(
++        "INSERT INTO kanban_notify_subs "
++        "(task_id, platform, chat_id, thread_id, user_id, delivery_mode, created_at, last_event_id) "
++        "VALUES (?, 'tui', 'independent-chat', '', 'user-2', 'notify', ?, 0)",
++        (independent, int(time.time())),
++    )
++    conn.commit()
++
++    target = decision if link_to_ancestor else unit
++    before = _parentage_snapshot(conn)
++    with pytest.raises(ValueError, match="canonical Aether collaboration root"):
++        kb.link_tasks(conn, independent, target)
++    assert _parentage_snapshot(conn) == before
++    assert kb.get_collaboration_root(conn, decision) == root
++    assert kb.get_collaboration_root(conn, unit) == root
++
++
++def test_aether_link_tasks_allows_new_rootless_decision_chain(
++    board_db: tuple[Path, sqlite3.Connection],
++) -> None:
++    """Linking fresh rootless nodes beneath the canonical root preserves that root."""
++    kanban_home, conn = board_db
++    project_id, canonical, _ = _aether_parentage_fixture(kanban_home, conn)
++    root = kb.create_task(
++        conn,
++        title="canonical root",
++        assignee="supervisor",
++        project_id=project_id,
++        workspace_kind="dir",
++        workspace_path=canonical,
++    )
++    assert kb.opt_in_collaboration(
++        conn,
++        root,
++        contract_id="oc_hf460",
++        contract_version="1",
++        session_id="origin-session",
++        board="test_board",
++    )
++    decision = kb.create_task(
++        conn, title="rootless decision", assignee="supervisor", project_id=project_id
++    )
++    existing_unit = kb.create_task(
++        conn,
++        title="existing rootless descendant",
++        assignee="implementer",
++        project_id=project_id,
++        parents=(decision,),
++    )
++
++    kb.link_tasks(conn, root, decision)
++    assert kb.get_collaboration_root(conn, decision) == root
++    assert kb.get_collaboration_root(conn, existing_unit) == root
++
++    later_unit = kb.create_task(
++        conn, title="later rootless unit", assignee="implementer", project_id=project_id
++    )
++    kb.link_tasks(conn, decision, later_unit)
++    assert kb.get_collaboration_root(conn, later_unit) == root
++
++    # Aether identity on the board must not restrict an unrelated generic DAG.
++    generic_a = kb.create_task(conn, title="generic root A", assignee="worker")
++    generic_b = kb.create_task(conn, title="generic root B", assignee="worker")
++    generic_child = kb.create_task(conn, title="generic child", assignee="worker")
++    kb.link_tasks(conn, generic_a, generic_child)
++    kb.link_tasks(conn, generic_b, generic_child)
++    assert kb.get_collaboration_root(conn, generic_child) is None
++
++
++def test_aether_link_rejects_project_mismatch_before_side_effects(
++    board_db: tuple[Path, sqlite3.Connection],
++    tmp_path: Path,
++) -> None:
++    """A same-root edge cannot attach a foreign-Project descendant."""
++    from hermes_cli import projects_db
++
++    kanban_home, conn = board_db
++    project_id, canonical, _ = _aether_parentage_fixture(kanban_home, conn)
++    with projects_db.connect_closing() as pconn:
++        foreign_project = projects_db.create_project(
++            pconn,
++            name=f"HF-460 foreign {tmp_path.name}",
++            primary_path=str(tmp_path / "foreign"),
++        )
++    Path(canonical).mkdir()
++    root = kb.create_task(
++        conn,
++        title="canonical root",
++        assignee="supervisor",
++        project_id=project_id,
++        workspace_kind="dir",
++        workspace_path=canonical,
++    )
++    assert kb.opt_in_collaboration(
++        conn,
++        root,
++        contract_id="oc_hf460",
++        contract_version="1",
++        session_id="origin-session",
++        board="test_board",
++    )
++    child = kb.create_task(
++        conn,
++        title="foreign child",
++        assignee="implementer",
++        project_id=foreign_project,
++        workspace_kind="dir",
++        workspace_path=str(tmp_path / "foreign-child"),
++    )
++
++    before = _parentage_snapshot(conn)
++    with pytest.raises(ValueError, match="canonical Aether collaboration Project"):
++        kb.link_tasks(conn, root, child)
++    assert _parentage_snapshot(conn) == before
++
++
++def test_aether_parentage_rejects_incomplete_project_identity_claim_atomically(
++    board_db: tuple[Path, sqlite3.Connection],
++) -> None:
++    """A persisted exact opt-in cannot be extended after its Aether Project binding is lost."""
++    kanban_home, conn = board_db
++    project_id, canonical, candidate = _aether_parentage_fixture(kanban_home, conn)
++    Path(canonical).mkdir()
++    Path(candidate).mkdir()
++    root = kb.create_task(
++        conn,
++        title="canonical root",
++        assignee="supervisor",
++        project_id=project_id,
++        workspace_kind="dir",
++        workspace_path=canonical,
++    )
++    assert kb.opt_in_collaboration(
++        conn,
++        root,
++        contract_id="oc_hf460",
++        contract_version="1",
++        session_id="origin-session",
++        board="test_board",
++    )
++
++    metadata_path = kb.board_metadata_path("test_board")
++    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
++    metadata.pop("aether_project_id")
++    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
++    before = _parentage_snapshot(conn)
++    with pytest.raises(
++        ValueError, match="malformed or mismatched Aether collaboration claim"
++    ):
++        kb.create_task(
++            conn,
++            title="unreviewable child",
++            assignee="implementer",
++            project_id=project_id,
++            parents=(root,),
++            workspace_kind="dir",
++            workspace_path=str(Path(candidate) / "must-not-exist"),
++        )
++    assert _parentage_snapshot(conn) == before
++    assert kb.get_collaboration_root(conn, root) == root
++
++
++@pytest.mark.parametrize(
++    "damage", ["missing_contract", "changed_project", "missing_metadata"]
++)
++def test_aether_link_rejects_damaged_board_identity_atomically(
++    board_db: tuple[Path, sqlite3.Connection], damage: str
++) -> None:
++    """Persisted Aether opt-in snapshots stay guarded if board identity is damaged."""
++    kanban_home, conn = board_db
++    project_id, canonical, candidate = _aether_parentage_fixture(kanban_home, conn)
++    root = kb.create_task(
++        conn,
++        title="canonical root",
++        assignee="supervisor",
++        project_id=project_id,
++        workspace_kind="dir",
++        workspace_path=canonical,
++    )
++    assert kb.opt_in_collaboration(
++        conn,
++        root,
++        contract_id="oc_hf460",
++        contract_version="1",
++        session_id="origin-session",
++        board="test_board",
++    )
++    decision = kb.create_task(
++        conn,
++        title="decision",
++        assignee="supervisor",
++        project_id=project_id,
++        parents=(root,),
++        workspace_kind="dir",
++        workspace_path=canonical,
++    )
++    unit = kb.create_task(
++        conn,
++        title="unit",
++        assignee="implementer",
++        project_id=project_id,
++        parents=(decision,),
++        workspace_kind="dir",
++        workspace_path=candidate,
++    )
++    unrelated = kb.create_task(
++        conn,
++        title="unrelated root",
++        assignee="supervisor",
++        project_id=project_id,
++    )
++    kb.add_notify_sub(
++        conn,
++        task_id=unrelated,
++        platform="tui",
++        chat_id="unrelated-chat",
++        delivery_mode="notify",
++    )
++
++    metadata_path = kb.board_metadata_path("test_board")
++    if damage == "missing_metadata":
++        metadata_path.unlink()
++    else:
++        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
++        if damage == "missing_contract":
++            metadata.pop("aether_contract_id")
++        else:
++            metadata["project_id"] = "different-project"
++        metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
++
++    before = _parentage_snapshot(conn)
++    with pytest.raises(
++        ValueError, match="malformed or mismatched Aether collaboration claim"
++    ):
++        kb.link_tasks(conn, unrelated, unit)
++    assert _parentage_snapshot(conn) == before
++    assert kb.get_collaboration_root(conn, decision) == root
++    assert kb.get_collaboration_root(conn, unit) == root
++
++
++def test_generic_multiroot_create_is_unchanged_by_aether_parentage_guard(
++    board_db: tuple[Path, sqlite3.Connection],
++) -> None:
++    """The opt-in and exact connection-board identity are required for this guard."""
++    _, conn = board_db
++    root_a = kb.create_task(conn, title="generic root A", assignee="worker")
++    root_b = kb.create_task(conn, title="generic root B", assignee="worker")
++    child = kb.create_task(
++        conn,
++        title="generic multi-root child",
++        assignee="worker",
++        parents=(root_a, root_b),
++    )
++    assert kb.get_collaboration_root(conn, child) is None
++
++
++def test_isolated_aether_key_and_ambient_default_board_do_not_corroborate(
++    board_db: tuple[Path, sqlite3.Connection],
++    tmp_path: Path,
++) -> None:
++    """Only the actual DB board metadata plus event identity enable the guard."""
++    from hermes_cli import projects_db
++
++    kanban_home, conn = board_db
++    with projects_db.connect_closing() as pconn:
++        project_id = projects_db.create_project(
++            pconn, name=f"HF-460 isolated {tmp_path.name}", primary_path=str(tmp_path)
++        )
++
++    # Put a fully Aether-looking identity on the ambient default board, but the
++    # actual connection is for test_board. An isolated key on that actual board
++    # is still insufficient, even with a persisted generic opt-in event.
++    default_meta_path = kb.board_metadata_path("default")
++    default_meta_path.parent.mkdir(parents=True, exist_ok=True)
++    default_meta_path.write_text(
++        json.dumps({
++            "aether_contract_id": "oc_ambient",
++            "aether_contract_version": 1,
++            "aether_project_id": "ambient-aether-project",
++            "project_id": project_id,
++        }),
++        encoding="utf-8",
++    )
++    actual_meta_path = kb.board_metadata_path("test_board")
++    actual_meta_path.parent.mkdir(parents=True, exist_ok=True)
++    actual_meta_path.write_text(
++        json.dumps({
++            "slug": "test_board",
++            "project_id": project_id,
++            "aether_project_id": "isolated-label",
++        }),
++        encoding="utf-8",
++    )
++
++    root = kb.create_task(
++        conn,
++        title="generic opted-in root",
++        assignee="supervisor",
++        project_id=project_id,
++    )
++    assert kb.opt_in_collaboration(
++        conn, root, session_id="origin-session", board="test_board"
++    )
++    independent = kb.create_task(
++        conn, title="generic independent root", assignee="worker", project_id=project_id
++    )
++    child = kb.create_task(
++        conn,
++        title="generic multi-root child",
++        assignee="worker",
++        project_id=project_id,
++        parents=(root, independent),
++    )
++    assert kb.get_collaboration_root(conn, child) is None
++
++
++@pytest.mark.parametrize("attach_second_aether_root", [False, True])
++def test_aether_link_tasks_refuses_root_substitution_atomically(
++    board_db: tuple[Path, sqlite3.Connection],
++    attach_second_aether_root: bool,
++) -> None:
++    """An opted-in root keeps its exact canonical root under every new edge.
++
++    ``attach_second_aether_root=False`` attaches a generic root above the
++    corroborated root; ``True`` attaches a second corroborated root. Both are
++    root substitution: they would give existing descendants a different
++    collaboration root and leave the flow pre-damaged for review (#475).
++    """
++    kanban_home, conn = board_db
++    project_id, _canonical, candidate = _aether_parentage_fixture(kanban_home, conn)
++    Path(candidate).mkdir()
++    canonical_root = kb.create_task(
++        conn,
++        title="canonical root",
++        assignee="supervisor",
++        project_id=project_id,
++        workspace_kind="dir",
++        workspace_path=str(Path(candidate) / "canonical"),
++    )
++    assert kb.opt_in_collaboration(
++        conn,
++        canonical_root,
++        contract_id="oc_hf460",
++        contract_version="1",
++        session_id="origin-session",
++        board="test_board",
++    )
++    decision = kb.create_task(
++        conn,
++        title="decision",
++        assignee="supervisor",
++        project_id=project_id,
++        parents=(canonical_root,),
++    )
++    unit = kb.create_task(
++        conn,
++        title="unit",
++        assignee="implementer",
++        project_id=project_id,
++        parents=(decision,),
++        workspace_kind="dir",
++        workspace_path=candidate,
++    )
++
++    if attach_second_aether_root:
++        intruder = kb.create_task(
++            conn,
++            title="second corroborated root",
++            assignee="supervisor",
++            project_id=project_id,
++        )
++        assert kb.opt_in_collaboration(
++            conn,
++            intruder,
++            contract_id="oc_hf460",
++            contract_version="1",
++            session_id="other-session",
++            board="test_board",
++        )
++    else:
++        intruder = kb.create_task(
++            conn,
++            title="generic independent root",
++            assignee="supervisor",
++            project_id=project_id,
++        )
++    unit_2 = kb.create_task(
++        conn,
++        title="intruder unit",
++        assignee="implementer",
++        project_id=project_id,
++        parents=(intruder,),
++    )
++    kb.add_notify_sub(
++        conn,
++        task_id=unit_2,
++        platform="tui",
++        chat_id="intruder-chat",
++        delivery_mode="notify",
++    )
++    conn.execute("UPDATE tasks SET status='done' WHERE id=?", (intruder,))
++    conn.execute("UPDATE tasks SET status='running' WHERE id=?", (unit_2,))
++    conn.commit()
++
++    before = _parentage_snapshot(conn)
++    with pytest.raises(ValueError, match="canonical Aether collaboration root"):
++        kb.link_tasks(conn, intruder, canonical_root)
++    assert _parentage_snapshot(conn) == before
++    assert kb.get_collaboration_root(conn, decision) == canonical_root
++    assert kb.get_collaboration_root(conn, unit) == canonical_root
++    assert kb.get_collaboration_root(conn, canonical_root) == canonical_root
++
++
++def test_aether_create_task_refuses_second_corroborated_root_atomically(
++    board_db: tuple[Path, sqlite3.Connection],
++) -> None:
++    """A new child cannot be born under two corroborated or two mixed roots."""
++    kanban_home, conn = board_db
++    project_id, canonical, candidate = _aether_parentage_fixture(kanban_home, conn)
++    Path(canonical).mkdir()
++    Path(candidate).mkdir()
++    canonical_root = kb.create_task(
++        conn,
++        title="canonical root",
++        assignee="supervisor",
++        project_id=project_id,
++        workspace_kind="dir",
++        workspace_path=canonical,
++    )
++    assert kb.opt_in_collaboration(
++        conn,
++        canonical_root,
++        contract_id="oc_hf460",
++        contract_version="1",
++        session_id="origin-session",
++        board="test_board",
++    )
++    second_root = kb.create_task(
++        conn,
++        title="second corroborated root",
++        assignee="supervisor",
++        project_id=project_id,
++    )
++    assert kb.opt_in_collaboration(
++        conn,
++        second_root,
++        contract_id="oc_hf460",
++        contract_version="1",
++        session_id="other-session",
++        board="test_board",
++    )
++    unit = kb.create_task(
++        conn,
++        title="unit",
++        assignee="implementer",
++        project_id=project_id,
++        parents=(canonical_root,),
++        workspace_kind="dir",
++        workspace_path=candidate,
++    )
++    generic_root = kb.create_task(
++        conn,
++        title="generic root",
++        assignee="worker",
++        project_id=project_id,
++    )
++
++    before = _parentage_snapshot(conn)
++    for parents in ((canonical_root, second_root), (canonical_root, generic_root)):
++        rejected_workspace = Path(candidate) / f"must-not-exist-{len(parents)}"
++        with pytest.raises(ValueError, match="canonical Aether collaboration root"):
++            kb.create_task(
++                conn,
++                title="ambiguous child",
++                assignee="implementer",
++                project_id=project_id,
++                parents=parents,
++                workspace_kind="dir",
++                workspace_path=str(rejected_workspace),
++            )
++        assert not rejected_workspace.exists()
++    assert _parentage_snapshot(conn) == before
++    assert kb.get_collaboration_root(conn, unit) == canonical_root
++    assert kb.get_collaboration_root(conn, canonical_root) == canonical_root
++    assert kb.get_collaboration_root(conn, second_root) == second_root
+diff --git a/tests/hermes_cli/test_kanban_session_affinity.py b/tests/hermes_cli/test_kanban_session_affinity.py
+index 5f2170bfa..d53285558 100644
+--- a/tests/hermes_cli/test_kanban_session_affinity.py
++++ b/tests/hermes_cli/test_kanban_session_affinity.py
+@@ -1383,7 +1383,14 @@ def test_recognized_aether_identity_damage_never_spawns_fresh_review(
+                 workspace_kind="dir", workspace_path=str(canonical),
+             )
+             conn.execute("UPDATE tasks SET status='done' WHERE id=?", (other,))
+-            kb.link_tasks(conn, other, unit)
++            # Deliberately construct a pre-existing damaged graph directly in
++            # storage. The public link API must now refuse creating this state;
++            # this control still proves review dispatch fails closed on legacy
++            # or externally damaged rows.
++            conn.execute(
++                "INSERT INTO task_links (parent_id, child_id) VALUES (?, ?)",
++                (other, unit),
++            )
+         conn.commit()
+     finally:
+         conn.close()
