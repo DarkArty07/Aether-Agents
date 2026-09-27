@@ -3951,6 +3951,13 @@ class LifecycleManager:
         }
         self._run_target_lifecycle_subprocess(target_release_id, request)
 
+    def _projection_request_project(self, project_root: Path | None) -> str | None:
+        """Carry caller-verified binding before the target changes its working directory."""
+        selected = project_root if project_root is not None else self.project_root
+        if selected is None:
+            selected = self._resolve_default_project()
+        return str(selected.resolve()) if selected is not None else None
+
     def _prepare_target_projections_subprocess(
         self,
         target_release_id: str,
@@ -3967,15 +3974,10 @@ class LifecycleManager:
                 str(roots.wsl_shortcuts_dir) if roots.wsl_shortcuts_dir is not None else None
             ),
         }
-        resolved_proj = (
-            str(project_root.resolve())
-            if project_root is not None
-            else (str(self.project_root.resolve()) if self.project_root is not None else None)
-        )
         request = {
             "operation": "prepare_projections",
             "projection_roots": roots_data,
-            "project_root": resolved_proj,
+            "project_root": self._projection_request_project(project_root),
             "proposed_record": self.store._target_active_payload(record),
         }
         result = self._run_target_lifecycle_subprocess(target_release_id, request)
@@ -4079,15 +4081,10 @@ class LifecycleManager:
                 str(roots.wsl_shortcuts_dir) if roots.wsl_shortcuts_dir is not None else None
             ),
         }
-        resolved_proj = (
-            str(project_root.resolve())
-            if project_root is not None
-            else (str(self.project_root.resolve()) if self.project_root is not None else None)
-        )
         request = {
             "operation": "validate_projections",
             "projection_roots": roots_data,
-            "project_root": resolved_proj,
+            "project_root": self._projection_request_project(project_root),
         }
         result = self._run_target_lifecycle_subprocess(target_release_id, request)
         mismatches = result.get("mismatches", [])
@@ -6598,7 +6595,9 @@ class LifecycleManager:
                 )
             if compensation_error is not None:
                 raise IntegrityError(
-                    "lifecycle transition compensation failed"
+                    "lifecycle transition compensation failed; "
+                    f"transition error: {transition_error}; "
+                    f"compensation error: {compensation_error}"
                 ) from compensation_error
             raise transition_error
         self.store._finish_transition_locked(transition, state="committed")
