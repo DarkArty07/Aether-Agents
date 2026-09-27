@@ -398,8 +398,9 @@ def test_wheel_and_sdist_include_valid_portable_canonical_skill_resources(
             expected_version = {
                 "objective-contract-design": "0.2.1",
                 "contract-result-review": "0.1.2",
-                "supervisor-decomposition": "0.1.5",
-                "implementation-evidence": "0.1.2",
+                "supervisor-decomposition": "0.1.6",
+                "implementation-evidence": "0.1.3",
+                "git-github-closeout": "0.1.1",
                 "semver-release": "0.1.1",
                 "project-knowledge": "0.1.1",
             }.get(skill_name, "0.1.0")

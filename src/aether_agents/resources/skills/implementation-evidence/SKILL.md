@@ -1,7 +1,7 @@
 ---
 name: implementation-evidence
 description: Use when Implementer executes a contract-derived unit.
-version: 0.1.2
+version: 0.1.3
 author: Morfeo (Aether role), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -70,6 +70,10 @@ Supervisor-owned delivery defines scope; reading more context does not enlarge i
    approval for equivalent local algorithms, private names, or test organization.
    Investigate the smallest unknown that blocks the unit; do not design an unrelated
    framework or absorb incidental defects that do not block acceptance.
+   Apply `git-github-closeout`'s Workspace and temporary-storage hygiene section to
+   your owned temporary resources only. Check capacity before large writes, use scoped
+   disposable locations and reclaim them after their last consumer and evidence handoff.
+   That shared procedure does not grant publication or terminal pipeline ownership.
 4. **Implement with the resolved test discipline.** Follow test-first only when the
    project's standard requires it. Reproduce a defect when that is the acceptance
    basis. Exercise normal and required negative/boundary cases using the oracle checks
@@ -95,6 +99,9 @@ Supervisor-owned delivery defines scope; reading more context does not enlarge i
    project-relative evidence references in portable artifacts; never include secrets,
    raw private state or provider credentials. Report unit-level compatibility evidence
    only; Supervisor owns aggregate release conclusions and pipeline publication.
+   Include any necessary retained temporary path and its consumer/reason in this handoff.
+   Remove obsolete intermediates, but preserve your assigned worktree and required
+   review inputs for Supervisor; requesting review is not worktree retirement.
 8. **Use the existing terminal/review lane.** Re-read the actual graph and native task
    protocol. Normal Aether unit review is same-card: request it instead of self-approving;
    only the claimed Supervisor review run issues its verdict. A terminal integration
