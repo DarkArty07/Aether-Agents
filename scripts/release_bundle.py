@@ -46,12 +46,11 @@ ALLOWED_HERMES_EXTRAS = ("mcp",)
 HERMES_SOURCE_MODE = "maintained_fork"
 PROFILE_BUNDLE_VERSION = "2"
 PROFILE_ROLES = ("morfeo", "supervisor", "implementer")
-AETHER_PLUGIN_NAMES = (
-    "aether-contract-observer",
-    "aether-objective-contracts",
-    "aether-project-knowledge",
-    "aether-telegram-monitor",
-)
+AETHER_PLUGIN_ENTRY_POINTS = {
+    "aether-contract-observer": "aether_agents.observation.capture.hermes_plugin",
+    "aether-objective-contracts": "aether_agents.objective_contracts.hermes_plugin",
+    "aether-project-knowledge": "aether_agents.knowledge.hermes_plugin",
+}
 PINNED_LOCAL_UPDATE_OPTIONS = (
     "--local",
     "--aether-checkout",
@@ -621,6 +620,11 @@ def inspect_wheel(lifecycle: Any, path: Path) -> dict[str, Any]:
     """Inspect the wheel through the product's own member inspection."""
 
     inspected = lifecycle.LifecycleManager._inspect_wheel(path)
+    if inspected["plugin_entry_points"] != AETHER_PLUGIN_ENTRY_POINTS:
+        raise BundleError(
+            "plugin-entry-point-mismatch",
+            "release bundles must contain exactly the current three Aether plugin targets",
+        )
     members: list[dict[str, Any]] = []
     with zipfile.ZipFile(path) as archive:
         for info in archive.infolist():

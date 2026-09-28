@@ -30,7 +30,6 @@ aether = "aether_agents.cli:main"
 aether-contract-observer = "aether_agents.observation.capture.hermes_plugin"
 aether-objective-contracts = "aether_agents.objective_contracts.hermes_plugin"
 aether-project-knowledge = "aether_agents.knowledge.hermes_plugin"
-aether-telegram-monitor = "aether_agents.monitor.hermes_plugin"
 
 [project.urls]
 Homepage = "https://github.com/DarkArty07/aether-agents"
@@ -45,8 +44,7 @@ pattern = "^(?P<version>[^\\s]+)$"
 packages = ["src/aether_agents"]
 
 # OBS-FR-075: package the exact normative bytes without maintaining a second
-# source copy. The laboratory bytes are mapped into package resources by the
-# source-distribution force-include below.
+# source copy.
 [tool.hatch.build.targets.wheel.force-include]
 "specs/002-aether-contract-observation/contracts/observation-event.schema.json" = "aether_agents/resources/schemas/observation-event.schema.json"
 "specs/002-aether-contract-observation/contracts/observation-summary.schema.json" = "aether_agents/resources/schemas/observation-summary.schema.json"
@@ -58,9 +56,6 @@ packages = ["src/aether_agents"]
 [tool.hatch.build.targets.sdist]
 include = [
   "/src/aether_agents",
-  "/src/aether_agents/resources/lab/**",
-  "/lab",
-  "/scripts/e2e",
   "/specs/002-aether-contract-observation/contracts",
   "/specs/001-aether-v1-productization/contracts/release-lock.schema.json",
   "/specs/001-aether-v1-productization/contracts/project.schema.json",
@@ -69,9 +64,6 @@ include = [
   "/README.md",
   "/LICENSE",
 ]
-
-[tool.hatch.build.targets.sdist.force-include]
-"lab" = "src/aether_agents/resources/lab"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -119,7 +111,7 @@ select = ["E4", "E7", "E9", "F", "I"]
 [tool.mypy]
 # Fixture payloads and the named legacy modules have pre-existing inference
 # defects.  The gate remains source-scoped and does not use ``ignore_errors``.
-exclude = "(^src/aether_agents/resources/lab/fixtures/|^src/aether_agents/(?:lifecycle|paths|objective_contracts/store|lab/runner|observation/(?:checkpoint|capture/(?:collector|hermes_plugin|journal)|locking|privacy|query|reduce/(?:flow|process|reconciliation|reducer)|retention|storage))\\.py$)"
+exclude = "(^src/aether_agents/(?:lifecycle|paths|objective_contracts/store|observation/(?:checkpoint|capture/(?:collector|hermes_plugin|journal)|locking|privacy|query|reduce/(?:flow|process|reconciliation|reducer)|retention|storage))\\.py$)"
 files = ["src/aether_agents"]
 python_version = "3.11"
 warn_unused_configs = true
