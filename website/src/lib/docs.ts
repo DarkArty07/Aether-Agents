@@ -27,7 +27,6 @@ const descriptions: Record<string, string> = {
   'guides/lifecycle': 'Recorrido completo del trabajo y su cierre.',
   'guides/project-knowledge': 'Graphify, mapa técnico compartido y experiencias por rol.',
   'guides/observation': 'Evidencia y lectura de la actividad del sistema.',
-  'guides/telegram-monitor': 'Reportes horarios de progreso y límites del monitor de Telegram.',
   'guides/policy-and-recovery': 'Política, límites y recuperación reversible.',
   'guides/morfeo-tool-configuration': 'Selección local de herramientas por rol, sus motivos y límites.',
   'guides/morfeo-mcp': 'Uso de Morfeo desde clientes MCP externos, contexto inicial y límites de la conexión.',
