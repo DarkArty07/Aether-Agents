@@ -88,7 +88,6 @@ def test_wheel_has_exact_official_plugin_entrypoints_and_role_profile_opt_ins(
             "aether-contract-observer": "aether_agents.observation.capture.hermes_plugin",
             "aether-objective-contracts": "aether_agents.objective_contracts.hermes_plugin",
             "aether-project-knowledge": "aether_agents.knowledge.hermes_plugin",
-            "aether-telegram-monitor": "aether_agents.monitor.hermes_plugin",
         }
         for profile in PROFILE_NAMES:
             data = archive.read(f"aether_agents/resources/profiles/{profile}/config.yaml").decode(
@@ -99,17 +98,33 @@ def test_wheel_has_exact_official_plugin_entrypoints_and_role_profile_opt_ins(
             ).read_text(encoding="utf-8")
             assert data == source
             assert ("aether-objective-contracts" in data) is (profile == "morfeo")
-            assert ("aether-telegram-monitor" in data) is (profile == "morfeo")
-        # The monitor's packaged deterministic pre-check and narration context ship in
-        # the same wheel as the entry point that consumes them.
-        for name in (
-            "aether_agents/resources/monitor/precheck.py",
-            "aether_agents/resources/monitor/narration-context.md",
-        ):
-            wheel_bytes = archive.read(name)
-            source_bytes = (ROOT / "src" / name).read_bytes()
-            assert wheel_bytes == source_bytes, name
+            assert "aether-telegram-monitor" not in data
+        retired_wheel_prefixes = (
+            "aether_agents/lab/",
+            "aether_agents/monitor/",
+            "aether_agents/resources/lab/",
+            "aether_agents/resources/monitor/",
+        )
+        assert not any(name.startswith(retired_wheel_prefixes) for name in archive.namelist())
         assert not any("aether_observer" in name for name in archive.namelist())
+
+
+def test_sdist_omits_retired_lab_and_monitor_sources_and_mappings(
+    built_distribution: tuple[Path, Path],
+) -> None:
+    _, sdist = built_distribution
+    with tarfile.open(sdist, "r:gz") as archive:
+        members = [name.split("/", 1)[-1] for name in archive.getnames()]
+
+    retired_prefixes = (
+        "src/aether_agents/lab/",
+        "src/aether_agents/monitor/",
+        "src/aether_agents/resources/lab/",
+        "src/aether_agents/resources/monitor/",
+        "lab/",
+        "scripts/e2e/",
+    )
+    assert not any(name.startswith(retired_prefixes) for name in members)
 
 
 def test_wheel_and_sdist_schemas_are_exact_normative_bytes(
@@ -213,7 +228,7 @@ eps = sorted(
     for ep in importlib.metadata.entry_points().select(group='hermes_agent.plugins')
     if ep.dist and ep.dist.metadata['Name'] == 'aether-agents'
 )
-if len(eps) != 4:
+if len(eps) != 3:
     raise RuntimeError('Aether plugin entry-point set mismatch')
 observer = importlib.import_module('aether_agents.observation.capture.hermes_plugin')
 loaded = next(ep for ep in eps if ep.name == 'aether-contract-observer').load()
@@ -298,7 +313,6 @@ def test_same_wheel_installs_in_isolated_manager_and_runtime_without_path_shadow
         ["aether-contract-observer", "aether_agents.observation.capture.hermes_plugin"],
         ["aether-objective-contracts", "aether_agents.objective_contracts.hermes_plugin"],
         ["aether-project-knowledge", "aether_agents.knowledge.hermes_plugin"],
-        ["aether-telegram-monitor", "aether_agents.monitor.hermes_plugin"],
     ]
     assert manager_identity["observer_module"] == (
         "aether_agents.observation.capture.hermes_plugin"
@@ -345,15 +359,15 @@ def test_same_wheel_installs_in_isolated_manager_and_runtime_without_path_shadow
     )
     assert "--since" in help_result.stdout and "--watch" in help_result.stdout
 
-    monitor_help = subprocess.run(
-        [str(manager / "bin" / "aether"), "monitor", "--help"],
-        check=True,
+    retired_command = subprocess.run(
+        [str(manager / "bin" / "aether"), "monitor"],
+        check=False,
         capture_output=True,
         text=True,
         env=manager_env,
     )
-    for action in ("status", "on", "off", "history"):
-        assert action in monitor_help.stdout
+    assert retired_command.returncode == 2
+    assert "invalid choice: 'monitor'" in retired_command.stderr
 
     # External provenance can name and hash the one wheel; that final digest is not
     # embedded inside its own metadata or package resources.

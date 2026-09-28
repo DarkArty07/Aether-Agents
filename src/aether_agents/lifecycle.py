@@ -130,18 +130,21 @@ KNOWLEDGE_ENTRY_POINT: dict[str, str] = {
     "target": "aether_agents.knowledge.hermes_plugin",
 }
 
-MONITOR_ENTRY_POINT: dict[str, str] = {
-    "plugin_name": "aether-telegram-monitor",
-    "group": "hermes_agent.plugins",
-    "target": "aether_agents.monitor.hermes_plugin",
-}
-
 AETHER_PLUGIN_ENTRY_POINTS: dict[str, str] = {
     OBSERVER_ENTRY_POINT["plugin_name"]: OBSERVER_ENTRY_POINT["target"],
     OBJECTIVE_CONTRACT_ENTRY_POINT["plugin_name"]: OBJECTIVE_CONTRACT_ENTRY_POINT["target"],
     KNOWLEDGE_ENTRY_POINT["plugin_name"]: KNOWLEDGE_ENTRY_POINT["target"],
-    MONITOR_ENTRY_POINT["plugin_name"]: MONITOR_ENTRY_POINT["target"],
 }
+_HISTORICAL_AETHER_PLUGIN_ENTRY_POINTS: dict[str, str] = {
+    "aether-contract-observer": "aether_agents.observation.capture.hermes_plugin",
+    "aether-objective-contracts": "aether_agents.objective_contracts.hermes_plugin",
+    "aether-project-knowledge": "aether_agents.knowledge.hermes_plugin",
+    "aether-telegram-monitor": "aether_agents.monitor.hermes_plugin",
+}
+_KNOWN_AETHER_PLUGIN_ENTRY_POINTS = (
+    AETHER_PLUGIN_ENTRY_POINTS,
+    _HISTORICAL_AETHER_PLUGIN_ENTRY_POINTS,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -5394,8 +5397,16 @@ class LifecycleManager:
             str(staged_wheel),
         )
 
-        self._verify_installed_environment(manager_python, runtime=False)
-        self._verify_installed_environment(runtime_python, runtime=True)
+        self._verify_installed_environment(
+            manager_python,
+            runtime=False,
+            expected_plugin_entry_points=metadata["plugin_entry_points"],
+        )
+        self._verify_installed_environment(
+            runtime_python,
+            runtime=True,
+            expected_plugin_entry_points=metadata["plugin_entry_points"],
+        )
 
         manager_identity = self._installed_aether_identity(manager_python)
         runtime_identity = self._installed_aether_identity(runtime_python)
@@ -6724,7 +6735,7 @@ class LifecycleManager:
         observed = f"aether-contract-observer={target}"
         if observed != HERMES_BASELINE.observer_entry_point:
             raise IntegrityError("candidate observer entry point target mismatch")
-        if plugin_entry_points != AETHER_PLUGIN_ENTRY_POINTS:
+        if plugin_entry_points not in _KNOWN_AETHER_PLUGIN_ENTRY_POINTS:
             raise IntegrityError("candidate Aether plugin entry-point set mismatch")
         schema_versions = {
             key: payload.get("properties", {}).get("schema_version", {}).get("const")
@@ -6736,9 +6747,7 @@ class LifecycleManager:
             "manifest": observation_compatibility["segment_manifest_write_version"],
         }:
             raise IntegrityError("candidate packaged schema version mismatch")
-        entrypoints = [
-            [name, target] for name, target in sorted(AETHER_PLUGIN_ENTRY_POINTS.items())
-        ]
+        entrypoints = [[name, target] for name, target in sorted(plugin_entry_points.items())]
         fingerprint_blob = json.dumps(
             {"files": sorted(rows), "entrypoints": entrypoints},
             sort_keys=True,
@@ -6749,6 +6758,7 @@ class LifecycleManager:
             "version": version,
             "python_requires": HERMES_BASELINE.python_requires,
             "entry_point": observed,
+            "plugin_entry_points": dict(plugin_entry_points),
             "observer": dict(OBSERVER_ENTRY_POINT),
             "observation_compatibility": observation_compatibility,
             "observation_schema_sha256": schema_members,
@@ -6797,24 +6807,38 @@ class LifecycleManager:
             command.extend(("--requirement", str(requirements)))
         self._run_uv(*command)
 
-    def _verify_installed_environment(self, python: Path, *, runtime: bool) -> None:
+    def _verify_installed_environment(
+        self,
+        python: Path,
+        *,
+        runtime: bool,
+        expected_plugin_entry_points: dict[str, str] | None = None,
+    ) -> None:
         """Run package consistency/import checks before a candidate can be recorded."""
 
         self._run_uv("--no-config", "pip", "check", "--python", str(python))
-        expected_plugins = repr(AETHER_PLUGIN_ENTRY_POINTS)
+        expected_plugins = repr(
+            AETHER_PLUGIN_ENTRY_POINTS
+            if expected_plugin_entry_points is None
+            else expected_plugin_entry_points
+        )
         script = f"""
 import importlib.metadata as metadata
 import aether_agents
 expected = {expected_plugins}
-entries = {{
-    entry.name: entry
-    for entry in metadata.entry_points().select(group='hermes_agent.plugins')
-    if entry.name in expected
-}}
-if set(entries) != set(expected):
+distribution = metadata.distribution('aether-agents')
+distribution_name = distribution.metadata['Name'].lower().replace('_', '-')
+entries = [
+    entry for entry in metadata.entry_points().select(group='hermes_agent.plugins')
+    if entry.dist is not None
+    and entry.dist.metadata['Name'].lower().replace('_', '-') == distribution_name
+]
+observed = sorted((entry.name, entry.value) for entry in entries)
+if observed != sorted(expected.items()):
     raise SystemExit(3)
+by_name = {{entry.name: entry for entry in entries}}
 for name, target in expected.items():
-    entry = entries[name]
+    entry = by_name[name]
     if entry.value != target or not callable(getattr(entry.load(), 'register', None)):
         raise SystemExit(3)
 """
@@ -7028,7 +7052,6 @@ print(json.dumps({
             identity = json.loads(completed.stdout)
         except (json.JSONDecodeError, UnicodeError) as error:
             raise IntegrityError("installed Aether identity is malformed") from error
-        expected = [[name, target] for name, target in sorted(AETHER_PLUGIN_ENTRY_POINTS.items())]
         if not isinstance(identity, dict):
             raise IntegrityError("installed Aether identity is malformed")
         installed_entrypoints = identity.get("entrypoints")
@@ -7045,7 +7068,11 @@ print(json.dumps({
             != OBSERVER_ENTRY_POINT["target"]
         ):
             raise IntegrityError("installed observer entry point mismatch")
-        if installed_entrypoints != expected or identity.get("console_scripts") != [
+        known_plugin_maps = [
+            [[name, target] for name, target in sorted(plugin_map.items())]
+            for plugin_map in _KNOWN_AETHER_PLUGIN_ENTRY_POINTS
+        ]
+        if installed_entrypoints not in known_plugin_maps or identity.get("console_scripts") != [
             ["aether", "aether_agents.cli:main"]
         ]:
             raise IntegrityError("installed Aether plugin entry-point set mismatch")

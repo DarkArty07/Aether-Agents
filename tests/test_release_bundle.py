@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tarfile
 import types
+import zipfile
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -214,6 +215,48 @@ def test_workflow_keeps_identity_validation_and_attaches_the_qualified_bytes(too
     assert workflow.count('gh release view "$RELEASE_TAG"') == 1
     assert workflow.count('gh release create "$RELEASE_TAG"') == 1
     assert workflow.count('gh release edit "$RELEASE_TAG"') == 1
+
+
+def test_bundle_wheel_inspection_refuses_historical_plugin_map(
+    tool: types.ModuleType,
+    tmp_path: Path,
+) -> None:
+    assert tool.AETHER_PLUGIN_ENTRY_POINTS == {
+        "aether-contract-observer": "aether_agents.observation.capture.hermes_plugin",
+        "aether-objective-contracts": "aether_agents.objective_contracts.hermes_plugin",
+        "aether-project-knowledge": "aether_agents.knowledge.hermes_plugin",
+    }
+    wheel = tmp_path / "candidate.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("aether_agents/__init__.py", "")
+
+    inspected = {
+        "distribution": "aether-agents",
+        "version": "1.0.0rc1",
+        "python_requires": ">=3.11,<3.14",
+        "entry_point": "aether-contract-observer=aether_agents.observation.capture.hermes_plugin",
+        "plugin_entry_points": dict(tool.AETHER_PLUGIN_ENTRY_POINTS),
+        "observer": {},
+        "observation_compatibility": {},
+        "observation_schema_sha256": {},
+        "observer_requirements_sha256": "a" * 64,
+        "installed_file_fingerprint": "b" * 64,
+    }
+
+    class FakeLifecycle:
+        class LifecycleManager:
+            @staticmethod
+            def _inspect_wheel(_path: Path) -> dict[str, object]:
+                return inspected
+
+    result = tool.inspect_wheel(FakeLifecycle, wheel)
+    assert result["distribution"] == "aether-agents"
+    inspected["plugin_entry_points"] = {
+        **tool.AETHER_PLUGIN_ENTRY_POINTS,
+        "aether-telegram-monitor": "aether_agents.monitor.hermes_plugin",
+    }
+    with pytest.raises(tool.BundleError, match="plugin-entry-point-mismatch"):
+        tool.inspect_wheel(FakeLifecycle, wheel)
 
 
 def test_workflow_forbidden_effects_stay_absent() -> None:
