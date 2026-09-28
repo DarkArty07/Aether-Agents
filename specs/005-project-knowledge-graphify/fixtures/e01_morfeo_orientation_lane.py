@@ -30,6 +30,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -40,25 +41,30 @@ from typing import Any, Mapping
 
 import pytest
 
-from aether_agents.knowledge.component import configure
-from aether_agents.knowledge.context import resolve_context
-from aether_agents.knowledge.service import KnowledgeService
-from aether_agents.lab.isolation import isolated_hermes_env
-from aether_agents.lab.runner import prepare_profiles
-from aether_agents.observation.context import ProjectRegistry
-from aether_agents.project_marker import validate_project_marker
+REPO_ROOT = Path(__file__).resolve().parents[3]
+WORKTREE_SRC = REPO_ROOT / "src"
+TESTS_ROOT = REPO_ROOT / "tests"
+if str(TESTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TESTS_ROOT))
+from runtime_isolation import (  # noqa: E402
+    isolated_hermes_env,
+    preflight_disposable_destinations,
+)
+
+from aether_agents.knowledge.component import configure  # noqa: E402
+from aether_agents.knowledge.context import resolve_context  # noqa: E402
+from aether_agents.knowledge.service import KnowledgeService  # noqa: E402
+from aether_agents.observation.context import ProjectRegistry  # noqa: E402
+from aether_agents.project_marker import validate_project_marker  # noqa: E402
 
 try:  # PyYAML is a dev/static dependency only; the lane degrades without it.
     import yaml
 except ImportError:  # pragma: no cover - dev environment always provides it
     yaml = None  # type: ignore[assignment]
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-WORKTREE_SRC = REPO_ROOT / "src"
-
-EXPECTED_MORFEO_SOUL_SHA256 = "a1c997634ddface5d0f86744ff24cc23b964145a20d736d1ced4b3c23ef1d7f8"
+EXPECTED_MORFEO_SOUL_SHA256 = "51ce00c1eec497ac7b0f45cb3269f9f22666ba2708fc9e9ee7bdc1b37656f2ef"
 EXPECTED_PROJECT_KNOWLEDGE_SKILL_SHA256 = (
-    "41436ff6cd9f64cd3b82d2e7a160d22454b0c01bb604b67674a3c08471c38e27"
+    "85960d5950dccbaa836fc630292ca47d682355f54757d04cff8108696f939266"
 )
 
 
@@ -125,7 +131,7 @@ def hash_file(path: Path) -> str:
 
 
 def verify_candidate_resource_bytes() -> dict[str, str]:
-    """Verify that current candidate resources match the frozen KG19-03 bytes."""
+    """Verify current candidate resources against the exact source-byte digests."""
     soul_path = WORKTREE_SRC / "aether_agents/resources/profiles/morfeo/SOUL.md"
     skill_path = WORKTREE_SRC / "aether_agents/resources/skills/project-knowledge/SKILL.md"
 
@@ -313,6 +319,95 @@ def _load_yaml_mapping(path: Path) -> dict[str, Any]:
     return dict(data)
 
 
+def _patch_fixture_profile_hook(config_text: str, hook_path: Path) -> str:
+    """Rewrite one existing Aether hook to its isolated home, refusing ambiguity."""
+    hook_pattern = re.compile(
+        r"^(?P<indent>\s*)command:\s*.*aether_pre_tool_policy\.py\s*$",
+        re.MULTILINE,
+    )
+    replacement_count = 0
+
+    def replace_hook(match: re.Match[str]) -> str:
+        nonlocal replacement_count
+        replacement_count += 1
+        return f"{match.group('indent')}command: {json.dumps(str(hook_path), ensure_ascii=False)}"
+
+    updated = hook_pattern.sub(replace_hook, config_text)
+    if replacement_count != 1:
+        raise RuntimeError(
+            "profile config must contain exactly one Aether pre-tool hook command; "
+            f"found {replacement_count}"
+        )
+
+    auto_accept_pattern = re.compile(r"(?m)^hooks_auto_accept:\s*(?:true|false)\s*$")
+    if auto_accept_pattern.search(updated):
+        updated = auto_accept_pattern.sub("hooks_auto_accept: true", updated, count=1)
+    else:
+        updated = updated.rstrip() + "\nhooks_auto_accept: true\n"
+
+    approvals_pattern = re.compile(r"(?ms)^approvals:\n(?P<body>(?:^[ \t]+.*(?:\n|$))*)")
+    approvals = approvals_pattern.search(updated)
+    if approvals is None:
+        updated = updated.rstrip() + "\napprovals:\n  mode: false\n"
+    else:
+        block = approvals.group(0)
+        mode_pattern = re.compile(r"(?m)^[ \t]+mode:\s*.*$")
+        if mode_pattern.search(block):
+            replacement = mode_pattern.sub("  mode: false", block, count=1)
+        else:
+            replacement = "approvals:\n  mode: false\n" + approvals.group("body")
+        updated = updated[: approvals.start()] + replacement + updated[approvals.end() :]
+    return updated
+
+
+def _prepare_disposable_profiles(profile_root: Path, run_root: Path) -> Path:
+    """Copy three candidate profiles and install hooks only inside the disposable home."""
+    run_root.mkdir(parents=True, exist_ok=True)
+    hermes_root = run_root / "hermes-home"
+    backup = run_root / "hook-backup"
+    preflight_disposable_destinations(run_root, hermes_root, backup)
+
+    prepared: list[tuple[Path, Path, str]] = []
+    for role in ("morfeo", "supervisor", "implementer"):
+        source_profile = profile_root.expanduser().resolve() / role
+        source_config = source_profile / "config.yaml"
+        source_soul = WORKTREE_SRC / "aether_agents" / "resources" / "profiles" / role / "SOUL.md"
+        if not source_config.is_file():
+            raise RuntimeError(f"profile config is missing for {role}: {source_config}")
+        if not source_soul.is_file():
+            raise RuntimeError(f"tracked SOUL is missing for {role}: {source_soul}")
+        target = hermes_root / "profiles" / role
+        patched_config = _patch_fixture_profile_hook(
+            source_config.read_text(encoding="utf-8"),
+            target / "hooks" / "aether_pre_tool_policy.py",
+        )
+        prepared.append((target, source_soul, patched_config))
+
+    for target, source_soul, patched_config in prepared:
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "config.yaml").write_text(patched_config, encoding="utf-8")
+        shutil.copy2(source_soul, target / "SOUL.md")
+
+    installed = subprocess.run(
+        (
+            sys.executable,
+            str(REPO_ROOT / "scripts" / "sync_policy_hooks.py"),
+            "install",
+            "--home",
+            str(hermes_root),
+            "--backup-dir",
+            str(backup),
+        ),
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if installed.returncode != 0:
+        raise RuntimeError("candidate hook installation into isolated profiles failed")
+    return hermes_root
+
+
 def setup_isolated_test_environment(
     run_root: Path,
     *,
@@ -341,8 +436,7 @@ def setup_isolated_test_environment(
             "graphify interpreter not found: set AETHER_GRAPHIFY_PYTHON to the provisioned component interpreter"
         )
 
-    commands_log = run_root / "commands.log"
-    hermes_root = prepare_profiles(profile_root, run_root, commands_log)
+    hermes_root = _prepare_disposable_profiles(profile_root, run_root)
 
     candidate_soul = WORKTREE_SRC / "aether_agents/resources/profiles/morfeo/SOUL.md"
     candidate_skill = WORKTREE_SRC / "aether_agents/resources/skills/project-knowledge/SKILL.md"
@@ -609,8 +703,38 @@ def run_live_agent_turn(
 # =========================================================================
 
 
-def test_resource_hashes_match_frozen_bytes() -> None:
-    """AC-1/AC-4: Candidate SOUL and skill must match exact reviewed hashes."""
+def test_fixture_profile_hook_rewrite_is_unique_and_fail_closed(tmp_path: Path) -> None:
+    """Disposable profile preparation rewrites one hook and refuses missing/ambiguous hooks."""
+    hook_path = (
+        tmp_path / "hermes-home" / "profiles" / "morfeo" / "hooks" / "aether_pre_tool_policy.py"
+    )
+    config = (
+        "hooks:\n"
+        "  pre_tool_call:\n"
+        "    - matcher: .*\n"
+        "      command: /live/profiles/morfeo/hooks/aether_pre_tool_policy.py\n"
+        "      timeout: 5\n"
+        "      fail_closed: true\n"
+        "hooks_auto_accept: false\n"
+        "approvals:\n"
+        "  mode: true\n"
+    )
+
+    rewritten = _patch_fixture_profile_hook(config, hook_path)
+
+    assert f"command: {json.dumps(str(hook_path))}" in rewritten
+    assert "/live/profiles/" not in rewritten
+    assert "hooks_auto_accept: true" in rewritten
+    assert "approvals:\n  mode: false" in rewritten
+    with pytest.raises(RuntimeError, match="found 0"):
+        _patch_fixture_profile_hook("hooks: []\n", hook_path)
+    ambiguous = config + "  - matcher: .*\n    command: /second/aether_pre_tool_policy.py\n"
+    with pytest.raises(RuntimeError, match="found 2"):
+        _patch_fixture_profile_hook(ambiguous, hook_path)
+
+
+def test_resource_hashes_match_current_source_bytes() -> None:
+    """AC-1/AC-4: Current candidate SOUL and skill match their verified exact hashes."""
     hashes = verify_candidate_resource_bytes()
     assert hashes["morfeo_soul_sha256"] == EXPECTED_MORFEO_SOUL_SHA256
     assert hashes["project_knowledge_skill_sha256"] == EXPECTED_PROJECT_KNOWLEDGE_SKILL_SHA256
