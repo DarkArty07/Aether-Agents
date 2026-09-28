@@ -72,6 +72,26 @@ KG19 integration evidence. If its minimal fixture-local preparation cannot prese
 current safety guarantees without a new substantial Lab, stop and return the concrete
 dependency rather than silently delete the knowledge fixture or weaken a retained test.
 
+**Current-candidate hash reconciliation (discovered during U1):** the fixture's
+`test_resource_hashes_match_frozen_bytes` still pins the #505 corrected SOUL and skill
+hashes recorded in `specs/005-project-knowledge-graphify/evidence/KG19-04.md:25-50`.
+Both differ from the source at this retirement's base commit
+`3758f6cdf21d676086db7f963d429c5962d61521`: Morfeo SOUL
+`51ce00c1eec497ac7b0f45cb3269f9f22666ba2708fc9e9ee7bdc1b37656f2ef`,
+project-knowledge skill
+`85960d5950dccbaa836fc630292ca47d682355f54757d04cff8108696f939266`.
+This is pre-existing source drift, not a U1 regression. Select the current-candidate
+oracle: verify both exact bytes at the objective base and unchanged candidate, then
+update **both** expected digests in the retained fixture and accurately label its
+static check as checking current source bytes, not re-certifying the historical
+KG19-03 candidate. Keep exact-hash refusal for any further unexpected change. Preserve
+the old hashes and outcomes only in the untouched #505 evidence and attributable Git
+history; record old/new hashes, source revisions, rationale and pre-existing failing
+result in U1 evidence. Do not modify SOUL/skill to make them match history, suppress
+the test, reinterpret the earlier E01 trials as a PASS on current bytes, or run an agent
+to 'qualify' the changed hashes. The existing seven no-spend tests must report their
+actual outcomes after the scoped correction; static-byte PASS proves no agent behavior.
+
 ### 2.2 Exact plugin verification without breaking retained releases
 
 Simply changing the current entry-point dictionary from four plugins to three is not

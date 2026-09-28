@@ -38,6 +38,11 @@ uv run --frozen python scripts/run_tests.py -- -q \
 
 Record each result or skip honestly. Do not run the fixture's optional live E01 suite,
 claim agent behavior was qualified, or demand a new provider-backed campaign.
+The existing first static test's #505 SOUL **and skill** hashes predate this objective's
+base. Apply the exact current-candidate two-hash reconciliation in
+[plan.md](plan.md), section 2.1, before accepting the seven-case result; preserve old
+hashes in #505 evidence, not as a deliberately failing current-source oracle. A green
+byte check cannot establish that Morfeo used the graph before exploring sources.
 
 The packaging fixture already builds wheel/sdist and checks isolated installs. Extend
 its existing assertions to require absence of retired modules/resources/entry points,
