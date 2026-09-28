@@ -27,6 +27,18 @@ well. A skipped native knowledge integration prerequisite is disclosed, not a PA
 retain the deterministic isolation-helper coverage regardless. Do not use the removed
 Lab/Monitor tests or scripts as prerequisites.
 
+The independently retained KG-19 knowledge fixture is not a Lab scenario and lives
+outside the default `tests/` collection. Once its Lab imports are removed, run its
+existing deterministic tests without any model-spend flag:
+
+```sh
+uv run --frozen python scripts/run_tests.py -- -q \
+  specs/005-project-knowledge-graphify/fixtures/e01_morfeo_orientation_lane.py
+```
+
+Record each result or skip honestly. Do not run the fixture's optional live E01 suite,
+claim agent behavior was qualified, or demand a new provider-backed campaign.
+
 The packaging fixture already builds wheel/sdist and checks isolated installs. Extend
 its existing assertions to require absence of retired modules/resources/entry points,
 exact current three-plugin metadata, ordinary unknown-command refusal for `monitor`,

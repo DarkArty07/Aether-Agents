@@ -29,6 +29,7 @@ not make their removal backward-compatible.
 | --- | --- | --- |
 | Formal Lab | Remove `src/aether_agents/lab/`, `lab/`, `scripts/e2e/`, and `src/aether_agents/resources/lab` mapping/symlink. Remove Lab-only scenario/runner/matrix/persistent/affinity/formalization tests. | No executable/package import or build input depends on the Lab; non-Lab tests still execute. |
 | Shared test isolation | Move only the environment-builder closure consumed by the surviving knowledge binding test to `tests/runtime_isolation.py`; import it using the existing sibling test-helper convention. | Existing scoped environment scrubbing and disposable destination containment remain checked; no production export or runner moves with it. |
+| Independent knowledge E01 fixture | Keep `specs/005-project-knowledge-graphify/fixtures/e01_morfeo_orientation_lane.py` reproducible without importing the removed Lab. Use the same unshipped isolation helper and fixture-local disposable profile preparation, not a moved runner or new product API. | Its seven pre-existing deterministic tests remain runnable without model spend; historical evidence and the owner-cancelled live re-qualification remain attributed, not retested or reclassified. |
 | Monitor | Remove `src/aether_agents/monitor/`, `src/aether_agents/resources/monitor/`, `scripts/qualify_telegram_monitor.py`, `scripts/telegram_monitor_lab.py`, and dedicated Monitor tests. | No Monitor entry point/tool/command/report resources in a freshly built/installed artifact. |
 | Shared code | Remove only Monitor parser/dispatch in `src/aether_agents/cli.py`, entry-point/expectation coupling in `lifecycle.py`, `scripts/release_bundle.py`, `pyproject.toml`, and default Morfeo profile config. | Observation, contracts and knowledge remain the three current official plugins; other commands/profiles remain unchanged. |
 | Mixed tests | Reconcile `tests/test_authorized_cleanup.py`, `test_documentation.py`, `test_observation_packaging.py`, `test_public_artifacts.py`, `test_knowledge_session_binding.py` and affected lifecycle tests. | Remove retired assertions, not unrelated cases. New negative checks live in the existing test owners; only a small isolation-helper test module is needed if no existing owner fits. |
@@ -40,8 +41,10 @@ web components, gateway code and historical evidence are not deletion candidates
 
 ### 2.1 Minimal isolation support
 
-At the inspected revision the retained production-feature consumer is
-`tests/test_knowledge_session_binding.py:300-345`. Its dependency is
+The retained knowledge-feature consumers are
+`tests/test_knowledge_session_binding.py:300-345` and the independent E01 fixture in
+`specs/005-project-knowledge-graphify/fixtures/e01_morfeo_orientation_lane.py:46-47,345,388`.
+The first test's dependency is
 `isolated_hermes_env(run_root, hermes_root, hermes) -> dict[str, str]`. Preserve that
 signature in the test helper so this migration does not redesign the test. Its minimal
 closure is the scrub-name/prefix constants, environment scrub, disposable destination
@@ -50,10 +53,24 @@ boundary tests for inherited identity and symlink/escaped destinations. The disc
 native writer probes, subprocess runner, PTY qualification and evidence protocol are
 not prerequisites of this consumer and must not be copied wholesale.
 
-Assumption: the tracked dependency inventory is complete at the handoff base. If a
-further retained consumer is found, preserve its actual guarantee with the smallest
-shared test support; consult Morfeo if that would require another product-level API or
-retaining a substantial Lab lane. Do not silently skip the consumer.
+The second consumer is a historical, test-only knowledge lane. Its previous `prepare_profiles`
+call (`lab/runner.py:257-298`) copied the three candidate role configs and tracked SOULs
+into a disposable Hermes home, rewrote the hook command to that home's hook, and installed
+the canonical hook through `scripts/sync_policy_hooks.py` under the disposable home/backup
+directory. Preserve that exact isolation and fail-closed missing/ambiguous-hook boundary
+with a **fixture-local** setup function using the existing hook installer, not by moving
+the Lab runner, scenarios, process harness, PTY lane or public API. Import
+`isolated_hermes_env` from `tests/runtime_isolation.py` via a checkout-relative test-only
+import; do not export it from the product. Keep all writes within the disposable root and
+the existing explicit spend guard. The seven deterministic tests of this fixture are a
+focused preservation check, not a license for a new provider-backed E01 campaign.
+The owner's later #505 decision (`specs/005-project-knowledge-graphify/spec.md:118-126`)
+cancelled the live E01 re-qualification; its old partial result and fixture provenance
+remain historical. This fixture has no ordinary CI invocation and is outside the
+configured `tests/` testpaths, but its reproducibility was explicitly retained by the
+KG19 integration evidence. If its minimal fixture-local preparation cannot preserve the
+current safety guarantees without a new substantial Lab, stop and return the concrete
+dependency rather than silently delete the knowledge fixture or weaken a retained test.
 
 ### 2.2 Exact plugin verification without breaking retained releases
 
