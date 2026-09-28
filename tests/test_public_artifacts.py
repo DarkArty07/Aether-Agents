@@ -151,51 +151,52 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     incomplete = (ROOT / "INCOMPLETE_IMPLEMENTATIONS.md").read_text(encoding="utf-8")
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    assert readme.count("**Source versus release:**") == 1
+    source_section, history = readme.split("**Source versus release:**", 1)[1].split(
+        "The historical [RC17 local candidate]", 1
+    )
+    source_section = " ".join(source_section.split())
+    history = " ".join(history.split("Historical context:", 1)[0].split())
     assert "multi-agent software-engineering product" in readme
     assert "[documentation index](docs/index.md)" in readme
     assert "`docs/capabilities.toml`](docs/capabilities.toml)" in readme
     assert "sole current implementation-status and traceability registry" in readme
     assert "documented transitional downstream" in readme
-    # The wheel's METADATA embeds this portal. RC8 contains #495 guidance,
-    # but neither source nor tag proves live activation or agent behavior.
+    # The wheel's METADATA embeds this portal. Preserve the historical RC17
+    # identity without representing subsequent main commits as that release.
     assert "releases/tag/v1.0.0-rc.8" not in readme
     assert "releases/tag/v1.0.0-rc.7" not in readme
     assert "releases/tag/v1.0.0-rc.6" not in readme
     assert "releases/tag/v1.0.0-rc.5" not in readme
-    assert "`1.0.0rc17` / `1.0.0-rc.17`" in readme
-    assert "local annotated tag identity is `v1.0.0-rc.17`" in readme
+    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "1.0.0rc17"
+    assert "`VERSION` still reads `1.0.0rc17`" in source_section
+    assert (
+        "these later source commits have **not** been prepared or activated as a new RC"
+        in source_section
+    )
+    assert "The local `v1.0.0-rc.17` tag names its earlier exact revision" in source_section
+    assert "it is not a tag for current `main`" in source_section
+    assert "aether doctor --json" in source_section
+    assert (
+        "`release_impact=major`, `release_action=defer`, `release_channel=none`" in source_section
+    )
+    assert "RC17 local candidate" in readme
+    assert "`release_impact=major` for the incompatible command rename" in history
+    assert "`release_action=prepare`, `release_channel=prerelease`" in history
     assert "restores the new Morfeo SOUL and canonical contract skills" in readme
     assert (
-        "neither this source nor a local tag proves what is installed or that agent behavior improved"
-        in readme
+        "Neither this source nor RC17 qualifies stable `1.0.0`, PyPI, WSL2, or agent behavior"
+        in history
     )
-    assert "Query `aether doctor` for the active version" in readme
-    assert "no tag is pushed and no GitHub/package publication is authorized" in readme
+    assert "No tag was pushed or package published" in history
     assert "Earlier local tags remain immutable" in readme
     assert "releases/tag/v1.0.0-rc.1" in readme
     assert "published but rejected" in readme
-    status = [line for line in readme.splitlines() if line.startswith("**Status:**")]
-    assert len(status) == 1, f"expected exactly one status paragraph, found {len(status)}"
-    assert "releases/tag/v1.0.0-rc.16" not in status[0]
-    assert "releases/tag/v1.0.0-rc.15" not in status[0]
-    assert "releases/tag/v1.0.0-rc.14" not in status[0]
-    assert "releases/tag/v1.0.0-rc.13" not in status[0]
-    assert "releases/tag/v1.0.0-rc.12" not in status[0]
-    assert "releases/tag/v1.0.0-rc.10" not in status[0]
-    assert "releases/tag/v1.0.0-rc.9" not in status[0]
-    assert "releases/tag/v1.0.0-rc.8" not in status[0]
-    assert "releases/tag/v1.0.0-rc.7" not in status[0]
-    assert "releases/tag/v1.0.0-rc.6" not in status[0]
-    assert "releases/tag/v1.0.0-rc.5" not in status[0]
-    assert "release_impact = major" in status[0]
-    assert "release_action = prepare" in status[0]
-    assert "release_channel = prerelease" in status[0]
-    for time_bound in ("will be published", "not yet", "pending", "to be superseded"):
-        assert time_bound not in status[0], f"status paragraph carries {time_bound!r}"
+    assert "**Status:**" not in readme
+    for prior_release in ("16", "15", "14", "13", "12", "10", "9", "8", "7", "6", "5"):
+        assert f"releases/tag/v1.0.0-rc.{prior_release}" not in source_section
     assert "beta stabilization build, not a release candidate" not in readme
     assert "no release candidate has been published" not in readme
-    assert "**not** stable `1.0.0`" in readme
-    assert "a PyPI release or WSL2 qualification" in readme
     assert "#261 remains open" in readme
     assert "remain explicit unsupported placeholders" in readme
     assert "`aether reconcile` supports only its bounded `--to active` form" in readme
