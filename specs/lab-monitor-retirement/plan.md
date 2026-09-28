@@ -159,7 +159,16 @@ dependent work for an unavoidable change to retained functionality, missing effe
 permission, ambiguous identity or a genuine protected-edge denial. Morfeo resolves
 in-scope design details; only missing material owner intent returns to the owner.
 
-Terminal evidence belongs in this objective's `evidence/` with compact per-unit records
-and a Supervisor `final.md` receipt; Morfeo adds `reception.md` when accepting. Raw logs
-and disposable builds stay in owned local scratch and are retired after preserving the
-necessary evidence. No bulk cleanup of pre-existing worktrees or private state.
+Before the implementation PR merges, commit reviewed per-unit evidence and a pre-merge
+acceptance mapping under this objective's `evidence/`; neither may predict CI, merge,
+issue closure or cleanup. After the actual green merge and applicable reconciliation,
+Supervisor writes the `evidence/final.md` receipt in its owned project worktree, attaches
+those exact bytes to its native root board task **before** retiring that worktree, reads
+back the attachment identity and content/digest, and records the attachment locator and
+exact merged revision in its terminal handoff. The post-merge receipt is durable in the
+board attachment, not represented as a file already tracked on `main`; no second
+evidence-only PR is required. Morfeo records its subsequent exact-revision acceptance
+in `evidence/reception.md` locally and references that result in the existing Objective
+Plan and root task comment; it must not claim the post-merge reception was in the merged
+PR. Raw logs and disposable builds stay in owned local scratch and are retired after
+preserving necessary evidence. No bulk cleanup of pre-existing worktrees or private state.
