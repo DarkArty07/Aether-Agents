@@ -4,7 +4,9 @@
 
 **Accepted:** 2026-09-28 UTC (2026-09-27 in the owner's local conversation)
 
-**Status:** accepted retirement intent; implementation and source acceptance pending
+**Status:** source retirement reviewed, merged and accepted at
+`d5bed9a8f30c5d5e2289630c4eac1c6585b42c48` via PRs #547/#548; no new RC or
+installed cutover
 
 **Design steward:** Morfeo
 

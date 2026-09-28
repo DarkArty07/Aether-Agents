@@ -2,7 +2,26 @@
 
 Aether Agents is a multi-agent software-engineering product and method. It adapts [Hermes Agent](https://hermes-agent.nousresearch.com/docs) as the runtime substrate and [GitHub Spec Kit](https://github.com/github/spec-kit) as the specification method, while defining Aether's role, handoff, policy, and qualification boundaries.
 
-**Status:** this source revision defines `1.0.0rc17` / `1.0.0-rc.17` as a **local-only candidate**. It binds reviewed maintained-fork Hermes commit `007cfb77676b6b024d2c0986f4585e6cfdcf18d6` (tree `b26638974fc134da866b821ab3c4b34ab430aeb3`), including the integrated HLP-433/435/460/473/474/475 fixes. It carries portable project methodology, scoped temporary/worktree hygiene and the explicit planning command `/aether-plan`; the internal `skills/plan/` resource key stays compatible with RC16. It retains schema 5 with `hermes.extras` `mcp`, schema 4 readers and Morfeo MCP. Its local annotated tag identity is `v1.0.0-rc.17`; neither this source nor a local tag proves what is installed or that agent behavior improved. Query `aether doctor` for the active version and use exact package/cutover evidence. `release_impact = major` records the incompatible command rename within the prerelease line; `release_action = prepare`, `release_channel = prerelease`; no tag is pushed and no GitHub/package publication is authorized. Earlier local tags remain immutable; RC1 remains [published but rejected](https://github.com/DarkArty07/Aether-Agents/releases/tag/v1.0.0-rc.1) and must not be activated, and #261 remains open. This is **not** stable `1.0.0`, a PyPI release or WSL2 qualification.
+**Source versus release:** `main` includes the reviewed
+[Lab/Monitor retirement](specs/lab-monitor-retirement/spec.md) after the last locally
+tagged candidate. `VERSION` still reads `1.0.0rc17`, but these later source commits
+have **not** been prepared or activated as a new RC. The local `v1.0.0-rc.17` tag
+names its earlier exact revision; it is not a tag for current `main`. Check the
+selected installation with `aether doctor --json` and the release lock, not the
+checkout's version string. This retirement has `release_impact=major`,
+`release_action=defer`, `release_channel=none`.
+
+The historical [RC17 local candidate](specs/rc17-local-release/spec.md) binds reviewed
+maintained-fork Hermes commit `007cfb77676b6b024d2c0986f4585e6cfdcf18d6`
+(tree `b26638974fc134da866b821ab3c4b34ab430aeb3`), including
+HLP-433/435/460/473/474/475, portable methodology, `/aether-plan`, schema 5 with
+the `mcp` extra, and schema 4 readers. Its own conclusions were
+`release_impact=major` for the incompatible command rename,
+`release_action=prepare`, `release_channel=prerelease`. No tag was pushed or package
+published. Earlier local tags remain immutable; RC1 remains
+[published but rejected](https://github.com/DarkArty07/Aether-Agents/releases/tag/v1.0.0-rc.1),
+and #261 remains open. Neither this source nor RC17 qualifies stable `1.0.0`, PyPI,
+WSL2, or agent behavior.
 
 Historical context: RC8 restores the new Morfeo SOUL and canonical contract skills
 following the RC7 bridge; that historical statement is not RC17 qualification.

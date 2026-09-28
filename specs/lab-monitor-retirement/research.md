@@ -40,9 +40,14 @@ All line references below are inspection coordinates at Aether
 | Historical decision conflict? | `DESIGN.md:399-400`; A1 `A1-FR-092/093`; R11 `FR-1104a/1142/1143`, `SC-1116`; `specs/telegram-monitor/spec.md`. | Owner withdrawal belongs in these canonical owners; retiring tooling does not retroactively pass or waive reliability. |
 
 Tracked-source inventory found no production consumer outside the Lab package. The
-retained direct test consumer is the knowledge test; Lab-only and Monitor-only tests and
-mixed packaging/documentation checks form the remaining dependency edges. Workers must
-revalidate at their exact base, not assume this inspection is a runtime qualification.
+first inspection found `tests/test_knowledge_session_binding.py`, but **missed** a
+second, non-Lab test consumer: the KG-19 E01 knowledge fixture under
+`specs/005-project-knowledge-graphify/fixtures/`. U1 found both Lab imports during
+execution; the [technical plan](plan.md#21-minimal-isolation-support) and
+[`evidence/u1.md`](evidence/u1.md) record the bounded test-only migration and eight
+deterministic passes. Lab-only and Monitor-only tests and mixed package/documentation
+checks were the other dependency edges. This corrects the original inventory, not the
+historical inspection revision or the KG-19 behavioral verdict.
 
 The local observations dated 2026-09-25 supplied hypotheses and historical analysis,
 not requirements. The owner's current instruction supersedes their proposal to retain
@@ -55,6 +60,61 @@ work, so retirement has its own issue #546 rather than reopening rejected accept
 Project knowledge at the exact inspected revision reported `INDEX_MISSING`; source
 inspection was the explicit fallback. No semantic provider or indexing campaign was
 invoked to make design available.
+
+## Exploratory findings transferred before retiring local observations
+
+The two local `.aether/observations/` notes dated 2026-09-25 were exploratory,
+not implementation authority. Their useful historical findings are retained here and
+in the owner decision, not promoted into new acceptance criteria:
+
+- The Monitor analysis counted **38,267 physical lines** across production/resources,
+  dedicated qualification scripts/tests and specifications/documentation at historical
+  source revision `eeaa24025697ff1b1dbb0ab21e65ffb07f03de5f` (comments and blank
+  lines included; not a maintained size target). A read-only collector probe then
+  observed zero items and 14 labeled binding/identity gaps. Zero items alone cannot
+  establish a defect without reportable work at that instant. The separate natural
+  production run did report zero items despite reportable work, and the owner rejected
+  acceptance; [postmortem #407](https://github.com/DarkArty07/Aether-Agents/issues/407)
+  preserves that attribution and stop decision. Do not infer present-day behavior
+  or a need to rebuild the Monitor from those historical probes.
+- The Lab exploration did not establish an exact last-use date or prove zero utility.
+  The owner chose subtraction based on actual perceived use versus maintenance burden.
+  Some test isolation was independently useful, including the later-discovered KG-19
+  fixture, and was retained as **unshipped** test support. Deleting the Lab did not
+  pass PD-74; its reliability evidence remains an outstanding separate question.
+- The earlier proposed thin Telegram notifier was superseded by the owner's explicit
+  choice of **no replacement**. Native Hermes cron and ordinary Telegram interaction
+  survive; the old installed Monitor remains outside this source-only objective.
+
+## Verified outcome and reusable engineering lessons
+
+The reviewed source retirement [PR #547](https://github.com/DarkArty07/Aether-Agents/pull/547)
+and bounded automatic Pages map correction
+[PR #548](https://github.com/DarkArty07/Aether-Agents/pull/548) reached final `main`
+`d5bed9a8f30c5d5e2289630c4eac1c6585b42c48`. Criterion-level evidence and
+its limits are in [`evidence/integration.md`](evidence/integration.md) and Morfeo's
+post-merge [`evidence/reception.md`](evidence/reception.md). Lessons are bounded:
+
+- Retire public plugin/CLI surfaces **and** their package identities, docs and tests.
+  New candidate artifacts emit three exact plugins; historical four-plugin artifacts
+  remain a closed, authenticated read case, not a reason to keep Monitor code or to
+  assume an old manager can adopt a new wheel.
+- A deleted documentation guide can leave the website's static descriptions map
+  stale. Python documentation checks and green PR policy did not detect that edge;
+  the automatic Pages run after #547 failed, then #548 fixed that one key and its
+  exact-head policy/Pages checks passed. An automatic deployment must be accounted for
+  at its own effect boundary; this does not authorize a manual deploy.
+- Two combined `pytest-cov` runs failed with mixed statement/branch shards and
+  instrumented timing failures. The existing CI split exercised tests, performance
+  and unchanged 78% coverage separately, measuring 80% on #547. Those earlier
+  failures remain failures, not a retroactive pass or a new generic CI rule.
+- A PR cannot truthfully contain evidence of its own later merge and cleanup. The
+  reviewed candidate carried pre-merge evidence; Supervisor's final post-merge
+  receipt was attached to its terminal task, and Morfeo's exact-revision reception
+  was authored afterward. Distinguish these from facts that were already in the PR.
+- `VERSION=1.0.0rc17` remains in newer unreleased source, while the RC17 tag and
+  selected installation identify earlier bytes. Version text and a merged branch
+  cannot establish new RC preparation, installed adoption or PD-74 qualification.
 
 ## Alternatives rejected
 

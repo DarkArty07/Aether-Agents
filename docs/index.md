@@ -4,16 +4,15 @@ Aether is a multi-agent software-engineering product built on [Hermes Agent](htt
 
 This index is navigation only and routes reader questions to the appropriate guide, reference, or authority artifact. For the complete reader-facing placement and conflict-resolution map across all artifact classes, see [Authority and artifact ownership](authority.md).
 
-This source tree defines local-only `1.0.0rc17` (display `1.0.0-rc.17`, local
-annotated tag `v1.0.0-rc.17`), pinned to reviewed maintained-fork Hermes commit
-`007cfb77676b6b024d2c0986f4585e6cfdcf18d6` (tree
-`b26638974fc134da866b821ab3c4b34ab430aeb3`). It includes the integrated
-HLP-433/435/460/473/474/475 fixes and portable methodology with `/aether-plan`.
-The internal planning resource key stays `plan` for RC16 updater compatibility.
-Release-lock schema 5, Hermes extra `mcp`, schema 4 readers and
-[Morfeo MCP](guides/morfeo-mcp.md) remain. See the [RC17 scope](../specs/rc17-local-release/spec.md).
-Source and local tags do not prove runtime activation or agent behavior; consult
-`aether doctor` and exact cutover evidence. No public tag or release is authorized.
+The last locally tagged candidate is `1.0.0rc17` (display `1.0.0-rc.17`, tag
+`v1.0.0-rc.17`) at an earlier source revision. Current `main` also contains the
+[Lab/Monitor source retirement](../specs/lab-monitor-retirement/spec.md) without a
+new RC, release, or installed cutover. Its unchanged `VERSION` string does not make
+these later source bytes the RC17 package. Use `aether doctor --json` and exact
+cutover evidence to identify the installed runtime; source and local tags do not
+qualify agent behavior. The [RC17 scope](../specs/rc17-local-release/spec.md) retains
+its reviewed maintained-fork pin and qualification limits. No public tag or package
+release is authorized by this documentation.
 The executable Hermes source is Aether's maintained fork
 `DarkArty07/aether-hermes` branch `aether-main`, bound
 by release-lock schema 4 or 5 `maintained_fork` and installed through `aether update`.
