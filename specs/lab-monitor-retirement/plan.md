@@ -159,6 +159,33 @@ handoff because lifecycle/packaging/CI boundaries are touched; normal required P
 Combine full tests and coverage in one run where applicable. Reuse exact-revision,
 applicable unit evidence rather than make every worker repeat the full suite.
 
+**Integrated-run method after observed instrumentation conflict:** two terminal attempts
+to combine the full exact-Hermes suite with `pytest-cov` reached the retained tests but
+ended in `Can't combine statement coverage data with branch data`; the second was run
+serially after the corrected observation test lock, so the first attempt's overlapping
+focused invocation does not explain the whole failure. Instrumented timing tests also
+failed; isolated uninstrumented checks passed on an earlier candidate, which alone does
+not prove the final tree. The "combine" instruction was a proportionality preference,
+not an acceptance waiver or a mandate to manufacture a result from a broken collector.
+For the final candidate, use the existing `.github/workflows/policy.yml` verification
+split without changing that workflow or its coverage floor: (1) full exact-Hermes test
+bootstrap without `pytest-cov`, excluding only
+`tests/test_observation_performance.py` from this instrumented-sensitive pass; (2) the
+performance cases separately *without* coverage on the same revision, including the
+existing strict ingestion-latency gate; (3) the existing `coverage run -m pytest` path
+with exact verified Hermes checkout, omitting only that performance module, plus the
+isolated native Graphify append lane when its provisioned component exists, and
+`coverage report --format=total` with unchanged configured 78% floor. Keep subprocess
+coverage data from previous failed attempts out of the fresh coverage file. Every
+retained test is still exercised by its applicable lane; no test, coverage threshold,
+CI condition or branch protection is weakened. Record each run's revision, prerequisites,
+actual results and skips; record **both failed combined attempts** as failures, not a
+retroactive PASS. If the split still fails (test, floor, missing local prerequisite or
+CI), diagnose/return the concrete limit; do not claim acceptance from focused checks.
+This changes verification scheduling after evidence invalidated the proposed combined
+command; RET-01–RET-07 and the finalized contract's full exact-Hermes and unchanged-floor
+outcomes are unchanged. Required PR checks remain an independent gate.
+
 | Criterion | Decisive scenario/result | Evidence |
 | --- | --- | --- |
 | RET-01 | Fresh checkout/build has no Lab modules, resources, wrappers or executable consumers. Remaining test suite collects/runs without Lab. | Tracked diff/reference classification; package member checks; tests. |

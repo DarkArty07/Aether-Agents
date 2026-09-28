@@ -54,12 +54,18 @@ and refusal of unknown/mismatched identities without touching an installed relea
 ## Integrated repository gate
 
 Since lifecycle, packaging and the literal policy manifest change, the existing project
-standard requires one integrated full bootstrap. Combine coverage rather than repeat
-another full suite just for the counter:
+standard requires a full exact-Hermes bootstrap and the unchanged coverage floor.
+The initial combined `pytest-cov` command was attempted twice, including a serial
+rerun after the test-lock correction, and both ended with mixed statement/branch-data
+INTERNALERROR. Instrumented timing checks also failed; a previous isolated no-coverage
+PASS cannot be attributed to a later candidate. Use the **existing CI split** for the
+final revision instead, without masking either failed combined attempt:
 
 ```sh
 uv run --frozen python scripts/run_tests.py -- -q \
-  --cov=aether_agents --cov-report=term-missing
+  --ignore=tests/test_observation_performance.py
+uv run --frozen python scripts/run_tests.py -- -q \
+  tests/test_observation_performance.py
 uv run --frozen ruff check src/aether_agents tests scripts
 uv run --frozen ruff format --check src/aether_agents tests scripts
 uv run --frozen mypy src/aether_agents
@@ -71,6 +77,21 @@ for artifact in .aether/tmp/lab-monitor-retirement/dist/*.whl \
 done
 git diff --check
 ```
+
+For coverage use the **actual** `.github/workflows/policy.yml` `Enforce integrated
+coverage floor` step (lines 986–1007): a verified exact Hermes checkout on `PYTHONPATH`
+and `AETHER_EXACT_HERMES_CHECKOUT`, a fresh owned `COVERAGE_FILE`, then
+`uv run --frozen coverage run -m pytest -q
+--ignore=tests/test_observation_performance.py`, the separately provisioned native
+Graphify `coverage run --append` lane when available, and
+`uv run --frozen coverage report --format=total`. Its configured branch coverage and
+`fail_under = 78` remain unchanged. Do **not** combine data shards from the failed
+`pytest-cov` runs or silently omit the performance tests; they run uninstrumented above,
+including the strict ingestion-latency case. If the component is unavailable locally,
+report that limit and verify the required CI result on the exact PR revision rather than
+calling a partial local run full coverage. A failing full/latency/coverage/CI gate is a
+failure to diagnose, not authority to weaken the threshold or skip cases. The split is
+for the same acceptance obligations, not a new qualification campaign.
 
 The scanner's repeatable `--artifact` flag is defined in
 `scripts/check_public_artifacts.py:76-82`. Reuse the packaging fixture's built artifacts
