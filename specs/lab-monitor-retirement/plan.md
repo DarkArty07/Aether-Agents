@@ -4,7 +4,9 @@
 
 **Inspected source:** `21fa590e850dd29f5672a63fb521766431745628`
 
-**Disposition:** material design resolved; implementation delegated after finalized contract
+**Disposition:** design executed and source accepted at
+`d5bed9a8f30c5d5e2289630c4eac1c6585b42c48`; this plan records the
+implementation method, not installed activation
 
 ## 1. Route and boundaries
 

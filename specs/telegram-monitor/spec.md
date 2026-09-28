@@ -8,8 +8,15 @@
 > its evidence retain historical decisions and the rejected/incomplete acceptance;
 > they do not authorize further Monitor development, live qualification or reactivation.
 
-**Status:** requirements resolved under owner-delegated pragmatic design; implementation and qualification pending.
-**Authority:** the owner explicitly authorized autonomous documentation, implementation and progress reporting through the existing Telegram while unavailable. Morfeo resolves the remaining reversible design decisions; Supervisor owns decomposition, independent review and normal pipeline closeout. This is a scoped exception to the feature freeze for this objective only, not a waiver of the reliability/release gates.
+**Historical status:** requirements were resolved under the earlier owner-delegated
+design, but functional acceptance was rejected and the objective stopped; the subsystem
+was later removed from source under #546. The older pending implementation/qualification
+statement is not current status.
+**Historical authority (withdrawn):** at that time the owner authorized autonomous
+documentation, implementation and progress reporting through the existing Telegram
+while unavailable. Morfeo resolved reversible design decisions; Supervisor owned
+decomposition, review and closeout. This was scoped to the earlier objective, did not
+waive reliability/release gates, and grants no current activation authority.
 **Tracking:** [issue #367](https://github.com/DarkArty07/Aether-Agents/issues/367).
 **Canonical foundation:** existing R0 constitution, DESIGN.md three roles/PD-70 observation, specification 002, and qualified native Hermes scheduling/messaging. No constitutional principle is added or changed.
 

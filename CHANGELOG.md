@@ -2,6 +2,12 @@
 
 ## Unreleased — Lab and Telegram Monitor retirement
 
+- Reviewed source retirement merged via PR #547; the bounded documentation-site map
+  correction merged via PR #548. The implementation is accepted in `main` with its
+  post-merge [reception](specs/lab-monitor-retirement/evidence/reception.md). This
+  unreleased source still carries `VERSION=1.0.0rc17`, but the earlier RC17 tag and
+  its release artifact do not include the retirement; no replacement RC was prepared.
+  `release_impact=major`, `release_action=defer`, `release_channel=none`.
 - Retire the formal Aether Qualification Lab, Telegram Monitor and periodic progress
   reports without a replacement. Remove their active documentation and capability
   records while retaining specifications, contracts, prior failures and release evidence
