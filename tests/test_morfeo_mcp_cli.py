@@ -45,3 +45,9 @@ def test_public_host_is_refused_before_runtime(capsys) -> None:
     code = main(["mcp", "morfeo", "serve", "--host", "0.0.0.0", "--project", "/tmp/not-a-project"])
     assert code == 2
     assert "127.0.0.1" in capsys.readouterr().err
+
+
+def test_retired_monitor_command_uses_argparse_unknown_command_path(capsys) -> None:
+    assert main(["monitor"]) == 2
+    error = capsys.readouterr().err
+    assert "invalid choice: 'monitor'" in error
