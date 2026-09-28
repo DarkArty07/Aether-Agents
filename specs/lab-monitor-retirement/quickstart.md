@@ -79,7 +79,7 @@ git diff --check
 ```
 
 For coverage use the **actual** `.github/workflows/policy.yml` `Enforce integrated
-coverage floor` step (lines 986–1007): a verified exact Hermes checkout on `PYTHONPATH`
+coverage floor` step (lines 896–917): a verified exact Hermes checkout on `PYTHONPATH`
 and `AETHER_EXACT_HERMES_CHECKOUT`, a fresh owned `COVERAGE_FILE`, then
 `uv run --frozen coverage run -m pytest -q
 --ignore=tests/test_observation_performance.py`, the separately provisioned native
