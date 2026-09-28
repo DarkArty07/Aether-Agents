@@ -96,3 +96,16 @@ support, rather than requiring an indiscriminate zero-string match.
 The compatible remainder of the product remains subject to its existing specifications.
 No performance target, line-count quota, broad cleanup, new native integration or
 behavioral qualification claim is added by this retirement.
+
+## 5. Subsequent documentation closeout authority
+
+After source acceptance, the owner requested a bounded documentation consolidation and
+retirement of the two resolved local observation notes. On 2026-09-28 UTC the owner
+**separately authorized the existing automatic deployment to Aether's GitHub Pages site
+caused by a normal green merge of documentation PR #549**. This applies only to that
+site and that PR's documented changes. It grants no manual Pages dispatch, deployment
+to another target, package publication, new RC, runtime cutover or change to prior
+historical/private state. The original retirement's no-deployment boundary remains
+accurate for its earlier source work; this later owner instruction resolves the
+specific additional effect. Review and required checks still gate the merge, and the
+deployment must be observed on the exact merged revision before claiming success.
