@@ -44,6 +44,10 @@ The `aether-contract-observer` entry point is a passive observer: its callbacks 
 
 The plugin entry point and provider-free read behavior are tested. Portable resource presence is not proof of installed profile activation or public lifecycle qualification; see [Plugins and tools](../reference/plugins-and-tools.md).
 
-## Qualification laboratory
+## Qualification and reliability status
 
-`aether_agents.lab` and the retained `scripts/e2e/` wrappers prepare disposable evidence roots. Deterministic preparation is useful evidence but is not a live provider-backed reliability run or release qualification. Live model execution requires its separately authorized gate, and the known persistent-session wake capability wall is documented in [limitations](../reference/limitations-and-troubleshooting.md).
+The owner retired Aether's formal Qualification Lab and its compatibility wrappers.
+That removal does not pass or waive the outstanding PD-74 reliability gate, and this
+objective does not select a replacement qualification route or authorize an agent-behavior
+campaign. Contract Observation remains a bounded read interface; its presence is not proof
+of installed-runtime or live qualification.

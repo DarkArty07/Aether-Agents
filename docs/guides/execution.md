@@ -82,9 +82,10 @@ another unit's scope. Unfinished, blocked, review-active, concurrent, or
 unrelated work is preserved. Completion evidence states what changed, what was
 actually verified, and what material risk or non-applicability remains.
 
-Write-capable probes and review steps construct one disposable board context with the
-reviewed laboratory constructors and refuse a context that resolves outside their
-private roots before the first native writer. Accidental mutation of a live or shared
+Write-capable probes and review steps construct a disposable board context and refuse
+one that resolves outside its private roots before the first native writer. The former
+formal Qualification Lab and its constructors are retired; retained test-only isolation
+support lives in `tests/runtime_isolation.py`. Accidental mutation of a live or shared
 board is preserved as evidence and escalated through the supported lifecycle: direct
 SQL deletion of tasks, comments, events or runs is never cleanup. Isolation defects are
 reproduced against disposable copies. Preservation evidence needs an independently retained

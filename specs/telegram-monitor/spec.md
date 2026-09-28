@@ -1,5 +1,13 @@
 # Telegram Monitor — autonomous hourly progress
 
+> **Retired by owner decision — 2026-09-28 UTC:**
+> [`../lab-monitor-retirement/spec.md`](../lab-monitor-retirement/spec.md) supersedes
+> the implementation and activation requirements below. The complete Monitor and
+> its periodic Telegram reports are removed without replacement; native Hermes cron,
+> ordinary messaging and native execution notifications remain. This document and
+> its evidence retain historical decisions and the rejected/incomplete acceptance;
+> they do not authorize further Monitor development, live qualification or reactivation.
+
 **Status:** requirements resolved under owner-delegated pragmatic design; implementation and qualification pending.
 **Authority:** the owner explicitly authorized autonomous documentation, implementation and progress reporting through the existing Telegram while unavailable. Morfeo resolves the remaining reversible design decisions; Supervisor owns decomposition, independent review and normal pipeline closeout. This is a scoped exception to the feature freeze for this objective only, not a waiver of the reliability/release gates.
 **Tracking:** [issue #367](https://github.com/DarkArty07/Aether-Agents/issues/367).

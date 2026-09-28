@@ -1,5 +1,13 @@
 # Aether Agents remediation, operational simplification, and E2E reliability plan
 
+> **Partial supersession — 2026-09-28 UTC:** the owner withdrew the formal Lab
+> implementation and its future maintenance under `DESIGN.md` PD-75 and
+> [`../lab-monitor-retirement/spec.md`](../lab-monitor-retirement/spec.md).
+> This plan's Lab construction, synthetic-owner and runner/scorer provisions now
+> describe historical work, not instructions to preserve or rebuild that subsystem.
+> Prior results and the still-outstanding PD-74 gate remain unchanged; retirement is
+> neither reliability PASS nor authority for a new qualification framework.
+
 **Plan ID:** 004
 **Status:** implementation integrated into `main`; live E2E and runtime cutover pending
 **Date:** 2026-08-26

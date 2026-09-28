@@ -9,7 +9,6 @@ plugins:
     - aether-contract-observer
     - aether-objective-contracts
     - aether-project-knowledge
-    - aether-telegram-monitor
   entries:
     aether-contract-observer:
       settings:
@@ -20,7 +19,3 @@ plugins:
     aether-project-knowledge:
       settings:
         enabled: false
-    aether-telegram-monitor:
-      settings:
-        enabled: true
-        language: Spanish

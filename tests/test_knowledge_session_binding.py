@@ -17,6 +17,13 @@ import sys
 from pathlib import Path
 
 import pytest
+from runtime_isolation import (
+    SCRUB_NAMES,
+    SCRUB_PREFIXES,
+    RuntimeIsolationError,
+    isolated_hermes_env,
+    preflight_disposable_destinations,
+)
 from test_project_knowledge_engine import OTHER, PROJECT, git_at, project
 
 from aether_agents.knowledge import bindings
@@ -25,6 +32,62 @@ from aether_agents.knowledge.common import KnowledgeError, atomic_json
 from aether_agents.knowledge.context import resolve_context
 
 SESSION = "exact-session"
+
+
+def test_isolated_environment_scrubs_inherited_selectors_without_mutating_parent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    hermes_root = tmp_path / "hermes-home"
+    hermes_root.mkdir()
+    inherited = {f"{prefix}INHERITED_SELECTOR" for prefix in SCRUB_PREFIXES}
+    inherited.update(SCRUB_NAMES)
+    for name in inherited:
+        monkeypatch.setenv(name, "outer-identity")
+    before = dict(os.environ)
+
+    env = isolated_hermes_env(run_root, hermes_root, Path(sys.executable))
+
+    assert inherited.isdisjoint(env)
+    assert env["HERMES_HOME"] == str(hermes_root)
+    assert env["HERMES_KANBAN_DB"] == str(run_root / "kanban.db")
+    assert env["HERMES_KANBAN_WORKSPACES_ROOT"] == str(run_root / "worktrees")
+    assert env["XDG_STATE_HOME"] == str(run_root / "xdg-state")
+    assert env["XDG_DATA_HOME"] == str(run_root / "xdg-data")
+    assert dict(os.environ) == before
+
+
+def test_preflight_rejects_escaped_disposable_destination(tmp_path: Path) -> None:
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+
+    with pytest.raises(RuntimeIsolationError, match="escapes sandbox"):
+        preflight_disposable_destinations(run_root, tmp_path / "outside.db")
+
+
+def test_preflight_rejects_symlinked_disposable_destination(tmp_path: Path) -> None:
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    target = tmp_path / "outside.db"
+    target.touch()
+    destination = run_root / "kanban.db"
+    destination.symlink_to(target)
+
+    with pytest.raises(RuntimeIsolationError, match="cannot be a symlink"):
+        preflight_disposable_destinations(run_root, destination)
+
+
+def test_preflight_rejects_symlinked_ancestor_even_when_target_is_contained(
+    tmp_path: Path,
+) -> None:
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    (run_root / "actual").mkdir()
+    (run_root / "alias").symlink_to(run_root / "actual", target_is_directory=True)
+
+    with pytest.raises(RuntimeIsolationError, match="cannot contain a symlink"):
+        preflight_disposable_destinations(run_root, run_root / "alias" / "kanban.db")
 
 
 def native_home(tmp_path: Path, cwd: str | None) -> Path:
@@ -300,7 +363,7 @@ def test_unclear_git_probe_never_falls_back(
 def test_isolated_native_tool_resolves_plain_cwd_explicit_binding(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Real tool boundary in a disposable lab home for the reported TS-373 scenario."""
+    """Real tool boundary in a disposable Hermes home for the reported TS-373 scenario."""
     pytest.importorskip("hermes_cli.plugins")
     graphify = os.environ.get("AETHER_GRAPHIFY_PYTHON")
     if not graphify:
@@ -312,13 +375,12 @@ def test_isolated_native_tool_resolves_plain_cwd_explicit_binding(
     from aether_agents.knowledge.component import configure
     from aether_agents.knowledge.hermes_plugin import register
     from aether_agents.knowledge.service import KnowledgeService
-    from aether_agents.lab import isolated_hermes_env
 
     root, state = project(tmp_path)
     bind_session(state, PROJECT, "morfeo", SESSION, root=root)
     plain = plain_directory(tmp_path)
-    lab_root = tmp_path / "isolated-lab"
-    hermes_home = lab_root / "profiles" / "morfeo"
+    run_root = tmp_path / "isolated-hermes"
+    hermes_home = run_root / "profiles" / "morfeo"
     hermes_home.mkdir(parents=True)
     with sqlite3.connect(hermes_home / "state.db") as connection:
         connection.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT)")
@@ -342,10 +404,10 @@ def test_isolated_native_tool_resolves_plain_cwd_explicit_binding(
             }
         )
     )
-    for name, value in isolated_hermes_env(lab_root, hermes_home, Path(sys.executable)).items():
+    for name, value in isolated_hermes_env(run_root, hermes_home, Path(sys.executable)).items():
         monkeypatch.setenv(name, value)
     assert os.environ["HERMES_HOME"] == str(hermes_home)
-    assert os.environ["HERMES_KANBAN_DB"] == str(lab_root / "kanban.db")
+    assert os.environ["HERMES_KANBAN_DB"] == str(run_root / "kanban.db")
     configure(KnowledgeService(state, tmp_path / "cache"), Path(graphify))
 
     manager = PluginManager(scope_key=str(hermes_home))
@@ -393,7 +455,7 @@ def test_isolated_native_tool_resolves_plain_cwd_explicit_binding(
         )
         assert read["revision"] == saved["revision"]
         assert "explicit binding" in read["content"]
-        assert not (lab_root / "kanban.db").exists()
+        assert not (run_root / "kanban.db").exists()
 
         # The preserved typed envelope must also hold once this exact session's recorded
         # workspace becomes unreadable: an untyped escape is not an acceptable answer.

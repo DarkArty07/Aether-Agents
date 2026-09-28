@@ -1457,9 +1457,81 @@ def test_wheel_fingerprint_binds_runtime_metadata_schemas_and_entry_points(
         "group": "hermes_agent.plugins",
         "target": "aether_agents.observation.capture.hermes_plugin",
     }
+    assert identity["plugin_entry_points"] == lifecycle.AETHER_PLUGIN_ENTRY_POINTS
     assert set(identity["observation_schema_sha256"]) == {"event", "summary", "manifest"}
     assert all(len(digest) == 64 for digest in identity["observation_schema_sha256"].values())
     assert len(identity["observer_requirements_sha256"]) == 64
+
+
+def test_historical_four_plugin_identity_uses_its_authenticated_map(
+    tmp_path: Path,
+) -> None:
+    current_wheel = _build_wheel(tmp_path / "current", "1.0.1")
+    historical_wheel = _tamper_wheel_member(
+        current_wheel,
+        tmp_path / "historical-four-plugin.whl",
+        ".dist-info/entry_points.txt",
+        lambda data: data.replace(
+            b"[hermes_agent.plugins]\n",
+            b"[hermes_agent.plugins]\n"
+            b"aether-telegram-monitor = aether_agents.monitor.hermes_plugin\n",
+            1,
+        ),
+    )
+
+    current_identity = LifecycleManager._inspect_wheel(current_wheel)
+    historical_identity = LifecycleManager._inspect_wheel(historical_wheel)
+    historical_plugins = lifecycle._HISTORICAL_AETHER_PLUGIN_ENTRY_POINTS
+    assert historical_identity["plugin_entry_points"] == historical_plugins
+    assert (
+        historical_identity["installed_file_fingerprint"]
+        != (current_identity["installed_file_fingerprint"])
+    )
+
+    with zipfile.ZipFile(historical_wheel) as archive:
+        rows = [
+            (name, hashlib.sha256(archive.read(name)).hexdigest())
+            for name in archive.namelist()
+            if not name.endswith("/")
+            and (
+                name.startswith("aether_agents/")
+                or name.endswith(
+                    (".dist-info/METADATA", ".dist-info/WHEEL", ".dist-info/entry_points.txt")
+                )
+            )
+        ]
+    historical_entrypoints = [[name, target] for name, target in sorted(historical_plugins.items())]
+    expected_fingerprint = hashlib.sha256(
+        json.dumps(
+            {"files": sorted(rows), "entrypoints": historical_entrypoints},
+            sort_keys=True,
+        ).encode()
+    ).hexdigest()
+    current_map_fingerprint = hashlib.sha256(
+        json.dumps(
+            {
+                "files": sorted(rows),
+                "entrypoints": [
+                    [name, target]
+                    for name, target in sorted(lifecycle.AETHER_PLUGIN_ENTRY_POINTS.items())
+                ],
+            },
+            sort_keys=True,
+        ).encode()
+    ).hexdigest()
+    assert historical_identity["installed_file_fingerprint"] == expected_fingerprint
+    assert historical_identity["installed_file_fingerprint"] != current_map_fingerprint
+
+    prepared = _prepared_release_with_target_manager(
+        tmp_path / "historical-install",
+        "1.0.1",
+        historical_wheel,
+        observation_compatibility=historical_identity["observation_compatibility"],
+    )
+    installed_identity = LifecycleManager._installed_aether_identity(
+        LifecycleManager._environment_python(prepared.stage / "manager")
+    )
+    assert installed_identity["fingerprint"] == historical_identity["installed_file_fingerprint"]
 
 
 def test_wheel_rejects_unapproved_third_plugin_entry_point(tmp_path: Path) -> None:
@@ -1473,6 +1545,47 @@ def test_wheel_rejects_unapproved_third_plugin_entry_point(tmp_path: Path) -> No
             b"[hermes_agent.plugins]\nhostile-extra = hostile.plugin\n",
             1,
         ),
+    )
+
+    with pytest.raises(IntegrityError, match="Aether plugin entry-point set"):
+        LifecycleManager._inspect_wheel(tampered)
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    (
+        (
+            b"aether-project-knowledge = aether_agents.knowledge.hermes_plugin\n",
+            b"",
+        ),
+        (
+            b"aether-telegram-monitor = aether_agents.monitor.hermes_plugin",
+            b"aether-telegram-monitor = hostile.monitor.plugin",
+        ),
+    ),
+)
+def test_wheel_rejects_incomplete_or_malformed_historical_plugin_maps(
+    tmp_path: Path,
+    old: bytes,
+    new: bytes,
+) -> None:
+    wheel = _build_wheel(tmp_path / "build", "1.0.0")
+    historical = _tamper_wheel_member(
+        wheel,
+        tmp_path / "historical-four-plugin.whl",
+        ".dist-info/entry_points.txt",
+        lambda data: data.replace(
+            b"[hermes_agent.plugins]\n",
+            b"[hermes_agent.plugins]\n"
+            b"aether-telegram-monitor = aether_agents.monitor.hermes_plugin\n",
+            1,
+        ),
+    )
+    tampered = _tamper_wheel_member(
+        historical,
+        tmp_path / "malformed-plugin-map.whl",
+        ".dist-info/entry_points.txt",
+        lambda data: data.replace(old, new, 1),
     )
 
     with pytest.raises(IntegrityError, match="Aether plugin entry-point set"):
@@ -1495,14 +1608,66 @@ def test_installed_environment_probe_loads_every_approved_aether_plugin(
         return subprocess.CompletedProcess(arguments, 0, "", "")
 
     monkeypatch.setattr(lifecycle.subprocess, "run", record_probe)
-    manager._verify_installed_environment(Path(sys.executable), runtime=False)
+    for expected in (
+        lifecycle.AETHER_PLUGIN_ENTRY_POINTS,
+        lifecycle._HISTORICAL_AETHER_PLUGIN_ENTRY_POINTS,
+    ):
+        manager._verify_installed_environment(
+            Path(sys.executable),
+            runtime=False,
+            expected_plugin_entry_points=expected,
+        )
 
-    [script] = captured
-    for name, target in lifecycle.AETHER_PLUGIN_ENTRY_POINTS.items():
-        assert repr(name) in script
-        assert repr(target) in script
-    assert "entry.value != target" in script
-    assert "entry.load()" in script
+    assert len(captured) == 2
+    for script, expected in zip(
+        captured,
+        (
+            lifecycle.AETHER_PLUGIN_ENTRY_POINTS,
+            lifecycle._HISTORICAL_AETHER_PLUGIN_ENTRY_POINTS,
+        ),
+    ):
+        for name, target in expected.items():
+            assert repr(name) in script
+            assert repr(target) in script
+        assert "observed != sorted(expected.items())" in script
+        assert "entry.dist.metadata['Name']" in script
+        assert "entry.value != target" in script
+        assert "entry.load()" in script
+
+
+@pytest.mark.parametrize(
+    "plugin_map",
+    (
+        {
+            **lifecycle.AETHER_PLUGIN_ENTRY_POINTS,
+            "unapproved-plugin": "unapproved.module",
+        },
+        {
+            name: target
+            for name, target in lifecycle.AETHER_PLUGIN_ENTRY_POINTS.items()
+            if name != "aether-project-knowledge"
+        },
+        {
+            **lifecycle.AETHER_PLUGIN_ENTRY_POINTS,
+            "aether-telegram-monitor": "hostile.monitor.plugin",
+        },
+    ),
+)
+def test_installed_identity_rejects_unknown_or_malformed_plugin_maps(
+    plugin_map: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identity = {
+        "entrypoints": [[name, target] for name, target in sorted(plugin_map.items())],
+        "console_scripts": [["aether", "aether_agents.cli:main"]],
+    }
+
+    def return_identity(arguments, **kwargs):
+        return subprocess.CompletedProcess(arguments, 0, json.dumps(identity), "")
+
+    monkeypatch.setattr(lifecycle.subprocess, "run", return_identity)
+    with pytest.raises(IntegrityError, match="plugin entry-point set mismatch"):
+        LifecycleManager._installed_aether_identity(Path("unused-python"))
 
 
 def test_wheel_inspection_binds_the_targets_own_projection_schema(tmp_path: Path) -> None:
