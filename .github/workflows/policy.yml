@@ -197,6 +197,7 @@ jobs:
           .aether/objective-contracts/oc_5c2dad1b37b20a80/v1.md
           .aether/objective-contracts/oc_6176d2be6cb7e6fe/v1.md
           .aether/objective-contracts/oc_644c0b407d13366a/v1.md
+          .aether/objective-contracts/oc_736139ca259b79d8/v1.md
           .aether/objective-contracts/oc_742f9f4797494bf9/v1.md
           .aether/objective-contracts/oc_742f9f4797494bf9/v2.md
           .aether/objective-contracts/oc_742f9f4797494bf9/v3.md
@@ -457,7 +458,6 @@ jobs:
           tests/test_contract_quality_documents.py
           tests/test_contract_result_review.py
           tests/test_documentation.py
-          tests/test_e2e_matrix.py
           tests/test_graphify_worker_native.py
           tests/test_hermes_baseline.py
           tests/test_hermes_editable.py

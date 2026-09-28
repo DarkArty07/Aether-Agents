@@ -445,6 +445,7 @@ def test_policy_manifest_tracks_retirement_without_widening_ci_gates() -> None:
     workflow = (ROOT / ".github/workflows/policy.yml").read_text(encoding="utf-8")
 
     assert "tests/runtime_isolation.py" in workflow
+    assert ".aether/objective-contracts/oc_736139ca259b79d8/v1.md" in workflow
     for path in (
         "docs/guides/telegram-monitor.md",
         "lab/README.md",
@@ -458,11 +459,12 @@ def test_policy_manifest_tracks_retirement_without_widening_ci_gates() -> None:
         "tests/fixtures/e2e",
         "tests/test_e2e_harness.py",
         "tests/test_e2e15_qualification.py",
+        "tests/test_e2e_matrix.py",
         "tests/test_lab_formalization.py",
         "tests/test_telegram_monitor_cli_plugin.py",
     ):
         assert path not in workflow, path
-    assert "tests/test_e2e_matrix.py" in workflow
+    assert "tests/test_e2e_matrix.py" not in workflow
     # The literal manifest stays literal: no wildcard was introduced for deleted paths.
     for glob in (
         "lab/**",
