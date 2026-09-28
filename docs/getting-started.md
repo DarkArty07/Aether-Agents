@@ -111,14 +111,4 @@ rolling user state backward. The managed Hermes source is the release-lock `main
 identity (`schema_version` 4, repository `https://github.com/DarkArty07/aether-hermes`); the
 retired `transitional_fork` mode is refused for new preparation.
 
-## Inspect the Telegram Monitor without changing anything
-
-`aether monitor status --json` and `aether monitor history --json` read durable monitor state and are safe to run before deciding anything; `aether monitor on` and `aether monitor off` change the installation and require the provisioned runtime. The deterministic qualification lane performs no model call and no Telegram send:
-
-```bash
-uv run --frozen python scripts/qualify_telegram_monitor.py --json
-```
-
-Read [Telegram Monitor](guides/telegram-monitor.md) before enabling the feature, and treat live hourly/Telegram qualification as pending until the terminal integration reports it.
-
 For the intended operational model after an initialized project exists, read [Lifecycle](guides/lifecycle.md), [Objective Contracts](guides/objective-contracts.md), and [Execution](guides/execution.md).

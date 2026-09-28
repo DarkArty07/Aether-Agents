@@ -73,8 +73,9 @@ or weaken a test merely to obtain a green result.
 Kanban fixtures must isolate dispatcher routing and execution identity, not only
 `HERMES_HOME`: inherited `HERMES_KANBAN_*` variables can still select the worker's live
 board or workspace. Use a scoped environment change with temporary destinations and
-verify that the outer board is unchanged. Subprocess probes can reuse
-`aether_agents.lab.isolated_hermes_env`; never test isolation against a live board.
+verify that the outer board is unchanged. Subprocess probes use only the minimal test-only
+isolation support in `tests/runtime_isolation.py`; never test isolation against a live
+board.
 
 ### RC17 bounded release verification (#542)
 

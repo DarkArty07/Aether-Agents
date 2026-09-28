@@ -71,10 +71,12 @@ issue #261 stays open with those publication and platform gates outstanding. See
   See [Lifecycle](guides/lifecycle.md).
 
 ### Operations, safety, and diagnostics
-- **How do I run read-only system observations or qualification checks?**
+- **How do I inspect a compact contract observation?**
   See [Observation](guides/observation.md).
-- **How do I read or control the hourly Telegram progress reports?**
-  See [Telegram Monitor](guides/telegram-monitor.md).
+- **Has Aether replaced its hourly Telegram progress reports?**
+  No. The owner retired the Aether Monitor and its periodic reports without a replacement.
+  Native Hermes cron, ordinary Telegram interaction, and native task/final/input
+  notifications remain unchanged. See the [retirement decision](../specs/lab-monitor-retirement/spec.md).
 - **What are the edge safety guards and rollback-first recovery policies?**
   See [Policy and recovery](guides/policy-and-recovery.md).
 - **What CLI commands and options are supported in this build?**

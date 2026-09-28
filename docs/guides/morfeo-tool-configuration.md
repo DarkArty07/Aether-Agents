@@ -55,8 +55,6 @@ source inspection.
 **On** means selected in this recipe, not mandatory to use or operationally
 qualified. **Off** means not selected; it does not imply uninstallation or missing
 credentials. **Deferred** means still off, with a future decision recorded below.
-**Reporter only** means selected in the profile but usable only in the restricted
-Monitor reporter context.
 
 | Toolset | Morfeo | Supervisor | Implementer | Purpose when selected |
 | --- | --- | --- | --- | --- |
@@ -65,8 +63,6 @@ Monitor reporter context.
 | `cronjob` | On | Off | Off | An owner-requested follow-up, report, or future pipeline start. |
 | `aether_contracts` | On | Off | Off | Author and finalize project-bound contracts and prepare their exact handoff. |
 | `aether_observation` | On | Off | Off | Read compact contract progress and diagnose only the relevant evidence gaps. |
-| `aether_monitor` | On | Off | Off | Inspect or control the separately configured Telegram Monitor within existing authority. |
-| `aether_monitor_reporting` | Reporter only | Off | Off | Supply the bounded snapshot for a restricted Monitor reporter run. |
 
 The recipe aligns each role's CLI and Telegram lists. Native dispatch resolves
 that role's CLI selection for a worker; this does not imply separate user-facing
@@ -80,8 +76,8 @@ observation tool alone says nothing about background event capture.
 context, perform bounded direct work, and hand substantial product work to the
 pipeline.
 
-Morfeo uses the shared core for evidence and direct work. Its additional contract,
-observation, and Monitor tools support its stewardship responsibilities rather
+Morfeo uses the shared core for evidence and direct work. Its additional contract
+and observation tools support its stewardship responsibilities rather
 than create another execution system. `kanban` is for genuine durable pipeline
 work, not ceremony for every small request. A completed card is not automatically
 an accepted owner objective.

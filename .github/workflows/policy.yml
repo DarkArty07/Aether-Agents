@@ -197,6 +197,7 @@ jobs:
           .aether/objective-contracts/oc_5c2dad1b37b20a80/v1.md
           .aether/objective-contracts/oc_6176d2be6cb7e6fe/v1.md
           .aether/objective-contracts/oc_644c0b407d13366a/v1.md
+          .aether/objective-contracts/oc_736139ca259b79d8/v1.md
           .aether/objective-contracts/oc_742f9f4797494bf9/v1.md
           .aether/objective-contracts/oc_742f9f4797494bf9/v2.md
           .aether/objective-contracts/oc_742f9f4797494bf9/v3.md
@@ -290,7 +291,6 @@ jobs:
           docs/guides/policy-and-recovery.md
           docs/guides/project-initialization.md
           docs/guides/project-knowledge.md
-          docs/guides/telegram-monitor.md
           docs/index.md
           docs/product-boundary.md
           docs/reference/capabilities.md
@@ -301,49 +301,6 @@ jobs:
           home/.env.example
           home/SOUL.md
           home/config.yaml.template
-          lab/README.md
-          lab/fixtures/manifest.json
-          lab/fixtures/sandbox/brownfield/AGENTS.md
-          lab/fixtures/sandbox/brownfield/message.py
-          lab/fixtures/sandbox/brownfield/sentinel.txt
-          lab/fixtures/sandbox/brownfield/verify.py
-          lab/fixtures/sandbox/concurrent/alpha.py
-          lab/fixtures/sandbox/concurrent/beta.py
-          lab/fixtures/sandbox/concurrent/gamma.py
-          lab/fixtures/sandbox/concurrent/verify.py
-          lab/fixtures/sandbox/direct-bug/calc.py
-          lab/fixtures/sandbox/direct-bug/verify.py
-          lab/fixtures/sandbox/direct-text/greeting.txt
-          lab/fixtures/sandbox/direct-text/verify.py
-          lab/fixtures/sandbox/local-choice/formatter.py
-          lab/fixtures/sandbox/local-choice/verify.py
-          lab/fixtures/sandbox/product-decision/config.py
-          lab/fixtures/sandbox/product-decision/verify.py
-          lab/fixtures/sandbox/safety/sentinel.txt
-          lab/fixtures/sandbox/safety/verify.py
-          lab/fixtures/sandbox/two-component-feature/app.py
-          lab/fixtures/sandbox/two-component-feature/normalize.py
-          lab/fixtures/sandbox/two-component-feature/render.py
-          lab/fixtures/sandbox/two-component-feature/verify.py
-          lab/scenarios/e2e-01.json
-          lab/scenarios/e2e-02.json
-          lab/scenarios/e2e-03.json
-          lab/scenarios/e2e-04.json
-          lab/scenarios/e2e-05.json
-          lab/scenarios/e2e-06.json
-          lab/scenarios/e2e-07.json
-          lab/scenarios/e2e-08.json
-          lab/scenarios/e2e-09.json
-          lab/scenarios/e2e-10.json
-          lab/scenarios/e2e-11.json
-          lab/scenarios/e2e-12.json
-          lab/scenarios/e2e-13.json
-          lab/scenarios/e2e-14.json
-          lab/scenarios/e2e-15.json
-          lab/scenarios/e2e-16.json
-          lab/schemas/evidence.schema.json
-          lab/schemas/fixture-manifest.schema.json
-          lab/schemas/scenario.schema.json
           patches/hermes/HLP-211b-flow-blocker-routing.patch
           patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch
           patches/hermes/HLP-226c-cross-board-project-inheritance.patch
@@ -383,24 +340,15 @@ jobs:
           scripts/check_documentation.py
           scripts/check_hermes_baseline_drift.py
           scripts/check_public_artifacts.py
-          scripts/e2e/README.md
-          scripts/e2e/collect.py
-          scripts/e2e/dispatch.py
-          scripts/e2e/matrix.py
-          scripts/e2e/run.py
-          scripts/e2e/scenarios
-          scripts/e2e/synthetic_owner.py
           scripts/qualify_knowledge_expansion.py
           scripts/qualify_mixed_version_lifecycle.py
           scripts/qualify_morfeo_mcp.py
           scripts/qualify_observation.py
           scripts/qualify_oc79.py
           scripts/qualify_rc16_transition.py
-          scripts/qualify_telegram_monitor.py
           scripts/release_bundle.py
           scripts/run_tests.py
           scripts/sync_policy_hooks.py
-          scripts/telegram_monitor_lab.py
           scripts/validate_hermes_patch_reconciliation.py
           src/aether_agents/__init__.py
           src/aether_agents/cli.py
@@ -425,18 +373,6 @@ jobs:
           src/aether_agents/knowledge/semantic.py
           src/aether_agents/knowledge/service.py
           src/aether_agents/knowledge/snapshots.py
-          src/aether_agents/lab/__init__.py
-          src/aether_agents/lab/affinity.py
-          src/aether_agents/lab/collect.py
-          src/aether_agents/lab/dispatch.py
-          src/aether_agents/lab/isolation.py
-          src/aether_agents/lab/matrix.py
-          src/aether_agents/lab/observation.py
-          src/aether_agents/lab/persistent.py
-          src/aether_agents/lab/resources.py
-          src/aether_agents/lab/runner.py
-          src/aether_agents/lab/synthetic_owner.py
-          src/aether_agents/lab/validation.py
           src/aether_agents/launcher.py
           src/aether_agents/lifecycle.py
           src/aether_agents/mcp/__init__.py
@@ -446,17 +382,6 @@ jobs:
           src/aether_agents/mcp/hermes_adapter.py
           src/aether_agents/mcp/morfeo_server.py
           src/aether_agents/mcp/session.py
-          src/aether_agents/monitor/__init__.py
-          src/aether_agents/monitor/collector.py
-          src/aether_agents/monitor/commands.py
-          src/aether_agents/monitor/delivery.py
-          src/aether_agents/monitor/hermes_plugin.py
-          src/aether_agents/monitor/models.py
-          src/aether_agents/monitor/reporting.py
-          src/aether_agents/monitor/runtime.py
-          src/aether_agents/monitor/service.py
-          src/aether_agents/monitor/sources.py
-          src/aether_agents/monitor/store.py
           src/aether_agents/objective_contracts/__init__.py
           src/aether_agents/objective_contracts/execution_boards.py
           src/aether_agents/objective_contracts/hermes_plugin.py
@@ -497,9 +422,6 @@ jobs:
           src/aether_agents/resources/graphify/requirements.in
           src/aether_agents/resources/graphify/requirements.txt
           src/aether_agents/resources/hermes-baseline.json
-          src/aether_agents/resources/lab
-          src/aether_agents/resources/monitor/narration-context.md
-          src/aether_agents/resources/monitor/precheck.py
           src/aether_agents/resources/observer-requirements.txt
           src/aether_agents/resources/profiles/implementer/SOUL.md
           src/aether_agents/resources/profiles/implementer/config.yaml
@@ -518,7 +440,6 @@ jobs:
           src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md
           src/aether_agents/resources/skills/work-memory/SKILL.md
           src/aether_agents/result.py
-          tests/fixtures/e2e
           tests/fixtures/mixed-version/candidate-record.json
           tests/fixtures/mixed-version/launch-ink-hydrated-frame.bin
           tests/fixtures/mixed-version/launch-ink-lazy-frame.bin
@@ -530,15 +451,13 @@ jobs:
           tests/fixtures/rc16-transition/rc15-record.json
           tests/fixtures/rc16-transition/rc15-release-lock.json
           tests/observation_helpers.py
+          tests/runtime_isolation.py
           tests/test_a1_contracts.py
           tests/test_aether_tui_launcher.py
           tests/test_authorized_cleanup.py
           tests/test_contract_quality_documents.py
           tests/test_contract_result_review.py
           tests/test_documentation.py
-          tests/test_e2e15_qualification.py
-          tests/test_e2e_harness.py
-          tests/test_e2e_matrix.py
           tests/test_graphify_worker_native.py
           tests/test_hermes_baseline.py
           tests/test_hermes_editable.py
@@ -551,8 +470,6 @@ jobs:
           tests/test_knowledge_schema.py
           tests/test_knowledge_semantic_manager.py
           tests/test_knowledge_session_binding.py
-          tests/test_lab_formalization.py
-          tests/test_lab_writer_isolation.py
           tests/test_lifecycle_adoption.py
           tests/test_lifecycle_profile_transfer.py
           tests/test_lifecycle_projections.py
@@ -589,13 +506,6 @@ jobs:
           tests/test_release_bundle.py
           tests/test_same_card_phase_predicates.py
           tests/test_source_restoration.py
-          tests/test_telegram_monitor_ambient_isolation.py
-          tests/test_telegram_monitor_cli_plugin.py
-          tests/test_telegram_monitor_delivery.py
-          tests/test_telegram_monitor_reporting.py
-          tests/test_telegram_monitor_runtime.py
-          tests/test_telegram_monitor_sources.py
-          tests/test_telegram_monitor_state.py
           tests/test_tui_projections.py
           tests/test_work_memory.py
           tests/test_worker_tool_defaults.py

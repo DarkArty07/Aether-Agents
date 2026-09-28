@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — Lab and Telegram Monitor retirement
+
+- Retire the formal Aether Qualification Lab, Telegram Monitor and periodic progress
+  reports without a replacement. Remove their active documentation and capability
+  records while retaining specifications, contracts, prior failures and release evidence
+  as attributed history; prior failure is not rewritten as PASS.
+- Preserve native Hermes cron, ordinary Telegram interaction, native task/final/input
+  notifications, and retained private historical state. This source change does not claim
+  that an installed runtime has been cut over or that PD-74 reliability is satisfied.
+
 ## 1.0.0rc17 — portable methodology and accumulated source fixes
 
 Package `1.0.0rc17` / display `1.0.0-rc.17` / local annotated tag `v1.0.0-rc.17`.
