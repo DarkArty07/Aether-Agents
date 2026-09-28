@@ -271,7 +271,6 @@ def test_policy_workflow_admits_the_documentation_inventory_and_runs_the_checker
         "docs/guides/execution.md",
         "docs/guides/observation.md",
         "docs/guides/policy-and-recovery.md",
-        "docs/guides/telegram-monitor.md",
         "docs/reference/cli.md",
         "docs/reference/plugins-and-tools.md",
         "docs/reference/limitations-and-troubleshooting.md",
@@ -400,113 +399,77 @@ def test_stewardship_capabilities_are_distinct_and_honest() -> None:
     )
 
 
-def test_monitor_capability_is_registered_statused_and_traceable() -> None:
-    """The Telegram Monitor surface is registered with truthful status and traceability."""
-
-    registry = tomllib.loads((ROOT / "docs/capabilities.toml").read_text(encoding="utf-8"))
+def test_retired_surfaces_are_absent_from_current_registry_and_guidance() -> None:
+    registry_text = (ROOT / "docs/capabilities.toml").read_text(encoding="utf-8")
+    registry = tomllib.loads(registry_text)
     records = {record["id"]: record for record in registry["capabilities"]}
-    record = records["telegram-monitor.hourly-progress"]
+    surfaces = {surface for record in records.values() for surface in record["surfaces"]}
 
-    assert record["status"] == "partial"
-    for surface in (
-        "cli.command.aether.monitor",
-        "cli.command.aether.monitor.status",
-        "cli.command.aether.monitor.on",
-        "cli.command.aether.monitor.off",
-        "cli.command.aether.monitor.history",
-        "cli.option.aether.monitor.history.--limit",
-        "plugin.aether-telegram-monitor",
-    ):
-        assert surface in record["surfaces"], surface
-    assert "docs/guides/telegram-monitor.md" in record["documents"]
-    assert "specs/telegram-monitor/spec.md" in record["specifications"]
-    assert "src/aether_agents/monitor/runtime.py" in record["implementation"]
-    assert "scripts/qualify_telegram_monitor.py" in record["verification"]
-    notes = record["notes"]
-    for marker in ("remains pending", "Bot API acceptance", "not substitutes"):
-        assert marker in notes, marker
+    assert "lifecycle.qualification-laboratory" not in records
+    assert "telegram-monitor.hourly-progress" not in records
+    assert "lifecycle.qualification-laboratory" not in surfaces
+    assert "cli.command.aether.monitor" not in surfaces
+    assert "plugin.aether-telegram-monitor" not in surfaces
+    assert not (ROOT / "docs/guides/telegram-monitor.md").exists()
+    assert (ROOT / "specs/telegram-monitor/spec.md").is_file()
+    assert (ROOT / "specs/lab-monitor-retirement/spec.md").is_file()
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "Hermes-native cron, ordinary Telegram interaction" in readme
+    assert "native task/final/input notifications remain unchanged" in readme
 
-    reference = (ROOT / "docs/reference/capabilities.md").read_text(encoding="utf-8")
-    assert "## `telegram-monitor.hourly-progress`" in reference
-    assert "**Status:** `partial`" in reference
-
-
-def test_monitor_guide_documents_controls_state_and_limits() -> None:
-    """The user guide carries the fixed control surface, data limits and rollback."""
-
-    guide = (ROOT / "docs/guides/telegram-monitor.md").read_text(encoding="utf-8")
-
-    for phrase in (
-        "aether monitor status",
-        "aether monitor history",
-        "aether.telegram-monitor.v1",
-        "aether_monitor_report_snapshot",
-        "aether_monitor_reporting",
-        "`0 * * * *`",
-        "aether monitor off --json",
-        "Bot API",
-        "--live",
-    ):
-        assert phrase in guide or phrase.replace("`", "") in guide, phrase
-    assert "thirty days" in guide
-    # The guide must not promise live qualification this unit cannot evidence.
-    assert "not** qualified" in guide or "not qualified" in guide
+    documents = {
+        "README.md": ("docs/guides/telegram-monitor.md", "aether monitor"),
+        "docs/index.md": ("guides/telegram-monitor.md",),
+        "docs/getting-started.md": (
+            "aether monitor",
+            "qualify_telegram_monitor.py",
+            "guides/telegram-monitor.md",
+        ),
+        "docs/guides/observation.md": ("aether_agents.lab", "scripts/e2e/"),
+        "docs/product-boundary.md": ("aether-telegram-monitor", "qualification laboratory"),
+        "docs/reference/cli.md": ("aether monitor", "qualify_telegram_monitor.py"),
+        "docs/reference/plugins-and-tools.md": (
+            "aether-telegram-monitor",
+            "aether_monitor",
+            "aether_monitor_report_snapshot",
+        ),
+        "docs/guides/morfeo-tool-configuration.md": ("aether_monitor",),
+    }
+    for path, retired_markers in documents.items():
+        text = (ROOT / path).read_text(encoding="utf-8").lower()
+        for marker in retired_markers:
+            assert marker.lower() not in text, f"{path} retains current retired surface {marker!r}"
 
 
-def test_monitor_guide_states_the_bounded_receipt_directory_rule() -> None:
-    """Round-9 review finding: the guide must state the bounded rename outcome.
-
-    A parent already renamed, replaced or removed when the receipt write begins is refused
-    read-only with ``output-unsafe-target`` and nothing is written; a rename that lands
-    after the write's directory descriptor is bound cannot redirect the write, so the
-    receipt stays inside the established directory and the run fails its final verification
-    with ``private-output`` (no qualified verdict).  The reviewed absolute claim — every
-    rename/replacement ends with no receipt anywhere — was false and must not return.
-    """
-
-    guide = " ".join((ROOT / "docs/guides/telegram-monitor.md").read_text(encoding="utf-8").split())
-    paragraph = guide.split("Private receipts (", 1)[1].split(" Every other target", 1)[0]
-
-    for phrase in (
-        "Establishment records that directory's identity",
-        "already renamed or replaced",
-        "`output-unsafe-target` error and no receipt is written anywhere",
-        "cannot redirect the write",
-        "private receipt can only remain in the established `0700` directory",
-        "no qualified verdict is emitted",
-    ):
-        assert phrase in paragraph, phrase
-    # The audited overclaim must not come back: a rename during the run can leave the
-    # private receipt inside the established directory.
-    assert "renamed or replaced at the same name during the run fails closed" not in paragraph
-
-
-def test_policy_manifest_admits_every_monitor_path_literally() -> None:
-    """Every new non-spec path is listed literally; no check or glob was widened."""
-
+def test_policy_manifest_tracks_retirement_without_widening_ci_gates() -> None:
     workflow = (ROOT / ".github/workflows/policy.yml").read_text(encoding="utf-8")
 
+    assert "tests/runtime_isolation.py" in workflow
     for path in (
         "docs/guides/telegram-monitor.md",
+        "lab/README.md",
+        "scripts/e2e/README.md",
         "scripts/qualify_telegram_monitor.py",
+        "scripts/telegram_monitor_lab.py",
+        "src/aether_agents/lab/__init__.py",
         "src/aether_agents/monitor/__init__.py",
-        "src/aether_agents/monitor/commands.py",
-        "src/aether_agents/monitor/delivery.py",
-        "src/aether_agents/monitor/hermes_plugin.py",
-        "src/aether_agents/monitor/reporting.py",
-        "src/aether_agents/monitor/runtime.py",
-        "src/aether_agents/monitor/service.py",
-        "src/aether_agents/monitor/sources.py",
-        "src/aether_agents/monitor/store.py",
-        "src/aether_agents/resources/monitor/narration-context.md",
+        "src/aether_agents/resources/lab",
         "src/aether_agents/resources/monitor/precheck.py",
+        "tests/fixtures/e2e",
+        "tests/test_e2e_harness.py",
+        "tests/test_e2e15_qualification.py",
+        "tests/test_lab_formalization.py",
         "tests/test_telegram_monitor_cli_plugin.py",
-        "tests/test_telegram_monitor_runtime.py",
     ):
-        assert path in workflow, path
-    # The literal manifest stays literal: no wildcard was introduced for the new paths.
+        assert path not in workflow, path
+    assert "tests/test_e2e_matrix.py" in workflow
+    # The literal manifest stays literal: no wildcard was introduced for deleted paths.
     for glob in (
+        "lab/**",
+        "scripts/e2e/**",
+        "src/aether_agents/lab/**",
         "src/aether_agents/monitor/*",
+        "tests/test_lab*",
         "tests/test_telegram_monitor_*",
         "docs/guides/telegram-monitor*",
         "scripts/qualify_telegram_monitor*",
@@ -516,67 +479,6 @@ def test_policy_manifest_admits_every_monitor_path_literally() -> None:
     assert "python -m compileall -q src tests scripts" in static_gate
     assert "ruff check src/aether_agents tests scripts" in static_gate
     assert "ruff format --check src/aether_agents tests scripts" in static_gate
-
-
-def test_monitor_guide_states_what_the_store_persists_without_overclaiming() -> None:
-    """Round-9 review finding: the privacy claim must match the implemented store.
-
-    The store persists the validated narrative structure (and the narrator session
-    identifier), so the guide may not claim that no narrative text is persisted.  The
-    corrected wording names what is persisted and what is not (Telegram message text,
-    credentials, raw transcripts, tool arguments/results, provider bindings, chat
-    identifiers).
-    """
-
-    guide = (ROOT / "docs/guides/telegram-monitor.md").read_text(encoding="utf-8")
-    privacy = guide.split("## State, privacy and retention")[1].split("## Failure behavior")[0]
-
-    for phrase in (
-        "validated narrative structure",
-        "narrator session identifier",
-        "24,000 characters",
-        "Telegram message text is not persisted",
-        "raw transcript",
-    ):
-        assert phrase in privacy, phrase
-    # The audited overclaim must not survive anywhere in the guide's privacy section: the
-    # store really does persist narrative prose, so the blanket sentence was false.
-    assert "No credential, chat identifier, message text, raw transcript" not in privacy
-
-
-def test_monitor_guide_documents_the_isolated_laboratory_and_its_retention() -> None:
-    """The guide's qualification claims match the D13 laboratory the harness implements.
-
-    The retired shared-registry lane is described as retired — with the guarantees it
-    provided mapped onto the containment evidence that carries them — and the guide never
-    presents the laboratory as a production qualification.
-    """
-
-    guide = " ".join((ROOT / "docs/guides/telegram-monitor.md").read_text(encoding="utf-8").split())
-
-    for phrase in (
-        "isolated native-runtime laboratory",
-        "lab-root-inside-repository",
-        "lab-context-escape",
-        "lab-scheduler-stop",
-        "lab-retention",
-        "never self-deletes the laboratory",
-        "`registry_touched: false`",
-        "No code path addresses the operator registry at all",
-        "it never touches this installation's project registry",
-    ):
-        assert phrase in guide, phrase
-    # The retired lane's durable artifacts are history, not current behaviour.
-    for retired in (
-        "registry.json.qualification-recovery.json",
-        "registry.json.qualification-held",
-        ".aether-qualification-staging-",
-        "**Live qualification is currently refused",
-    ):
-        assert retired not in guide, retired
-    # Live evidence is still pending: the laboratory is not production acceptance.
-    assert "is not qualified" in guide
-    assert "not production acceptance" in guide
 
 
 SEMANTIC_MAINTENANCE_SURFACES = (

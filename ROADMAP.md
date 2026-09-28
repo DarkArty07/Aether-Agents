@@ -25,17 +25,15 @@ Current surfaces and limits belong to the capability registry, not this roadmap.
 See [the plan](specs/005-project-knowledge-graphify/plan.md) and
 [validation criteria](specs/005-project-knowledge-graphify/validation.md).
 
-## Telegram Monitor — bounded autonomous objective
+## Owner-directed Lab and Telegram Monitor retirement (2026-09-28)
 
-The owner authorized autonomous design, implementation and progress reporting for
-[Telegram Monitor](specs/telegram-monitor/spec.md): hourly narratives by Morfeo across
-project-bound sessions/contracts, one existing Telegram conversation, native cron reuse
-and an automatic/no-work-silent lifecycle with manual-off priority. This scoped feature
-exception includes documented tests and reversible local activation through provisioned
-access; it does not waive stabilization gates, permit unrelated changes or publish a
-release. Implementation and real delivery qualification remain pending. Technical design
-and runnable verification live beside the feature specification; current capability
-status continues to belong solely to `docs/capabilities.toml`.
+The owner retired the formal Qualification Lab and Telegram Monitor, including periodic
+progress reports, with no replacement. This supersedes the earlier [Telegram Monitor
+specification](specs/telegram-monitor/spec.md) and its bounded implementation and delivery
+authorization; those materials remain historical and do not describe a current capability
+or authorize reactivation. Native Hermes cron, ordinary Telegram interaction and native
+task/final/input notifications remain unchanged. Deleting the Lab is not a reliability
+PASS or waiver: PD-74 remains outstanding. See the [retirement decision](specs/lab-monitor-retirement/spec.md).
 
 ## 1. What this roadmap means
 
@@ -77,7 +75,7 @@ The authorized `1.0.0rc1` objective is a bounded pre-stable milestone, not the s
 
 - package version `1.0.0rc1`; annotated tag and GitHub prerelease `v1.0.0-rc.1`; `release_impact = major`, `release_action = publish`, `release_channel = prerelease`;
 - explicitly **not** stable `1.0.0`, **not** a PyPI or other package-index publication, and **not** a WSL2 qualification result;
-- immutable release code and Graphify components live under the Aether XDG data root while every mutable Hermes home, session, board, credential, memory, observation, monitor and knowledge artifact stays under the Aether XDG state root, with `aether update` as the sole supported promotion/activation boundary (non-mutating local-candidate preview, explicit interrupting activation, transition recovery and state-preserving rollback that never rolls user state backward); and
+- immutable release code and Graphify components live under the Aether XDG data root while every mutable Hermes home, session, board, credential, memory, observation, knowledge artifact, and retained historical Monitor data stays under the Aether XDG state root, with `aether update` as the sole supported promotion/activation boundary (non-mutating local-candidate preview, explicit interrupting activation, transition recovery and state-preserving rollback that never rolls user state backward); and
 - issue `#261` remains open with the stable-1.0.0, PyPI/OIDC and WSL2 gates outstanding.
 
 The public path supports Linux native and WSL2 only for 1.0. It installs into Aether-owned XDG roots, keeps persistent user/profile/project state outside immutable releases, reuses Hermes profiles/Projects/boards/worktrees/review/lifecycle, and never replaces an unrelated personal Hermes installation.
@@ -106,7 +104,7 @@ These are dependency phases and release-evidence gates, not a claim that code mu
 | Phase | Scope | Status | Exit/gate |
 |---|---|---|---|
 | 0 | Canonical reconciliation and baseline freeze | in progress; reopened by PD-71–PD-74 | DESIGN/R7/R8/R10/A1/R13/role resources agree on reversibility-first local work and the minimal edge boundary |
-| S | 004 operational simplification + E2E reliability | in progress; **feature freeze active** | `aether_agents.lab` is the formal Hermes-free qualification API; `scripts/e2e` remains wrappers, with schema-validated full/observation preparation, isolated `--parallel 2` roots, and serialized E2E-15. Minimal guard + aligned roles + disposable E2E canary; then >=19/20 representative live passes with latest 10 consecutive, zero guard-caused manual recovery and zero protected-edge violations |
+| S | 004 operational simplification + E2E reliability | in progress; **feature freeze active; former Lab route retired** | PD-74 remains unsatisfied. The formal Aether Lab and its compatibility wrappers are retired with no replacement specified by this objective; removal is not a reliability PASS or waiver. Any future qualification route must be reconciled under separate authority. |
 | 1 | Manager/package skeleton and public contracts | frozen behind phase S | Built wheel installs with `uv`; help/version/no-runtime doctor run outside source tree |
 | 2 | Maintained-fork source reconciliation and artifacts | in progress under the `1.0.0rc1` objective | The `aether-main` candidate carries every accepted active behavior as source — never as replayed `.patch` files — and passes its own focused gates; local wheel/sdist/runtime-source/provenance ready. **External gate** before public fork/tag/release |
 | 3 | Runtime lifecycle and recovery | in progress under the `1.0.0rc1` objective | Validated maintained-fork release lock, `aether update` local-candidate route with a non-mutating preview and explicit interrupting activation, one authoritative active-release record with matching `runtime/current`, launcher, Desktop and Aether-owned service projections, transition recovery and state-preserving rollback; fault-injected disposable lanes plus one bounded real activation/rollback lane preserve the coherent active release and unrelated state |
@@ -121,17 +119,14 @@ These are dependency phases and release-evidence gates, not a claim that code mu
 
 The complete testing standard and Supervisor handoff are in `specs/r13-synthesis-and-release/plan.md` §§3–7, A1-reconciled to the maintained-fork release mode. The bounded `1.0.0rc1` release-candidate objective executes against `specs/001-aether-v1-productization/plan.md` under its Objective Contract. Morfeo creates no implementation units.
 
-## 6. Evidence boundary
+## 6. Historical Lab and evidence boundary
 
-The formal laboratory keeps canonical scenarios, fixture metadata, and evidence schemas
-under `lab/`, packages those exact bytes for wheel consumers, and writes compact
-redacted JSON/JSONL only inside disposable run roots. The observation suite is a
-separate preparation/live lane and never contributes to the PD-74 rolling 20-run
-score. The bounded provider-backed observation lane has passed with real curated tool
-calls and zero fallback. Native persistent-session proof is still pending: E2E-15 must demonstrate a
-same-session Morfeo wake from the terminal board event under PTY, and a one-shot
-harness continuation cannot satisfy that requirement. No deterministic preparation
-result is a live qualification or release claim.
+The former formal Lab stored scenarios, fixtures, schemas and qualification outputs;
+its implementation and compatibility wrappers were retired by the owner on 2026-09-28.
+Those earlier artifacts and failures remain attributable history, not current product
+inputs or evidence that the outstanding PD-74 reliability gate passed. The retirement
+objective preserves historical release/evidence records and does not define a replacement
+qualification route or authorize a new agent-behavior campaign.
 
 Public release claims are verified against the exact locked public artifact and installed RC, not a private editable runtime. Required evidence includes:
 
@@ -198,6 +193,11 @@ This roadmap and the reconciled contracts authorize no public or destructive eff
 - existing-install cutover, deployment, destructive migration/purge, or unrelated service/process mutation; or
 - force-push, history rewrite, or discard of unknown local work.
 
-The current operational route is **004 stabilization**: finish canonical alignment, replace the overbroad guard, align portable role behavior, build the disposable E2E canary, then execute the real reliability matrix only after its existing credential/spend gate is explicitly opened. Feature expansion, Hermes upgrades, observation expansion, RC qualification, publication and stable release remain frozen/separate until PD-74 passes; deterministic candidate code does not authorize those external effects.
+PD-74 remains outstanding. The former formal Lab and E2E-canary route was retired by the
+owner; this roadmap does not select a replacement qualification route or authorize an
+agent-behavior campaign. Feature expansion, Hermes upgrades, observation expansion, RC
+qualification, publication and stable release remain frozen/separate until PD-74 is
+satisfied through a separately reconciled and authorized route; deleting tooling is not
+evidence of reliability.
 
 An explicit owner instruction captured in a finalized Objective Contract can authorize a bounded objective beyond this roadmap's own boundary, including its scoped pushes, pull requests, required checks, green merges, annotated tag and GitHub prerelease — as `oc_3397f9f05d780f8e@v1` does for the `1.0.0rc1` release candidate. This roadmap still authorizes nothing by itself, and no such authorization extends to stable `v1.0.0`, PyPI publication, WSL2 qualification or another objective.

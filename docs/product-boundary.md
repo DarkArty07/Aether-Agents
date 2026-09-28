@@ -6,7 +6,7 @@ Aether is a product and method layered on [Hermes Agent](https://hermes-agent.no
 | --- | --- |
 | Agent conversation loop, profiles, tools, and hooks | A three-role responsibility model, Objective Contracts, portable role resources, and a small edge-effect policy |
 | Durable boards, dispatcher, cards, retries, reclaim, worktrees, review, and session support | Which role uses those primitives, how a finalized contract enters a project/version-specific board, and what evidence must accompany completion |
-| Plugin discovery and tool registration | The `aether-contract-observer`, `aether-objective-contracts`, optional `aether-project-knowledge` and Morfeo-only `aether-telegram-monitor` entry points and their bounded Aether tools |
+| Plugin discovery and tool registration | The `aether-contract-observer`, `aether-objective-contracts`, and optional `aether-project-knowledge` entry points and their bounded Aether tools |
 | Generic configuration, provider, credential, and service behavior | Product-specific release/project/observation candidates and explicit limits; no duplicated generic manual |
 
 ## Aether-owned behavior
@@ -18,10 +18,15 @@ The current source contains:
 - Morfeo-only Objective Contract authoring and deterministic per-contract-version execution-board handoff;
 - bounded Contract Observation capture/read interfaces;
 - portable Morfeo, Supervisor, and Implementer resource bundles;
-- a policy hook that protects narrow credential, protected external, and destructive edges; and
-- a disposable qualification laboratory plus compatibility wrappers.
+- a policy hook that protects narrow credential, protected external, and destructive edges.
 
 The status of each surface is not implied by this inventory. Consult [Capability coverage](reference/capabilities.md) for implemented, partial, transitional, and unsupported status.
+
+The owner retired the formal Qualification Lab and Telegram Monitor, including periodic
+progress reports, without a replacement. Native Hermes cron, ordinary Telegram
+interaction and native task/final/input notifications remain unchanged. Source retirement
+does not establish installed-runtime cutover or satisfy the outstanding PD-74 reliability
+gate; historical private state is preserved.
 
 ## Optional Graphify component
 
