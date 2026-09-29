@@ -5,6 +5,7 @@
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Amended**: 2026-08-18 — direct PD-44 actions distinguished from delegated board execution
 **Amended**: 2026-09-04 — canonical skill domains and terminal residue retention reconciled
+**Amended**: 2026-09-29 — project-level board wording reconciled with the accepted per-contract-version execution board under Objective Contract `oc_593cb1275b24ea19@v1` (issue #552)
 **Decision authority**: Christopher
 **Autonomous design delegate for this stage**: Morfeo
 **Future role owner**: Morfeo
@@ -250,8 +251,12 @@ skills refer there instead of maintaining competing cleanup protocols.
 
 ## 7. Boards Are the Project Boundary
 
-- **FR-924**: One board and workspace root per portable project identity (R5-FR-510). `aether init` maps that identity to a native Hermes Project and board; a worker is pinned to the exact board at spawn.
-- **FR-925**: Namespacing inside a board is a soft filter and MUST NOT be used as an isolation boundary between projects (R5-FR-511).
+Project identity still scopes isolation; the provisioned execution board is the
+per-contract-version board accepted by `specs/003-objective-contracts/spec.md`
+("Execution-board isolation"), which this stage defers to rather than restating differently.
+
+- **FR-924**: Each project's execution MUST be isolated on boards provisioned for its complete executable identity `(project_id, contract_id, version)`, resolved from the verified portable project identity (R5-FR-510, 003-objective-contracts). `aether init` maps that identity to one native Hermes Project and creates no board; the board itself is provisioned only by a ready Objective Contract handoff. A worker is pinned to the exact board at spawn.
+- **FR-925**: Namespacing inside a board is a soft filter and MUST NOT be used as an isolation boundary between projects or between contract versions (R5-FR-511).
 - **FR-926**: Cross-project references MUST NOT be expressed as links, which the runtime does not permit across boards. Where a relationship exists, it belongs in the contract.
 - **FR-927**: A moved clone may be remapped explicitly after repository-identity validation. A UUID or canonical-repository collision MUST fail rather than attach to another project's state.
 - **FR-928**: Hermes `projects.db` remains per profile while the board store is shared across profiles (`hermes_cli/projects_db.py:1-18`). Aether's mapping MUST make all three role profiles resolve the same portable project and board without sharing a profile home or duplicating the board kernel.

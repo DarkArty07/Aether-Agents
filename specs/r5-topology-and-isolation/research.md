@@ -213,3 +213,57 @@ Checked because the same class of error already produced a false finding about H
 | A hotspot file becomes a standing reconciliation lane | Two flags trigger decomposition before more work is queued | R7 |
 | Board is not a security boundary between principals | Recorded as the trusted-local-user model | R10 |
 | Dispatcher internals not yet inspected | Read by R7 before concurrency policy is set | R7 |
+
+## 10. Superseded wording preserved as history (2026-09-29)
+
+Two R5 statements written on 2026-08-17 (`b9b3dfda`) remained competing current MUSTs
+against later accepted decisions. They are corrected in `spec.md`; this section records
+the earlier text and the exact reason, so a reader of the old wording can see why it was
+never silently replaced.
+
+### R5 board wording: one board per project → one board per executable identity
+
+- **Earlier text (2026-08-17):** FR-510 said "Aether MUST use one board per project" and
+  section 4 was titled "Boards Are the Project Boundary".
+- **Accepted later (2026-08-31, `1d578c1e`, and `842f4424`):**
+  `specs/003-objective-contracts/spec.md` ("Responsibility boundary" and
+  "Execution-board isolation") provisions exactly one local Hermes board for the
+  complete executable identity `(project_id, contract_id, version)`, deterministic from
+  those bytes, retried and concurrent-retry stable, with another project, contract or
+  version resolving to a different board and database. Observed in this repository's own
+  local state: boards such as
+  `oc-12027989a08f41cda82c54ff1bfb6b03-593cb1275b24ea19-v1` carry the exact Aether tuple
+  in `board.json`, and `aether init` deliberately creates no board
+  (`specs/001-aether-v1-productization/spec.md` A1-FR-052 and its `contracts/cli.md`
+  §2: "No board, worktree, worker or first commit is required for onboarding. Execution
+  boards are provisioned only by a ready Objective Contract handoff").
+- **Why this is a narrower rule, not a redesign:** the project binding, the worker board
+  pin at spawn and the trusted-local-user (not a security-principal) boundary are all
+  unchanged. What changed is the granularity of the *provisioned* identity: the project
+  supplies the verified portable identity; the contract version supplies the execution
+  isolation. A board is therefore never inferred from a display name, session recency or
+  the `default` board, and the raw `HERMES_KANBAN_DB` override is refused before board
+  mutation.
+- **What is preserved as history:** this section, the Git record of the 2026-08-17
+  wording, and the intuition behind it — isolation was never meant to be optional, only
+  coarser-grained than the accepted execution identity.
+
+### R5 role wording: Supervisor MUST NOT implement → PD-73 bounded repair
+
+- **Earlier text (2026-08-17):** FR-518 said the supervising role "MUST NOT perform the
+  implementation itself", with no boundary.
+- **Accepted later:** DESIGN.md PD-73 permits an explicitly attributed, bounded repair
+  that restores already-agreed behavior when it costs less remaining work and delay than
+  another handoff, remains verifiable and does not monopolize supervision. R7-FR-703,
+  R8-FR-819b/§7.1, R13-FR-1314 and the supervisor SOUL carry the same boundary, and R7
+  already records the procedure (distinguish the candidate, the correction and the
+  verified final candidate; verification of one's own repair is not independent review).
+- **Why this is a boundary, not a handover:** Implementer still owns substantial unit
+  implementation and its reversible local judgement (DESIGN.md PD-73, R5-FR-509a),
+  Supervisor gains no product-feature implementation, acceptance or shared-interface
+  authority, and no lane, role or runtime gate is added. The older sentence's intent —
+  that the supervising role does not absorb implementation — is retained inside the
+  reconciled FR-518 rather than deleted.
+- **What is preserved as history:** this section and the Git record. The original
+  prohibition was the correct default for a stage that had not yet accepted a repair
+  boundary; it is superseded only to the extent accepted decisions already superseded it.
