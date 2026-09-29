@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import types
 from pathlib import Path
@@ -9,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from aether_agents.launcher import ActivationError
-from aether_agents.mcp import hermes_adapter
+from aether_agents.mcp import hermes_adapter, morfeo_server
 from aether_agents.mcp.morfeo_server import install_tools, main, prepare_bridge
 
 
@@ -228,6 +229,51 @@ def test_runtime_installs_bootstrap_and_visible_tools(tmp_path: Path, install_mo
     install_tools(server, bridge, "project", tmp_path)
     assert "morfeo_bootstrap" in server.tools
     assert "memory" in server.tools
+
+
+def test_omitted_optional_arguments_are_not_forwarded_as_null(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from mcp.server.fastmcp import FastMCP
+
+    received: list[dict[str, object]] = []
+
+    def call(_session: object, _name: str, arguments: dict[str, object]) -> str:
+        received.append(arguments)
+        return "ok"
+
+    parameters = {
+        "type": "object",
+        "properties": {
+            "action": {"type": "string"},
+            "question": {"type": "string"},
+            "budget_tokens": {"type": "integer"},
+        },
+        "required": ["action"],
+    }
+    bridge = types.SimpleNamespace(
+        published=lambda: [
+            {
+                "function": {
+                    "name": "project_knowledge",
+                    "description": "pk",
+                    "parameters": parameters,
+                }
+            }
+        ],
+        ensure=lambda *_args, **_kwargs: None,
+        call=call,
+        bootstrap=lambda _session: {"role": "morfeo"},
+    )
+    monkeypatch.setattr(morfeo_server, "client_key", lambda _ctx: "stdio")
+    server = FastMCP("morfeo")
+    install_tools(server, bridge, "project", tmp_path)
+    asyncio.run(server.call_tool("project_knowledge", {"action": "query", "question": "q"}))
+    asyncio.run(server.call_tool("project_knowledge", {"action": "status", "budget_tokens": 0}))
+    assert received == [
+        {"action": "query", "question": "q"},
+        {"action": "status", "budget_tokens": 0},
+    ]
 
 
 def test_serve_refuses_a_missing_runtime_python(
