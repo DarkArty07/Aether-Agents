@@ -2,7 +2,7 @@
 
 **Decision authority:** project owner
 **Objective owner/design steward:** Morfeo
-**Status:** accepted audit and source-correction intent; automatic Pages effect pending owner answer before final execution handoff
+**Status:** accepted audit and source-correction intent; bounded automatic Pages effect confirmed by owner, execution pending
 **Inspected base:** `4d60b418a19c21bacd01e503cb961d4240647f8f` (`origin/main`, includes PR #551)
 **Tracking:** [issue #552](https://github.com/DarkArty07/Aether-Agents/issues/552)
 
@@ -21,11 +21,11 @@ Inspect Aether's current project documentation for material contradictions and f
 - **DC-05 — Derived surfaces and history.** Reconcile affected current `docs/`, root operating map, `website/src/lib/docs.ts` only if a tracked docs path changes, and existing test assertions that otherwise enforce obsolete words. Leave historical specs, PR/issue evidence, immutable contracts, postmortems and releases attributable; add narrowly scoped supersession/status labels only to mutable owning entry points, not blanket replacements. Do not delete other sessions' work. Preserve the unrelated uncommitted multiharness-design edit in the shared primary checkout.
 - **DC-06 — Verified integration.** Independently review the source/doc/test changes in their owning lanes, validate all current docs/registry links and required repository checks, merge through the normal green GitHub PR path without squash/force/bypass, verify exact `main` revision and any authorized automatic site deployment, reconcile #552 and safely retire objective-owned merged branches/worktrees after durable evidence. Morfeo performs separate contract-result reception against the actual integrated artifact. A passing PR or board status alone is not completion; preserve failures and missing main-run evidence honestly.
 
-## 3. Authority, pending effect and limits
+## 3. Authority and effect limits
 
 The owner authorizes autonomous source/documentation corrections and requires completion on `main`; the existing R8 routine path permits normal reviewed branch/PR/check/merge within that scope. Product implementation is delegated to Supervisor and Implementer, not Morfeo or short-lived subagents. Review is valuable here because a whole cross-domain documentation sweep can create contradictory authority, make a historical result look current, or miss a dependent site/test oracle.
 
-**Pages decision pending:** `.github/workflows/pages.yml:3-10,66-75` automatically deploys the existing Aether site on a `main` push affecting `docs/**` or `website/**`. The owner's earlier explicit approval was confined to PR #549, not this objective. The owner has been asked whether #552 may cause that same automatic effect. A positive answer must be recorded here, with exact destination and limits, before final contract/handoff or any docs-path merge. A negative answer does not allow disabling or bypassing the workflow; dependent delivery would stop incomplete for an owner choice. No manual Pages dispatch, other deployment, public release/package, credential acquisition, model spend, provider change, runtime adoption, history rewrite, destructive state purge or unrelated repository cleanup is authorized.
+**Owner-confirmed Pages boundary (2026-09-29 UTC):** the owner clarified that the earlier "autorizo" also covers the **existing automatic GitHub Pages deployment** triggered by normal, green `main` merges of the reviewed documentation PR(s) needed for #552. `.github/workflows/pages.yml:3-10,66-75` owns that effect for `docs/**` or `website/**`; no fresh per-PR permission is required within this objective. This correction does not retroactively change prior evidence. Verify each merge's exact destination/commit and workflow outcome before reporting delivery. No manual Pages dispatch, other site/target, unrelated deployment, public release/package, new RC, credential acquisition, model spend, provider change, runtime adoption, history rewrite, destructive state purge or unrelated repository cleanup is authorized.
 
 ## 4. Acceptance and stop
 
