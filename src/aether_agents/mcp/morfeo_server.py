@@ -137,8 +137,10 @@ def install_tools(mcp: Any, bridge: ToolBridge, project_id: str, project: Path) 
 
         def handler(ctx: Context, _name: str = name, **arguments: Any) -> str:
             session = bridge.ensure(client_key(ctx), project_id=project_id, project_root=project)
+            # FastMCP passes None for each omitted optional parameter; forward only supplied ones.
+            supplied = {key: value for key, value in arguments.items() if value is not None}
             try:
-                return bridge.call(session, _name, arguments)
+                return bridge.call(session, _name, supplied)
             except MorfeoMcpError as exc:
                 return exc.code
 
