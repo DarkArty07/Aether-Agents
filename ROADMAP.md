@@ -1,7 +1,7 @@
 # Aether Agents Roadmap
 
 **Decision authority**: owner
-**Current conceptual baseline**: `DESIGN.md` through PD-77 — the accepted owner decisions are numbered continuously to PD-77, where PD-76 (2026-09-23 era, added with the contract-bounded-gate clarification) bounds what delegated gates may claim and PD-77 (2026-08-29) binds conversation continuity to the Objective Contract flow rather than to the process. Earlier numbered rows stay accepted and dated; `DESIGN.md` §11 is the normative text.
+**Current conceptual baseline**: `DESIGN.md` through PD-77 — the accepted owner decisions are numbered continuously to PD-77, where PD-76 (added 2026-08-27 with the contract-bounded-gate clarification) bounds what delegated gates may claim and PD-77 (2026-08-29) binds conversation continuity to the Objective Contract flow rather than to the process. Earlier numbered rows stay accepted and dated; `DESIGN.md` §11 is the normative text.
 **Current product contracts**: `specs/001-aether-v1-productization/`, `specs/002-aether-contract-observation/`, and the stabilization plan `specs/004-operational-simplification-and-e2e-reliability/plan.md`
 **Current synthesis/entry**: `specs/r13-synthesis-and-release/`, A1-reconciled on 2026-09-15 to the maintained-fork release mode, the XDG data/state split and release-lock `schema_version` 4; reopened until the PD-74 reliability gate passes
 **Selected Hermes base**: `NousResearch/hermes-agent` `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, `hermes-agent` `0.20.4`, Python `>=3.11,<3.14` — retained as the public reference baseline for upstream-compatible behavior and historical evidence, not as the executable release input
