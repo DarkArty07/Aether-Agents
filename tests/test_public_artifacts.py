@@ -15,7 +15,7 @@ ROOT = Path(__file__).parents[1]
 SCANNER = ROOT / "scripts" / "check_public_artifacts.py"
 ROOT_REPORTS = ("INTEGRATIONS.md", "INCOMPLETE_IMPLEMENTATIONS.md")
 # Updated by the owner-authorized Graphify integration; retain byte-integrity coverage.
-INTEGRATIONS_SHA256 = "b34ac51af0a9ae65d3b35fb1e724165042585b61bfe92ed3196369e853c86536"
+INTEGRATIONS_SHA256 = "f5bb2a004477335062b05fee03c9a0645c58b95d9c349eae497bdfc3b2e46c63"
 # The canonical base manifest step asserts `VERSION` against an ERE quoted in the workflow.
 _VERSION_GUARD_RE = re.compile(r"^\s*grep -Eq '(?P<pattern>[^']+)' VERSION$", re.MULTILINE)
 # The accepted package identities mirror `.github/workflows/release.yml` (`Validate release
@@ -84,7 +84,7 @@ def test_root_reports_are_tracked_immutable_and_privacy_safe(tmp_path: Path) -> 
     assert tracked.returncode == 0, tracked.stderr
 
     integrations = ROOT / "INTEGRATIONS.md"
-    assert integrations.stat().st_size == 9305
+    assert integrations.stat().st_size == 10698
     assert hashlib.sha256(integrations.read_bytes()).hexdigest() == INTEGRATIONS_SHA256
 
     subprocess.run(("git", "init", "-q"), cwd=tmp_path, check=True)

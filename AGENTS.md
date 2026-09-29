@@ -23,16 +23,24 @@ prior failures/releases immutable.
 
 Only Morfeo has a proper agent name; supervision and implementation remain role descriptions. Hermes Agent and GitHub Spec Kit are selected foundations. Aether reuses native Hermes profiles, Projects, boards, worktrees, review, and lifecycle where they qualify. A2A remains available but unused under R6; framework availability never authorizes an integration mechanism.
 
-Executable Hermes source is Aether's maintained fork `DarkArty07/aether-hermes` branch `aether-main`, bound by release-lock `schema_version` 4 source mode `maintained_fork` through repository, exact commit, source-tree digest, artifacts and provenance, and installed through `aether update`. The earlier fixed public baseline `NousResearch/hermes-agent` `v2026.8.18` — annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, distribution `hermes-agent` `0.20.4`, Python `>=3.11,<3.14` — remains a reference baseline for upstream-compatible behavior and historical evidence, not the deployment input. `.patch` files and HLP records are audit/reconstruction evidence and are never replayed onto the active runtime; the retired `transitional_fork` mode is refused for new preparation. Hermes keeps its own distribution identity (`hermes-agent`). No new Aether capability may depend on a downstream-only core change, and each accepted fork change retires when an exact released upstream artifact passes its behavior gate.
-
-The RC6 bounded corrective objective is `oc_b5926701207812e8@v1`, designed in `specs/001-aether-v1-productization/plan-rc6.md`: finish mixed-version lifecycle compatibility, observer startup/native-query reliability and portable launcher guidance, then qualify one local candidate `1.0.0rc6` / `1.0.0-rc.6` / `v1.0.0-rc.6`. Its conclusions are `release_impact=patch` / `release_action=prepare` / `release_channel=prerelease`; the annotated tag remains local-only, never pushed. This is not stable `1.0.0`, PyPI publication or WSL2 qualification; #261 stays open. #485 is the owning objective issue, with #488 and #490 included and related launcher/service issues reconciled only against actual evidence. The failed rc5 contract `oc_a7a3cff05e82c148@v1` remains non-accepted history; operational recovery does not retroactively accept it. Exact frozen old readers/writers must be tested in isolation before live effects, and coherent rc5 is the only live fallback for this objective. Executable Hermes stays at maintained-fork merge `aed6591a69f453a1867b73628603e7b53ba40ffc` (`#450`+`#461`) for this objective's own lane, and that commit remains the installed runtime pin. The separately authorized #494 source phase advanced the maintained fork's `aether-main` to `58f8c37a49b341f25b8fdd6310542fe932031b8d` with reviewed source, a portable artifact and reconciled evidence only; its live adoption is a deferred successor, not a runtime change. The separately authorized source repair for issue #433 then advanced the same branch to `621047dc1c10cceb2825013cc8bb611b4d0e8de1` (reviewed auxiliary Responses reasoning-usage preservation, portable artifact and reconciled evidence only); its live adoption is likewise a deferred successor and the installed runtime pin named above is unchanged. Existing rc.2 through rc.5 tags and activation records remain immutable; the published-but-rejected rc1 (`oc_3397f9f05d780f8e@v1`) must not be activated. Automatic deployments to the existing Aether GitHub Pages site caused by reviewed green merges required by this objective remain authorized; no manual Pages dispatch, other target or unrelated deployment is authorized.
-
-Current owner-authorized local maintenance for #497/#495 is a two-candidate managed update. RC7 is the compatibility bridge with RC6-identical Morfeo SOUL and canonical contract skills; this `1.0.0rc8` source revision restores the #495 planning guidance and the #497 updater repair. For #487, the owner's accepted option B gives Hermes ownership of the complete main gateway unit; Aether verifies only its required service invariants, as reconciled in A1. Source or a local tag alone cannot establish qualification, active runtime selection or improved agent behavior: require reviewed Git evidence, exact-version isolation and a verified managed cutover. No tag is pushed or published. These maintenance candidates do not accept the outstanding RC6 objective, qualify stable release or WSL2, or authorize unrelated runtime changes.
-
-The owner-authorized Morfeo MCP objective (#515) continues in this `1.0.0rc14` source candidate. It keeps rc13's schema 5 emission, `hermes.extras: [mcp]`, and `aether mcp morfeo serve`. Candidate preparation qualifies required HLP coverage at the executable Hermes pin `aed6591a69f453a1867b73628603e7b53ba40ffc`; HLP-428 and HLP-433 stay deferred and are not retired. This source is not an activation claim. No Hermes fork change, tag push, or stable release is authorized.
+Executable Hermes source is Aether's maintained fork `DarkArty07/aether-hermes` branch `aether-main`, bound by release-lock source mode `maintained_fork` — emitted as `schema_version` 5 with the closed `hermes.extras` allowlist and readable as schema 4 — through repository, exact commit, source-tree digest, artifacts and provenance, and installed through `aether update`. The earlier fixed public baseline `NousResearch/hermes-agent` `v2026.8.18` — annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, distribution `hermes-agent` `0.20.4`, Python `>=3.11,<3.14` — remains a reference baseline for upstream-compatible behavior and historical evidence, not the deployment input. `.patch` files and HLP records are audit/reconstruction evidence and are never replayed onto the active runtime; the retired `transitional_fork` mode is refused for new preparation. Hermes keeps its own distribution identity (`hermes-agent`). No new Aether capability may depend on a downstream-only core change, and each accepted fork change retires when an exact released upstream artifact passes its behavior gate.
 
 
-## RC15 review maintenance
+## Historical objectives (earlier owner authorizations, no longer current authority)
+
+These entries are preserved, dated history from objectives that have already
+delivered their source into this `main` branch. They retain their links and
+preservation gates, but they are **not** standing authority for new work: nothing
+below authorizes new implementation, a new release candidate, runtime activation or
+an external effect today. Each objective's own specification, Objective Contract and
+release evidence remain the authoritative record of what it did. For where this
+repository currently stands, read [`README.md`](README.md) and the stabilization
+statements above; [`CHANGELOG.md`](CHANGELOG.md) records what each release actually
+shipped.
+
+### RC15 review maintenance (delivered 2026-09-25)
+
+Superseded as authority by the later RC17 candidate and the subsequent `main` source; kept for its boundary language (resource checks are not agent-behavior qualification).
 
 The current owner objective prepares RC15 with the revised Supervisor SOUL and
 canonical review procedure. Its Hermes source is the RC14 base plus a generic
@@ -43,7 +51,9 @@ excludes agent behavior tests and unrelated deferred fork changes. RC15 does not
 resume or accept the paused #494 objective. Preserve earlier releases and distinguish
 focused deterministic checks, packaging verification and untested agent behavior.
 
-## Current role-guidance maintenance (#426 / #459)
+### Role-guidance maintenance (#426 / #459, merged 2026-09-26)
+
+The role SOULs and canonical skills it authorized now live in the packaged resources referenced above; its instruction-maintenance scope is not a precedent for a further documentation objective without new owner authority.
 
 The owner authorizes Morfeo to directly consolidate the three package-owned SOULs and
 relevant canonical skills, preserving intent, useful contract boundaries and proportional
@@ -53,6 +63,19 @@ agent campaign, live canary or runtime adoption is part of this objective. The o
 observe ordinary usage and reopen issues if needed. Do not report behavioral qualification
 from resource checks. See `specs/006-contract-execution-quality/spec.md` for the owning
 maintenance decision; this does not waive required repository checks or unrelated gates.
+
+### RC6, RC8 and RC14 candidate objectives (delivered source)
+
+Each candidate below delivered its own source revision, which is recorded in
+[`CHANGELOG.md`](CHANGELOG.md). Their installation-specific pins and local-only tags
+describe that objective's own lane at that time; they are not the current runtime pin
+and authorize no new effect.
+
+The RC6 bounded corrective objective is `oc_b5926701207812e8@v1`, designed in `specs/001-aether-v1-productization/plan-rc6.md`: finish mixed-version lifecycle compatibility, observer startup/native-query reliability and portable launcher guidance, then qualify one local candidate `1.0.0rc6` / `1.0.0-rc.6` / `v1.0.0-rc.6`. Its conclusions are `release_impact=patch` / `release_action=prepare` / `release_channel=prerelease`; the annotated tag remains local-only, never pushed. This is not stable `1.0.0`, PyPI publication or WSL2 qualification; #261 stays open. #485 is the owning objective issue, with #488 and #490 included and related launcher/service issues reconciled only against actual evidence. The failed rc5 contract `oc_a7a3cff05e82c148@v1` remains non-accepted history; operational recovery does not retroactively accept it. Exact frozen old readers/writers must be tested in isolation before live effects, and coherent rc5 is the only live fallback for this objective. Executable Hermes stays at maintained-fork merge `aed6591a69f453a1867b73628603e7b53ba40ffc` (`#450`+`#461`) for this objective's own lane, and that commit remains the installed runtime pin. The separately authorized #494 source phase advanced the maintained fork's `aether-main` to `58f8c37a49b341f25b8fdd6310542fe932031b8d` with reviewed source, a portable artifact and reconciled evidence only; its live adoption is a deferred successor, not a runtime change. The separately authorized source repair for issue #433 then advanced the same branch to `621047dc1c10cceb2825013cc8bb611b4d0e8de1` (reviewed auxiliary Responses reasoning-usage preservation, portable artifact and reconciled evidence only); its live adoption is likewise a deferred successor and the installed runtime pin named above is unchanged. Existing rc.2 through rc.5 tags and activation records remain immutable; the published-but-rejected rc1 (`oc_3397f9f05d780f8e@v1`) must not be activated. Automatic deployments to the existing Aether GitHub Pages site caused by reviewed green merges required by this objective remain authorized; no manual Pages dispatch, other target or unrelated deployment is authorized.
+
+Current owner-authorized local maintenance for #497/#495 is a two-candidate managed update. RC7 is the compatibility bridge with RC6-identical Morfeo SOUL and canonical contract skills; this `1.0.0rc8` source revision restores the #495 planning guidance and the #497 updater repair. For #487, the owner's accepted option B gives Hermes ownership of the complete main gateway unit; Aether verifies only its required service invariants, as reconciled in A1. Source or a local tag alone cannot establish qualification, active runtime selection or improved agent behavior: require reviewed Git evidence, exact-version isolation and a verified managed cutover. No tag is pushed or published. These maintenance candidates do not accept the outstanding RC6 objective, qualify stable release or WSL2, or authorize unrelated runtime changes.
+
+The owner-authorized Morfeo MCP objective (#515) continues in this `1.0.0rc14` source candidate. It keeps rc13's schema 5 emission, `hermes.extras: [mcp]`, and `aether mcp morfeo serve`. Candidate preparation qualifies required HLP coverage at the executable Hermes pin `aed6591a69f453a1867b73628603e7b53ba40ffc`; HLP-428 and HLP-433 stay deferred and are not retired. This source is not an activation claim. No Hermes fork change, tag push, or stable release is authorized.
 
 ## How Aether is built: borrow the thinking, write our own workflow
 
@@ -88,22 +111,22 @@ This principle is owned canonically by `specs/r0-design-governance/spec.md` and 
 
 ## Project guidance and canonical skills
 
-**RC17 local release (#542):** source integration and one managed local cutover are
-authorized with bounded verification, reusing reviewed fixes and required CI rather
-than duplicating a full local suite or creating an agent campaign. The exact fork pin
-is `007cfb77676b6b024d2c0986f4585e6cfdcf18d6`. The public skill is `aether-plan`, but its
-internal `skills/plan/` key is retained for RC16 reader compatibility. Preserve private
-configuration and RC16; no tag push, public release or live rollback rehearsal. This
-separate release supersedes earlier candidate-local fork deferrals only for its own lane;
-see `specs/rc17-local-release/spec.md`. Historical evidence and the #541 delivery below
-keep their original limits.
+**Historical local release (RC17, #542, prepared 2026-09-27):** source integration and
+one managed local cutover are authorized with bounded verification, reusing reviewed
+fixes and required CI rather than duplicating a full local suite or creating an agent
+campaign. The exact fork pin is `007cfb77676b6b024d2c0986f4585e6cfdcf18d6`. The public
+skill is `aether-plan`, but its internal `skills/plan/` key is retained for RC16 reader
+compatibility. Preserve private configuration and RC16; no tag push, public release or
+live rollback rehearsal. This separate release supersedes earlier candidate-local fork
+deferrals only for its own lane; see `specs/rc17-local-release/spec.md`. Historical
+evidence and the #541 delivery below keep their original limits.
 
-**Current bounded maintenance (#541):** the owner authorizes direct Morfeo instruction
-and documentation work for portable project methodology, expected behaviors and the
-`aether-plan` rename. Review the actual diff and affected references only; do not run
-test suites, builds, linters, additional validation campaigns or CI for this local
-delivery. The minimal resource-name registration and test/reference reconciliation
-needed by the rename are in scope. No pipeline, runtime activation, publication,
+**Historical bounded maintenance (#541, 2026-09-27):** the owner authorized direct
+Morfeo instruction and documentation work for portable project methodology, expected
+behaviors and the `aether-plan` rename. Review the actual diff and affected references
+only; do not run test suites, builds, linters, additional validation campaigns or CI
+for this local delivery. The minimal resource-name registration and test/reference
+reconciliation needed by the rename are in scope. No pipeline, runtime activation, publication,
 workflow disabling or protected-check bypass is authorized. This objective-specific
 boundary is recorded in R2 §3.1 and `CONTRIBUTING.md`; other objectives retain their gates.
 
@@ -190,7 +213,7 @@ Research checkouts stay outside this repository. They are evidence sources, not 
 - **Hermes Agent**
   - Upstream: `https://github.com/NousResearch/hermes-agent.git`
   - **Selected public release evidence:** release `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, distribution `hermes-agent` `0.20.4`, Python `>=3.11,<3.14`. This remains the reference baseline for upstream-compatible behavior and historical qualification evidence.
-  - **Executable release source:** maintained fork `https://github.com/DarkArty07/aether-hermes.git` branch `aether-main`. Each release binds the exact accepted commit, source-tree digest, artifact closure and provenance through release-lock `schema_version` 4 source mode `maintained_fork`; the retired `transitional_fork` mode is refused for new preparation.
+  - **Executable release source:** maintained fork `https://github.com/DarkArty07/aether-hermes.git` branch `aether-main`. Each release binds the exact accepted commit, source-tree digest, artifact closure and provenance through release-lock source mode `maintained_fork` (emitted as `schema_version` 5, readable as schema 4); the retired `transitional_fork` mode is refused for new preparation.
   - A locally loaded editable Hermes tree, its path, and its observed revision are runtime evidence only. They are not a distributable dependency or manually maintained durable documentation.
   - Resolve the source actually loaded, its version, and its revision at investigation time before making a runtime claim. Research checkouts and live local state remain read-only evidence during canonical design work; an authorized release candidate must start from the exact accepted maintained-fork commit and the exact accepted Aether revision, and must never copy private editable state or replay `.patch` files onto an active runtime.
   - The live profile under `home/` is evidence of what is initialized, not documentation of intent; its contents are never adopted merely by being present.
