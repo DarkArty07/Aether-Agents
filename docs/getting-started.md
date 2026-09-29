@@ -107,8 +107,6 @@ maintained-fork revisions, target version and release ID, active HLP coverage, a
 hashes, expected service interruption, preserved state and any blockers without staging or
 activating anything. Activation happens only with an explicit `--yes`, may interrupt
 Aether-owned instances immediately, and `aether rollback` restores product code without
-rolling user state backward. The managed Hermes source is the release-lock `maintained_fork`
-identity (`schema_version` 4, repository `https://github.com/DarkArty07/aether-hermes`); the
-retired `transitional_fork` mode is refused for new preparation.
+rolling user state backward. The managed Hermes source is the release-lock `maintained_fork` identity (repository `https://github.com/DarkArty07/aether-hermes`, emitted as `schema_version` 5 with the closed `hermes.extras` allowlist and still readable as schema 4); the retired `transitional_fork` mode is refused for new preparation.
 
 For the intended operational model after an initialized project exists, read [Lifecycle](guides/lifecycle.md), [Objective Contracts](guides/objective-contracts.md), and [Execution](guides/execution.md).

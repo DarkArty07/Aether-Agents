@@ -262,9 +262,13 @@ class ObservationNormativeDocumentationTests(unittest.TestCase):
         self.observation = OBS_SPEC_PATH.read_text(encoding="utf-8")
         self.research = OBS_RESEARCH_PATH.read_text(encoding="utf-8")
 
-    def test_product_definition_metadata_matches_the_pd76_stabilization_baseline(self) -> None:
-        self.assertIn("accepted current conceptual design through PD-76", self.design)
-        self.assertIn("`DESIGN.md` through PD-76", self.roadmap)
+    def test_product_definition_metadata_matches_the_pd77_stabilization_baseline(self) -> None:
+        # The status/roadmap headers must name the actually accepted decision set.
+        # PD-77 is accepted in DESIGN.md (added 2026-08-29), so the former PD-76
+        # wording was stale; the assertion is corrected to the revised current
+        # claim and keeps the remaining PD-74 stability assertions unchanged.
+        self.assertIn("accepted current conceptual design through PD-77", self.design)
+        self.assertIn("`DESIGN.md` through PD-77", self.roadmap)
         self.assertIn("**Product-definition version**: `PD-74`", self.a1_spec)
         self.assertIn("PD-74 reliability gate", self.roadmap)
         self.assertNotIn(
