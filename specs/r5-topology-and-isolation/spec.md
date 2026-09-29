@@ -7,6 +7,7 @@
 **Amended**: 2026-08-20 — PD-44 capability surface expanded and PD-45 accepted by Christopher
 **Amended**: 2026-08-26 — role responsibility remains semantic while the pre-tool micro-permission boundary is retired
 **Amended**: 2026-09-04 — autonomous stewardship, project guidance, and procedural skill precedence reconciled
+**Amended**: 2026-09-29 — execution-board identity and the PD-73 bounded-repair boundary reconciled against accepted later decisions under Objective Contract `oc_593cb1275b24ea19@v1` (issue #552); role topology unchanged
 **Decision authority**: Christopher  
 **Autonomous design delegate for this stage**: Hermes  
 **Future role owner**: Morfeo  
@@ -87,8 +88,17 @@ At any moment Aether runs one `morfeo` and, when Morfeo dispatches substantial w
 
 ## 4. Boards Are the Project Boundary
 
-- **FR-510**: Aether MUST use one board per project. A worker is pinned to its board at spawn and cannot see another.
-- **FR-511**: The board is the hard isolation boundary between projects. Namespacing within a board is a soft filter and MUST NOT be relied on for isolation.
+The board is still the project boundary: isolation is scoped by the verified portable
+project identity, never by display name, recency or an approximate path. The accepted
+execution identity is finer-grained than "one board per project": a ready Objective
+Contract handoff provisions exactly one isolated board for the complete executable
+identity `(project_id, contract_id, version)`, deterministic from those bytes, while a
+project with no ready handoff owns no board. Earlier R5 text requiring one board per
+project is preserved as history in `research.md` §10 rather than as a competing current
+MUST (003-objective-contracts, "Execution-board isolation").
+
+- **FR-510**: Aether MUST isolate each project's execution on its own board, and MUST NOT let a board shared with another project carry that project's work. The board MUST be provisioned for one complete executable identity `(project_id, contract_id, version)`, with retries and concurrent authoring sessions converging on the same board and a different project, contract or version resolving to a different board and database. A worker is pinned to its board at spawn and cannot see another.
+- **FR-511**: The board is the hard isolation boundary between projects and between contract versions. Namespacing within a board is a soft filter and MUST NOT be relied on for isolation.
 - **FR-512**: The board is single-host by design, under a trusted-local-user threat model. Aether MUST NOT treat it as a security boundary between principals, and R10 MUST record this.
 
 ## 5. Workspaces — Parallel Isolation, Solved
@@ -137,7 +147,7 @@ Spec Kit produces `tasks.md`; the board executes cards. Nothing until now said h
 - **FR-516e**: A card MUST NOT be edited to change what the contract asks for. Intent changes at the artifact that owns it, and the board is re-materialized from the corrected breakdown.
 
 - **FR-517**: When Morfeo selects the pipeline, it MUST hand the contract over as exactly one card assigned to `supervisor`. Morfeo MUST NOT create implementation cards, because decomposition belongs to the supervising role (R3-D01). Direct PD-44 work requires no handoff card because no role boundary is crossed.
-- **FR-518**: The supervising role MUST create child cards, link them to their integration card, and then step back. It MUST NOT perform the implementation itself.
+- **FR-518**: The supervising role MUST create child cards, link them to their integration card, and then step back. It MUST NOT perform the implementation itself **beyond the accepted PD-73 boundary**: it MAY make an explicitly attributed, bounded repair that restores already-agreed behavior — including integration glue such as conflicts, imports, wiring, build/config glue and reference corrections — when fixing and verifying it is more economical than another handoff and it does not monopolize supervision. Implementing substantial units stays with Implementer, and the repair boundary grants no new product authority, acceptance criterion or shared-interface decision (DESIGN.md PD-73/PD-77; R8-FR-819b/§7.1; R7-FR-703).
 - **FR-519**: Every child card body MUST carry every decision it depends on. Workers cannot see sibling cards, so a decision left implicit is a decision each worker will invent differently. This is R2's handoff completeness principle at the card level.
 - **FR-520**: Any decision two parallel cards would each have to make MUST be made once by the supervising role and stamped into both bodies.
 - **FR-521**: Completion MUST carry structured evidence answering what changed, how it was verified, what would unblock a retry, and what risk is deliberately left open.
