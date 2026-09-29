@@ -3,7 +3,9 @@
 **Unit:** U3 of the #552 execution breakdown (`git show
 6b989bf04613d935a32ffed2734c6a46b28ae088:specs/documentation-consistency/tasks.md`).
 **Base revision:** `62ec14653baa8f84449f41a68d64cf64d50939d6`.
-**Candidate revision:** `741c0fd1baaf9fc014a9224f453158386f12c03e` (one local commit).
+**Implementation commit:** `741c0fd1baaf9fc014a9224f453158386f12c03e`. This evidence note is a
+separate follow-up commit on the same branch, so the unit's candidate head is the branch tip
+reported in the card handoff, not this hash.
 **Scope audited:** the 20 tracked current `docs/` Markdown pages, `docs/capabilities.toml`
 and its generated `docs/reference/capabilities.md`, verified against current source,
 `VERSION`, the local tag set and the capability registry.
