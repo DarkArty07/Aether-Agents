@@ -1,8 +1,8 @@
 # Aether Agents — Conceptual Multi-Agent Design
 
-**Status:** accepted current conceptual design through PD-76; operational reliability stabilization active
+**Status:** accepted current conceptual design through PD-77 (PD-76 bounds the Objective Contract against delegated overreach; PD-77, added 2026-08-29, makes conversation continuity flow-bound rather than process-bound); operational reliability stabilization active
 **Accepted baseline:** 2026-08-17
-**Last amended:** 2026-09-04
+**Last amended:** 2026-09-29 — status header and amendment note corrected to name the actual accepted decision set through PD-77 under objective contract `oc_593cb1275b24ea19@v1` (#552); no decision row was added, renumbered, reworded or removed
 **Product authority:** Christopher
 
 ## 1. Purpose and scope
@@ -402,6 +402,8 @@ and pull request; promotion never happens by learning alone.
 | **PD-77** | **Conversation continuity is flow-bound, not process-bound.** Morfeo retains the owner-facing origin session. One Objective Contract flow binds one exact Supervisor session and one canonical Supervisor workspace across decomposition, review, and integration; each Implementer card receives a fresh session and isolated worktree. The binding is opt-in side data keyed by board, Project, opaque flow id, and profile, protected by lease/generation fencing. Ordinary internal milestones stay silent to the origin as owner-facing notifications; explicit peer questions and coalesced evidence notices may reach the originating design steward without notifying the human owner. Only explicit `input`, `revision`, or `flow_terminal` routing returns to the owner-facing session. | Upstream provides an equivalent qualified primitive, or controlled evidence shows one-workspace Supervisor continuity weakens isolation or integration correctness. |
 | **PD-41** | **Every claim about runtime behaviour is labelled verified or assumed.** Executing the behaviour outranks reading the code, which outranks reading the documentation; where they disagree, the more direct evidence wins and the disagreement is recorded. This project has paid twice for treating documentation as evidence. | — |
 A current explicit instruction from Christopher always supersedes older project content; the owning artifact must then be updated.
+
+**Amendment note (2026-09-29):** the accepted set already ran through PD-77, so the status header above now names it. This note records that correction and nothing else: no decision row was added, renumbered, reworded, reordered or deleted, no decision content changed, and no new decision is claimed. See Objective Contract `oc_593cb1275b24ea19@v1` (DC-02).
 
 ## 12. Design areas and owners
 
