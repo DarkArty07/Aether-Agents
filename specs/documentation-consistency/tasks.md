@@ -42,18 +42,18 @@ T is the terminal integration card and depends on the root handoff plus all five
 | U2 | DC-01, DC-02, DC-05 (AC2, AC3) | Current stage-spec normative owners agree with the accepted per-contract-version board and the accepted bounded-repair boundary without widening role authority | `specs/r5-topology-and-isolation/spec.md`, `specs/r5-topology-and-isolation/research.md`, `specs/r9-state-and-recovery/spec.md`, and any other current stage-spec statement that contradicts those two accepted rules | root handoff |
 | U3 | DC-01, DC-03, DC-04, DC-05 (AC1, AC3) | The tracked current `docs/` corpus, the capability registry and its generated reference are truthful about source/tag/installed state, implementation status and documented limits | `docs/**`, `docs/capabilities.toml` and its regenerated reference, `tests/test_documentation.py`, `tests/test_observation_usage_guidance.py` | root handoff |
 | U4 | DC-01, DC-03, DC-05 (AC1, AC3) | The root operating map no longer presents earlier objectives as current authority, and the integration index no longer states installation-specific status as portable current product status | `AGENTS.md`, `INTEGRATIONS.md`, `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `website/src/lib/docs.ts` (only if a tracked docs path changes), `tests/test_contract_quality_documents.py` (only if a spec-adjacent assertion it owns must change), `tests/test_public_artifacts.py` byte-integrity constants for `INTEGRATIONS.md` only (see §3.12) | root handoff |
-| U5 | DC-01, DC-05, AC4 | The required canonical-base manifest gate is green at the candidate revision with no CI-logic change and no weakened check | `.github/workflows/policy.yml` (manifest heredoc region only), `tests/test_public_artifacts.py` | root handoff + U4 |
+| U5 | DC-01, DC-05, AC4 | The required canonical-base manifest gate is green at the candidate revision with no CI-logic change and no weakened check | `.github/workflows/policy.yml` (manifest heredoc region only), `tests/test_public_artifacts.py` (manifest oracle only) | root handoff |
 | T | DC-06 (AC4) | Integrated, independently reviewed candidate published through the normal green path with exact `main`/Pages evidence, issue disposition, three separate release conclusions and scoped cleanup | integration, evidence and closeout artifacts only | root + U1–U5 |
 
-`[P]` U1–U4 may run concurrently: their writable surfaces are disjoint and no unit consumes
+`[P]` U1–U5 may run concurrently: their writable file sets are disjoint and no unit consumes
 another unit's intermediate output. U5 is a separate unit rather than part of U4 because the
 required-gate repair has its own semantic owner (the canonical base manifest) and its own
 oracle, and can be verified independently of any prose wording; folding it into U4 would make
-one card span two independently deliverable outcomes. U5 depends on U4 for the reason in §3.12:
-the required `policy` job step "Validate canonical base manifest" compares every tracked
-non-`specs/` path against the literal manifest, so manifest correctness can only be verified
-after the tracked surface stops changing. T is genuinely serialized: it consumes all five
-reviewed candidates and the single integration branch.
+one card span two independently deliverable outcomes. U5 stays a bounded one-line repair only
+because of the tracked-path freeze in §3.12(c); content edits in another unit do not change the
+manifest. T is genuinely serialized: it consumes all five reviewed candidates and the single
+integration branch, and it re-verifies the manifest against the frozen integrated surface,
+which is where path-level drift would first become observable.
 
 ## 3. Shared decisions stamped into every unit
 
@@ -92,14 +92,22 @@ reviewed candidates and the single integration branch.
     (`test_root_reports_are_tracked_immutable_and_privacy_safe`, lines 86-88) asserts
     `INTEGRATIONS.md` byte size `9305` and SHA-256
     `b34ac51af0a9ae65d3b35fb1e724165042585b61bfe92ed3196369e853c86536`, and the same file owns
-    the canonical-base manifest oracle and its constant `INTEGRATIONS_SHA256`. Therefore: U4
-    edits `INTEGRATIONS.md` and additionally owns the byte-integrity constants in
-    `tests/test_public_artifacts.py` for that one assertion (updating the digest and size to the
-    corrected file, with the existing comment retained and no other assertion touched); U5 runs
-    last and must confirm the manifest heredoc lists every tracked non-`specs/` path at the
-    frozen post-U4 surface. U5 does not re-edit the byte-integrity constants. Because
-    `tests/test_public_artifacts.py` has two writers, U5 is sequenced after U4 rather than
-    concurrent: this is a real dependency, not artificial serialization.
+    the canonical-base manifest oracle (`test_canonical_base_manifest_matches_tracked_non_specs_files`,
+    line 231) plus its constant `INTEGRATIONS_SHA256`. Therefore:
+    (a) only U4 edits `INTEGRATIONS.md`; if U4 changes that file it must also update the size
+    literal `9305` and `INTEGRATIONS_SHA256` in `tests/test_public_artifacts.py` to the corrected
+    file, keeping the existing comment and touching no other assertion in that file;
+    (b) if U4 leaves `INTEGRATIONS.md` unchanged, it must state that explicitly and change
+    nothing in that test file;
+    (c) U5 owns the manifest heredoc in `.github/workflows/policy.yml` and must add exactly the
+    missing tracked path `.aether/objective-contracts/oc_593cb1275b24ea19/v1.md` at sorted
+    position 21 (between `oc_537e9a8701b4aac7/v2.md` and `oc_59cd48430a56d93c/v1.md`), and owns
+    `tests/test_public_artifacts.py` only for the manifest oracle; U5 must not re-edit the
+    byte-integrity constants.
+    Because both units may write `tests/test_public_artifacts.py`, whoever runs second rebases on
+    the first and re-runs that file; a conflict in that one file is expected coordination, not a
+    defect. No new tracked file may be added outside `specs/`, so the manifest stays at 398
+    non-`specs/` paths during this objective and no other manifest line changes.
 
 ## 4. Non-build obligations
 
