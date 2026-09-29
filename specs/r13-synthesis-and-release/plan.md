@@ -7,10 +7,11 @@
 **Execution owner**: Supervisor
 **Derived from**: `spec.md`, R4/R8–R12, `../001-aether-v1-productization/`, and `../002-aether-contract-observation/`
 **Selected Hermes reference baseline**: `NousResearch/hermes-agent` `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, `hermes-agent` `0.20.4`, Python `>=3.11,<3.14`
-**Executable Hermes source**: maintained fork `DarkArty07/aether-hermes`, branch `aether-main`, bound by release-lock `schema_version` 4 source mode `maintained_fork` (repository, branch, exact commit, source-tree digest, artifact closure and provenance)
+**Executable Hermes source**: maintained fork `DarkArty07/aether-hermes`, branch `aether-main`, selected by the release lock's `maintained_fork` source mode (repository, branch, exact commit, source-tree digest, artifact closure and provenance); current preparation emits `schema_version` 5 with the closed `hermes.extras` allowlist and readers accept schema 4 and 5
 **A1 release mode**: `maintained_fork`; the retired `transitional_fork` mode (fixed public baseline plus replayed residual patches) is refused for new preparation
 **Written**: 2026-08-21
 **Amended**: 2026-09-15 — maintained-fork and `1.0.0rc1` release-candidate reconciliation under Objective Contract `oc_3397f9f05d780f8e@v1`
+**Amended**: 2026-09-29 — the header and §2.1 release-lock schema claims corrected to the actual current binding (emitted as `schema_version` 5 with the closed `hermes.extras` allowlist; readers accept 4 and 5) under Objective Contract `oc_593cb1275b24ea19@v1` (issue #552)
 
 ## 1. Summary
 
@@ -21,7 +22,7 @@ Two independently versioned components are locked together:
 1. `aether-agents` on PyPI, exposing `aether`; and
 2. the original `hermes-agent` distribution from the exact `upstream` or `maintained_fork` source/artifact named by the manager's release lock.
 
-The selected stable upstream base is exact and remains the reference baseline for upstream-compatible behavior. The six existing indispensable workflow guarantees below are carried as maintained-fork source on `aether-main` under release-lock `schema_version` 4 source mode `maintained_fork`, never as replayed `.patch` files, and the retired `transitional_fork` mode is refused for new preparation. The maintained fork stays a retirement-bound boundary rather than an architecture destination or a place for new Aether-only capabilities, and no new product capability may require a downstream-only Hermes change.
+The selected stable upstream base is exact and remains the reference baseline for upstream-compatible behavior. The six existing indispensable workflow guarantees below are carried as maintained-fork source on `aether-main` under the release lock's `maintained_fork` source mode — current preparation emits `schema_version` 5 and readers accept schema 4 and 5 — never as replayed `.patch` files, and the retired `transitional_fork` mode is refused for new preparation. The maintained fork stays a retirement-bound boundary rather than an architecture destination or a place for new Aether-only capabilities, and no new product capability may require a downstream-only Hermes change.
 
 ## 2. Fixed implementation decisions
 
@@ -34,13 +35,13 @@ The selected stable upstream base is exact and remains the reference baseline fo
 | Import package | Fixed as `aether_agents` by PD-69; implementation findings cannot rename it without an owner-approved contract revision |
 | Contract observer | Same `aether-agents` wheel and product version; official `hermes_agent.plugins` entry point `aether-contract-observer = "aether_agents.observation.capture.hermes_plugin"`; no second distribution or per-profile source copy |
 | Aether version | One source of truth; SemVer display/tag and PEP 440 package form must normalize to the same release |
-| Public schema versions | Aether manager owns them; setup/project schemas are integer `1`; release-lock schema is integer `4` after the maintained-fork reconciliation (it was integer `3` through PD-65/69/70) and declares the source mode, the observer entry point plus event/summary/segment-manifest read/write versions and projection schema version |
+| Public schema versions | Aether manager owns them; setup/project schemas are integer `1`; the release lock's current preparation emits `schema_version` 5 and readers accept `4` and `5`, where schema `4` is the historical lock with no Hermes extras and schema `5` requires the closed `hermes.extras` allowlist (the lock was integer `3` through PD-65/69/70) — the lock declares the source mode, the observer entry point plus event/summary/segment-manifest read/write versions and projection schema version |
 | Observation evolution/privacy | PD-70: immutable versioned event journals, pure upcasters, per-reader versioned projections, preserved unknown-newer bytes, exact context resolution, private project HMAC key epochs, and deterministic closed-segment compaction |
 | Profile-policy bundle version | Aether release-owned and digest-bound; independent field, never inferred from file timestamps |
 | Hermes version | Native `hermes-agent` version plus exact public source/tag/commit/artifact identity in the lock |
 | Downstream build identity | Phase 2 decides a PEP 440-conforming artifact version without renaming the distribution; it must remain traceable to upstream `0.20.4` and the Aether patch ledger |
 
-The A1 `release-lock.schema.json` is reconciled at schema version `4`: `upstream` mode forbids downstream-only coordinates, `maintained_fork` mode binds the public fork repository, branch, exact commit, source-tree digest, artifact closure and provenance, the retired `transitional_fork` mode is refused for new preparation, both modes require immutable Hermes coordinates/digests/provenance/Python compatibility, and the Aether section binds the single distribution plus official observer entry point. The wheel's final digest remains in external release provenance and local transition records to avoid self-reference. Phase 1 implements and validates this accepted public contract; it does not redesign it.
+The A1 `release-lock.schema.json` accepts schema versions `4` and `5`, with current preparation emitting schema `5` (schema `4` is the historical lock with no Hermes extras; schema `5` requires the closed `hermes.extras` allowlist): `upstream` mode forbids downstream-only coordinates, `maintained_fork` mode binds the public fork repository, branch, exact commit, source-tree digest, artifact closure and provenance, the retired `transitional_fork` mode is refused for new preparation, both modes require immutable Hermes coordinates/digests/provenance/Python compatibility, and the Aether section binds the single distribution plus official observer entry point. The wheel's final digest remains in external release provenance and local transition records to avoid self-reference. Phase 1 implements and validates this accepted public contract; it does not redesign it.
 
 ### 2.2 Manager/runtime boundary
 
@@ -99,7 +100,7 @@ Selected commit evidence:
 
 ### 2.5 Release mode and patch ledger
 
-R4 research §13 owns the per-change disposition. The six accepted changes below are carried as maintained-fork source on `aether-main`, bound by release-lock `schema_version` 4 source mode `maintained_fork`, and are never replayed as `.patch` files onto an active release. The accepted change set is:
+R4 research §13 owns the per-change disposition. The six accepted changes below are carried as maintained-fork source on `aether-main`, bound by the release lock's `maintained_fork` source mode (current preparation emits `schema_version` 5; readers accept schema 4 and 5), and are never replayed as `.patch` files onto an active release. The accepted change set is:
 
 1. sticky initial blocking;
 2. agent-facing retry override;
@@ -175,7 +176,7 @@ Carry only the six accepted changes as source on the maintained fork, based on t
 
 ### Phase 3 — Runtime lifecycle and recovery
 
-Implement schema-4 lock validation, one-wheel verified download staging, dual isolated installation, external-provenance/transition digest binding, installed-file fingerprint and entry-point parity, active-release record, transition journal, doctor, update, mismatch detection, reconcile, rollback, and safe uninstall.
+Implement release-lock validation for the accepted reader schemas (current preparation emits `schema_version` 5; readers accept 4 and 5), one-wheel verified download staging, dual isolated installation, external-provenance/transition digest binding, installed-file fingerprint and entry-point parity, active-release record, transition journal, doctor, update, mismatch detection, reconcile, rollback, and safe uninstall.
 
 **Exit**: fault injection proves no mixed active release and no damage to unrelated Hermes/user state.
 

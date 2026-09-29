@@ -231,12 +231,17 @@ class CanonicalContractConsistencyTests(unittest.TestCase):
 
         self.assertEqual(roadmap_id, "**Roadmap ID**: R4")
 
-    def test_release_lock_schema_and_plan_agree_on_version_four(self) -> None:
+    def test_release_lock_schema_and_plan_agree_on_accepted_versions(self) -> None:
+        # The gate is the coupling between the shipped schema and the plan's stated
+        # versions, not any single literal. The former assertion pinned the phrase
+        # "release-lock schema is integer `4`", which stopped being true once current
+        # preparation emitted schema 5; it now asserts the actual revised claim.
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         plan = A1_PLAN_PATH.read_text(encoding="utf-8")
 
         self.assertEqual(schema["properties"]["schema_version"]["enum"], [4, 5])
-        self.assertIn("release-lock schema is integer `4`", plan)
+        self.assertIn("current preparation emits `schema_version` 5", plan)
+        self.assertIn("readers accept `4` and `5`", plan)
         self.assertNotIn("requires downstream fork coordinates unconditionally", plan)
 
     def test_tui_subscription_is_not_claimed_as_delivery(self) -> None:

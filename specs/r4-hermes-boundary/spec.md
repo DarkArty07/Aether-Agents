@@ -39,7 +39,7 @@ R4 does not choose which primitive Aether uses (R5), decide A2A's scope (R6), de
 - **FR-401**: Aether MUST classify a Hermes capability before adopting it, and MUST NOT adopt one merely because it exists.
 - **FR-402**: Aether MUST NOT build a coordination mechanism that duplicates one of these three.
 - **FR-403**: Aether targets a qualified stable upstream Hermes release and MUST prefer configuration, profiles, skills, plugins, prompts, and upstream contribution over downstream core changes.
-- **FR-403a**: Aether carries its runtime changes as maintained-fork source: the executable release source is the maintained fork `DarkArty07/aether-hermes`, branch `aether-main`, selected by the release lock's `maintained_fork` source mode (`schema_version` 4). The retired `transitional_fork` mode — a fixed public baseline plus replayed residual patches — is refused for new preparation, and `.patch` records are never replayed onto an active release. Each carried downstream change MUST keep its Aether guarantee, upstream disposition, qualification evidence, and retirement condition explicit, and Aether MUST NOT add a new product capability that requires a downstream-only core change.
+- **FR-403a**: Aether carries its runtime changes as maintained-fork source: the executable release source is the maintained fork `DarkArty07/aether-hermes`, branch `aether-main`, selected by the release lock's `maintained_fork` source mode (current preparation emits `schema_version` 5; readers accept schema 4 and 5). The retired `transitional_fork` mode — a fixed public baseline plus replayed residual patches — is refused for new preparation, and `.patch` records are never replayed onto an active release. Each carried downstream change MUST keep its Aether guarantee, upstream disposition, qualification evidence, and retirement condition explicit, and Aether MUST NOT add a new product capability that requires a downstream-only core change.
 - **FR-403b**: Every release lock MUST declare `upstream` or `maintained_fork` and pin the public repository, branch and exact commit, annotated-tag/commit identity where applicable, source-tree or artifact digest, Python range, and Aether compatibility. The original `hermes-agent` distribution remains isolated from any personal installation.
 - **FR-403c**: Generally useful fixes MUST be proposed upstream. Aether-specific policy remains outside Hermes core. A merged PR is not grounds to retire a patch until the exact target release passes that patch's behavior gate.
 - **FR-404**: Every capability claim MUST record the Hermes version, because these claims are version-specific and one minor release already invalidated three of them.
@@ -149,8 +149,10 @@ Only one of the three gaps recorded earlier survives, and **R5 removed it from A
 
 > **Maintained-fork reconciliation (2026-09-15, Objective Contract `oc_3397f9f05d780f8e@v1`).** The
 > executable release source is now the maintained fork `DarkArty07/aether-hermes`, branch `aether-main`,
-> bound by release-lock `schema_version` 4 source mode `maintained_fork` through repository, branch, exact
-> commit, source-tree digest, artifact closure and provenance. The `v2026.8.18` selection recorded below
+> bound by the release lock's `maintained_fork` source mode through repository, branch, exact
+> commit, source-tree digest, artifact closure and provenance (that 2026-09-15 reconciliation recorded
+> `schema_version` 4; current preparation emits schema 5 and readers accept 4 and 5, as the
+> 2026-09-29 amendment above records). The `v2026.8.18` selection recorded below
 > remains the reference baseline for upstream-compatible behavior and historical evidence, not the
 > deployment input; the retired `transitional_fork` mode is refused for new preparation, and FR-425 is
 > reconciled accordingly. The historical wording in this section is preserved rather than rewritten.

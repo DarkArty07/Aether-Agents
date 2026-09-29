@@ -126,7 +126,7 @@ Real serialization is the integration/closeout chain:
    `--aether-commit`, `--fork-checkout`, `--fork-commit`) must declare exactly these
    surfaces. If real inspection proves the vocabulary materially wrong, return the delta
    to Supervisor instead of silently diverging in one unit.
-6. Pinned release-lock identifiers: `schema_version` 4; `hermes.source_mode`
+6. Pinned release-lock identifiers: `schema_version` 5 as emitted by current preparation (the reader accepts 4 and 5; schema 4 is the historical lock with no Hermes extras); `hermes.source_mode`
    `maintained_fork` with `hermes.repository` const `https://github.com/DarkArty07/aether-hermes`,
    exact `commit`, `source_tree_sha256`, Hermes `version`/`tag`, `python_requires` and an
    `artifacts` closure; the packaged resource copy under

@@ -26,17 +26,20 @@ Guided mode is used when `--config` is absent. Declarative mode parses the TOML 
 
 Effects may include creating XDG directories, staging the lock-selected maintained-fork Hermes runtime, writing product-owned profile policy/configuration, and preparing the user service. Login autostart is opt-in. Provider authentication is delegated to the managed Hermes native mechanism.
 
-The local wheel/check-out implementation path requires an explicit schema-4
-`--release-lock`. The manager validates its six-field Aether pre-build identity
+The local wheel/check-out implementation path requires an explicit `--release-lock`
+(an accepted schema `4` or `5` lock; current preparation emits `5`). The manager validates
+its six-field Aether pre-build identity
 against wheel metadata, its hash-bound observer dependency digest against the packaged
 lock, and its Hermes source-tree digest against a tracked-commit archive. It retains
 the exact validated lock in the staged release and never invents Git provenance from
 a filename, remote artifact digest, or wheel digest.
 
-A schema-4 lock declares `hermes.source_mode` `maintained_fork` with
+An accepted lock (schema `4` or `5`) declares `hermes.source_mode` `maintained_fork` with
 `hermes.repository` `https://github.com/DarkArty07/aether-hermes` and binds the exact
 fork commit, source-tree digest, Hermes package version/tag, Python compatibility and
-artifact closure. The retired `transitional_fork` mode — a fixed public baseline plus
+artifact closure. Schema `4` is the historical lock and carries no Hermes extras; schema
+`5` requires the closed `hermes.extras` allowlist. The retired `transitional_fork` mode
+— a fixed public baseline plus
 replayed residual `.patch` files — is refused for new preparation with an actionable
 message; `patches/hermes/*.patch` records remain audit/reconstruction evidence and are
 never applied to an active release. It also keeps the upstream `upstream` mode for a
@@ -91,7 +94,7 @@ These commands address only the Aether-managed user service and never another He
 aether doctor [--project PATH] [--json]
 ```
 
-Validates platform, XDG paths and permissions, manager/product compatibility, release-lock schema `4`, external provenance and local transition digests, the runtime artifact/executable, manager/runtime `aether-agents` distribution/package/Git/source/installed-file identity parity, the exact `aether-contract-observer` entry-point target and per-profile enablement, declared observation write versions contained in their read sets and matched to packaged schemas/upcasters/projection code, runtime-local CLI non-shadowing, profile-policy parity, service state, required tools, project identity, board/session/launch context mappings, observation health counters, journal/archive integrity, projection compatibility, fingerprint-key permissions/epochs, and WSL2 filesystem constraints. It reports unresolved/conflicting context and preserved unknown-newer observation bytes without exposing their identifiers or key material. It is read-only and remains usable when Hermes cannot import. A mismatch between the authoritative active-release record, `runtime/current`, the launcher, the Desktop entry and the Aether-owned service projection is reported as an actionable fail-closed diagnostic instead of a silent degradation.
+Validates platform, XDG paths and permissions, manager/product compatibility, the release-lock schema (emitted as `5` by current preparation; readers accept `4` and `5`), external provenance and local transition digests, the runtime artifact/executable, manager/runtime `aether-agents` distribution/package/Git/source/installed-file identity parity, the exact `aether-contract-observer` entry-point target and per-profile enablement, declared observation write versions contained in their read sets and matched to packaged schemas/upcasters/projection code, runtime-local CLI non-shadowing, profile-policy parity, service state, required tools, project identity, board/session/launch context mappings, observation health counters, journal/archive integrity, projection compatibility, fingerprint-key permissions/epochs, and WSL2 filesystem constraints. It reports unresolved/conflicting context and preserved unknown-newer observation bytes without exposing their identifiers or key material. It is read-only and remains usable when Hermes cannot import. A mismatch between the authoritative active-release record, `runtime/current`, the launcher, the Desktop entry and the Aether-owned service projection is reported as an actionable fail-closed diagnostic instead of a silent degradation.
 
 ### `aether update`
 

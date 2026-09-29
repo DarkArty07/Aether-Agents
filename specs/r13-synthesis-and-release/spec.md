@@ -10,6 +10,7 @@
 **Amended**: 2026-09-04 — autonomous stewardship, canonical procedures, and terminal closeout reconciled
 **Amended**: 2026-09-15 — maintained-fork and Aether `1.0.0rc1` release-candidate reconciliation under Objective Contract `oc_3397f9f05d780f8e@v1`
 **Amended**: 2026-09-29 — FR-1334 initialization mapping reconciled with the accepted per-contract-version execution board under Objective Contract `oc_593cb1275b24ea19@v1` (issue #552)
+**Amended**: 2026-09-29 — the header's release-lock schema claim corrected to the actual current binding (emitted as `schema_version` 5 with the closed `hermes.extras` allowlist; readers accept 4 and 5) under Objective Contract `oc_593cb1275b24ea19@v1` (issue #552)
 **Decision authority**: Christopher
 **Contract owner**: Morfeo
 **Execution owner**: Supervisor
@@ -18,7 +19,7 @@
 **Research**: `research.md`
 **Plan**: `plan.md`
 **Selected Hermes reference baseline**: `NousResearch/hermes-agent` `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, distribution version `0.20.4`, Python `>=3.11,<3.14`
-**Executable Hermes source**: maintained fork `DarkArty07/aether-hermes`, branch `aether-main`, bound by release-lock `schema_version` 4 source mode `maintained_fork` (repository, branch, exact commit, source-tree digest, artifact closure and provenance)
+**Executable Hermes source**: maintained fork `DarkArty07/aether-hermes`, branch `aether-main`, selected by the release lock's `maintained_fork` source mode (repository, branch, exact commit, source-tree digest, artifact closure and provenance); current preparation emits `schema_version` 5 with the closed `hermes.extras` allowlist and readers accept schema 4 and 5
 
 ## 1. Purpose and precedence
 
@@ -137,7 +138,7 @@ The manager treats Hermes as an external executable and MUST NOT import Hermes m
 
 The selected upstream reference baseline is release `v2026.8.18`; its annotated tag object and commit are recorded in the header. The source archive observed during reconciliation had SHA-256 `1e3d39d3638ec15fa9d31af262568a953e9272090deb1c50c44cd401175f5b80`. The previously supplied `9f13bb131670169467d9b2453ae2e8848814ff6e` does not resolve and MUST NOT appear as a release commit.
 
-**Maintained-fork reconciliation (2026-09-15, Objective Contract `oc_3397f9f05d780f8e@v1`):** the executable release source is the maintained fork `DarkArty07/aether-hermes`, branch `aether-main`, bound by the release lock's `schema_version` 4 `maintained_fork` source mode through repository, branch, exact commit, source-tree digest, artifact closure and provenance. The retired `transitional_fork` mode is refused for new preparation and `.patch` records are never replayed onto an active release. The baseline above remains the reference for upstream-compatible behavior and historical evidence.
+**Maintained-fork reconciliation (2026-09-15, Objective Contract `oc_3397f9f05d780f8e@v1`):** the executable release source is the maintained fork `DarkArty07/aether-hermes`, branch `aether-main`, bound by the release lock's `maintained_fork` source mode through repository, branch, exact commit, source-tree digest, artifact closure and provenance (that reconciliation recorded release-lock `schema_version` 4; current preparation emits schema 5 with the closed `hermes.extras` allowlist and readers accept 4 and 5, as the 2026-09-29 amendment above records). The retired `transitional_fork` mode is refused for new preparation and `.patch` records are never replayed onto an active release. The baseline above remains the reference for upstream-compatible behavior and historical evidence.
 
 Direct drift review found six indispensable guarantees not yet present as qualifying behavior in the selected tag: sticky initial blocking, agent-facing retry override, human-gated escalation recovery, one durable terminal handoff, first-spawn branch propagation, and asymmetric per-profile concurrency. R4 research §13 owns the patch-by-patch evidence, upstream PR state, and retirement gates.
 
@@ -223,6 +224,7 @@ the last green canary, do not disguise the false positive as user authority.
 > **Maintained-fork reconciliation note (2026-09-15, Objective Contract `oc_3397f9f05d780f8e@v1`).** The
 > completed items above are retained as history. The recorded upstream base remains the reference baseline
 > for upstream-compatible behavior and historical evidence; the initial release mode recorded there is
-> superseded by the maintained-fork source mode (`schema_version` 4, `maintained_fork`), with the retired
+> superseded by the maintained-fork source mode (`maintained_fork`; that 2026-09-15 reconciliation recorded
+> `schema_version` 4, and current preparation emits schema 5 while readers accept 4 and 5), with the retired
 > `transitional_fork` mode refused for new preparation. This note records the supersession only; it
 > completes none of the items above.
