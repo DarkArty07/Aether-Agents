@@ -17,6 +17,6 @@ The external MCP client remains Morfeo's top-level model. Native `delegate_task`
 children inherit Morfeo's configured Hermes model/provider route; bootstrap itself does
 not construct a provider client or make a model call.
 
-Source and a local tag do not prove that a live installation is serving Morfeo MCP. Activation still requires the managed rc9-then-rc10 update path.
+Source and a local tag do not prove that a live installation is serving Morfeo MCP. A release that serves this command must be prepared and then activated through the managed `aether update` path; the RC9/RC10 bridge history in [008](../../specs/008-morfeo-mcp/spec.md) is where that boundary was established, and it is not a description of current source.
 
 `scripts/qualify_morfeo_mcp.py` is the deterministic disposable qualification. It does not activate the live installation. A managed update after merge is still required before `aether doctor` can report this candidate as the active runtime.

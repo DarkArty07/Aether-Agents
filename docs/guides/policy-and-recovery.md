@@ -78,8 +78,10 @@ and services keep running. A partial transition is detected and recoverable inst
 being reported as success, and `aether rollback` restores product code, runtime and service
 without rolling user state backward.
 
-Release-lock `schema_version` 4 declares the maintained-fork source identity
+Release-lock `schema_version` 5 is what current preparation emits; schema 4 readers remain
+accepted. Schema 4 declares the maintained-fork source identity
 (`hermes.source_mode = maintained_fork`, `hermes.repository =
-https://github.com/DarkArty07/aether-hermes`); the retired `transitional_fork` mode — a
+https://github.com/DarkArty07/aether-hermes`) without extras; schema 5 keeps that identity and
+adds the closed `hermes.extras` allowlist. In both, the retired `transitional_fork` mode — a
 fixed public baseline plus replayed `.patch` files — is refused for new preparation, and
 `.patch` records are never applied to an active release.

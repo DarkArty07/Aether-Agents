@@ -56,7 +56,10 @@ processes immediately; there is no drain or wait-for-idle semantics, unrelated s
 never stopped, and a partial transition is detected and recoverable. `aether rollback`
 restores product code, runtime and service without rolling user state backward.
 
-Release-lock `schema_version` 4 declares the maintained-fork source mode
+Release-lock `schema_version` 5 is what current preparation emits; readers accept
+`schema_version` 4 and 5. Schema 4 is the historical lock and means `hermes_extras = ()`,
+while schema 5 requires the closed `hermes.extras` allowlist. Both declare the
+maintained-fork source mode
 (`hermes.source_mode = maintained_fork`, `hermes.repository =
 https://github.com/DarkArty07/aether-hermes`); the retired `transitional_fork` mode is refused
 for new preparation. This page documents tested local candidate behavior — it is not a claim
