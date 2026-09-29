@@ -255,7 +255,7 @@ Project identity still scopes isolation; the provisioned execution board is the
 per-contract-version board accepted by `specs/003-objective-contracts/spec.md`
 ("Execution-board isolation"), which this stage defers to rather than restating differently.
 
-- **FR-924**: One board and workspace root per portable project identity is the project-level mapping, and each project's execution MUST be isolated on boards provisioned for its complete executable identity `(project_id, contract_id, version)` (R5-FR-510, 003-objective-contracts). `aether init` maps that identity to a native Hermes Project and creates no board; the board itself is provisioned only by a ready Objective Contract handoff. A worker is pinned to the exact board at spawn.
+- **FR-924**: Each project's execution MUST be isolated on boards provisioned for its complete executable identity `(project_id, contract_id, version)`, resolved from the verified portable project identity (R5-FR-510, 003-objective-contracts). `aether init` maps that identity to one native Hermes Project and creates no board; the board itself is provisioned only by a ready Objective Contract handoff. A worker is pinned to the exact board at spawn.
 - **FR-925**: Namespacing inside a board is a soft filter and MUST NOT be used as an isolation boundary between projects or between contract versions (R5-FR-511).
 - **FR-926**: Cross-project references MUST NOT be expressed as links, which the runtime does not permit across boards. Where a relationship exists, it belongs in the contract.
 - **FR-927**: A moved clone may be remapped explicitly after repository-identity validation. A UUID or canonical-repository collision MUST fail rather than attach to another project's state.
