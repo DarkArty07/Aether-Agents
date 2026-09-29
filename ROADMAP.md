@@ -3,9 +3,9 @@
 **Decision authority**: owner
 **Current conceptual baseline**: `DESIGN.md` through PD-77 — the accepted owner decisions are numbered continuously to PD-77, where PD-76 (added 2026-08-27 with the contract-bounded-gate clarification) bounds what delegated gates may claim and PD-77 (2026-08-29) binds conversation continuity to the Objective Contract flow rather than to the process. Earlier numbered rows stay accepted and dated; `DESIGN.md` §11 is the normative text.
 **Current product contracts**: `specs/001-aether-v1-productization/`, `specs/002-aether-contract-observation/`, and the stabilization plan `specs/004-operational-simplification-and-e2e-reliability/plan.md`
-**Current synthesis/entry**: `specs/r13-synthesis-and-release/`, A1-reconciled on 2026-09-15 to the maintained-fork release mode, the XDG data/state split and release-lock `schema_version` 4; reopened until the PD-74 reliability gate passes
+**Current synthesis/entry**: `specs/r13-synthesis-and-release/`, A1-reconciled on 2026-09-15 to the maintained-fork release mode, the XDG data/state split and the release lock (emitted by current preparation as `schema_version` 5 with the closed `hermes.extras` allowlist, read as schema 4 or 5); reopened until the PD-74 reliability gate passes
 **Selected Hermes base**: `NousResearch/hermes-agent` `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, `hermes-agent` `0.20.4`, Python `>=3.11,<3.14` — retained as the public reference baseline for upstream-compatible behavior and historical evidence, not as the executable release input
-**Executable Hermes source**: maintained fork `DarkArty07/aether-hermes` branch `aether-main`, bound by release-lock `schema_version` 4 source mode `maintained_fork` (repository, exact commit, source-tree digest, artifact closure and provenance); Hermes keeps its own distribution identity `hermes-agent`
+**Executable Hermes source**: maintained fork `DarkArty07/aether-hermes` branch `aether-main`, bound by the release lock's `maintained_fork` source mode (repository, exact commit, source-tree digest, artifact closure and provenance); current preparation emits `schema_version` 5 with the closed `hermes.extras` allowlist and readers accept schema 4 and 5; Hermes keeps its own distribution identity `hermes-agent`
 **A1 release mode**: `maintained_fork`; the retired `transitional_fork` mode (fixed public baseline plus replayed residual patches) is refused for new preparation
 
 **Current behavior and implementation status**: [`docs/`](docs/index.md) and its sole status/traceability registry, [`docs/capabilities.toml`](docs/capabilities.toml). This roadmap records future work, accepted phase history, and release-visible limitations; it is not a live capability-status tracker.
@@ -67,7 +67,7 @@ Historical EC1/private-profile build evidence remains in R13 research and Git hi
 Aether 1.0 is a public stable product, not a documentation tag. It has two release-locked components:
 
 1. `aether-agents` on PyPI, exposing `aether` and owning setup, project mapping, service lifecycle, diagnosis, update, rollback, uninstall, schemas, release lock, and sanitized product resources; and
-2. the original `hermes-agent` distribution built from the maintained-fork source selected by that lock (`maintained_fork`, release-lock `schema_version` 4) — or from the exact public upstream source when upstream is deliberately selected. Hermes keeps its own distribution/version identity, and the retired `transitional_fork` mode (fixed public baseline plus replayed residual patches) is refused for new preparation.
+2. the original `hermes-agent` distribution built from the maintained-fork source selected by that lock (`maintained_fork`; current preparation emits release-lock `schema_version` 5 and readers accept 4 and 5) — or from the exact public upstream source when upstream is deliberately selected. Hermes keeps its own distribution/version identity, and the retired `transitional_fork` mode (fixed public baseline plus replayed residual patches) is refused for new preparation.
 
 ### Release-candidate scope (2026-09-15)
 
@@ -95,7 +95,7 @@ The former `transitional_fork` mode is retired. The six indispensable guarantees
 - first-spawn branch propagation; and
 - asymmetric per-profile concurrency.
 
-Under PD-49/61/64/65 and the `1.0.0rc1` reconciliation, the accepted changes are carried as maintained-fork source on `aether-main` and bound by the release lock (`maintained_fork`, `schema_version` 4) through repository, exact commit, source-tree digest, artifact closure and provenance. `.patch` files and HLP records are audit/reconstruction evidence and are never replayed onto the active runtime. Retiring the fork is no longer a mandatory goal: upstream adoption happens only when deliberately selected, with the Aether changes reconciled and verified. No new product capability may require a downstream-only Hermes change, and R4 research §13 owns the exact source evidence, upstream issue/PR state, and the behavior gates for any individual accepted change.
+Under PD-49/61/64/65 and the `1.0.0rc1` reconciliation, the accepted changes are carried as maintained-fork source on `aether-main` and bound by the release lock (`maintained_fork`; current preparation emits `schema_version` 5 and readers accept 4 and 5) through repository, exact commit, source-tree digest, artifact closure and provenance. `.patch` files and HLP records are audit/reconstruction evidence and are never replayed onto the active runtime. Retiring the fork is no longer a mandatory goal: upstream adoption happens only when deliberately selected, with the Aether changes reconciled and verified. No new product capability may require a downstream-only Hermes change, and R4 research §13 owns the exact source evidence, upstream issue/PR state, and the behavior gates for any individual accepted change.
 
 ## 5. A1 dependency phases
 

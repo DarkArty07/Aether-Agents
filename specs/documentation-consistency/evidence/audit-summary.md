@@ -39,6 +39,7 @@ disposition. Unit evidence: [U3 corpus note](u3-docs-corpus.md).
 | 15 | `INTEGRATIONS.md:18-25,47-62` stated installation-specific Context7/Exa status as portable current product status. | DC-04 integration-index honesty | The ACTIVE vocabulary now carries an installation-specificity qualifier; the Context7 entry states the verified limit (packaged profiles ship no `context7` entry) and re-attributes the unpinned `@upstash/context7-mcp` invocation to the owner-selected local template; the Exa entry cites the packaged profile resources and the local-credential dependency. No owner-selected integration was dropped and no credential or private runtime state was read. |
 | 16 | `AGENTS.md:26`, `AGENTS.md:216` and `README.md:42` described the maintained-fork binding as release-lock `schema_version` 4 only. | DC-03 root portals | Brought into line with finding 12: each line states the emitted schema 5 and the accepted reader range. |
 | 17 | `.github/workflows/policy.yml` canonical base manifest omitted the tracked path `.aether/objective-contracts/oc_593cb1275b24ea19/v1.md`, so the required step "Validate canonical base manifest" and its oracle failed (397 expected vs 398 actual). | DC-06 required checks | Exactly one data line added in sorted position. No CI logic changed, no check weakened, and the workflow's own data-only classifier still treats the diff as manifest data. |
+| 18 | `ROADMAP.md:6,8,70,98` and `specs/r13-synthesis-and-release/spec.md:20` still stated release-lock `schema_version` 4 as the *current* binding. Findings 12 and 16 reconciled the same claim class in `docs/`, `AGENTS.md`, `README.md` and the registry, but omitted the roadmap and the stage-spec/plan headers, so the objective's own DC-03/DC-05 sweep was incomplete. | DC-03 source/release honesty; DC-05 derived roadmap + stage owners | Reconciled at each semantic owner: `ROADMAP.md` (derived roadmap), `specs/r13-synthesis-and-release/spec.md` and `plan.md` (stage owner), plus the same present-tense claim in `specs/r4-hermes-boundary/spec.md:42`, `specs/r8-workspaces-and-integration/spec.md:44`, `specs/001-aether-v1-productization/{spec,plan,research,tasks,contracts/cli}.md` and the coupled oracle. Each now distinguishes emission from read compatibility (current preparation emits `schema_version` 5 with the closed `hermes.extras` allowlist; readers accept 4 and 5). Dated 2026-09-15 reconciliation records keep their schema-4 wording and gain an explicit superseding pointer. See the continuation note below. |
 
 ## 2. Verified non-applicability (audited, deliberately not edited)
 
@@ -92,3 +93,60 @@ oracles required correction only where they enforced the exact revised current c
   the checks recorded above.
 - The prior #549 red main push and its #550 correction remain immutable history and are not
   retroactively made green.
+
+## 5. Continuation — finding 18 correction (post-PR-#555, card `t_d87c50d8`)
+
+Morfeo's exact-result reception of the merged revision found finding 18: findings 12 and 16
+corrected the schema-4-as-current claim in `docs/`, `AGENTS.md`, `README.md` and the
+capability registry, but left the same present-tense claim in the derived roadmap and the
+active stage-spec/plan headers. That was a real gap in this audit's DC-03/DC-05 coverage,
+not new product intent, so the same Objective Contract `oc_593cb1275b24ea19@v1` continued
+under card `t_d87c50d8` at base `21beed80` (the current `origin/main`, which contains the
+`f745cd32` merge of PR #555).
+
+Sections 1–4 above are preserved as the PR #555 record and are not rewritten. This section
+records only the continuation.
+
+**Corrected at the semantic owner** (source of truth: `scripts/release_bundle.py:43-45`
+emits schema 5, accepts readers 4/5, with the closed `hermes.extras` allowlist):
+
+- `ROADMAP.md:6,8,70,98` — derived roadmap map.
+- `specs/r13-synthesis-and-release/spec.md` (header and the 2026-09-15/reconciliation notes)
+  and `plan.md` (header, §2.1 schema table and paragraph, §2.5, Phase 3) — stage owner.
+- `specs/r4-hermes-boundary/spec.md` (FR-403a and the reconciliation note) and
+  `specs/r8-workspaces-and-integration/spec.md` (FR-804c) — stage owners for the same claim.
+- `specs/001-aether-v1-productization/`: `spec.md` (A1-FR-021d plus a dated supersession
+  note), `plan.md` (§2.2 import-boundary paragraph and the update path), `research.md`
+  (artifact-identity paragraph plus a superseding note), `tasks.md` (pinned identifiers),
+  `contracts/cli.md` (`--release-lock` requirement, accepted-lock paragraph, `doctor`).
+
+**Coupled oracle corrected, gate preserved.** `tests/test_a1_contracts.py` pinned the exact
+stale literal `"release-lock schema is integer \`4\`"`. The test was renamed to
+`test_release_lock_schema_and_plan_agree_on_accepted_versions` and now asserts the shipped
+schema enum `[4, 5]` together with the revised plan wording, keeping the same coupling gate,
+the same `assertNotIn` guard, and every neighbouring PD-74 assertion verbatim. No test was
+deleted, skipped, weakened or re-scoped.
+
+**Deliberately not edited (verified, not assumed).** Dated records whose schema-4 wording is
+correct history: the 2026-09-15 reconciliation notes in R4/R13 and A1 research (they keep
+their wording and gain a superseding pointer), `CHANGELOG.md:153` (RC9 *did* emit schema 4),
+`specs/008-morfeo-mcp/{spec,plan,tasks}.md` (RC9's bridge behavior), `tasks-rc2.md` (RC2's
+own bundle identity), `src/aether_agents/lifecycle.py:512` (`schema_version == 4` is the
+reader branch that must accept schema 4) and `:4375` (a docstring about schema-4 lock
+qualification), and the `docs/**` and root-portal surfaces already corrected before PR #555.
+
+**Verification of this continuation** (exact commands run in the objective worktree):
+focused `tests/test_a1_contracts.py` → 29 passed, 11 subtests; `tests/test_documentation.py`
++ `tests/test_a1_contracts.py` + `tests/test_contract_quality_documents.py` → 59 passed,
+1 skipped, 11 subtests; `scripts/check_documentation.py` → passed;
+`scripts/check_hermes_baseline_drift.py --json` → exit 0; `ruff check`/`ruff format --check`
+on the changed test file → clean (the 3 `ruff check` and 8 `ruff format` findings elsewhere
+are pre-existing, in files this change does not touch); `git diff --check` → clean.
+A full class re-sweep for the claim pattern over all tracked files leaves only the
+deliberately-preserved sites listed above.
+
+**Boundary.** Documentation and its coupled oracle only: no `VERSION`, tag, release-lock,
+runtime, credential or provider change, no manual Pages dispatch, and no check bypassed.
+Pages is not applicable to this change — `.github/workflows/pages.yml` triggers on
+`website/**`, `docs/**` and its own path, and this delta touches none of them.
+`release_impact=none`, `release_action=defer`, `release_channel=none`.
