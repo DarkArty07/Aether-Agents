@@ -41,16 +41,19 @@ T is the terminal integration card and depends on the root handoff plus all five
 | U1 | DC-01, DC-02, DC-05 (AC2) | `DESIGN.md` and `ROADMAP.md` name the actual accepted decision set and their exact-wording oracle agrees | `DESIGN.md`, `ROADMAP.md`, `tests/test_a1_contracts.py` | root handoff |
 | U2 | DC-01, DC-02, DC-05 (AC2, AC3) | Current stage-spec normative owners agree with the accepted per-contract-version board and the accepted bounded-repair boundary without widening role authority | `specs/r5-topology-and-isolation/spec.md`, `specs/r5-topology-and-isolation/research.md`, `specs/r9-state-and-recovery/spec.md`, and any other current stage-spec statement that contradicts those two accepted rules | root handoff |
 | U3 | DC-01, DC-03, DC-04, DC-05 (AC1, AC3) | The tracked current `docs/` corpus, the capability registry and its generated reference are truthful about source/tag/installed state, implementation status and documented limits | `docs/**`, `docs/capabilities.toml` and its regenerated reference, `tests/test_documentation.py`, `tests/test_observation_usage_guidance.py` | root handoff |
-| U4 | DC-01, DC-03, DC-05 (AC1, AC3) | The root operating map no longer presents earlier objectives as current authority, and the integration index no longer states installation-specific status as portable current product status | `AGENTS.md`, `INTEGRATIONS.md`, `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `website/src/lib/docs.ts` (only if a tracked docs path changes), `tests/test_contract_quality_documents.py` (only if a spec-adjacent assertion it owns must change) | root handoff |
-| U5 | DC-01, DC-05, AC4 | The required canonical-base manifest gate is green at the candidate revision with no CI-logic change and no weakened check | `.github/workflows/policy.yml` (manifest heredoc region only), `tests/test_public_artifacts.py` | root handoff |
+| U4 | DC-01, DC-03, DC-05 (AC1, AC3) | The root operating map no longer presents earlier objectives as current authority, and the integration index no longer states installation-specific status as portable current product status | `AGENTS.md`, `INTEGRATIONS.md`, `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `website/src/lib/docs.ts` (only if a tracked docs path changes), `tests/test_contract_quality_documents.py` (only if a spec-adjacent assertion it owns must change), `tests/test_public_artifacts.py` byte-integrity constants for `INTEGRATIONS.md` only (see §3.12) | root handoff |
+| U5 | DC-01, DC-05, AC4 | The required canonical-base manifest gate is green at the candidate revision with no CI-logic change and no weakened check | `.github/workflows/policy.yml` (manifest heredoc region only), `tests/test_public_artifacts.py` | root handoff + U4 |
 | T | DC-06 (AC4) | Integrated, independently reviewed candidate published through the normal green path with exact `main`/Pages evidence, issue disposition, three separate release conclusions and scoped cleanup | integration, evidence and closeout artifacts only | root + U1–U5 |
 
-`[P]` U1–U5 may run concurrently: their writable surfaces are disjoint and no unit consumes
+`[P]` U1–U4 may run concurrently: their writable surfaces are disjoint and no unit consumes
 another unit's intermediate output. U5 is a separate unit rather than part of U4 because the
 required-gate repair has its own semantic owner (the canonical base manifest) and its own
 oracle, and can be verified independently of any prose wording; folding it into U4 would make
-one card span two independently deliverable outcomes. T is genuinely serialized: it consumes
-all five reviewed candidates and the single integration branch.
+one card span two independently deliverable outcomes. U5 depends on U4 for the reason in §3.12:
+the required `policy` job step "Validate canonical base manifest" compares every tracked
+non-`specs/` path against the literal manifest, so manifest correctness can only be verified
+after the tracked surface stops changing. T is genuinely serialized: it consumes all five
+reviewed candidates and the single integration branch.
 
 ## 3. Shared decisions stamped into every unit
 
@@ -85,6 +88,18 @@ all five reviewed candidates and the single integration branch.
     `tests/test_contract_quality_documents.py` → U4; `tests/test_public_artifacts.py` → U5.
     A required correction outside your ownership is reported in the handoff, not edited; edits
     must preserve marker text that existing oracles assert.
+12. **Cross-unit coupling (verified at base).** `tests/test_public_artifacts.py`
+    (`test_root_reports_are_tracked_immutable_and_privacy_safe`, lines 86-88) asserts
+    `INTEGRATIONS.md` byte size `9305` and SHA-256
+    `b34ac51af0a9ae65d3b35fb1e724165042585b61bfe92ed3196369e853c86536`, and the same file owns
+    the canonical-base manifest oracle and its constant `INTEGRATIONS_SHA256`. Therefore: U4
+    edits `INTEGRATIONS.md` and additionally owns the byte-integrity constants in
+    `tests/test_public_artifacts.py` for that one assertion (updating the digest and size to the
+    corrected file, with the existing comment retained and no other assertion touched); U5 runs
+    last and must confirm the manifest heredoc lists every tracked non-`specs/` path at the
+    frozen post-U4 surface. U5 does not re-edit the byte-integrity constants. Because
+    `tests/test_public_artifacts.py` has two writers, U5 is sequenced after U4 rather than
+    concurrent: this is a real dependency, not artificial serialization.
 
 ## 4. Non-build obligations
 
