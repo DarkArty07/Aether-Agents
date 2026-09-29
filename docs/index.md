@@ -14,8 +14,9 @@ qualify agent behavior. The [RC17 scope](../specs/rc17-local-release/spec.md) re
 its reviewed maintained-fork pin and qualification limits. No public tag or package
 release is authorized by this documentation.
 The executable Hermes source is Aether's maintained fork
-`DarkArty07/aether-hermes` branch `aether-main`, bound
-by release-lock schema 4 or 5 `maintained_fork` and installed through `aether update`.
+`DarkArty07/aether-hermes` branch `aether-main`, bound by release-lock
+`maintained_fork` — read as schema 4 or 5, emitted as schema 5 with the closed
+`hermes.extras` allowlist — and installed through `aether update`.
 In the historical rc3 qualification, active release `1.0.0rc3-8987f650c027ad09` was
 locally selected from Aether merge `d8ff984c67bfc147ac9c83cf8a34a72edc27c8df` and
 maintained-fork commit `aed6591a69f453a1867b73628603e7b53ba40ffc`; `aether doctor`
