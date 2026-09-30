@@ -106,3 +106,9 @@ Implemented the console script `aether-kanban-worker` and gateway `HERMES_BIN` p
   - Pre-change Hermes workers continue to receive identical invocation and environment via the pass-through path.
   - The `HERMES_BIN` override is scoped strictly to the Morfeo gateway process and only activates when the release's own launcher executable exists.
   - Any uncertainty, missing contract identity, unselected harness, review attempt, model override, or exception falls back seamlessly to the exact pre-change Hermes execution.
+
+## 5. Integration correction (Supervisor, attributed separately)
+
+The accepted unit commit `af9ab4ad` is unchanged. During integration, `_check_claimed_event_not_review` was found to treat a work claim from another run as evidence for the current run: with only run 10 carrying a work claim, a query for run 11 returned eligible. Plan section 3.5 condition 5, clarified at `d7493cf8`, requires the claimed event to exist for the exact `HERMES_KANBAN_RUN_ID`; a missing row is ineligible and resolves to Hermes.
+
+The correction, in its own commit on the integration branch, removes the fallback query and adds `test_condition_5_missing_current_run_claim_forces_passthrough`. Re-run: `uv run --frozen python scripts/run_tests.py tests/test_kanban_worker_launcher.py` — 43 passed. This correction is Supervisor-authored and is not part of the independently reviewed unit.

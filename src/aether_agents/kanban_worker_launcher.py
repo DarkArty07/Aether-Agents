@@ -93,12 +93,9 @@ def _check_claimed_event_not_review(db_path: Path, task_id: str, run_id_str: str
             (task_id, run_id),
         )
         row = cur.fetchone()
-        if row is None:
-            cur = conn.execute(
-                "SELECT payload FROM task_events WHERE task_id = ? AND kind = 'claimed' ORDER BY id DESC LIMIT 1",
-                (task_id,),
-            )
-            row = cur.fetchone()
+        # The event must exist for this exact run. A claim recorded for another
+        # run is not evidence about this attempt, and missing evidence resolves
+        # to Hermes (plan section 3.5, condition 5).
         if row is None:
             return False
 

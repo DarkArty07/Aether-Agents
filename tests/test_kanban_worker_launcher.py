@@ -721,6 +721,29 @@ def test_condition_5_claimed_event_review_status_forces_passthrough(
     assert rec["argv"][1:] == env.default_argv
 
 
+def test_condition_5_missing_current_run_claim_forces_passthrough(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A work claim recorded for another run is not evidence for this attempt.
+
+    The database holds a work claim for run 10 only. Querying run 11 must be
+    ineligible, so the attempt passes through to Hermes (plan section 3.5,
+    condition 5).
+    """
+    env = HarnessTestHarness(tmp_path, monkeypatch)
+    env.db_path.unlink()
+    env._init_database()
+    conn = sqlite3.connect(env.db_path)
+    conn.execute("UPDATE task_events SET run_id = 10 WHERE kind = 'claimed'")
+    conn.commit()
+    conn.close()
+    monkeypatch.setenv("HERMES_KANBAN_RUN_ID", "11")
+
+    assert launcher.is_eligible_for_claude_code(env.default_argv) is False
+    rec = _run_launcher_subprocess(env, env.default_argv)
+    assert rec["argv"][1:] == env.default_argv
+
+
 def test_condition_5_review_affinity_set_forces_passthrough(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
