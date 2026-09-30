@@ -224,6 +224,12 @@ failure terminates the Claude process group and falls back (§3.11). A later
 not a substitute for the positive pre-prompt handshake. Invocation flags, PD-71,
 user configuration, fallback and single-writer rules are unchanged.
 
+The live status response may also contain other servers' configuration, headers or
+environment fields. Consume only the worker's status/tool-name projection needed for
+the gate; do not copy or persist raw control replies or unrelated configuration in
+receipts, evidence or the bounded failure stream tail. This preserves EIH-09's existing
+no-secrets boundary for the corrected observable, not a new reporting deliverable.
+
 **Resolved assumption, 2026-09-30 (Morfeo, collaboration #5):** a disposable
 no-user-message probe of the exact binary returned successful `initialize` with
 `current_permission_mode: "bypassPermissions"` and `mcp_status` with the fixture
