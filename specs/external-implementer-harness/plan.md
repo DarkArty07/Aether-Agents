@@ -192,18 +192,49 @@ until an explicit non-bare option is added.
 
 ### 3.7 Readiness gate (EIH-08, EIH-10)
 
-The work prompt is written to Claude's input only after positive evidence of:
+The work prompt is written to Claude's input only after positive evidence of all
+three invariants: effective bypass mode, the connected worker MCP with its required
+tools, and the active PD-71 settings source. On Claude Code 2.1.285 the deterministic
+pre-prompt observable is the CLI's native stream-json **control protocol**, not the
+initial `system/init` tool snapshot:
 
-- the stream's `system/init` reporting `permissionMode: "bypassPermissions"`;
-- the `aether-worker` MCP server reported connected with its required tools listed; and
-- the PD-71 hook being active: the same per-attempt settings source registers a
-  `SessionStart` command hook that writes a per-attempt nonce, which must exist.
+1. Send a `control_request` with a unique `request_id` and
+   `request: {"subtype": "initialize", "hooks": null}`. Accept only the matching
+   `control_response.response` with `subtype: "success"` and
+   `response.current_permission_mode == "bypassPermissions"`. `hooks: null` adds no
+   SDK callback hooks; the command hooks and the user's configuration remain loaded.
+2. Send `control_request` messages with `request: {"subtype": "mcp_status"}` within
+   the existing bounded readiness deadline. Accept only a matching success response
+   whose `response.mcpServers` includes `name: "aether-worker"`, explicit
+   `status: "connected"`, and `tools[].name` containing **every** required tool from
+   the derived worker surface (§3.9) for this attempt. The required set is nonempty;
+   its discovery/representation remains local implementation freedom. An absent
+   status, `pending`, another server, or one matching tool is not positive evidence.
+3. Confirm the existing `SessionStart` nonce for this attempt, written by the same
+   per-attempt settings source that registers the blocking PD-71 `PreToolUse` hook.
+4. Only then send the first user work message (§3.8). No warm-up user prompt, tool
+   call, model inference or SDK dependency is needed to establish readiness.
 
-Readiness has a bounded timeout. Failure terminates the Claude process group and falls
-back (§3.11). The mechanism above is the intended design; the implementation must verify
-the exact event sequence on the recorded Claude version and record it as evidence. If no
-deterministic ordering exists that keeps the work prompt away from the model until the
-hook is proven active, stop (§7) rather than weaken the gate.
+Readiness has a bounded timeout. In the control responses above, the outer
+`event.response` carries `subtype` and the matching `request_id`; the success data
+are at `event.response.response` (effective mode or `mcpServers`). An error,
+missing field, unmatched response or unmet invariant never opens the prompt gate;
+failure terminates the Claude process group and falls back (§3.11). A later
+`system/init` is corroborating run evidence,
+not a substitute for the positive pre-prompt handshake. Invocation flags, PD-71,
+user configuration, fallback and single-writer rules are unchanged.
+
+**Resolved assumption, 2026-09-30 (Morfeo, collaboration #5):** a disposable
+no-user-message probe of the exact binary returned successful `initialize` with
+`current_permission_mode: "bypassPermissions"` and `mcp_status` with the fixture
+worker explicitly connected and its tool listed. The nonce matched; no model
+message or `system/init` occurred before the gate. This resolves the observational
+premise, not AC7/AC10 or EIH-C implementation acceptance. Details and limits are in
+[research.md](research.md) §3. The unaccepted candidate `8adac14d` must be corrected
+and its mocked readiness evidence reconciled by the existing review lane. The
+invariant in EIH-08/AC7 and contract terms do not change. If this protocol cannot
+prove the **actual** worker surface before its work prompt, stop (§7); do not weaken
+the gate.
 
 ### 3.8 Context and skills (EIH-05, OD-5)
 

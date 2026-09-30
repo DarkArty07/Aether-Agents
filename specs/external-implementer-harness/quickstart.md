@@ -19,7 +19,10 @@ Run the narrow tests for the unit being changed, for example
 - **Launcher routing:** with a stub `hermes` that records argv/environment, each §3.5
   condition independently forces an exact pass-through; decision exceptions pass
   through; a fully eligible attempt reaches the adapter.
-- **Adapter and fallback:** with a stub `claude` emitting canned stream-json — readiness
+- **Adapter and fallback:** with a stub `claude` emitting canned stream-json — the
+  matched control responses in plan §3.7 open the gate only with effective bypass,
+  a connected worker and every required tool, plus the matching nonce; absent status,
+  missing tools or a foreign request ID never release the work prompt. Readiness
   failures (MCP missing, bypass off, nonce missing, timeout), auth/billing/rate-limit
   signals, crash and error results each fall back exactly once by `execv`; clean exit
   without a transition exits 76; SIGTERM, cancellation, lost claim and a surviving writer
@@ -79,10 +82,12 @@ provisioned Claude Code login; no Hermes model credentials are needed or copied.
    the plugin performs. Do not build the spawn by hand.
 4. **Observe and record** after the attempt ends: task status `review` with the transition
    made by this run; the commit in the disposable repository; the `aether-executor:`
-   comment and the receipt (Claude version, session id, outcome); `system/init` evidence
-   (`bypassPermissions`, `aether-worker` connected, required tools); the `SessionStart`
-   nonce; hook-log entries showing PD-71 evaluated the Claude tool calls; and that no
-   Hermes pass-through occurred.
+   comment and the receipt (Claude version, session id, outcome); pre-prompt matched
+   `initialize` response (`current_permission_mode: "bypassPermissions"`) and
+   `mcp_status` response (`aether-worker.status: "connected"`, every required tool)
+   per plan §3.7; the matching `SessionStart` nonce; any later `system/init` as
+   corroboration rather than the readiness oracle; hook-log entries showing PD-71
+   evaluated the Claude tool calls; and that no Hermes pass-through occurred.
 5. **Clean up.** Preserve the record in this objective's `evidence/`, then remove the
    disposable roots. Report any retained path with its reason.
 

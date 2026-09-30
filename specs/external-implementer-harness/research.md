@@ -2,8 +2,9 @@
 
 Decisions follow Spec Kit's research format (decision, rationale, alternatives). Claims are
 labelled by how they were established (PD-41): **read** in code or documentation at a
-stated revision, or **observed** by running a read-only command. Nothing here was
-established by executing Claude Code as an Implementer or by running the pipeline.
+stated revision, or **observed** by running a read-only command. Initial authoring
+established no Claude Implementer run or pipeline result. The later bounded,
+no-work-prompt readiness probes are separately attributed in §3.1.
 
 ## 1. Upstream method inspected
 
@@ -98,7 +99,74 @@ earlier read of 187 boards (2026-09-28) found 118 of 408 Implementer cards in go
   read 2026-09-29): the specification defines the format; clients scan their own paths and
   optionally `.agents/skills`. Claude Code's native project path is `.claude/skills`.
 
+### 3.1 Readiness premise resolved during execution (2026-09-30)
+
+**Question:** collaboration #5 from EIH-C's same-card Supervisor review. Candidate
+`8adac14dee851415161ef0669753bccfe3e3b350` checks `system/init`, and accepts an
+absent/`ready` server status or any one prefixed tool. Supervisor's disposable probe
+found all MCPs pending/needs-auth with no MCP tools at init. That does not prove the
+worker unavailable, and the candidate's weaker checks do not prove the required
+surface ready. EIH-C remains unaccepted.
+
+**Upstream inspected directly:** `anthropics/claude-agent-sdk-python` at
+`bbf09e3c11d3c5f2cfa2d9cf20af9b3abdfc1b4a` (GitHub API revision resolved, raw
+files read, 2026-09-30):
+
+- `src/claude_agent_sdk/_internal/query.py:309-363,784-802`: initialize the native
+  streaming control protocol; `get_mcp_status` sends subtype `mcp_status`.
+- `src/claude_agent_sdk/client.py:471-502` and `types.py:743-778`: the live MCP
+  status response contains `mcpServers`, explicit status and `tools[].name`.
+- `client.py:314-339`: setting permission mode is also a control operation. It was
+  probed as corroboration, but is not needed by the selected readiness mechanism.
+
+The SDK supplies the existing protocol, not a new dependency or execution harness.
+The official Claude documentation requests returned HTTP 403; no documentation
+content or behavior was invented in their place. Hermes' official worker-lane
+page was readable and does not add an alternate role transport.
+
+**Directly observed by Morfeo:** two bounded event-only probes of the installed
+unmodified Claude Code **2.1.285**, binary SHA-256
+`33dad1ec615a2e08cc78b494f05c110e49916de2c79d78ec8799ebf46b233d29`.
+The command used exactly the plan §3.6 flags, a disposable MCP **fixture** named
+`aether-worker` advertising only `probe_status`, added SessionStart/PreToolUse
+settings, an empty probe plugin, disposable cwd and isolated Hermes/Aether state.
+The normal Claude configuration stayed loaded; no forbidden isolation flag or
+personal-config edit was used. The fixture is not the production worker surface.
+
+- Probe 1: zero user messages; matching `initialize` success at 1.794 s, matching
+  `mcp_status` success at 1.803 s with worker `status: "connected"` and
+  `tools: [{"name": "probe_status", ...}]`; nonce matched. No `system/init`
+  or model event occurred, so the original init-dependent oracle did **not** pass.
+- Probe 2: no passive `system/init` during the first 3 s; matching `initialize`
+  success at 3.089 s with nested data
+  `current_permission_mode: "bypassPermissions"`; supplementary
+  `set_permission_mode` success returned `mode: "bypassPermissions"`; matching
+  `mcp_status` success at 3.092 s explicitly connected with `probe_status`.
+  The SessionStart nonce matched the attempt; `permission_mode` in that hook's
+  payload was null and is **not** a bypass oracle. Zero user messages and zero
+  model events; the refined pre-prompt control/nonce oracle passed.
+
+**Decision:** plan §3.7 uses the matched initialize response's effective mode,
+matched live `mcp_status` with **all** required worker tools, and the same-settings
+nonce. `system/init` is only later corroboration. This is a correction of the
+readiness observational mechanism inside the delegated freedom, not a waiver or
+change to EIH-08/AC7, fallback, effect authority or finalized contract terms.
+Missing/unknown status or one available tool cannot open the gate.
+
+**Limits and remaining work:** these probes prove a deterministic CLI control
+path before any work prompt; they do not prove actual native worker MCP readiness,
+PD-71 tool evaluation (no tools were called), unit correctness, EIH-12, installed
+availability or agent behavior. Supervisor returns the narrow gate/evidence
+correction through EIH-C's existing review lane and preserves its review budget.
+The isolated real work attempt and the repository gates remain pending. Both
+probe subprocesses were reaped and their disposable scopes removed; the sanitized
+observations are retained here, not raw user configuration or transcripts.
+
 ## 4. Decisions
+
+The readiness assumption in the original authoring row below was resolved during
+execution; the current mechanism is plan §3.7, with the direct evidence in §3 above.
+The accepted invariants and effect authority are unchanged.
 
 | Decision | Rationale | Alternatives rejected |
 | --- | --- | --- |
