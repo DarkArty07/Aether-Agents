@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 import subprocess
+import sys
+import sysconfig
 import threading
 import time
 from collections.abc import Iterator
@@ -611,6 +614,55 @@ def _handle(
         )
 
 
+def _passes_through_runtime_current(path: Path) -> bool:
+    """Return True if path passes through the runtime/current selector."""
+    parts = path.parts
+    for i in range(len(parts) - 1):
+        if parts[i] == "runtime" and parts[i + 1] == "current":
+            return True
+    return False
+
+
+def _resolve_running_release_launcher(scripts_dir: Path | None = None) -> Path | None:
+    """Resolve the aether-kanban-worker launcher in the running release's scripts directory.
+
+    Resolved so the path never passes through the runtime/current selector.
+    Returns the resolved absolute Path only if it is a regular executable file;
+    otherwise returns None.
+    """
+    if scripts_dir is None:
+        scripts_dir_raw = sysconfig.get_path("scripts")
+        scripts_dir = Path(scripts_dir_raw) if scripts_dir_raw else Path(sys.executable).parent
+
+    candidate = scripts_dir / "aether-kanban-worker"
+    if not candidate.exists() and sys.platform == "win32":
+        candidate = scripts_dir / "aether-kanban-worker.exe"
+    if not candidate.exists():
+        candidate_parent = Path(sys.executable).parent / "aether-kanban-worker"
+        if candidate_parent.exists():
+            candidate = candidate_parent
+
+    try:
+        resolved = candidate.resolve()
+        if _passes_through_runtime_current(resolved):
+            return None
+        st = resolved.stat()
+        if not stat.S_ISREG(st.st_mode):
+            return None
+        if not (bool(st.st_mode & 0o111) or os.access(resolved, os.X_OK)):
+            return None
+        return resolved
+    except (OSError, ValueError):
+        return None
+
+
+def _configure_hermes_bin_override(scripts_dir: Path | None = None) -> None:
+    """Set HERMES_BIN to the running release's worker launcher if valid."""
+    launcher = _resolve_running_release_launcher(scripts_dir)
+    if launcher is not None:
+        os.environ["HERMES_BIN"] = str(launcher)
+
+
 def register(ctx: Any) -> None:
     """Register one transactional authoring tool only in the configured Morfeo profile."""
     get_config = getattr(ctx, "get_config", None)
@@ -621,6 +673,8 @@ def register(ctx: Any) -> None:
         or get_config("author_profile", "") != "morfeo"
     ):
         return
+
+    _configure_hermes_bin_override()
 
     def handler(args: dict[str, Any], **runtime_kwargs: Any) -> str:
         runtime_kwargs.pop("author_profile", None)
