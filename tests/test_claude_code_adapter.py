@@ -148,16 +148,28 @@ def test_write_receipt_fields(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     assert data["readiness_summary"]["mcp_status"] == "connected"
 
 
-def test_get_required_worker_tools_derived_and_env():
-    # Honors explicit env override
-    tools = get_required_worker_tools({"AETHER_REQUIRED_WORKER_TOOLS": "alpha,beta,gamma"})
-    assert tools == {"alpha", "beta", "gamma"}
+def test_get_required_worker_tools_derives_and_fails_closed(monkeypatch: pytest.MonkeyPatch):
+    import aether_agents.worker_mcp_server as server
 
-    # Default derived set includes core Kanban tools
-    derived = get_required_worker_tools({})
-    assert "kanban_show" in derived
-    assert "kanban_complete" in derived
-    assert "kanban_block" in derived
+    monkeypatch.setattr(
+        server,
+        "discover_worker_tool_definitions",
+        lambda: [
+            {"function": {"name": "kanban_show"}},
+            {"function": {"name": "kanban_complete"}},
+            {"not": "a tool"},
+        ],
+    )
+    assert get_required_worker_tools({}) == {"kanban_show", "kanban_complete"}
+
+    def _unavailable() -> list[dict[str, Any]]:
+        raise RuntimeError("discovery unavailable")
+
+    monkeypatch.setattr(server, "discover_worker_tool_definitions", _unavailable)
+    assert get_required_worker_tools({}) == set()
+
+    monkeypatch.setattr(server, "discover_worker_tool_definitions", lambda: [])
+    assert get_required_worker_tools({}) == set()
 
 
 def _create_stub_claude(tmp_path: Path, script_body: str, run_hooks: bool = True) -> Path:
@@ -626,12 +638,55 @@ def test_adapter_scenario_readiness_failure_permission_mode_manual(
     assert receipt["cause"] == "readiness_failed"
 
 
+def test_adapter_system_init_cannot_supply_permission_mode(
+    test_board: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    script = """
+import sys, json
+init_line = sys.stdin.readline()
+init_req = json.loads(init_line) if init_line.strip() else {}
+print(json.dumps({
+    "type": "control_response",
+    "response": {"subtype": "error", "request_id": init_req.get("request_id"), "response": {}},
+}), flush=True)
+print(json.dumps({
+    "type": "system", "subtype": "init", "permissionMode": "bypassPermissions",
+}), flush=True)
+sys.exit(0)
+"""
+    stub = _create_stub_claude(tmp_path, script)
+    monkeypatch.setenv("AETHER_CLAUDE_BIN", str(stub))
+
+    execv_calls: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(
+        os, "execv", lambda target, args: execv_calls.append((target, args)) or sys.exit(99)
+    )
+
+    argv = ["aether-kanban-worker", "chat", "-q", "prompt"]
+    with pytest.raises(SystemExit) as exc:
+        run_attempt(argv, test_board["env"])
+    assert exc.value.code == 99
+    assert len(execv_calls) == 1
+
+    task_id = test_board["task_id"]
+    receipt_dir = state_root() / "external_harness" / "default" / task_id / "run_1"
+    receipt = json.loads((receipt_dir / "receipt.json").read_text(encoding="utf-8"))
+    assert receipt["fallback"] is True
+    assert receipt["cause"] == "readiness_failed"
+    assert receipt["readiness_summary"]["permission_mode"] is None
+
+
 def test_adapter_scenario_readiness_exact_closed_set_success_and_failure(
     test_board: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     closed_set = ["kanban_show", "kanban_comment", "kanban_heartbeat"]
-    env = dict(test_board["env"])
-    env["AETHER_REQUIRED_WORKER_TOOLS"] = ",".join(closed_set)
+    import aether_agents.worker_mcp_server as server
+
+    monkeypatch.setattr(
+        server,
+        "discover_worker_tool_definitions",
+        lambda: [{"function": {"name": name}} for name in closed_set],
+    )
 
     execv_calls: list[tuple[str, list[str]]] = []
     monkeypatch.setattr(
@@ -648,7 +703,7 @@ sys.exit(0)
     monkeypatch.setenv("AETHER_CLAUDE_BIN", str(stub_ok))
 
     argv = ["aether-kanban-worker", "chat", "-q", "prompt"]
-    code = run_attempt(argv, env)
+    code = run_attempt(argv, test_board["env"])
     assert execv_calls == []
     assert code == 76
 
@@ -660,7 +715,7 @@ sys.exit(0)
     monkeypatch.setenv("AETHER_CLAUDE_BIN", str(stub_inc))
 
     with pytest.raises(SystemExit) as exc:
-        run_attempt(argv, env)
+        run_attempt(argv, test_board["env"])
     assert exc.value.code == 99
     assert len(execv_calls) == 1
 

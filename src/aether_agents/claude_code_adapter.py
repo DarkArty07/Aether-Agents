@@ -68,44 +68,22 @@ AUTH_BILLING_ERROR_CATEGORIES = frozenset(
 def get_required_worker_tools(env: dict[str, str] | None = None) -> set[str]:
     """Resolve the required worker tools for readiness gating.
 
-    Derives the tool surface from the worker MCP server definitions for this attempt,
-    or honors AETHER_REQUIRED_WORKER_TOOLS if explicitly set.
+    Derives the nonempty surface from the worker MCP server definitions for this
+    attempt. A failed or empty discovery returns an empty set, which cannot satisfy
+    the readiness gate; no static inventory is substituted for a missing derivation.
     """
-    if env and "AETHER_REQUIRED_WORKER_TOOLS" in env:
-        tools_str = env["AETHER_REQUIRED_WORKER_TOOLS"].strip()
-        if tools_str:
-            return {t.strip() for t in tools_str.split(",") if t.strip()}
-    if "AETHER_REQUIRED_WORKER_TOOLS" in os.environ:
-        tools_str = os.environ["AETHER_REQUIRED_WORKER_TOOLS"].strip()
-        if tools_str:
-            return {t.strip() for t in tools_str.split(",") if t.strip()}
+    del env
     try:
         from aether_agents.worker_mcp_server import discover_worker_tool_definitions
 
         defs = discover_worker_tool_definitions()
-        derived = {
+        return {
             t["function"]["name"]
             for t in defs
             if isinstance(t, dict) and "function" in t and "name" in t.get("function", {})
         }
-        if derived:
-            return derived
     except Exception:
-        pass
-    return {
-        "kanban_attach",
-        "kanban_attach_url",
-        "kanban_attachments",
-        "kanban_block",
-        "kanban_comment",
-        "kanban_complete",
-        "kanban_create",
-        "kanban_heartbeat",
-        "kanban_link",
-        "kanban_request_changes",
-        "kanban_request_review",
-        "kanban_show",
-    }
+        return set()
 
 
 def _send_control_request(proc: subprocess.Popen[bytes], payload: dict[str, Any]) -> None:
@@ -489,10 +467,6 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
     old_sigint = signal.signal(signal.SIGINT, _forward_signal)
 
     required_worker_tools = get_required_worker_tools(env)
-    is_explicit_tools = bool(
-        (env and "AETHER_REQUIRED_WORKER_TOOLS" in env)
-        or "AETHER_REQUIRED_WORKER_TOOLS" in os.environ
-    )
 
     readiness_ok = False
     readiness_summary: dict[str, Any] = {
@@ -671,18 +645,17 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
                                                             ]
                                                         found_tools.add(name)
                                                 readiness_summary["mcp_tools"] = sorted(found_tools)
-                                                if is_explicit_tools:
-                                                    if found_tools == required_worker_tools:
-                                                        readiness_summary["mcp_connected"] = True
-                                                else:
-                                                    if required_worker_tools.issubset(found_tools):
-                                                        readiness_summary["mcp_connected"] = True
+                                                if (
+                                                    required_worker_tools
+                                                    and required_worker_tools.issubset(found_tools)
+                                                ):
+                                                    readiness_summary["mcp_connected"] = True
 
                             elif ev_type == "system" and ev_subtype == "init":
-                                # Later system/init is corroboration (plan §3.7)
-                                perm_mode = event.get("permissionMode")
-                                if perm_mode and not readiness_summary["permission_mode"]:
-                                    readiness_summary["permission_mode"] = perm_mode
+                                # Later system/init corroborates the run (plan §3.7) but
+                                # never supplies the effective permission mode. Only the
+                                # correlated initialize success above may do that.
+                                pass
                             elif ev_type == "system" and ev_subtype == "api_retry":
                                 error_cat = event.get("error_category") or event.get("category")
                                 if error_cat in AUTH_BILLING_ERROR_CATEGORIES:
