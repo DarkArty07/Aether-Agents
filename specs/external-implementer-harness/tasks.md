@@ -113,12 +113,12 @@ against this base and are not patch instructions.
 
 ```text
 t_d066909f (Supervisor decomposition root)
-    → EIH-A  contract selection and board projection        (Implementer)
-    → EIH-B  gateway override and launcher routing          (Implementer)
-    → EIH-C  Claude adapter, worker MCP, PD-71 hook         (Implementer)
-    → EIH-D  guidance and documentation                     (Implementer)
+    → EIH-A  t_a1c42d22 contract selection and board projection   (Implementer)
+    → EIH-B  t_d3197963 gateway override and launcher routing     (Implementer)
+    → EIH-C  t_be9fc19e Claude adapter, worker MCP, PD-71 hook    (Implementer)
+    → EIH-D  t_53f0d535 guidance and documentation                (Implementer)
     → same-card Supervisor review on each implementation unit
-    → EIH-INT terminal integration/closeout                 (Supervisor, same flow, terminal=true)
+    → EIH-INT t_a2efd73f terminal integration/closeout            (Supervisor)
 ```
 
 EIH-A, EIH-B, EIH-C and EIH-D are independent: exclusive writable files, shared
