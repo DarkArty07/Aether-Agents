@@ -162,6 +162,25 @@ The isolated real work attempt and the repository gates remain pending. Both
 probe subprocesses were reaped and their disposable scopes removed; the sanitized
 observations are retained here, not raw user configuration or transcripts.
 
+**Supplementary originating-session check (Morfeo TUI):** while the scheduled
+follow-up produced the decision and the two observations above, the originating
+session independently read the same exact SDK sources and installed binary, then
+performed two additional bounded control-only fixture probes. These used a fixture
+tool named `readiness_probe`, not the production worker. Matching initialize replies
+succeeded; live `mcp_status` reported the fixture worker explicitly connected with
+that tool; the SessionStart nonce matched the session. The second probe corroborated
+`set_permission_mode` with a success response containing `mode: "bypassPermissions"`.
+No user frames or model-message events were sent/observed, and no pre-prompt
+`system/init` appeared. Both owned process groups had no live members after cleanup;
+their temporary inputs were retired. Raw personal MCP configuration and stderr were
+not printed or retained.
+
+This check supports the control-status premise and does not replace the selected
+initialize-mode observable, require a permission setter, prove the full worker
+surface/PD-71 evaluation, or count as the isolated EIH-12 work run. The originating
+session successfully fetched the official headless documentation; that does not
+retroactively change the scheduled producer's HTTP-403 limitation recorded above.
+
 ## 4. Decisions
 
 The readiness assumption in the original authoring row below was resolved during
