@@ -390,3 +390,38 @@ def test_sectorized_souls_and_canonical_procedures_carry_d6_amendments() -> None
         assert '"action": "request"' in skill_text or "'action': 'request'" in skill_text
         assert '"action": "resolve"' in skill_text or "'action': 'resolve'" in skill_text
         assert "disposition" in skill_text
+
+
+def test_external_implementer_harness_guidance_states_od1_and_minimum_requirements() -> None:
+    """OD-1 and minimum user requirements for the opt-in external Implementer harness."""
+    morfeo_soul = (RESOURCES / "profiles/morfeo/SOUL.md").read_text(encoding="utf-8")
+    oc_skill = (RESOURCES / "skills/objective-contract-design/SKILL.md").read_text(encoding="utf-8")
+    expected_behavior = (ROOT / "docs/guides/expected-behavior.md").read_text(encoding="utf-8")
+    execution_guide = (ROOT / "docs/guides/execution.md").read_text(encoding="utf-8")
+
+    od1_phrase = (
+        "the owner requests another implementer harness when a contract is started; "
+        "without that explicit request every role runs on hermes and morfeo neither proposes, "
+        "asks about nor selects another harness"
+    )
+    assert od1_phrase in " ".join(morfeo_soul.split()).lower()
+    assert od1_phrase in " ".join(oc_skill.split()).lower()
+
+    assert (
+        "Select an external Implementer harness only on explicit owner request" in expected_behavior
+    )
+    assert "Opt-in Implementer harness (Claude Code)" in execution_guide
+
+    for requirement in (
+        "installed and logged in by the user",
+        "able to work unattended",
+        "never manages, isolates, or curates the user's Claude configuration",
+        "disableBypassPermissionsMode",
+        "consume the user's own Claude subscription plan",
+        "falls back statelessly",
+        "Hermes remains the default executor",
+        "goal_mode",
+        "all review attempts",
+        "never reads, manages, or stores Claude credentials",
+    ):
+        assert requirement.lower() in execution_guide.lower()
