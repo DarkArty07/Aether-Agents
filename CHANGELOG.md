@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — Lab and Telegram Monitor retirement
+## Unreleased — Lab and Telegram Monitor retirement, opt-in Implementer harness
 
 - Reviewed source retirement merged via PR #547; the bounded documentation-site map
   correction merged via PR #548. The implementation is accepted in `main` with its
@@ -15,6 +15,19 @@
 - Preserve native Hermes cron, ordinary Telegram interaction, native task/final/input
   notifications, and retained private historical state. This source change does not claim
   that an installed runtime has been cut over or that PD-74 reliability is satisfied.
+- Add an opt-in Claude Code Implementer harness (#563), authorized under amended PD-40
+  and selected per contract only when explicitly requested by the owner (OD-1). Without
+  that explicit request every role runs on Hermes, and Morfeo neither proposes, asks
+  about nor selects another harness.
+- Document minimum user requirements: Claude Code installed and logged in by the user;
+  unattended execution without interaction prompts (`disableBypassPermissionsMode` or
+  missing binary triggers stateless fallback to Hermes); attempts consume the user's
+  own plan; Aether adds its context, skills, MCP server and PD-71 pre-tool hook for the
+  run without managing, isolating or curating the user's Claude configuration.
+- Explicit limits: Hermes remains the default executor for all roles; goal-mode cards
+  and all review attempts stay on Hermes; Aether never reads, manages or stores Claude
+  credentials. Implementation-only under OD-8; no release, managed update or runtime
+  activation is part of this change.
 
 ## 1.0.0rc17 — portable methodology and accumulated source fixes
 

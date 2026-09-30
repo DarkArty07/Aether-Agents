@@ -148,6 +148,10 @@ Source repair, artifact preparation and live adoption are possible boundaries, n
 phases for every bug. Keep an indivisible change together; neither splitting nor consolidation
 is justified by a file, card or contract quota.
 
+The owner requests another Implementer harness when a contract is started; without that
+explicit request every role runs on Hermes and Morfeo neither proposes, asks about nor
+selects another harness.
+
 For every mandatory deliverable/check, identify the accepted outcome, preservation obligation
 or applicable project gate that requires it. Preserve alternatives, quantities, destinations,
 conditions and exclusions when deriving acceptance. An example, reviewer preference or a
@@ -215,9 +219,11 @@ an accepted material conflict to its owner instead of silently weakening it.
    decisions the receiver would still have to invent and remove each material gap.
    This is an author self-check, not an independent reviewer verdict.
 9. **Materialize one handoff.** Use the authorized `objective_contract` capability with
-   explicitly verified portable Project identity and incremental sections. Reference
-   owning artifacts rather than copying a competing spec/plan. Validate, finalize and
-   checkpoint exact bytes through the normal Git workflow. Carry only the prescribed
+   explicitly verified portable Project identity and incremental sections. Set optional
+   `implementer_harness` on `begin` or `supersede` only when the owner explicitly requests
+   another Implementer harness for that contract; without that explicit request omit the
+   parameter or use `hermes`. Reference owning artifacts rather than copying a competing
+   spec/plan. Validate, finalize and checkpoint exact bytes through the normal Git workflow. Carry only the prescribed
    short envelope to Supervisor; keep returned opaque routing values in root-card
    side data exactly as the capability requires. Never invent or repair routing identity.
 10. **State what is and is not complete.** Report design self-check evidence and any
@@ -289,6 +295,7 @@ additional applicable state/atomicity decisions; this example does not supply th
 
 ## Pitfalls
 
+- Proposing, asking about, or selecting an alternative Implementer harness without an explicit owner request.
 - Treating eleven nonempty sections, a digest or `finalize` as proof of good design.
 - Saying "Supervisor will design the API" when the API is material missing intent.
 - Prescribing every line of code, inventing architecture for a small change, or copying
