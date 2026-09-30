@@ -242,6 +242,26 @@ invariant in EIH-08/AC7 and contract terms do not change. If this protocol canno
 prove the **actual** worker surface before its work prompt, stop (§7); do not weaken
 the gate.
 
+**Current review reconciliation, 2026-09-30 (Morfeo):** EIH-C's first ordinary
+review return substituted a hand-picked tool list containing `memory`,
+`session_search`, `skills_list`, `skill_view`, `todo` and `terminal`. That list
+contradicts §3.9 and AC5/EIH-06; it is not an authorized worker surface or a new
+acceptance requirement. The gate requires every tool in the nonempty surface
+actually derived for this attempt, while the server itself remains limited to
+§3.9. A previously observed tool list is evidence, not a static replacement for
+that derivation. The correlated `initialize` effective-mode check, MCP check,
+nonce and control-reply privacy rule above all remain applicable.
+
+The same return cited test and fixture paths absent from candidate `8adac14d`.
+Its actual readiness evidence is `evidence/EIH-C.md` §4, and its focused tests
+are `tests/test_claude_code_adapter.py`, `tests/test_worker_mcp_server.py` and
+`tests/test_pd71_claude_hook.py`. Reconcile the existing evidence and affected
+checks under quickstart §1, not a fabricated fixture or additional suite. These
+paths identify the inspected candidate; they do not remove §5's local naming
+freedom. Supervisor clarifies this same return and Implementer continues the
+already-authorized correction; the return remains 1 of 2, with no new card,
+budget reset, contract-term change or acceptance.
+
 ### 3.8 Context and skills (EIH-05, OD-5)
 
 - **Appended context file:** the Implementer `SOUL.md` and `implementation-evidence`
