@@ -24,6 +24,7 @@ dependencies = [
 
 [project.scripts]
 aether = "aether_agents.cli:main"
+aether-kanban-worker = "aether_agents.kanban_worker_launcher:main"
 
 # Aether plugin allow-list: exact entry points, each targeting a module exposing register(ctx).
 [project.entry-points."hermes_agent.plugins"]
