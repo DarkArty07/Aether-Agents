@@ -57,7 +57,9 @@ against this base and are not patch instructions.
    grant no authority. Do not edit the canonical Objective Contract or those design
    artifacts.
 2. Start from base `2221302f1c93fb4ffd166df9b5482aa2fecaef7a`. If the branch base has
-   moved, rebase only with Supervisor's instruction.
+   moved, integrate by ordinary merge. Never rebase, amend, squash or otherwise rewrite
+   history: the Objective Contract and R8 do not authorize it. Divergent unit branches
+   are merged at integration, preserving each accepted unit commit.
 3. Fixed identifiers (plan §3.1): tool parameter `implementer_harness` with enum
    `hermes | claude-code`; front-matter key `implementer_harness: "claude-code"`
    (absent means Hermes); board metadata key `aether_implementer_harness: "claude-code"`
@@ -93,16 +95,34 @@ against this base and are not patch instructions.
 10. No new third-party runtime dependency. The standard library and the release's
     existing `mcp` extra suffice.
 11. Writable-file ownership below is exclusive. Concurrent edits to the same file are
-    forbidden. A needed change to a file owned by another unit returns to Supervisor.
+    forbidden. `hermes_plugin.py` is shared by EIH-A and EIH-B and is therefore ordered,
+    not concurrent: EIH-A owns it first for the selection parameter, schema, projection
+    and reuse validation; EIH-B applies the `HERMES_BIN` override inside `register` only
+    after EIH-A's commit is reviewed, on top of that commit, without rewriting it (see
+    the file-ownership correction below). A needed change to a file owned by another
+    unit returns to Supervisor.
 12. Focused tests use stub `hermes` and stub `claude` executables and disposable
     roots. Never touch live boards, live Hermes homes, the runtime selector, or the
     owner's Claude configuration. Real Claude Code calls are forbidden in these units;
     only EIH-INT runs quickstart §3.
 13. Unit evidence path: `specs/external-implementer-harness/evidence/<unit-id>.md`.
     No secrets, credentials, operator home paths or raw transcripts.
-14. Local judgement: module and file names other than the §3.1 identifiers, internal
-    structure, private test names and fixture layout. Eligibility, fallback triggers,
-    the fail-closed rule, identifiers and the forbidden-flag list are not local choices.
+14. Local judgement: module and file names other than the §3.1 identifiers and the
+    adapter seam below, internal structure, private test names and fixture layout.
+    Eligibility, fallback triggers, the fail-closed rule, identifiers and the
+    forbidden-flag list are not local choices.
+14a. Adapter seam (shared by EIH-B and EIH-C; neither unit may rename or reshape it):
+    EIH-C implements `aether_agents.claude_code_adapter.run_attempt(argv, env)`, and
+    EIH-B calls exactly that. `argv` is the full argument vector the dispatcher built,
+    `argv[0]` included. `env` is the environment mapping the dispatcher built for the
+    worker, unchanged. The function runs the plan §3.6–§3.12 attempt and returns an
+    `int` exit status: `0` after a native Kanban transition by this run, `76` for a
+    clean exit without one, `143` after a propagated SIGTERM. It does not return when
+    it falls back: fallback is its own `os.execv` of the Hermes pass-through from
+    plan §3.5, using the original `argv` tail and `env`, inside the same process. The
+    launcher performs no Claude work and no fallback of its own; on any routing
+    decision or exception it execs the pass-through itself. EIH-B imports the function
+    inside the eligible branch, so the pass-through path never imports the adapter.
 15. Local commit on the unit branch; same-card Supervisor review; no push, PR, merge
     or issue close. Unit compatibility evidence is `minor` (additive, opt-in). The
     aggregate conclusion belongs to EIH-INT.
@@ -114,20 +134,42 @@ against this base and are not patch instructions.
 ```text
 t_d066909f (Supervisor decomposition root)
     → EIH-A  t_a1c42d22 contract selection and board projection   (Implementer)
-    → EIH-B  t_d3197963 gateway override and launcher routing     (Implementer)
+    → EIH-B  t_d3197963 gateway override and launcher routing     (Implementer; after EIH-A for hermes_plugin.py)
     → EIH-C  t_be9fc19e Claude adapter, worker MCP, PD-71 hook    (Implementer)
     → EIH-D  t_53f0d535 guidance and documentation                (Implementer)
     → same-card Supervisor review on each implementation unit
-    → EIH-INT t_a2efd73f terminal integration/closeout            (Supervisor)
+    → t_f6160bfc decomposition correction                        (Supervisor, this card)
+    → EIH-INT t_45ed8737 terminal integration/closeout           (Supervisor, terminal=true)
 ```
 
-EIH-A, EIH-B, EIH-C and EIH-D are independent: exclusive writable files, shared
-decisions already fixed, no prerequisite artifact between them. EIH-C is one
-concentrated unit because the adapter, the worker MCP server and the PD-71 hook
-adapter are defined against the same per-attempt identity, environment and config
-files the launcher builds; splitting them would force concurrent edits to the
-launcher. Same-card review is the unit review lane. EIH-INT consumes independently
-reviewed units and does not replace unit review.
+EIH-C and EIH-D are independent of every other implementation unit. EIH-A and EIH-B
+are not concurrent: both edit `hermes_plugin.py`, so EIH-B is ordered after EIH-A's
+reviewed commit (file-ownership correction below). EIH-C is one concentrated unit
+because the adapter, the worker MCP server and the PD-71 hook adapter are defined
+against the same per-attempt identity, environment and config files the launcher
+builds; splitting them would force concurrent edits to the launcher. Same-card review
+is the unit review lane. EIH-INT consumes the independently reviewed units and this
+correction, and it does not replace unit review.
+
+## Decomposition correction (t_f6160bfc)
+
+Reconciled before integration, without widening the contract:
+
+1. **Flow continuity.** `t_a2efd73f` had been moved to its own worktree while keeping
+   `terminal=false`, which breaks R7 FR-714b/c (one canonical Supervisor workspace) and
+   FR-714e (exactly one `terminal=true` card). It was unstarted, so it was archived
+   through `hermes kanban archive` and replaced by `t_45ed8737`, created through the
+   native path with the same flow id, `terminal=true`, `workspace_kind=dir` and this
+   root workspace. Its parents are the four implementation units plus this correction.
+   The earlier direct SQL reassignment is superseded by that archive event; no rows were
+   deleted.
+2. **File ownership.** EIH-A (`t_a1c42d22`) and EIH-B (`t_d3197963`) both edit
+   `hermes_plugin.py`. EIH-A owns it first; EIH-B applies only its `register` override
+   after EIH-A's reviewed commit, on top of it, without rebasing or discarding either
+   unit's work. EIH-C and EIH-D do not touch the file and continue unaffected.
+3. **Adapter seam.** Shared decision 14a fixes the callable both units were free to
+   name. EIH-B calls it; EIH-C implements it.
+4. **No rewrite.** Shared decision 2 no longer permits a rebase. Integration merges.
 
 ## EIH-A — Contract selection and board projection
 
@@ -139,7 +181,9 @@ reviewed units and does not replace unit review.
   Unknown values and use on other actions are rejected. Reuse validates equality,
   absent/absent included, and mismatches raise the existing identity conflict. An
   rc17-style parser accepts a selected final contract. `show` reports the selection.
-- Inputs: base `2221302f`. No prerequisite unit.
+- Inputs: base `2221302f`. No prerequisite unit. You own `hermes_plugin.py` first; commit
+  your selection, schema, projection and reuse changes and hand them to review before
+  EIH-B touches the file.
 - Boundaries: writable `src/aether_agents/objective_contracts/store.py`,
   `src/aether_agents/objective_contracts/hermes_plugin.py` (selection parameter, schema,
   `prepare_handoff` projection and reuse validation only), and new focused tests under
@@ -161,18 +205,26 @@ reviewed units and does not replace unit review.
   The launcher routes to the adapter seam only when every plan §3.5 condition holds, and
   otherwise execs the pre-change Hermes entry with identical argv and environment,
   including when the board file or database cannot be read. It never re-reads `HERMES_BIN`.
-- Inputs: base `2221302f`. No prerequisite unit. The adapter entry it calls is the seam
-  named in shared decision 3; EIH-C implements it.
+- Inputs: base `2221302f`, plus EIH-A's reviewed commit, which lands first in
+  `hermes_plugin.py`. Do not edit that file until EIH-A's commit exists and has passed
+  review; then add only the `HERMES_BIN` override inside `register`, on top of that
+  commit, and do not rebase, amend or otherwise rewrite EIH-A's commit. Keep the
+  uncommitted override work you already have and replay it onto EIH-A's result. The
+  adapter entry you call is fixed by shared decision 14a:
+  `aether_agents.claude_code_adapter.run_attempt(argv, env)`. EIH-C implements it.
 - Boundaries: writable `pyproject.toml` (`[project.scripts]` entry only),
   `src/aether_agents/objective_contracts/hermes_plugin.py` (`register`'s `HERMES_BIN`
-  override only), the new launcher module and its console-script target, and new focused
-  tests (for example `tests/test_kanban_worker_launcher.py`). Do not edit `store.py` or
-  the selection/projection code EIH-A owns. The launcher's Claude branch is a single
-  call into the adapter seam; do not implement the adapter here.
-- Judgement: launcher module path and internal function names.
+  override only, applied after EIH-A), the new launcher module and its console-script
+  target, and new focused tests (for example `tests/test_kanban_worker_launcher.py`).
+  Do not edit `store.py` or the selection parameter, schema, projection or reuse
+  validation EIH-A owns. The launcher's Claude branch is a single call into the adapter
+  seam; do not implement the adapter here.
+- Judgement: launcher module path and internal function names, except the adapter seam
+  in shared decision 14a, which is fixed.
 - Verification: quickstart §1 plugin-override and launcher-routing bullets, using a stub
   `hermes` that records argv and environment.
-- Dependencies: decomposition root only.
+- Dependencies: decomposition root, then EIH-A's reviewed commit for `hermes_plugin.py`.
+  EIH-A owns the file first because both units edit it (R7 FR-714).
 - Completion: local commit; evidence `evidence/EIH-B.md`; same-card review; no push.
 
 ## EIH-C — Claude adapter, readiness, worker MCP and PD-71 hook
@@ -190,7 +242,9 @@ reviewed units and does not replace unit review.
   failure mode. Context and the per-attempt skills plugin match plan §3.8, and nothing is
   written to project or personal skill directories. Receipts and the `aether-executor:`
   comment are produced, transient inputs are removed, and no Hermes session row is created.
-- Inputs: base `2221302f`. No prerequisite unit. Consume the launcher seam EIH-B calls.
+- Inputs: base `2221302f`. No prerequisite unit. Implement the launcher seam fixed by
+  shared decision 14a: `aether_agents.claude_code_adapter.run_attempt(argv, env)`, with
+  the arguments, return codes and exec-based fallback defined there. Do not rename it.
 - Boundaries: writable the new adapter, worker MCP server, PD-71 hook adapter and context
   builder modules under `src/aether_agents/`, plus new focused tests (for example
   `tests/test_claude_code_adapter.py`, `tests/test_worker_mcp_server.py`,
@@ -198,8 +252,10 @@ reviewed units and does not replace unit review.
   `store.py`, `hermes_plugin.py`, `pyproject.toml`, or any file under
   `src/aether_agents/resources/`. Do not copy `KANBAN_GUIDANCE` into Aether source; import
   it at run time.
-- Judgement: module layout, the readiness mechanism within plan §3.7's invariant,
-  heartbeat rate within plan §3.11, receipt path layout and equivalence-table wording.
+- Judgement: module layout other than the `aether_agents.claude_code_adapter` module and
+  `run_attempt` entry fixed by shared decision 14a, the readiness mechanism within plan
+  §3.7's invariant, heartbeat rate within plan §3.11, receipt path layout and
+  equivalence-table wording.
 - Verification: quickstart §1 adapter, context, worker MCP, PD-71 and receipts bullets,
   using a stub `claude` emitting canned stream-json. If no deterministic ordering keeps
   the work prompt away from the model until the hook is proven active, stop and return to
@@ -234,21 +290,26 @@ reviewed units and does not replace unit review.
 ## EIH-INT — Terminal integration and closeout
 
 - Source: EIH-12, AC10, AC11, D3; quickstart §2, §3, §4; plan §8.
-- Outcome: independently reviewed EIH-A through EIH-D commits integrated without
-  squash, amend, rebase or force; the quickstart §2 integrated gate green; one isolated
-  real Claude Code run per quickstart §3 recorded in `evidence/`; normal branch push, PR,
-  required checks, green merge without bypass, issue #563 reconciliation and
-  objective-owned branch/worktree cleanup. Final receipt with criterion mapping, exact
-  revisions, PR/check/merge/issue state, cleanup and release conclusions
-  `release_impact=minor`, `release_action=defer`, `release_channel=none`.
-- Inputs: independently reviewed EIH-A, EIH-B, EIH-C and EIH-D commits plus this `tasks.md`.
+- Outcome: independently reviewed EIH-A through EIH-D commits integrated by ordinary
+  merge, without squash, amend, rebase or any other history rewrite; the quickstart §2
+  integrated gate green; one isolated real Claude Code run per quickstart §3 recorded in
+  `evidence/`; normal branch push, PR, required checks, green merge without bypass,
+  issue #563 reconciliation and objective-owned branch/worktree cleanup. Final receipt
+  with criterion mapping, exact revisions, PR/check/merge/issue state, cleanup and
+  release conclusions `release_impact=minor`, `release_action=defer`,
+  `release_channel=none`.
+- Inputs: independently reviewed EIH-A, EIH-B, EIH-C and EIH-D commits, this correction,
+  and this `tasks.md`.
+- Card: `t_45ed8737`, the single `terminal=true` card, sharing this root workspace
+  (`workspace_kind=dir`). `t_a2efd73f` was archived and is not the integration card.
 - Boundaries: integration-owned wiring and conflict repairs that introduce no new
   behavior, `specs/external-implementer-harness/evidence/` and `tasks.md` status.
   Behavior gaps return as implementation rework within the review budget.
 - Verification: quickstart §2 commands; quickstart §3 with disposable roots and the
   owner's already-provisioned Claude Code login; no live board, Hermes home or runtime
   selector; `git diff --check`.
-- Dependencies: decomposition root and all four independently reviewed implementation units.
+- Dependencies: decomposition root, all four independently reviewed implementation
+  units, and this correction `t_f6160bfc`.
 - Completion: merged PR and reconciled issue are success; local integration alone is not.
   Morfeo records exact-result reception afterwards.
 
