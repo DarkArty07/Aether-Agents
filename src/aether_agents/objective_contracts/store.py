@@ -413,9 +413,24 @@ class ObjectiveContractStore:
             path, (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
         )
 
-    def begin(self, *, project_id: str, title: str, session_id: str) -> dict[str, Any]:
+    def begin(
+        self,
+        *,
+        project_id: str,
+        title: str,
+        session_id: str,
+        implementer_harness: str | None = None,
+    ) -> dict[str, Any]:
         project_id, root = self._project(project_id)
         session_id = self._session(session_id)
+        if implementer_harness is not None and implementer_harness not in (
+            "hermes",
+            "claude-code",
+        ):
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-HARNESS-INVALID",
+                "implementer_harness is invalid",
+            )
         title = title.strip() if isinstance(title, str) else ""
         if (
             not title
@@ -457,8 +472,10 @@ class ObjectiveContractStore:
                 "change_reason": None,
                 "sections": {},
             }
+            if implementer_harness == "claude-code":
+                draft["implementer_harness"] = "claude-code"
             self._write_json(path, draft)
-            return {
+            result = {
                 "project_id": project_id,
                 "contract_id": contract_id,
                 "revision": 1,
@@ -466,6 +483,9 @@ class ObjectiveContractStore:
                 "draft_path": self._relative(root, path),
                 "created_in_session": session_id,
             }
+            if implementer_harness == "claude-code":
+                result["implementer_harness"] = "claude-code"
+            return result
 
     def _load_draft(
         self, root: Path, project_id: str, contract_id: str
@@ -635,6 +655,12 @@ class ObjectiveContractStore:
                 "AETHER-OBJECTIVE-CONTRACT-OPERATOR-PATH",
                 f"contract contains operator-local path content: {', '.join(unique_kinds)}",
             )
+        harness = draft.get("implementer_harness")
+        if harness is not None and harness != "claude-code":
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-HARNESS-INVALID",
+                "draft implementer_harness is invalid",
+            )
         return sections, missing
 
     def validate(self, *, project_id: str, contract_id: str) -> dict[str, Any]:
@@ -674,6 +700,8 @@ class ObjectiveContractStore:
             "change_reason": draft.get("change_reason"),
             "observation_trace_id": "ctr_" + secrets.token_hex(16),
         }
+        if draft.get("implementer_harness") == "claude-code":
+            metadata["implementer_harness"] = "claude-code"
         lines = ["---"]
         lines.extend(
             f"{key}: {json.dumps(value, ensure_ascii=False)}" for key, value in metadata.items()
@@ -758,6 +786,11 @@ class ObjectiveContractStore:
                 "AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID",
                 "final contract observation identity is invalid",
             )
+        if "implementer_harness" in metadata and metadata["implementer_harness"] != "claude-code":
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID",
+                "final contract implementer_harness is invalid",
+            )
         if any(
             _TRUNCATION_RE.search(value) or contains_secret_shape(value)
             for value in sections.values()
@@ -806,7 +839,7 @@ class ObjectiveContractStore:
             digest = hashlib.sha256(persisted).hexdigest()
             metadata, _ = self._parse_final(final_path)
             draft_path.unlink()
-            return {
+            result = {
                 "project_id": project_id,
                 "contract_id": contract_id,
                 "version": version,
@@ -817,6 +850,9 @@ class ObjectiveContractStore:
                 "created_in_session": draft["created_in_session"],
                 "finalized_in_session": session_id,
             }
+            if metadata.get("implementer_harness") == "claude-code":
+                result["implementer_harness"] = "claude-code"
+            return result
 
     def supersede(
         self,
@@ -826,6 +862,7 @@ class ObjectiveContractStore:
         version: int,
         change_reason: str,
         session_id: str,
+        implementer_harness: str | None = None,
     ) -> dict[str, Any]:
         project_id, root = self._project(project_id)
         contract_id = self._contract_id(contract_id)
@@ -833,6 +870,14 @@ class ObjectiveContractStore:
         if not isinstance(version, int) or version < 1:
             raise ContractError(
                 "AETHER-OBJECTIVE-CONTRACT-VERSION-INVALID", "source version is invalid"
+            )
+        if implementer_harness is not None and implementer_harness not in (
+            "hermes",
+            "claude-code",
+        ):
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-HARNESS-INVALID",
+                "implementer_harness is invalid",
             )
         reason = change_reason.strip() if isinstance(change_reason, str) else ""
         if not reason or _TRUNCATION_RE.search(reason):
@@ -867,6 +912,18 @@ class ObjectiveContractStore:
                     "AETHER-OBJECTIVE-CONTRACT-AMENDMENT-EXISTS",
                     "a draft or target version already exists",
                 )
+            source_harness = metadata.get("implementer_harness")
+            if implementer_harness is None:
+                selected_harness = source_harness
+            elif implementer_harness == "hermes":
+                selected_harness = None
+            elif implementer_harness == "claude-code":
+                selected_harness = "claude-code"
+            else:
+                raise ContractError(
+                    "AETHER-OBJECTIVE-CONTRACT-HARNESS-INVALID",
+                    "implementer_harness is invalid",
+                )
             utc, local = self._now()
             draft = {
                 "schema_version": 1,
@@ -886,8 +943,10 @@ class ObjectiveContractStore:
                 "change_reason": reason,
                 "sections": sections,
             }
+            if selected_harness == "claude-code":
+                draft["implementer_harness"] = "claude-code"
             self._write_json(draft_path, draft)
-            return {
+            result = {
                 "project_id": project_id,
                 "contract_id": contract_id,
                 "revision": 1,
@@ -896,6 +955,9 @@ class ObjectiveContractStore:
                 "draft_path": self._relative(root, draft_path),
                 "supersedes": draft["supersedes"],
             }
+            if selected_harness == "claude-code":
+                result["implementer_harness"] = "claude-code"
+            return result
 
     @staticmethod
     def _git(root: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
@@ -992,6 +1054,8 @@ class ObjectiveContractStore:
             "root_idempotency_key": token,
             "envelope": envelope,
         }
+        if metadata.get("implementer_harness") == "claude-code":
+            result["implementer_harness"] = "claude-code"
         if on_ready is not None:
             primary_path = self.registry.project_path(project_id)
             primary_root = primary_path.expanduser().resolve() if primary_path else root

@@ -145,6 +145,7 @@ def _create_metadata_exclusive(
     version: int,
     worktree_base_ref: str | None = None,
     observation_trace_id: str | None = None,
+    implementer_harness: str | None = None,
 ) -> bool:
     """Create board metadata without ever overwriting a competing writer."""
     payload: dict[str, Any] = {
@@ -161,6 +162,8 @@ def _create_metadata_exclusive(
         "created_at": int(time.time()),
         "archived": False,
     }
+    if implementer_harness == "claude-code":
+        payload["aether_implementer_harness"] = "claude-code"
     if observation_trace_id is not None:
         payload["observation_trace_id"] = observation_trace_id
     if worktree_base_ref is not None:
@@ -215,6 +218,7 @@ def _validate_execution_metadata(
     version: int,
     worktree_base_ref: str | None = None,
     observation_trace_id: str | None = None,
+    implementer_harness: str | None = None,
 ) -> None:
     if metadata.get("archived"):
         raise ExecutionBoardError(
@@ -240,6 +244,13 @@ def _validate_execution_metadata(
         raise ExecutionBoardError(
             "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT",
             "the execution board carries a different Objective Contract identity",
+        )
+    expected_harness = "claude-code" if implementer_harness == "claude-code" else None
+    stored_harness = metadata.get("aether_implementer_harness")
+    if stored_harness != expected_harness:
+        raise ExecutionBoardError(
+            "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT",
+            "the execution board carries a different implementer harness selection",
         )
     if (
         observation_trace_id is not None
@@ -401,6 +412,7 @@ def _provision_execution_board(
     version: int,
     worktree_base_ref: str | None = None,
     observation_trace_id: str | None = None,
+    implementer_harness: str | None = None,
 ) -> dict[str, str]:
     """Create or verify the one Hermes board for an executable contract version."""
     from hermes_cli import kanban_db  # type: ignore[import-untyped,import-not-found]
@@ -432,6 +444,7 @@ def _provision_execution_board(
                         version=version,
                         worktree_base_ref=worktree_base_ref,
                         observation_trace_id=observation_trace_id,
+                        implementer_harness=implementer_harness,
                     )
                     directory, metadata_path, db_path = _safe_board_paths(kanban_db, slug)
 
@@ -445,6 +458,7 @@ def _provision_execution_board(
                     version=version,
                     worktree_base_ref=worktree_base_ref,
                     observation_trace_id=observation_trace_id,
+                    implementer_harness=implementer_harness,
                 )
 
                 # Use the canonical explicit path, never Hermes's raw DB override. Idempotent
@@ -461,6 +475,7 @@ def _provision_execution_board(
                     version=version,
                     worktree_base_ref=worktree_base_ref,
                     observation_trace_id=observation_trace_id,
+                    implementer_harness=implementer_harness,
                 )
                 if not db_path.is_file():
                     raise ExecutionBoardError(
@@ -493,6 +508,12 @@ def _handle(
             )
         action = _required(args, "action")
         project_id = _required(args, "project_id")
+        if "implementer_harness" in args:
+            if action not in ("begin", "supersede"):
+                raise ContractError(
+                    "AETHER-OBJECTIVE-CONTRACT-HARNESS-INVALID",
+                    "implementer_harness is only supported on begin and supersede",
+                )
         session_workspace: Path | None = None
         if session_id:
             session_workspace = _native_session_workspace(session_id)
@@ -510,6 +531,7 @@ def _handle(
                 project_id=project_id,
                 title=_required(args, "title"),
                 session_id=session_id,
+                implementer_harness=args.get("implementer_harness"),
             )
         elif action == "set_section":
             result = store.set_section(
@@ -546,6 +568,7 @@ def _handle(
                 version=_required(args, "version"),
                 change_reason=_required(args, "change_reason"),
                 session_id=session_id,
+                implementer_harness=args.get("implementer_harness"),
             )
         elif action == "prepare_handoff":
 
@@ -559,6 +582,7 @@ def _handle(
                         worktree_base_ref=str(prepared["base_commit"]),
                         observation_trace_id=str(prepared.get("observation_trace_id") or "")
                         or None,
+                        implementer_harness=prepared.get("implementer_harness"),
                     )
                 except ExecutionBoardError as exc:
                     raise ContractError(exc.code, str(exc)) from exc
@@ -640,6 +664,10 @@ def register(ctx: Any) -> None:
                     },
                     "version": {"type": "integer", "minimum": 1},
                     "change_reason": {"type": "string"},
+                    "implementer_harness": {
+                        "type": "string",
+                        "enum": ["hermes", "claude-code"],
+                    },
                 },
             },
         },
