@@ -78,17 +78,19 @@ Calls delegate directly to native handlers via `tools.registry.registry.dispatch
 
 ---
 
-## 4. Observed Readiness Event Sequence (Plan §3.7 Probe)
+## 4. Readiness Gating via Native Stream-JSON Control Protocol (Plan §3.7)
 
-A bounded probe of installed Claude Code `2.1.285` in disposable scope confirmed the event ordering:
-1. **Hook Activation:** The `SessionStart` command hook executes immediately at process spawn before any user message is processed, writing the session nonce to disk.
-2. **Initial Event:** Claude emits `system/init` containing `permissionMode: "bypassPermissions"`, the tools list, and MCP servers.
-3. **Gating:** The adapter withholds the work prompt on stdin until:
-   - The nonce file exists and contains the attempt session UUID.
-   - `system/init` reports `permissionMode: "bypassPermissions"`.
-   - The `aether-worker` MCP server is reported connected with required tools.
-4. **Prompt Submission:** Only after positive verification is the work prompt (`"Work Aether Kanban task <id>.\n\n" + worker_context`) written to stdin.
-5. If readiness fails or times out (bounded at 15.0s), Claude's process group is terminated and fallback is executed via `os.execv`.
+Initial assumption and investigation history:
+- An earlier probe checked `system/init` for MCP status. During same-card review of candidate `8adac14d`, Supervisor's probe of Claude Code `2.1.285` found that `system/init` listed all MCP servers as `pending` or `needs-auth` with no `mcp__` tools.
+- Morfeo resolved the observational premise in collaboration response 7 (commit `a10c270a`, plan §3.7, research §3.1) by establishing that the deterministic pre-prompt observable on Claude Code `2.1.285` is the native stream-json **control protocol**, not passive `system/init` inspection.
+- The readiness gate in `claude_code_adapter.py` enforces positive evidence of all three invariants before any work prompt reaches Claude's stdin:
+  1. **Correlated `initialize` control response:** Executor emits `control_request` `initialize` with a unique `request_id` and `hooks: null`. A matching `control_response` must return `subtype: "success"` and `current_permission_mode: "bypassPermissions"`.
+  2. **Correlated `mcp_status` control response:** Executor emits `control_request` `mcp_status` with a unique `request_id`. A matching `control_response` must return `subtype: "success"`, explicit `status: "connected"` (never absent, pending, or ready), and `tools[].name` containing every tool in the derived required worker surface for this attempt (14 tools). If previously reported `pending`, it is polled until connected or timeout.
+  3. **`SessionStart` nonce:** A matching nonce file written by the per-attempt `SessionStart` command hook from the same settings that register the blocking PD-71 `PreToolUse` hook.
+  4. **Privacy preservation (commit `7a6a0b6a`):** Raw control replies (which may contain headers, env, or configuration of other MCP servers) are filtered out and never persisted into receipts or the failure stream tail.
+  5. **Later `system/init`:** Treated as corroborating run evidence, never a substitute for the pre-prompt control handshake.
+  6. **Prompt Submission:** Only after all three invariants are proven is the initial work prompt (`"Work Aether Kanban task <id>.\n\n" + worker_context`) written to stdin.
+- **Live observation status:** Real observation against a live Claude Code process with the full production worker MCP server is not yet done; it is scheduled for the one isolated real run in terminal integration unit `EIH-12` per plan §6 / quickstart §3.
 
 ---
 
@@ -128,12 +130,12 @@ The `pd71_claude_hook` module runs as a `PreToolUse` command hook with matcher `
 
 ## 7. Verification Results
 
-All 34 focused unit tests pass:
+All 43 focused unit tests pass:
 
 ```bash
 uv run --frozen pytest -v tests/test_claude_code_adapter.py tests/test_worker_mcp_server.py tests/test_pd71_claude_hook.py
 ```
-Output: `34 passed in 5.49s`.
+Output: `43 passed in 17.51s`.
 
 Static analysis and checks:
 - `uv run --frozen ruff check src/aether_agents/ tests/`: `All checks passed!`

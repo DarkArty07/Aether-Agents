@@ -65,6 +65,60 @@ AUTH_BILLING_ERROR_CATEGORIES = frozenset(
 )
 
 
+def get_required_worker_tools(env: dict[str, str] | None = None) -> set[str]:
+    """Resolve the required worker tools for readiness gating.
+
+    Derives the tool surface from the worker MCP server definitions for this attempt,
+    or honors AETHER_REQUIRED_WORKER_TOOLS if explicitly set.
+    """
+    if env and "AETHER_REQUIRED_WORKER_TOOLS" in env:
+        tools_str = env["AETHER_REQUIRED_WORKER_TOOLS"].strip()
+        if tools_str:
+            return {t.strip() for t in tools_str.split(",") if t.strip()}
+    if "AETHER_REQUIRED_WORKER_TOOLS" in os.environ:
+        tools_str = os.environ["AETHER_REQUIRED_WORKER_TOOLS"].strip()
+        if tools_str:
+            return {t.strip() for t in tools_str.split(",") if t.strip()}
+    try:
+        from aether_agents.worker_mcp_server import discover_worker_tool_definitions
+
+        defs = discover_worker_tool_definitions()
+        derived = {
+            t["function"]["name"]
+            for t in defs
+            if isinstance(t, dict) and "function" in t and "name" in t.get("function", {})
+        }
+        if derived:
+            return derived
+    except Exception:
+        pass
+    return {
+        "kanban_attach",
+        "kanban_attach_url",
+        "kanban_attachments",
+        "kanban_block",
+        "kanban_comment",
+        "kanban_complete",
+        "kanban_create",
+        "kanban_heartbeat",
+        "kanban_link",
+        "kanban_request_changes",
+        "kanban_request_review",
+        "kanban_show",
+    }
+
+
+def _send_control_request(proc: subprocess.Popen[bytes], payload: dict[str, Any]) -> None:
+    """Send a stream-json control_request to Claude Code stdin."""
+    if proc.stdin and not proc.stdin.closed:
+        try:
+            line = json.dumps(payload) + "\n"
+            proc.stdin.write(line.encode("utf-8"))
+            proc.stdin.flush()
+        except Exception as exc:
+            logger.warning("Failed to send control_request: %s", exc)
+
+
 def _now_iso_utc() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
@@ -434,19 +488,54 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
     old_sigterm = signal.signal(signal.SIGTERM, _forward_signal)
     old_sigint = signal.signal(signal.SIGINT, _forward_signal)
 
+    required_worker_tools = get_required_worker_tools(env)
+    is_explicit_tools = bool(
+        (env and "AETHER_REQUIRED_WORKER_TOOLS" in env)
+        or "AETHER_REQUIRED_WORKER_TOOLS" in os.environ
+    )
+
     readiness_ok = False
     readiness_summary: dict[str, Any] = {
         "permission_mode": None,
         "mcp_connected": False,
         "hook_active": False,
+        "initialize_request": None,
+        "initialize_response_id": None,
+        "mcp_status_request": None,
+        "mcp_status_response_id": None,
+        "mcp_status": None,
+        "mcp_tools": [],
+        "required_tools": sorted(required_worker_tools),
     }
     stream_tail = bytearray()
     structured_fallback_cause: str | None = None
     last_heartbeat = 0.0
 
     assert proc.stdout is not None
-    readiness_deadline = time.time() + READINESS_TIMEOUT_SECONDS
+    timeout_val = float(
+        env.get(
+            "AETHER_READINESS_TIMEOUT",
+            os.environ.get("AETHER_READINESS_TIMEOUT", READINESS_TIMEOUT_SECONDS),
+        )
+    )
+    readiness_deadline = time.time() + timeout_val
     line_bytes = b""
+
+    # Emit initial initialize control request per plan §3.7
+    init_request_id = f"init_{session_id}_{uuid.uuid4().hex[:8]}"
+    init_payload = {
+        "type": "control_request",
+        "request_id": init_request_id,
+        "request": {
+            "subtype": "initialize",
+            "hooks": None,
+        },
+    }
+    readiness_summary["initialize_request"] = init_payload
+    _send_control_request(proc, init_payload)
+
+    mcp_request_ids: set[str] = set()
+    last_mcp_poll = 0.0
 
     try:
         # Phase 1: Readiness gating
@@ -459,43 +548,141 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
                 except OSError:
                     pass
 
+            # If permission_mode is bypassPermissions and mcp_status hasn't been queried yet, send it
+            if readiness_summary["permission_mode"] == "bypassPermissions" and not mcp_request_ids:
+                first_mcp_id = f"mcp_{session_id}_{uuid.uuid4().hex[:8]}"
+                mcp_request_ids.add(first_mcp_id)
+                mcp_payload = {
+                    "type": "control_request",
+                    "request_id": first_mcp_id,
+                    "request": {
+                        "subtype": "mcp_status",
+                    },
+                }
+                readiness_summary["mcp_status_request"] = mcp_payload
+                _send_control_request(proc, mcp_payload)
+                last_mcp_poll = time.monotonic()
+
+            # Re-query mcp_status if previously reported pending
+            if (
+                readiness_summary["mcp_status"] == "pending"
+                and not readiness_summary["mcp_connected"]
+                and (time.monotonic() - last_mcp_poll >= 0.5)
+            ):
+                new_mcp_id = f"mcp_{session_id}_{uuid.uuid4().hex[:8]}"
+                mcp_request_ids.add(new_mcp_id)
+                mcp_payload = {
+                    "type": "control_request",
+                    "request_id": new_mcp_id,
+                    "request": {
+                        "subtype": "mcp_status",
+                    },
+                }
+                readiness_summary["mcp_status_request"] = mcp_payload
+                _send_control_request(proc, mcp_payload)
+                last_mcp_poll = time.monotonic()
+
             r, _, _ = select.select([proc.stdout], [], [], 0.1)
             if proc.stdout in r:
                 line_bytes = proc.stdout.readline()
                 if line_bytes:
-                    stream_tail.extend(line_bytes)
-                    if len(stream_tail) > MAX_STREAM_TAIL_BYTES:
-                        del stream_tail[: len(stream_tail) - MAX_STREAM_TAIL_BYTES]
-
                     line_str = line_bytes.decode("utf-8", errors="replace").strip()
+                    is_control = False
                     if line_str:
                         try:
                             event = json.loads(line_str)
                             ev_type = event.get("type")
                             ev_subtype = event.get("subtype")
-                            if ev_type == "system" and ev_subtype == "init":
-                                perm_mode = event.get("permissionMode")
-                                readiness_summary["permission_mode"] = perm_mode
-                                # Check MCP servers and tools
-                                mcp_servers = (
-                                    event.get("mcp_servers") or event.get("mcpServers") or []
-                                )
-                                tools_list = event.get("tools") or []
-                                server_ok = False
-                                if isinstance(mcp_servers, list):
-                                    for s in mcp_servers:
-                                        if isinstance(s, dict) and s.get("name") == "aether-worker":
-                                            if s.get("status") in (None, "connected", "ready"):
-                                                server_ok = True
-                                        elif isinstance(s, str) and s == "aether-worker":
-                                            server_ok = True
-                                if any(
-                                    isinstance(t, str) and t.startswith("mcp__aether-worker__")
-                                    for t in tools_list
-                                ):
-                                    server_ok = True
 
-                                readiness_summary["mcp_connected"] = server_ok
+                            if ev_type in ("control_request", "control_response"):
+                                is_control = True
+
+                            if ev_type == "control_response":
+                                resp_obj = event.get("response")
+                                if not isinstance(resp_obj, dict):
+                                    resp_obj = {}
+                                resp_req_id = resp_obj.get("request_id") or event.get("request_id")
+                                resp_subtype = resp_obj.get("subtype") or event.get("subtype")
+                                inner_resp = resp_obj.get("response")
+                                if not isinstance(inner_resp, dict):
+                                    inner_resp = resp_obj
+
+                                # Correlate initialize response
+                                if resp_req_id == init_request_id:
+                                    readiness_summary["initialize_response_id"] = resp_req_id
+                                    if resp_subtype == "success":
+                                        mode = inner_resp.get("current_permission_mode")
+                                        if mode == "bypassPermissions":
+                                            readiness_summary["permission_mode"] = mode
+                                            # Send mcp_status request upon successful initialize
+                                            if not mcp_request_ids:
+                                                first_mcp_id = (
+                                                    f"mcp_{session_id}_{uuid.uuid4().hex[:8]}"
+                                                )
+                                                mcp_request_ids.add(first_mcp_id)
+                                                mcp_payload = {
+                                                    "type": "control_request",
+                                                    "request_id": first_mcp_id,
+                                                    "request": {
+                                                        "subtype": "mcp_status",
+                                                    },
+                                                }
+                                                readiness_summary["mcp_status_request"] = (
+                                                    mcp_payload
+                                                )
+                                                _send_control_request(proc, mcp_payload)
+                                                last_mcp_poll = time.monotonic()
+
+                                # Correlate mcp_status response
+                                if resp_req_id in mcp_request_ids:
+                                    readiness_summary["mcp_status_response_id"] = resp_req_id
+                                    if resp_subtype == "success":
+                                        servers = (
+                                            inner_resp.get("mcpServers")
+                                            or inner_resp.get("mcp_servers")
+                                            or []
+                                        )
+                                        worker_server = None
+                                        if isinstance(servers, list):
+                                            for s in servers:
+                                                if (
+                                                    isinstance(s, dict)
+                                                    and s.get("name") == "aether-worker"
+                                                ):
+                                                    worker_server = s
+                                                    break
+                                        if worker_server:
+                                            s_status = worker_server.get("status")
+                                            readiness_summary["mcp_status"] = s_status
+                                            # Status must explicitly be "connected"
+                                            if s_status == "connected":
+                                                raw_tools = worker_server.get("tools") or []
+                                                found_tools: set[str] = set()
+                                                for t in raw_tools:
+                                                    name = (
+                                                        t.get("name")
+                                                        if isinstance(t, dict)
+                                                        else str(t)
+                                                    )
+                                                    if isinstance(name, str):
+                                                        if name.startswith("mcp__aether-worker__"):
+                                                            name = name[
+                                                                len("mcp__aether-worker__") :
+                                                            ]
+                                                        found_tools.add(name)
+                                                readiness_summary["mcp_tools"] = sorted(found_tools)
+                                                if is_explicit_tools:
+                                                    if found_tools == required_worker_tools:
+                                                        readiness_summary["mcp_connected"] = True
+                                                else:
+                                                    if required_worker_tools.issubset(found_tools):
+                                                        readiness_summary["mcp_connected"] = True
+
+                            elif ev_type == "system" and ev_subtype == "init":
+                                # Later system/init is corroboration (plan §3.7)
+                                perm_mode = event.get("permissionMode")
+                                if perm_mode and not readiness_summary["permission_mode"]:
+                                    readiness_summary["permission_mode"] = perm_mode
                             elif ev_type == "system" and ev_subtype == "api_retry":
                                 error_cat = event.get("error_category") or event.get("category")
                                 if error_cat in AUTH_BILLING_ERROR_CATEGORIES:
@@ -504,6 +691,12 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
                                 structured_fallback_cause = "error_result"
                         except Exception:
                             pass
+
+                    # Filter control replies from stream_tail per commit 7a6a0b6a
+                    if not is_control:
+                        stream_tail.extend(line_bytes)
+                        if len(stream_tail) > MAX_STREAM_TAIL_BYTES:
+                            del stream_tail[: len(stream_tail) - MAX_STREAM_TAIL_BYTES]
                 elif proc.poll() is not None:
                     # EOF reached
                     pass
@@ -558,9 +751,12 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
             )
             + "\n"
         )
-        if proc.stdin:
-            proc.stdin.write(work_payload.encode("utf-8"))
-            proc.stdin.flush()
+        if proc.stdin and not proc.stdin.closed:
+            try:
+                proc.stdin.write(work_payload.encode("utf-8"))
+                proc.stdin.flush()
+            except OSError:
+                pass
 
         # Phase 2: Stream monitoring loop
         while proc.poll() is None:
@@ -569,22 +765,16 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
                 line_bytes = proc.stdout.readline()
                 if not line_bytes:
                     break
-                stream_tail.extend(line_bytes)
-                if len(stream_tail) > MAX_STREAM_TAIL_BYTES:
-                    del stream_tail[: len(stream_tail) - MAX_STREAM_TAIL_BYTES]
-
-                # Heartbeat on real stream events, rate-limited
-                now = time.monotonic()
-                if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
-                    _trigger_heartbeat()
-                    last_heartbeat = now
 
                 line_str = line_bytes.decode("utf-8", errors="replace").strip()
+                is_control = False
                 if line_str:
                     try:
                         event = json.loads(line_str)
                         ev_type = event.get("type")
                         ev_subtype = event.get("subtype")
+                        if ev_type in ("control_request", "control_response"):
+                            is_control = True
                         # Check structured api_retry errors (auth/quota)
                         if ev_type == "system" and ev_subtype == "api_retry":
                             error_cat = event.get("error_category") or event.get("category")
@@ -598,6 +788,18 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
                                 structured_fallback_cause = "error_result"
                     except Exception:
                         pass
+
+                # Filter control replies from stream tail per commit 7a6a0b6a
+                if not is_control:
+                    stream_tail.extend(line_bytes)
+                    if len(stream_tail) > MAX_STREAM_TAIL_BYTES:
+                        del stream_tail[: len(stream_tail) - MAX_STREAM_TAIL_BYTES]
+
+                # Heartbeat on real stream events, rate-limited
+                now = time.monotonic()
+                if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+                    _trigger_heartbeat()
+                    last_heartbeat = now
 
         proc.wait()
     finally:
