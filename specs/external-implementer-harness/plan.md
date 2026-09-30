@@ -139,6 +139,10 @@ execution-board metadata and — read-only — the board database:
 5. The attempt is a **work** claim: the current run's latest `claimed` event does not carry
    `source_status: "review"` (`claim_review_task` records it; `claim_task` does not),
    `HERMES_KANBAN_REVIEW_AFFINITY` is unset and argv has no `--resume`.
+   The event must exist for this exact `HERMES_KANBAN_RUN_ID`; if its row is absent,
+   eligibility is false. A claim from another run cannot substitute for current-run
+   evidence. This restates the current-attempt condition and the Hermes-on-uncertainty
+   invariant; it is not an additional acceptance gate.
 6. The card pins no Hermes model or effort (`-m`, `--provider`, `--reasoning` in argv).
    `--skills` pins are honored (§3.8); the profile-derived `--toolsets` argument is always
    present and does not affect eligibility.
@@ -153,6 +157,15 @@ re-reads `HERMES_BIN`. This keeps the default path equal to today's, including d
 release switch. Uncertainty always resolves to Hermes. Because every worker spawn now
 passes through the launcher, this pass-through must be the simplest and most heavily
 tested path.
+
+**Current-source clarification, 2026-09-30 (Morfeo):** a disposable helper probe of
+EIH-B candidate `af9ab4ad220f3bc0537413a7eb3547a557a868d2` found that
+`_check_claimed_event_not_review` accepts a work claim from run 10 when queried for
+missing run 11. That is a condition-5 defect, not an optional compatibility residual:
+the expected result is ineligible/Hermes. Supervisor resolves the bounded correction
+and its focused regression through the existing integration/rework lane, preserving
+the accepted unit commit and evidence. No contract-term change, completed-card mutation,
+new objective or broad verification campaign is required.
 
 ### 3.6 Claude Code invocation (EIH-04, OD-2, OD-4)
 
