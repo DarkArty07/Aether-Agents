@@ -421,6 +421,33 @@ campaigns. [quickstart.md](quickstart.md) carries the runnable commands.
 Resource and focused tests show deterministic source behavior. The isolated run shows the
 path works once; neither claims installed availability or broad agent-behavior quality.
 
+**Clarificación del oráculo integrado, 2026-10-03 (Morfeo):** en el candidato
+`a82650fb24e630c2c82521b1b8a67f32ba186593`, la prueba
+`test_import_boundary_is_static_and_manager_modules_import_without_hermes`
+(`tests/test_observation_cli_plugin.py:1978–2015`) enumera tres importadores
+Hermes anteriores y no contempla los componentes de ejecución de #563. La
+frontera normativa de `DESIGN.md` PD-69 y
+`specs/002-aether-contract-observation/spec.md` §6 permanece intacta: el
+manager y el código compartido de observación no importan Hermes; se conservan
+las restricciones del adaptador de observación sobre dependencias del manager
+y registro de hooks. No existe un límite normativo de tres importadores para
+toda funcionalidad futura del paquete.
+
+**Decisión dentro del diseño aprobado:** Supervisor puede reconciliar el
+inventario AST con los tres importadores nuevos inspeccionados,
+`claude_context.py`, `kanban_worker_launcher.py` y `worker_mcp_server.py`.
+Su acceso diferido al contexto Kanban, a la ubicación canónica del board y al
+registro de herramientas realiza §3.5, §3.8 y §3.9; no son módulos del manager
+ni del flujo compartido de observación. Esta decisión se apoya en esa separación
+de responsabilidades y no autoriza dependencias Hermes en los módulos protegidos.
+Mantener el escaneo AST, el inventario cerrado por rutas y las otras aserciones
+de la misma prueba; no omitirla, aceptar comodines ni reducir gates o cobertura.
+Los nombres anteriores identifican el candidato inspeccionado, no revocan §5.
+Si la corrección exigiera romper la frontera normativa, devolver la discrepancia
+a Morfeo en lugar de ampliar la excepción. Es una reconciliación del oráculo
+bajo la integración existente, no otro retorno de C, cambio del contrato ni PASS;
+Supervisor conserva la implementación y la evidencia del gate corregido.
+
 ## 7. Authority, convergence and stop
 
 Supervisor uses the provisioned profiles and native Project, board and worktrees; it owns
