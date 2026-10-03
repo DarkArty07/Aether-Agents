@@ -6725,7 +6725,10 @@ class LifecycleManager:
             raise IntegrityError("candidate wheel compatibility metadata mismatch")
         if set(parser.sections()) != {"console_scripts", "hermes_agent.plugins"}:
             raise IntegrityError("candidate entry-point groups mismatch")
-        if dict(parser["console_scripts"]) != {"aether": "aether_agents.cli:main"}:
+        if dict(parser["console_scripts"]) != {
+            "aether": "aether_agents.cli:main",
+            "aether-kanban-worker": "aether_agents.kanban_worker_launcher:main",
+        }:
             raise IntegrityError("candidate public CLI entry point mismatch")
         plugin_entry_points = dict(parser["hermes_agent.plugins"])
         try:
@@ -7073,7 +7076,8 @@ print(json.dumps({
             for plugin_map in _KNOWN_AETHER_PLUGIN_ENTRY_POINTS
         ]
         if installed_entrypoints not in known_plugin_maps or identity.get("console_scripts") != [
-            ["aether", "aether_agents.cli:main"]
+            ["aether", "aether_agents.cli:main"],
+            ["aether-kanban-worker", "aether_agents.kanban_worker_launcher:main"],
         ]:
             raise IntegrityError("installed Aether plugin entry-point set mismatch")
         version = identity.get("version")
