@@ -24,13 +24,13 @@ dependencies = [
 
 [project.scripts]
 aether = "aether_agents.cli:main"
-aether-kanban-worker = "aether_agents.kanban_worker_launcher:main"
 
 # Aether plugin allow-list: exact entry points, each targeting a module exposing register(ctx).
 [project.entry-points."hermes_agent.plugins"]
 aether-contract-observer = "aether_agents.observation.capture.hermes_plugin"
 aether-objective-contracts = "aether_agents.objective_contracts.hermes_plugin"
 aether-project-knowledge = "aether_agents.knowledge.hermes_plugin"
+aether-telegram-monitor = "aether_agents.monitor.hermes_plugin"
 
 [project.urls]
 Homepage = "https://github.com/DarkArty07/aether-agents"
