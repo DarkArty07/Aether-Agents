@@ -109,6 +109,26 @@ Claude retried with `reviewer="supervisor"`.
 - This run proves one working path. It is not installed availability, a Supervisor
   review on the installed runtime, agent-behavior qualification or a PD-74 result.
 
+## 4. Integrated gate (quickstart §2)
+
+Run on the exact revision `655755007f2df526b7aa9a09da0aecfd81667ecb` with a clean
+tree, from 2026-10-03T08:09:09Z to 08:28:09Z, with `TMPDIR` on an owned disposable
+directory. Producer: owner-directed completion. Every check exited 0.
+
+| Check | Result |
+| --- | --- |
+| `uv run --frozen python scripts/run_tests.py` | 1768 passed, 64 skipped in 18 min 54 s (the 1763 at `31b42e78` plus the 5 new adapter regressions) |
+| `uv run --frozen ruff check src/aether_agents tests scripts` | passed |
+| `uv run --frozen ruff format --check src/aether_agents tests scripts` | passed |
+| `uv run --frozen mypy src/aether_agents` | passed |
+| `uv run --frozen python scripts/check_documentation.py` | passed |
+| `uv run --frozen python scripts/check_public_artifacts.py` | passed |
+| `uv build` and wheel inspection | `aether_agents-1.0.0rc17-py3-none-any.whl` declares `aether-kanban-worker = aether_agents.kanban_worker_launcher:main` and contains the six new modules |
+| `git diff --check` | clean |
+
+The required PR checks remain the independent gate. The package version here is still
+`1.0.0rc17`; the RC18 identity belongs to the release record.
+
 ## 5. Criterion mapping
 
 | Criterion | Evidence |
