@@ -1,13 +1,17 @@
 # Changelog
 
-## Unreleased — Lab and Telegram Monitor retirement, opt-in Implementer harness
+## 1.0.0rc18 — Lab and Telegram Monitor retirement, opt-in Claude Code Implementer
+
+Package `1.0.0rc18` / display `1.0.0-rc.18` / local annotated tag `v1.0.0-rc.18`.
+`release_impact=major` because the Lab and Telegram Monitor retirement removes a public
+command and plugin; `release_action=prepare`, `release_channel=prerelease`. This
+continues the pre-1.0 candidate line, not a stable major release. No tag push or public
+release. The maintained Hermes fork stays at RC17's commit
+`007cfb77676b6b024d2c0986f4585e6cfdcf18d6`.
 
 - Reviewed source retirement merged via PR #547; the bounded documentation-site map
   correction merged via PR #548. The implementation is accepted in `main` with its
-  post-merge [reception](specs/lab-monitor-retirement/evidence/reception.md). This
-  unreleased source still carries `VERSION=1.0.0rc17`, but the earlier RC17 tag and
-  its release artifact do not include the retirement; no replacement RC was prepared.
-  `release_impact=major`, `release_action=defer`, `release_channel=none`.
+  post-merge [reception](specs/lab-monitor-retirement/evidence/reception.md).
 - Retire the formal Aether Qualification Lab, Telegram Monitor and periodic progress
   reports without a replacement. Remove their active documentation and capability
   records while retaining specifications, contracts, prior failures and release evidence
@@ -26,8 +30,15 @@
   run without managing, isolating or curating the user's Claude configuration.
 - Explicit limits: Hermes remains the default executor for all roles; goal-mode cards
   and all review attempts stay on Hermes; Aether never reads, manages or stores Claude
-  credentials. Implementation-only under OD-8; no release, managed update or runtime
-  activation is part of this change.
+  credentials. A real attempt is one user turn: Claude's input ends after its first
+  result, and the documented stream-json failure signals trigger the stateless Hermes
+  fallback.
+- Includes the detached-activation project-binding fix (#544), Morfeo MCP forwarding of
+  only supplied optional arguments (#556) and the documentation reconciliations since
+  RC17 (#545, #549, #551, #555, #562).
+- #564 authorizes bounded release checks and one local managed activation. Exact cutover
+  evidence, not this source declaration, establishes installation. RC17 and earlier
+  releases remain immutable.
 
 ## 1.0.0rc17 — portable methodology and accumulated source fixes
 

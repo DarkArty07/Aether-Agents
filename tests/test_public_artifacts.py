@@ -42,6 +42,7 @@ ACCEPTED_PACKAGE_IDENTITIES = (
     "1.0.0rc15",
     "1.0.0rc16",
     "1.0.0rc17",
+    "1.0.0rc18",
     "2.30.4",
     "1.0.0.dev3",
 )
@@ -162,24 +163,22 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     assert "`docs/capabilities.toml`](docs/capabilities.toml)" in readme
     assert "sole current implementation-status and traceability registry" in readme
     assert "documented transitional downstream" in readme
-    # The wheel's METADATA embeds this portal. Preserve the historical RC17
-    # identity without representing subsequent main commits as that release.
+    # The wheel's METADATA embeds this portal. RC18 is this revision's local candidate;
+    # the RC17 identity stays history, and neither proves installation or behavior.
     assert "releases/tag/v1.0.0-rc.8" not in readme
     assert "releases/tag/v1.0.0-rc.7" not in readme
     assert "releases/tag/v1.0.0-rc.6" not in readme
     assert "releases/tag/v1.0.0-rc.5" not in readme
-    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "1.0.0rc17"
-    assert "`VERSION` still reads `1.0.0rc17`" in source_section
+    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "1.0.0rc18"
+    assert "`1.0.0rc18` / `1.0.0-rc.18` as a **local-only candidate**" in source_section
+    assert "local annotated tag identity is `v1.0.0-rc.18`" in source_section
     assert (
-        "these later source commits have **not** been prepared or activated as a new RC"
-        in source_section
+        "Neither this source nor a local tag proves what is installed or that agent "
+        "behavior improved" in source_section
     )
-    assert "The local `v1.0.0-rc.17` tag names its earlier exact revision" in source_section
-    assert "it is not a tag for current `main`" in source_section
     assert "aether doctor --json" in source_section
-    assert (
-        "`release_impact=major`, `release_action=defer`, `release_channel=none`" in source_section
-    )
+    assert "`release_action=prepare`, `release_channel=prerelease`" in source_section
+    assert "no tag is pushed and no GitHub/package publication is authorized" in source_section
     assert "RC17 local candidate" in readme
     assert "`release_impact=major` for the incompatible command rename" in history
     assert "`release_action=prepare`, `release_channel=prerelease`" in history
@@ -193,7 +192,7 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     assert "releases/tag/v1.0.0-rc.1" in readme
     assert "published but rejected" in readme
     assert "**Status:**" not in readme
-    for prior_release in ("16", "15", "14", "13", "12", "10", "9", "8", "7", "6", "5"):
+    for prior_release in ("17", "16", "15", "14", "13", "12", "10", "9", "8", "7", "6", "5"):
         assert f"releases/tag/v1.0.0-rc.{prior_release}" not in source_section
     assert "beta stabilization build, not a release candidate" not in readme
     assert "no release candidate has been published" not in readme

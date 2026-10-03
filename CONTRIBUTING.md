@@ -88,6 +88,15 @@ diagnosis; this direction neither disables CI nor permits a protected-check bypa
 The #541 no-test instruction continues to describe that earlier local source delivery,
 not this separately authorized release. Keep its evidence attribution unchanged.
 
+### RC18 bounded release verification (#564)
+
+The owner directs RC18 source integration and one local managed cutover. #563 already
+ran the full exact-Hermes suite and its isolated real run. The release adds the version
+identity checks and the normal required PR checks, then one non-mutating transition
+preview, the managed cutover and one post-cutover coherence check. A required check
+failure still needs concrete diagnosis; this direction neither disables CI nor permits a
+protected-check bypass.
+
 ## Quality checks
 
 Run the checks relevant to every changed Python path. The examples below cover the

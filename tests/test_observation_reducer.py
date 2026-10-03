@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from copy import deepcopy
 from itertools import permutations
 from pathlib import Path
@@ -1741,17 +1742,19 @@ def test_same_native_status_coordinates_with_incompatible_outcomes_are_ambiguous
         assert root["latest_run_outcome"] == "unknown"
 
 
-def _conflicting_envelopes(verification: dict) -> list[dict]:
+def _conflicting_envelopes(verification: dict) -> Iterator[dict]:
     """Conflicting envelopes for one verified event, ordered by construction only.
 
     The product version is part of every event's canonical bytes, so a digest relation
     between two envelopes is not stable across releases.  This yields the same conflict
     under a bounded set of unauthorized actor identities so the caller can select the
-    representative the reducer's ``min(canonical_digest)`` rule actually retains.
+    representative the reducer's ``min(canonical_digest)`` rule actually retains.  The
+    bound is wide because a release whose verified digest sits near the top of the range
+    leaves few identities above it (1.0.0rc18 needs the 322nd); envelopes are built
+    lazily, so only the identities up to the selected one are constructed.
     """
 
-    envelopes = []
-    for index in range(1, 65):
+    for index in range(1, 4097):
         candidate = deepcopy(verification)
         candidate["actor"] = {
             "kind": "agent",
@@ -1759,8 +1762,7 @@ def _conflicting_envelopes(verification: dict) -> list[dict]:
             "profile": "implementer",
             "role": "implementation",
         }
-        envelopes.append(candidate)
-    return envelopes
+        yield candidate
 
 
 def test_completion_event_id_conflict_neutralizes_authority_in_any_order() -> None:
