@@ -12,18 +12,19 @@ import datetime
 import json
 import logging
 import os
+import queue
 import re
-import select
 import shutil
 import signal
 import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 from aether_agents.claude_context import (
     build_appended_context,
@@ -52,6 +53,8 @@ FORBIDDEN_FLAGS = frozenset(
 RECEIPT_SCHEMA = "aether.harness-receipt.v1"
 COMMENT_PREFIX = "aether-executor:"
 MAX_STREAM_TAIL_BYTES = 256 * 1024  # 256 KiB ceiling per plan §3.12
+STDERR_TAIL_BYTES = 16 * 1024
+OUTPUT_DRAIN_SECONDS = 2.0
 HEARTBEAT_INTERVAL_SECONDS = 30.0
 READINESS_TIMEOUT_SECONDS = 15.0
 
@@ -95,6 +98,113 @@ def _send_control_request(proc: subprocess.Popen[bytes], payload: dict[str, Any]
             proc.stdin.flush()
         except Exception as exc:
             logger.warning("Failed to send control_request: %s", exc)
+
+
+def _end_input(proc: subprocess.Popen[bytes]) -> None:
+    """End Claude's stream-json input after the attempt's single user turn.
+
+    With ``--input-format stream-json`` the CLI keeps reading user messages until its
+    input ends, so a finished turn alone never ends the process. Like the official
+    Agent SDK for a single-turn query, the first ``result`` closes the input and the
+    CLI exits on its own (plan §3.11).
+    """
+    if proc.stdin and not proc.stdin.closed:
+        try:
+            proc.stdin.close()
+        except OSError:
+            pass
+
+
+def _is_error_result(event: dict[str, Any]) -> bool:
+    """Return True for a terminal ``result`` the CLI reports as failed."""
+    if event.get("is_error") is True:
+        return True
+    subtype = event.get("subtype")
+    return isinstance(subtype, str) and subtype != "success"
+
+
+def _error_result_cause(api_error: str | None, prior_cause: str | None) -> str:
+    """Name an error result by its terminal API error category when one was reported."""
+    if api_error:
+        return f"error_result_{api_error}"
+    return prior_cause or "error_result"
+
+
+class _StdoutLines:
+    """Deliver Claude's stdout line by line without select/buffer races.
+
+    A reader thread owns the blocking ``readline``; the attempt loops wait on a queue,
+    so a line Python has already buffered is never hidden from them.
+    """
+
+    def __init__(self, stream: IO[bytes]) -> None:
+        self._queue: queue.Queue[bytes | None] = queue.Queue()
+        self._ended = False
+        threading.Thread(target=self._pump, args=(stream,), daemon=True).start()
+
+    def _pump(self, stream: IO[bytes]) -> None:
+        try:
+            for line in iter(stream.readline, b""):
+                self._queue.put(line)
+        except (OSError, ValueError):
+            pass
+        finally:
+            self._queue.put(None)
+
+    def get(self, timeout: float) -> bytes | None:
+        """Return the next line, ``b""`` if none arrived in time, ``None`` once ended."""
+        if self._ended:
+            return None
+        try:
+            line = self._queue.get(timeout=timeout)
+        except queue.Empty:
+            return b""
+        if line is None:
+            self._ended = True
+        return line
+
+
+class _StderrTail:
+    """Drain Claude's stderr so a full pipe can never block the CLI.
+
+    Only a bounded tail is kept, for the existing failure stream tail.
+    """
+
+    def __init__(self, stream: IO[bytes] | None) -> None:
+        self._buf = bytearray()
+        self._lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+        if stream is not None:
+            self._thread = threading.Thread(target=self._drain, args=(stream,), daemon=True)
+            self._thread.start()
+
+    def _drain(self, stream: IO[bytes]) -> None:
+        read = getattr(stream, "read1", stream.read)
+        try:
+            while True:
+                chunk = read(4096)
+                if not chunk:
+                    return
+                with self._lock:
+                    self._buf.extend(chunk)
+                    if len(self._buf) > STDERR_TAIL_BYTES:
+                        del self._buf[: len(self._buf) - STDERR_TAIL_BYTES]
+        except (OSError, ValueError):
+            return
+
+    def snapshot(self) -> bytes:
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+        with self._lock:
+            return bytes(self._buf)
+
+
+def _failure_tail(stream_tail: bytearray, stderr_tail: _StderrTail) -> bytes:
+    """Bounded failure tail: filtered stream events, then the drained stderr tail."""
+    err = stderr_tail.snapshot()
+    if not err:
+        return bytes(stream_tail)
+    return bytes(stream_tail) + b"\n--- claude stderr ---\n" + err
 
 
 def _now_iso_utc() -> str:
@@ -452,6 +562,7 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
         )
 
     child_pid = proc.pid
+    stderr_tail = _StderrTail(proc.stderr)
     sigterm_received = False
 
     def _forward_signal(signum: int, frame: Any) -> None:
@@ -483,9 +594,11 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
     }
     stream_tail = bytearray()
     structured_fallback_cause: str | None = None
+    last_api_error: str | None = None
     last_heartbeat = 0.0
 
     assert proc.stdout is not None
+    stdout_lines = _StdoutLines(proc.stdout)
     timeout_val = float(
         env.get(
             "AETHER_READINESS_TIMEOUT",
@@ -493,7 +606,6 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
         )
     )
     readiness_deadline = time.time() + timeout_val
-    line_bytes = b""
 
     # Emit initial initialize control request per plan §3.7
     init_request_id = f"init_{session_id}_{uuid.uuid4().hex[:8]}"
@@ -556,9 +668,8 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
                 _send_control_request(proc, mcp_payload)
                 last_mcp_poll = time.monotonic()
 
-            r, _, _ = select.select([proc.stdout], [], [], 0.1)
-            if proc.stdout in r:
-                line_bytes = proc.stdout.readline()
+            line_bytes = stdout_lines.get(0.1)
+            if line_bytes is not None:
                 if line_bytes:
                     line_str = line_bytes.decode("utf-8", errors="replace").strip()
                     is_control = False
@@ -657,11 +768,15 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
                                 # correlated initialize success above may do that.
                                 pass
                             elif ev_type == "system" and ev_subtype == "api_retry":
-                                error_cat = event.get("error_category") or event.get("category")
+                                error_cat = event.get("error")
                                 if error_cat in AUTH_BILLING_ERROR_CATEGORIES:
                                     structured_fallback_cause = f"api_retry_{error_cat}"
-                            elif ev_type == "result" and event.get("status") == "error":
-                                structured_fallback_cause = "error_result"
+                            elif ev_type == "assistant" and isinstance(event.get("error"), str):
+                                last_api_error = event["error"]
+                            elif ev_type == "result" and _is_error_result(event):
+                                structured_fallback_cause = _error_result_cause(
+                                    last_api_error, structured_fallback_cause
+                                )
                         except Exception:
                             pass
 
@@ -670,12 +785,6 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
                         stream_tail.extend(line_bytes)
                         if len(stream_tail) > MAX_STREAM_TAIL_BYTES:
                             del stream_tail[: len(stream_tail) - MAX_STREAM_TAIL_BYTES]
-                elif proc.poll() is not None:
-                    # EOF reached
-                    pass
-            elif proc.poll() is not None:
-                # Process exited and no more output
-                pass
 
             if (
                 readiness_summary["hook_active"]
@@ -685,8 +794,8 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
                 readiness_ok = True
                 break
 
-            if proc.poll() is not None and not (proc.stdout in r and line_bytes):
-                # Process exited without completing readiness
+            if line_bytes is None or (proc.poll() is not None and not line_bytes):
+                # Output ended or the process exited without completing readiness
                 break
 
         if not readiness_ok:
@@ -708,7 +817,7 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
                 readiness_summary=readiness_summary,
                 attempt_dir=attempt_dir,
                 self_pid=self_pid,
-                stream_tail=bytes(stream_tail),
+                stream_tail=_failure_tail(stream_tail, stderr_tail),
             )
 
         # Readiness confirmed: write the work prompt to Claude's stdin
@@ -731,57 +840,76 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
             except OSError:
                 pass
 
-        # Phase 2: Stream monitoring loop
-        while proc.poll() is None:
-            r, _, _ = select.select([proc.stdout], [], [], 0.5)
-            if proc.stdout in r:
-                line_bytes = proc.stdout.readline()
-                if not line_bytes:
-                    break
+        # Phase 2: Stream monitoring loop. Read until Claude's output ends; once the
+        # process has exited, lines still in flight get a short bounded drain.
+        exited_at: float | None = None
+        while True:
+            line_bytes = stdout_lines.get(0.5)
+            if line_bytes is None:
+                break
+            if not line_bytes:
+                if proc.poll() is not None:
+                    if exited_at is None:
+                        exited_at = time.monotonic()
+                    elif time.monotonic() - exited_at > OUTPUT_DRAIN_SECONDS:
+                        break
+                continue
 
-                line_str = line_bytes.decode("utf-8", errors="replace").strip()
-                is_control = False
-                if line_str:
-                    try:
-                        event = json.loads(line_str)
-                        ev_type = event.get("type")
-                        ev_subtype = event.get("subtype")
-                        if ev_type in ("control_request", "control_response"):
-                            is_control = True
-                        # Check structured api_retry errors (auth/quota)
-                        if ev_type == "system" and ev_subtype == "api_retry":
-                            error_cat = event.get("error_category") or event.get("category")
-                            if error_cat in AUTH_BILLING_ERROR_CATEGORIES:
-                                structured_fallback_cause = f"api_retry_{error_cat}"
-                        elif ev_type == "result" and event.get("status") == "error":
-                            err_msg = str(event.get("error") or "")
-                            if any(cat in err_msg for cat in AUTH_BILLING_ERROR_CATEGORIES):
-                                structured_fallback_cause = "quota_or_billing_error"
-                            else:
-                                structured_fallback_cause = "error_result"
-                    except Exception:
-                        pass
+            line_str = line_bytes.decode("utf-8", errors="replace").strip()
+            is_control = False
+            if line_str:
+                try:
+                    event = json.loads(line_str)
+                    ev_type = event.get("type")
+                    ev_subtype = event.get("subtype")
+                    if ev_type in ("control_request", "control_response"):
+                        is_control = True
+                    # Structured API failure signals (plan §3.11): a retryable
+                    # failure's category is the documented api_retry ``error``
+                    # field and a terminal one is the assistant message ``error``.
+                    if ev_type == "system" and ev_subtype == "api_retry":
+                        error_cat = event.get("error")
+                        if error_cat in AUTH_BILLING_ERROR_CATEGORIES:
+                            structured_fallback_cause = f"api_retry_{error_cat}"
+                    elif ev_type == "assistant" and isinstance(event.get("error"), str):
+                        last_api_error = event["error"]
+                    elif ev_type == "result":
+                        if _is_error_result(event):
+                            structured_fallback_cause = _error_result_cause(
+                                last_api_error, structured_fallback_cause
+                            )
+                        else:
+                            # A successful turn supersedes retries it recovered from.
+                            structured_fallback_cause = None
+                        # One attempt is one user turn: end the input so the CLI
+                        # exits instead of waiting for another message.
+                        _end_input(proc)
+                except Exception:
+                    pass
 
-                # Filter control replies from stream tail per commit 7a6a0b6a
-                if not is_control:
-                    stream_tail.extend(line_bytes)
-                    if len(stream_tail) > MAX_STREAM_TAIL_BYTES:
-                        del stream_tail[: len(stream_tail) - MAX_STREAM_TAIL_BYTES]
+            # Filter control replies from stream tail per commit 7a6a0b6a
+            if not is_control:
+                stream_tail.extend(line_bytes)
+                if len(stream_tail) > MAX_STREAM_TAIL_BYTES:
+                    del stream_tail[: len(stream_tail) - MAX_STREAM_TAIL_BYTES]
 
-                # Heartbeat on real stream events, rate-limited
-                now = time.monotonic()
-                if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
-                    _trigger_heartbeat()
-                    last_heartbeat = now
+            # Heartbeat on real stream events, rate-limited
+            now = time.monotonic()
+            if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+                _trigger_heartbeat()
+                last_heartbeat = now
 
-        proc.wait()
+        try:
+            proc.wait(timeout=OUTPUT_DRAIN_SECONDS)
+        except subprocess.TimeoutExpired:
+            pass  # the process group is terminated below
     finally:
         signal.signal(signal.SIGTERM, old_sigterm)
         signal.signal(signal.SIGINT, old_sigint)
         _cleanup_process_group(proc, child_pid)
 
     end_utc = _now_iso_utc()
-    exit_code = proc.returncode
+    exit_code = proc.wait()
 
     # Inspect board state read-only for classification
     board_state = check_task_state_read_only(db_path, task_id, run_id)
@@ -891,7 +1019,7 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
             readiness_summary=readiness_summary,
             attempt_dir=attempt_dir,
             self_pid=self_pid,
-            stream_tail=bytes(stream_tail),
+            stream_tail=_failure_tail(stream_tail, stderr_tail),
         )
 
     if exit_code != 0:
@@ -911,7 +1039,7 @@ def run_attempt(argv: list[str], env: dict[str, str]) -> int:
             readiness_summary=readiness_summary,
             attempt_dir=attempt_dir,
             self_pid=self_pid,
-            stream_tail=bytes(stream_tail),
+            stream_tail=_failure_tail(stream_tail, stderr_tail),
         )
 
     # 5. Clean exit without transition -> exit 76 per plan §3.11 table

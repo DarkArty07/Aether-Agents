@@ -345,9 +345,10 @@ sys.exit(0)
 def test_adapter_scenario_api_retry_auth_falls_back(
     test_board: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
+    # Documented system/api_retry shape: the category is the ``error`` field.
     post = """
 sys.stdin.readline()
-print(json.dumps({'type': 'system', 'subtype': 'api_retry', 'error_category': 'authentication_failed'}), flush=True)
+print(json.dumps({'type': 'system', 'subtype': 'api_retry', 'attempt': 1, 'max_retries': 10, 'retry_delay_ms': 500, 'error_status': 401, 'error': 'authentication_failed'}), flush=True)
 sys.exit(1)
 """
     script = _make_handshake_body(post_handshake=post)
@@ -372,7 +373,194 @@ sys.exit(1)
     receipt_dir = state_root() / "external_harness" / "default" / task_id / "run_1"
     receipt = json.loads((receipt_dir / "receipt.json").read_text(encoding="utf-8"))
     assert receipt["fallback"] is True
-    assert "api_retry" in str(receipt["cause"]) or "authentication_failed" in str(receipt["cause"])
+    assert receipt["cause"] == "api_retry_authentication_failed"
+
+
+# Like the real CLI in --input-format stream-json mode, these stubs keep reading
+# input after their result and exit only once the adapter ends it. A watchdog
+# exits 3 instead of hanging when the input is never ended.
+_WAIT_FOR_INPUT_END = """
+import select as _select, time as _time
+_deadline = _time.time() + 10.0
+while True:
+    _remaining = _deadline - _time.time()
+    if _remaining <= 0:
+        sys.exit(3)
+    _ready, _, _ = _select.select([sys.stdin], [], [], _remaining)
+    if _ready and not sys.stdin.readline():
+        break
+"""
+
+
+def _result_line(*, is_error: bool, subtype: str = "success") -> str:
+    event = {
+        "type": "result",
+        "subtype": subtype,
+        "is_error": is_error,
+        "num_turns": 1,
+        "result": "turn finished",
+        "session_id": "stub-session",
+    }
+    return f"print(json.dumps({event!r}), flush=True)"
+
+
+def test_adapter_ends_input_after_success_result_without_transition_exits_76(
+    test_board: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    execv_calls: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(
+        os, "execv", lambda target, args: execv_calls.append((target, args)) or sys.exit(99)
+    )
+
+    post = f"""
+sys.stdin.readline()
+{_result_line(is_error=False)}
+{_WAIT_FOR_INPUT_END}
+sys.exit(0)
+"""
+    stub = _create_stub_claude(tmp_path, _make_handshake_body(post_handshake=post))
+    monkeypatch.setenv("AETHER_CLAUDE_BIN", str(stub))
+
+    code = run_attempt(["aether-kanban-worker", "chat", "-q", "prompt"], test_board["env"])
+    assert execv_calls == []
+    assert code == 76
+
+    task_id = test_board["task_id"]
+    receipt_dir = state_root() / "external_harness" / "default" / task_id / "run_1"
+    receipt = json.loads((receipt_dir / "receipt.json").read_text(encoding="utf-8"))
+    assert receipt["outcome"] == "clean_no_transition"
+
+
+def test_adapter_transition_then_success_result_exits_0(
+    test_board: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    task_id = test_board["task_id"]
+    db_file = str(test_board["db"])
+    execv_calls: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(
+        os, "execv", lambda target, args: execv_calls.append((target, args)) or sys.exit(99)
+    )
+
+    post = f"""
+sys.stdin.readline()
+import sqlite3
+conn = sqlite3.connect({db_file!r})
+conn.execute("UPDATE tasks SET status = 'review' WHERE id = '{task_id}'")
+conn.execute("INSERT INTO task_events (task_id, run_id, kind, created_at) VALUES ('{task_id}', 1, 'review_requested', 100)")
+conn.commit()
+conn.close()
+{_result_line(is_error=False)}
+{_WAIT_FOR_INPUT_END}
+sys.exit(0)
+"""
+    stub = _create_stub_claude(tmp_path, _make_handshake_body(post_handshake=post))
+    monkeypatch.setenv("AETHER_CLAUDE_BIN", str(stub))
+
+    code = run_attempt(["aether-kanban-worker", "chat", "-q", "prompt"], test_board["env"])
+    assert execv_calls == []
+    assert code == 0
+
+    receipt_dir = state_root() / "external_harness" / "default" / task_id / "run_1"
+    receipt = json.loads((receipt_dir / "receipt.json").read_text(encoding="utf-8"))
+    assert receipt["outcome"] == "review_requested"
+    assert receipt["fallback"] is False
+
+
+def test_adapter_error_result_with_api_error_falls_back_once(
+    test_board: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # Shape of the 404 the isolated real run observed: a terminal assistant API error
+    # followed by an error result, after which the CLI waits for more input.
+    assistant = {
+        "type": "assistant",
+        "message": {"role": "assistant", "content": [{"type": "text", "text": "API error"}]},
+        "error": "model_not_found",
+        "session_id": "stub-session",
+    }
+    post = f"""
+sys.stdin.readline()
+print(json.dumps({assistant!r}), flush=True)
+{_result_line(is_error=True)}
+{_WAIT_FOR_INPUT_END}
+sys.exit(1)
+"""
+    stub = _create_stub_claude(tmp_path, _make_handshake_body(post_handshake=post))
+    monkeypatch.setenv("AETHER_CLAUDE_BIN", str(stub))
+
+    execv_calls: list[tuple[str, list[str]]] = []
+
+    def mock_execv(target: str, args: list[str]) -> None:
+        execv_calls.append((target, args))
+        raise SystemExit(99)
+
+    monkeypatch.setattr(os, "execv", mock_execv)
+
+    with pytest.raises(SystemExit) as exc:
+        run_attempt(["aether-kanban-worker", "chat", "-q", "prompt"], test_board["env"])
+    assert exc.value.code == 99
+    assert len(execv_calls) == 1
+
+    task_id = test_board["task_id"]
+    receipt_dir = state_root() / "external_harness" / "default" / task_id / "run_1"
+    receipt = json.loads((receipt_dir / "receipt.json").read_text(encoding="utf-8"))
+    assert receipt["fallback"] is True
+    assert receipt["cause"] == "error_result_model_not_found"
+
+
+def test_adapter_success_result_supersedes_recovered_retry(
+    test_board: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    execv_calls: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(
+        os, "execv", lambda target, args: execv_calls.append((target, args)) or sys.exit(99)
+    )
+
+    retry = {
+        "type": "system",
+        "subtype": "api_retry",
+        "attempt": 1,
+        "max_retries": 10,
+        "retry_delay_ms": 10,
+        "error_status": 429,
+        "error": "rate_limit",
+    }
+    post = f"""
+sys.stdin.readline()
+print(json.dumps({retry!r}), flush=True)
+{_result_line(is_error=False)}
+{_WAIT_FOR_INPUT_END}
+sys.exit(0)
+"""
+    stub = _create_stub_claude(tmp_path, _make_handshake_body(post_handshake=post))
+    monkeypatch.setenv("AETHER_CLAUDE_BIN", str(stub))
+
+    code = run_attempt(["aether-kanban-worker", "chat", "-q", "prompt"], test_board["env"])
+    assert execv_calls == []
+    assert code == 76
+
+
+def test_adapter_drains_claude_stderr(
+    test_board: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    execv_calls: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(
+        os, "execv", lambda target, args: execv_calls.append((target, args)) or sys.exit(99)
+    )
+
+    # More than a pipe buffer of stderr before the handshake blocks an undrained CLI.
+    noisy = "sys.stderr.write('x' * (256 * 1024)); sys.stderr.flush()\n"
+    post = f"""
+sys.stdin.readline()
+{_result_line(is_error=False)}
+{_WAIT_FOR_INPUT_END}
+sys.exit(0)
+"""
+    stub = _create_stub_claude(tmp_path, noisy + _make_handshake_body(post_handshake=post))
+    monkeypatch.setenv("AETHER_CLAUDE_BIN", str(stub))
+
+    code = run_attempt(["aether-kanban-worker", "chat", "-q", "prompt"], test_board["env"])
+    assert execv_calls == []
+    assert code == 76
 
 
 def test_adapter_scenario_crash_falls_back(
