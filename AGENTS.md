@@ -124,13 +124,14 @@ This principle is owned canonically by `specs/r0-design-governance/spec.md` and 
 
 **Local release (RC18, #564, owner-directed 2026-10-03):** the owner directed finishing
 #563, integrating it into `main`, preparing the next candidate and updating the local
-installation. One local RC18 candidate on RC17's exact fork pin
-`007cfb77676b6b024d2c0986f4585e6cfdcf18d6`, an immutable local annotated tag and one
-managed local cutover are authorized. It reuses #563's full gate and isolated real run
-plus the normal required PR checks. No tag push, public release, Hermes change or agent
-campaign is authorized. A recorded, preview-first adoption path resolves the frozen RC17
-manager's forward-adoption limit for the three-plugin artifact; see
-`specs/rc18-local-release/spec.md`.
+installation. One local RC18 candidate, an immutable local annotated tag and one managed
+local cutover are authorized. The exact fork pin is
+`66e87f3487d75cda3681146818006b7c796a71a9`: RC17's selection plus HLP-554, the reviewed
+source of the Codex message-id guard that the installed RC17 carried as a live edit
+(#554, #560). It reuses #563's full gate and isolated real run plus the normal required
+PR checks. No tag push, public release or agent campaign is authorized. A recorded,
+preview-first adoption path resolves the frozen RC17 manager's forward-adoption limit
+for the three-plugin artifact; see `specs/rc18-local-release/spec.md`.
 
 **Historical local release (RC17, #542, prepared 2026-09-27):** source integration and
 one managed local cutover are authorized with bounded verification, reusing reviewed

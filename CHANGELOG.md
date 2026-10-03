@@ -6,8 +6,12 @@ Package `1.0.0rc18` / display `1.0.0-rc.18` / local annotated tag `v1.0.0-rc.18`
 `release_impact=major` because the Lab and Telegram Monitor retirement removes a public
 command and plugin; `release_action=prepare`, `release_channel=prerelease`. This
 continues the pre-1.0 candidate line, not a stable major release. No tag push or public
-release. The maintained Hermes fork stays at RC17's commit
-`007cfb77676b6b024d2c0986f4585e6cfdcf18d6`.
+release. Hermes is pinned to reviewed `aether-main` merge
+`66e87f3487d75cda3681146818006b7c796a71a9`: RC17's selection plus HLP-554.
+
+- Codex Responses replay keeps an assistant message id only when it starts with `msg`
+  (HLP-554, #554). This is the reviewed source of the guard that the installed RC17
+  carried as a live edit (#560); foreign ids no longer trigger repeated HTTP 400.
 
 - Reviewed source retirement merged via PR #547; the bounded documentation-site map
   correction merged via PR #548. The implementation is accepted in `main` with its

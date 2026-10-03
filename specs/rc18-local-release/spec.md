@@ -14,18 +14,26 @@ permitido»). This record carries that release:
 - one managed local cutover.
 
 Following the RC17 precedent, it pushes no tag and creates no GitHub Release or package
-publication. It changes no credentials, Hermes fork or private configuration, and runs
-no agent-behavior campaign or live rollback rehearsal. Normal required PR checks are not
+publication. Its only Hermes change is the reviewed maintained-fork guard described below
+(HLP-554). It changes no credentials or private configuration, and runs no
+agent-behavior campaign or live rollback rehearsal. Normal required PR checks are not
 bypassed. Automated Pages consequences of a green merge use the existing workflow.
 
 ## Candidate identity and included work
 
 - Package `1.0.0rc18`, display `1.0.0-rc.18`, local tag `v1.0.0-rc.18`, cut from the
   clean merged `main` revision that carries this record.
-- Maintained Hermes fork `DarkArty07/aether-hermes` at RC17's exact commit
-  `007cfb77676b6b024d2c0986f4585e6cfdcf18d6` (tree
-  `b26638974fc134da866b821ab3c4b34ab430aeb3`). Hermes does not change, and the HLP
-  selection with its attributed evidence is reused unchanged.
+- Maintained Hermes fork `DarkArty07/aether-hermes` at merge
+  `66e87f3487d75cda3681146818006b7c796a71a9` (tree
+  `097053ce9ca6b91021a2ba15107fdec9783df11e`). That is RC17's commit
+  `007cfb77676b6b024d2c0986f4585e6cfdcf18d6` plus fork PRs #24 and #25 (HLP-554).
+- HLP-554 keeps a replayed Codex Responses assistant message id only when it starts with
+  `msg`. The installed RC17 runtime carried this guard as a live edit: it fixes #554, and
+  it is why `aether doctor` reports the active release as incoherent (#560). Shipping
+  RC18 at RC17's pin would silently drop that fix from the installation, so the reviewed
+  fork source replaces the live edit through the managed path. Every other required HLP
+  and its attributed evidence is reused unchanged
+  ([HLP-554 evidence](../issue-554-codex-message-id/evidence/HLP-554.md)).
 - Source integrated since RC17:
   - the detached-activation project-binding fix (#544);
   - the retirement of the formal Lab, Telegram Monitor and periodic reports

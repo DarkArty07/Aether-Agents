@@ -76,6 +76,7 @@ EXPECTED_ACTIVE_IDS = (
     "HLP-473",
     "HLP-474",
     "HLP-475",
+    "HLP-554",
 )
 HLP226_PATCH_REFERENCES = (
     "patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch",
@@ -111,6 +112,7 @@ PATCH_DIGESTS = {
     "HLP-474": ("399409050eb82c5c9a16aac33231670b84bf50be63b579ed2229f03757ccff67",),
     "HLP-475": ("63cdbe85e7a29d05b8132629df5f11b3187cf38eb8a1d09c150c76cb2fcd1ff8",),
     "HLP-460": ("d003224941f40835cddd9625d95a34b0fec1e8a7c189f3a023234ac2c5e5ac03",),
+    "HLP-554": ("04a708d14f69b15778e5f5fceb326ea19d7353a2b359e5218831322c93ba9e15",),
 }
 
 
@@ -317,7 +319,7 @@ def test_repository_fragments_cover_active_ledger_and_bind_patch_digests(
         # retain their unavailable artifact status. Neither status grants runtime adoption.
         expected_status = (
             "passed"
-            if identifier in {"HLP-435", "HLP-473", "HLP-474", "HLP-475", "HLP-460"}
+            if identifier in {"HLP-435", "HLP-473", "HLP-474", "HLP-475", "HLP-460", "HLP-554"}
             else "unavailable"
         )
         assert records[identifier]["artifact_verification"]["status"] == expected_status
@@ -899,8 +901,10 @@ def test_repository_hlp428_and_hlp433_are_required_for_rc17() -> None:
     assert hlp433["retirement_gate"]["status"] == "not_executed"
 
 
-@pytest.mark.parametrize("identifier", ["HLP-435", "HLP-473", "HLP-474", "HLP-475", "HLP-460"])
-def test_rc17_selects_integrated_fixes_without_retiring_them(identifier: str) -> None:
+@pytest.mark.parametrize(
+    "identifier", ["HLP-435", "HLP-473", "HLP-474", "HLP-475", "HLP-460", "HLP-554"]
+)
+def test_rc18_selects_integrated_fixes_without_retiring_them(identifier: str) -> None:
     record = json.loads((ENTRIES_PATH / f"{identifier}.json").read_text(encoding="utf-8"))
     aggregate = json.loads(
         (ENTRIES_PATH.parent.parent / "hermes-patch-reconciliation.v1.json").read_text(
@@ -911,4 +915,4 @@ def test_rc17_selects_integrated_fixes_without_retiring_them(identifier: str) ->
     assert record["local_status"].startswith("MAINTAINED_FORK_ONLY / ")
     assert record["retirement_gate"]["status"] == "not_executed"
     assert record["artifact_verification"]["status"] == "passed"
-    assert aggregate["selected_source"]["revision"] == "007cfb77676b6b024d2c0986f4585e6cfdcf18d6"
+    assert aggregate["selected_source"]["revision"] == "66e87f3487d75cda3681146818006b7c796a71a9"

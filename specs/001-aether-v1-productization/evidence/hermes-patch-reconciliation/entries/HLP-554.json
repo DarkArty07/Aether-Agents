@@ -1,0 +1,44 @@
+{
+  "id": "HLP-554",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-554--codex-message-id-prefix-maintained-fork-2026-10-03",
+  "components": ["HLP-554", "agent/codex_responses_adapter.py", "tests/agent/test_codex_responses_adapter.py"],
+  "required_behavior": "Replayed assistant message ids reach Codex Responses only when they start with msg and stay within 64 characters; foreign ids such as other providers' UUIDs are dropped, while content, phase, valid msg ids, tool-call pairing and GitHub Responses id removal are unchanged.",
+  "local_status": "MAINTAINED_FORK_ONLY / UPSTREAM_PARTIAL",
+  "candidate_requirement": "required",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {"kind": "issue", "url": "https://github.com/DarkArty07/Aether-Agents/issues/554"},
+      {"kind": "pull_request", "url": "https://github.com/DarkArty07/aether-hermes/pull/24"},
+      {"kind": "pull_request", "url": "https://github.com/DarkArty07/aether-hermes/pull/25"}
+    ],
+    "disposition": "upstream_partial",
+    "evidence": [
+      {"kind": "source", "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/agent/codex_responses_adapter.py#L691-L699", "result": "The common inspected reference keeps a replayed assistant message id by nonempty string and length only."},
+      {"kind": "source", "reference": "https://github.com/NousResearch/hermes-agent/blob/eb7e8620324b32424c06218f6a28094df2e921f8/agent/codex_responses_adapter.py#L388-L404", "result": "Upstream main and released v2026.9.24 (f97608f178d1ffeca59860195ab7da295f7c8e5f) drop non-msg ids only for the ChatGPT Codex backend issuer; the fork guard covers every non-GitHub Responses issuer."}
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Retire after adoption of an exact upstream release whose message-id guard covers the Responses issuers Aether uses, with the six HLP-554 regression cases passing without the fork guard. Source availability alone is not adoption.",
+    "status": "not_executed",
+    "evidence": [
+      {"kind": "test", "reference": "specs/issue-554-codex-message-id/evidence/HLP-554.md#3-verification", "result": "Four foreign-id cases RED at base 007cfb77 and GREEN at 971698ca; Codex-related fork suites 227 passed with the fix and 221 at the base."}
+    ]
+  },
+  "artifact_verification": {
+    "status": "passed",
+    "blocker": null,
+    "artifacts": [
+      {"kind": "patch", "reference": "patches/hermes/HLP-554-codex-message-id-prefix.patch", "ledger_sha256": "04a708d14f69b15778e5f5fceb326ea19d7353a2b359e5218831322c93ba9e15", "computed_sha256": "04a708d14f69b15778e5f5fceb326ea19d7353a2b359e5218831322c93ba9e15", "checksum_status": "passed", "parse_status": "passed", "result": "passed"},
+      {"kind": "reconstruction_input", "reference": "maintained fork base 007cfb77676b6b024d2c0986f4585e6cfdcf18d6", "result": "passed"},
+      {"kind": "reconstruction", "reference": "Exact-base apply reconstructs 097053ce9ca6b91021a2ba15107fdec9783df11e, the tree of selected merge 66e87f3487d75cda3681146818006b7c796a71a9; reverse restores b26638974fc134da866b821ab3c4b34ab430aeb3.", "result": "passed"}
+    ]
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "Fork Actions are disabled (NOT RUN); verification is the recorded focused and Codex-related suite runs, not green CI.",
+    "Upstream's narrower issuer-scoped guard is not adopted; retirement needs an exact upstream release covering the issuers Aether uses."
+  ],
+  "summary": "HLP-554 replays only msg-prefixed assistant message ids to Codex Responses. Fork PR #24 merged as 96cdb97ede6e1726ad9651eb6d91553356563dcd and the AETHER_FORK.md record (PR #25) as 66e87f3487d75cda3681146818006b7c796a71a9, the RC18 selected pin. It is the reviewed source of the guard previously applied as a live edit to the installed RC17 runtime; only the managed cutover establishes adoption."
+}

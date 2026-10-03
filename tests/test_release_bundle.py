@@ -24,7 +24,7 @@ TOOL_PATH = ROOT / "scripts" / "release_bundle.py"
 WORKFLOW_PATH = ROOT / ".github" / "workflows" / "release.yml"
 AETHER_REMOTE = "https://github.com/DarkArty07/Aether-Agents.git"
 FORK_REMOTE = "https://github.com/DarkArty07/aether-hermes.git"
-FORK_COMMIT = "007cfb77676b6b024d2c0986f4585e6cfdcf18d6"
+FORK_COMMIT = "66e87f3487d75cda3681146818006b7c796a71a9"
 _ABSENT_COMMIT = "0" * 40
 
 

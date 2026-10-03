@@ -8,7 +8,8 @@ The current source revision defines the local candidate `1.0.0rc18` (display
 `1.0.0-rc.18`, tag `v1.0.0-rc.18`). It carries the
 [Lab/Monitor source retirement](../specs/lab-monitor-retirement/spec.md) and the opt-in
 [Claude Code Implementer harness](../specs/external-implementer-harness/spec.md) on
-RC17's maintained-fork pin. Use `aether doctor --json` and exact cutover evidence to
+maintained-fork commit `66e87f3487d75cda3681146818006b7c796a71a9` (RC17's selection
+plus HLP-554). Use `aether doctor --json` and exact cutover evidence to
 identify the installed runtime; source and local tags do not qualify agent behavior.
 The [RC18 scope](../specs/rc18-local-release/spec.md) records its bounded verification
 and limits, and the [RC17 scope](../specs/rc17-local-release/spec.md) stays history.

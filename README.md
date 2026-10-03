@@ -6,7 +6,9 @@ Aether Agents is a multi-agent software-engineering product and method. It adapt
 **local-only candidate**; its local annotated tag identity is `v1.0.0-rc.18`. It carries
 the reviewed [Lab/Monitor retirement](specs/lab-monitor-retirement/spec.md), the opt-in
 [Claude Code Implementer harness](specs/external-implementer-harness/spec.md) and the
-source fixes integrated since RC17, on RC17's maintained-fork Hermes commit. Neither
+source fixes integrated since RC17. It binds maintained-fork Hermes commit
+`66e87f3487d75cda3681146818006b7c796a71a9`: RC17's selection plus the HLP-554 Codex
+message-id guard. Neither
 this source nor a local tag proves what is installed or that agent behavior improved:
 check the selected installation with `aether doctor --json` and the release lock, not
 the checkout's version string. See the [RC18 scope](specs/rc18-local-release/spec.md).

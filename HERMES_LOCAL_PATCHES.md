@@ -2,6 +2,13 @@
 
 **Status:** canonical operational record of the functional differences that Aether maintains over its loaded Hermes.
 
+**RC18 candidate selection (#564):** reviewed maintained-fork merge
+`66e87f3487d75cda3681146818006b7c796a71a9` adds HLP-554 (fork PRs #24 and #25) to the
+RC17 selection and makes it required. HLP-554 is the reviewed source of the Codex
+message-id guard that the installed RC17 runtime carried as a live edit (#554, #560).
+Every other required entry is unchanged from RC17. Only the managed cutover receipt
+establishes live adoption.
+
 **RC17 candidate selection (#542):** reviewed maintained-fork commit
 `007cfb77676b6b024d2c0986f4585e6cfdcf18d6` includes HLP-433, HLP-435, HLP-460,
 HLP-473, HLP-474 and HLP-475, now required alongside the prior required set. Earlier
@@ -70,6 +77,7 @@ This file prevents a Hermes update from silently removing local repairs. An Aeth
 | `HLP-474` | `#474` | retain parent review auth only for the same provider and exact endpoint | routed fallback absent at inspected upstream | `MAINTAINED_FORK_ONLY / UPSTREAM_MISSING` |
 | `HLP-475` | `#475` | dispatch fresh reviewer on affinity-bound Supervisor card under verified Aether review opt-in | no equivalent in `NousResearch/hermes-agent` at contract inspection | `MAINTAINED_FORK_ONLY / UPSTREAM_MISSING` |
 | `HLP-460` | `#460` | prospective parentage that would give an opted-in Aether flow a second root is refused inside the native write transaction, with no side effect escaping | no ancestor-root helper, collaboration-root query or Aether opt-in corroboration in `NousResearch/hermes-agent` at the inspected revision, the latest released artifact or refreshed upstream main | `MAINTAINED_FORK_ONLY / UPSTREAM_MISSING` |
+| `HLP-554` | `#554` | replay an assistant message id to Codex Responses only when it starts with `msg`; drop foreign ids such as other providers' UUIDs | released `v2026.9.24` and upstream main drop non-`msg` ids only for the Codex backend issuer | `MAINTAINED_FORK_ONLY / UPSTREAM_PARTIAL` |
 
 ## HLP-473 — Telegram lazy TypeHandler (maintained fork, 2026-09-26)
 
@@ -106,6 +114,15 @@ This file prevents a Hermes update from silently removing local repairs. An Aeth
 - **Evidence:** `git apply --index --check` exit 0 on a disposable clean checkout of base `58750d6cf8182c0ff5093719b9e7cc5026621fbf`; applying the patch and running `git write-tree` yields `b26638974fc134da866b821ab3c4b34ab430aeb3`, equal to the reviewed candidate tree, and reversing with `git apply -R --index` restores `25912b5195ae21157fff70e644d0776b9197c48d` exactly. Parent unit HF-460 was independently reviewed with causal RED/GREEN; this unit re-ran the same hermetic focused command with `HERMES_TEST_FILE_RETRIES=0` at base (135 passed, 1 Windows-only skip) and candidate (149 passed, 1 Windows-only skip). Full record in `specs/remaining-source-bugs/evidence/HLP-460.md`.
 - **Disposition:** source-only fork PR #23 merged without check bypass at `007cfb77676b6b024d2c0986f4585e6cfdcf18d6` (tree `b26638974fc134da866b821ab3c4b34ab430aeb3`, identical to the reviewed candidate). Fork Actions recorded no runs/checks for this PR; `aether-main` has no required branch protection, so this is **not** a claim of green CI. The selected installed/release pin and reconciliation selected source stay `58750d6cf8182c0ff5093719b9e7cc5026621fbf`, with HLP-460 deferred at that pin; no runtime adoption, GitHub Pages dispatch, tag, RC17 or version change is claimed. Inspected upstream `NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`, released `v2026.9.24` (annotated tag object `e3dd27ee2d8b011737a4eea8e3eb3d711ab78690`, commit `f97608f178d1ffeca59860195ab7da295f7c8e5f`) and upstream main at review `f039f028f2bd5c6e2131b4ffaa4b200c81db68a3` all lack these Aether-specific root helpers and opt-in corroboration, so `UPSTREAM_MISSING` stands.
 - **Rollback/retirement:** reverse the patch or revert the implementation commit; retire only after an adopted upstream release refuses second-root prospective parentage inside its native write transaction while preserving generic multi-root DAGs, valid rootless promotion and review fail-closed behavior.
+
+## HLP-554 — Codex message-id prefix (maintained fork, 2026-10-03)
+
+- **Source:** fork PR #24, implementation `971698cafbf477f65f6d0792dc708b759f24a500`, merge `96cdb97ede6e1726ad9651eb6d91553356563dcd`; `AETHER_FORK.md` record PR #25, merge `66e87f3487d75cda3681146818006b7c796a71a9` (tree `097053ce9ca6b91021a2ba15107fdec9783df11e`); base `007cfb77676b6b024d2c0986f4585e6cfdcf18d6`.
+- **Behavior:** `_chat_messages_to_responses_input` and `_preflight_codex_input_items` keep a replayed assistant message id only when it starts with `msg` and stays within 64 characters. Foreign ids such as other providers' UUIDs, which Codex rejects with a non-retryable HTTP 400, are dropped. Content, phase, valid `msg` ids and tool-call pairing are unchanged, and GitHub Responses still drops every id. The guard is byte-identical to the live edit the installed RC17 runtime carried (#554, #560).
+- **Artifact:** `patches/hermes/HLP-554-codex-message-id-prefix.patch`, 6,403 bytes, 133 lines, SHA-256 `04a708d14f69b15778e5f5fceb326ea19d7353a2b359e5218831322c93ba9e15`; touches `AETHER_FORK.md`, `agent/codex_responses_adapter.py`, `tests/agent/test_codex_responses_adapter.py`.
+- **Evidence:** six parametrized regressions; the four foreign-id cases fail at base and pass after the fix. The Codex-related fork suites gave 227 passed with the fix and 221 at base. `git apply --index --check` exits 0 on a clean base checkout; applying yields the selected tree `097053ce9ca6b91021a2ba15107fdec9783df11e`, and reversing restores `b26638974fc134da866b821ab3c4b34ab430aeb3`. Full record in `specs/issue-554-codex-message-id/evidence/HLP-554.md`.
+- **Disposition:** selected and required for RC18 (#564). Fork Actions are disabled, so this is not a claim of green CI. The inspected upstream `4f22543509d1b91dc45bcb369447126c5eb14fb7` lacks the guard. Released `v2026.9.24` (commit `f97608f178d1ffeca59860195ab7da295f7c8e5f`) and main `eb7e8620324b32424c06218f6a28094df2e921f8` scope it to the Codex backend issuer only, so `UPSTREAM_PARTIAL`.
+- **Rollback/retirement:** reverse the patch or revert the implementation commit; retire only after an adopted upstream release whose guard covers the Responses issuers Aether uses passes the six regression cases without the fork guard.
 
 ## HLP-188 — sticky `initial_status=blocked`
 
