@@ -1,22 +1,9 @@
 # Aether Agents — Website
 
-Status: implemented local review candidate on `feat/website-onepage`.
-Not merged, committed, pushed, published or deployed. The owner reviews before integration.
-
-The first polish pass removes visible sketch numbering, refines supporting Spanish,
-adds the @DarkArty07 profile link and replaces the flattened knowledge graph with a
-locally bundled GSAP/SVG interactive illustration. See [polish plan](POLISH_PLAN.md)
-and [current Spanish review copy](COPY_REFINEMENT.md). Earlier literal wording is
-retained as design history, not silently overwritten.
-
-The final artwork pass uses the newly supplied Morfeo image for the opening and the
-abstract ether image for the closing authorship section. Both have restrained GSAP
-ambient lighting, sparse particles and pointer parallax, controlled by the same pause
-and reduced-motion settings. See [final polish plan](FINAL_POLISH_PLAN.md).
-
-Post-restart verification is complete, including repeated real browser history/cache
-restoration of graph and ambient-motion controls. Evidence and browser limits are
-recorded in [VERIFICATION.md](VERIFICATION.md); the site still awaits owner acceptance.
+Status: published. The `Website Pages` workflow builds, tests and deploys this site to
+<https://darkarty07.github.io/Aether-Agents/> on every merge to `main` that touches
+`website/` or `docs/`. The site presents the stable Aether 1.0.0 release; earlier review
+and polish history is kept in the plans linked below.
 
 An animated one-page site in Spanish and English with the approved Greek/modern,
 editorial tech-noir identity and Catppuccin Mocha palette. A separate documentation
@@ -46,7 +33,7 @@ After shutting down/restarting the machine, run `npm run preview` again; preview
 local development process, not an autostart service. If it reports a running server,
 open the existing address rather than starting a duplicate. Stop only the website
 preview you started or select an explicit alternate port; never stop an unrelated
-process. There is no public deployment workflow.
+process. Public deployment happens only through the `Website Pages` workflow.
 
 ## What is implemented
 
@@ -83,7 +70,7 @@ Spanish supporting copy was refined on the owner's explicit first-review request
 `COPY_REFINEMENT.md` owns this candidate. The headline “Del éter al software.” and the
 hero description remain unchanged. Section numbers exist only as internal design IDs.
 
-The documentation index introduces 16 canonical documents in Spanish. The original
+The documentation index introduces every canonical document in Spanish. The original
 technical text stays in English, visibly labeled, and is rendered at `/docs/<slug>/`.
 Search runs locally against a generated static index. Relative document links and
 heading anchors resolve locally; other repository links point at the inspected Git
@@ -104,6 +91,9 @@ reports widths at 360, 390, 768, 1024, 1440 and 1920 pixels. Browser reports/scr
 remain ignored under `test-results/` and `playwright-report/`.
 
 - Copy and translations: `src/data/content.ts`.
+- README banner and GitHub social preview: `npm run readme-assets` renders
+  `../.github/assets/banner.png` and `social-preview.png` from the approved hero artwork
+  with the site fonts and palette (local only, no network).
 - Composition: `src/components/Homepage.astro`.
 - Palette, typography and responsive rules: `src/styles/global.css`.
 - Native animation: `src/scripts/motion.ts`.

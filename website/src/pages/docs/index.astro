@@ -5,14 +5,14 @@ import { loadDocs, sourceRevision } from '../../lib/docs';
 import { sitePath } from '../../lib/site-path';
 const docs = await loadDocs();
 ---
-<Layout title="Documentación — Aether Agents" description="Conceptos, guías y referencia técnica de Aether Agents." docs>
+<Layout title="Documentación — Aether Agents" description="Instalación, tutoriales, guías y referencia técnica de Aether Agents." docs>
   <main id="main" class="wrap docs-shell">
     <aside class="docs-sidebar"><h2>AETHER / DOCS</h2><DocsNavigation docs={docs}/></aside>
     <div class="docs-content">
       <details class="docs-menu-mobile"><summary>Explorar documentación</summary><DocsNavigation docs={docs}/></details>
       <div class="docs-content-header"><span>DOCUMENTACIÓN / ÍNDICE</span><span>REV. {sourceRevision.slice(0,7)}</span></div>
       <h1 class="docs-index-title">El sistema, en detalle.</h1>
-      <p class="secondary">Arquitectura, contratos, ejecución y conocimiento. Un punto de entrada a la documentación del proyecto.</p>
+      <p class="secondary">Instalación, tutoriales, arquitectura, contratos, ejecución y conocimiento. Un punto de entrada a la documentación del proyecto.</p>
       <div class="docs-notice" style="margin-top:25px">El manual canónico está en inglés. Se genera directamente desde los documentos del repositorio en la revisión indicada, sin duplicarlos ni traducirlos automáticamente. Sus notas de estado describen esa revisión.</div>
       <div class="docs-search"><label for="docs-search">BUSCAR EN LA DOCUMENTACIÓN</label><input id="docs-search" type="search" placeholder="Contratos, Graphify, worktrees…" autocomplete="off" aria-describedby="search-count"/><p id="search-count" class="docs-results-count" role="status" aria-live="polite">{docs.length} documentos</p></div>
       <div class="docs-index-list">{docs.map(d => <article data-document={d.slug}><h2 lang="en"><a href={sitePath(`/docs/${d.slug}/`)}>{d.title} <span aria-hidden="true">→</span></a></h2><p>{d.description}</p></article>)}</div>

@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "astro dev --host 127.0.0.1 --port 4321",
     "assets": "node scripts/prepare-assets.mjs",
+    "readme-assets": "node scripts/readme-assets.mjs",
     "build": "npm run assets && astro build",
     "check": "astro check",
     "preview": "astro preview --host 127.0.0.1 --port 4321",

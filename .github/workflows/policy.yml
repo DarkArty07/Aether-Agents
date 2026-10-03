@@ -258,8 +258,11 @@ jobs:
           .aether/skills/aether-observe/SKILL.md
           .gitattributes
           .github/ISSUE_TEMPLATE/bug_report.md
+          .github/ISSUE_TEMPLATE/config.yml
           .github/ISSUE_TEMPLATE/feature_request.md
           .github/PULL_REQUEST_TEMPLATE.md
+          .github/assets/banner.png
+          .github/assets/social-preview.png
           .github/workflows/pages.yml
           .github/workflows/policy.yml
           .github/workflows/release.yml
@@ -294,12 +297,16 @@ jobs:
           docs/guides/project-initialization.md
           docs/guides/project-knowledge.md
           docs/index.md
+          docs/installation.md
           docs/product-boundary.md
           docs/reference/capabilities.md
           docs/reference/cli.md
           docs/reference/limitations-and-troubleshooting.md
           docs/reference/plugins-and-tools.md
           docs/roles-and-authority.md
+          docs/tutorials/claude-code.md
+          docs/tutorials/first-objective.md
+          docs/tutorials/project-knowledge.md
           home/.env.example
           home/SOUL.md
           home/config.yaml.template
@@ -549,6 +556,7 @@ jobs:
           website/public/favicon.svg
           website/scripts/capture.mjs
           website/scripts/prepare-assets.mjs
+          website/scripts/readme-assets.mjs
           website/scripts/verify-pages-build.mjs
           website/src/components/Astrolabe.astro
           website/src/components/Atmosphere.astro

@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.0.0 — stable release and feature freeze
+
+Package `1.0.0` / tag `v1.0.0`, published as a GitHub Release with the qualified bundle.
+`release_impact=major` (first stable release), `release_action=publish`,
+`release_channel=stable`. The product source is RC19 unchanged in behavior; Hermes stays
+pinned to maintained-fork commit `66e87f3487d75cda3681146818006b7c796a71a9`. The package
+shape matches RC19, so RC19 updates to it directly without an adoption bridge. See the
+[release record](specs/v1-stable-release/spec.md).
+
+- **Feature freeze.** The owner declared the feature set final. The project is published
+  as-is; open defects are documented as
+  [known issues](docs/reference/limitations-and-troubleshooting.md#known-issues) rather
+  than fixed, and the unmet #261 items (service commands, export, hosted installer,
+  PyPI, WSL2 and live qualification, the PD-74 gate) are explicitly deferred.
+- **Documentation for users.** A rewritten README with the website, a feature overview and
+  a quick start; a new [installation guide](docs/installation.md) verified end to end in
+  disposable XDG roots; a reworked [getting started](docs/getting-started.md) and
+  documentation index; and three tutorials:
+  [your first objective](docs/tutorials/first-objective.md),
+  [Claude Code](docs/tutorials/claude-code.md) and
+  [project knowledge](docs/tutorials/project-knowledge.md).
+- **Documented installation requirements** found while verifying the guide: `aether setup`
+  needs a Git checkout of the fork on `aether-main` at the locked commit, Node.js with npm,
+  and a running systemd user session; the Morfeo profile needs the `file` and `kanban`
+  toolsets before launch.
+- **Release assets.** README banner and social-preview image generated from the approved
+  website artwork; package metadata now declares Production/Stable, the license, the
+  website, documentation and changelog URLs.
+- **Website.** The landing page drops the beta label and its documentation map includes the
+  installation guide and tutorials.
+
 ## 1.0.0rc19 — Lab and Telegram Monitor retirement, opt-in Claude Code Implementer
 
 Package `1.0.0rc19` / display `1.0.0-rc.19` / local annotated tag `v1.0.0-rc.19`.

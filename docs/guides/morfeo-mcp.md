@@ -20,3 +20,12 @@ not construct a provider client or make a model call.
 Source and a local tag do not prove that a live installation is serving Morfeo MCP. A release that serves this command must be prepared and then activated through the managed `aether update` path; the RC9/RC10 bridge history in [008](../../specs/008-morfeo-mcp/spec.md) is where that boundary was established, and it is not a description of current source.
 
 `scripts/qualify_morfeo_mcp.py` is the deterministic disposable qualification. It does not activate the live installation. A managed update after merge is still required before `aether doctor` can report this candidate as the active runtime.
+
+## Use from Claude Code
+
+Register the server per project with
+`claude mcp add morfeo -- aether mcp morfeo serve --mode harness --project /path/to/project`.
+The bootstrap result is about 70,000 characters, above Claude Code's default MCP output
+limit ([#558](https://github.com/DarkArty07/Aether-Agents/issues/558)); start Claude Code
+with a higher `MAX_MCP_OUTPUT_TOKENS`. The step-by-step walkthrough is the
+[Claude Code tutorial](../tutorials/claude-code.md).

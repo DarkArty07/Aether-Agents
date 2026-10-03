@@ -1,80 +1,170 @@
+<p align="center">
+  <a href="https://darkarty07.github.io/Aether-Agents/">
+    <img src="https://raw.githubusercontent.com/DarkArty07/Aether-Agents/main/.github/assets/banner.png" alt="Aether Agents — From aether to software" width="100%">
+  </a>
+</p>
+
 # Aether Agents
 
-Aether Agents is a multi-agent software-engineering product and method. It adapts [Hermes Agent](https://hermes-agent.nousresearch.com/docs) as the runtime substrate and [GitHub Spec Kit](https://github.com/github/spec-kit) as the specification method, while defining Aether's role, handoff, policy, and qualification boundaries.
+<p align="center">
+  <strong>A spec-driven software-engineering team of three AI roles, built on Hermes Agent.</strong><br>
+  Describe an objective to Morfeo, agree on a durable Objective Contract, and let a Supervisor
+  and parallel Implementers deliver it in isolated Git worktrees with independent review.
+</p>
 
-**Source versus release:** this source revision defines `1.0.0rc19` / `1.0.0-rc.19` as a
-**local-only candidate**; its local annotated tag identity is `v1.0.0-rc.19`. It carries
-the reviewed [Lab/Monitor retirement](specs/lab-monitor-retirement/spec.md), the opt-in
-[Claude Code Implementer harness](specs/external-implementer-harness/spec.md) and the
-source fixes integrated since RC17. It binds maintained-fork Hermes commit
-`66e87f3487d75cda3681146818006b7c796a71a9`: RC17's selection plus the HLP-554 Codex
-message-id guard. RC17's frozen manager cannot adopt this package shape directly, so a
-local `1.0.0rc18` bridge with the historical shape carries the adoption. Neither
-this source nor a local tag proves what is installed or that agent behavior improved:
-check the selected installation with `aether doctor --json` and the release lock, not
-the checkout's version string. See the [RC19 scope](specs/rc19-local-release/spec.md).
-`release_impact=major` records the retirement of a public command and plugin within the
-prerelease line; `release_action=prepare`, `release_channel=prerelease`; no tag is
-pushed and no GitHub/package publication is authorized.
+<p align="center">
+  <a href="https://github.com/DarkArty07/Aether-Agents/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/DarkArty07/Aether-Agents?sort=semver&display_name=tag&color=cba6f7&labelColor=1e1e2e"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/DarkArty07/Aether-Agents?color=89b4fa&labelColor=1e1e2e"></a>
+  <img alt="Python 3.11 to 3.13" src="https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-a6e3a1?labelColor=1e1e2e">
+  <a href="https://github.com/DarkArty07/Aether-Agents/actions/workflows/policy.yml"><img alt="Repository policy checks" src="https://github.com/DarkArty07/Aether-Agents/actions/workflows/policy.yml/badge.svg?branch=main"></a>
+  <a href="https://darkarty07.github.io/Aether-Agents/"><img alt="Website" src="https://img.shields.io/badge/website-aether%20agents-f5c2e7?labelColor=1e1e2e"></a>
+</p>
 
-The historical [RC17 local candidate](specs/rc17-local-release/spec.md) binds reviewed
-maintained-fork Hermes commit `007cfb77676b6b024d2c0986f4585e6cfdcf18d6`
-(tree `b26638974fc134da866b821ab3c4b34ab430aeb3`), including
-HLP-433/435/460/473/474/475, portable methodology, `/aether-plan`, schema 5 with
-the `mcp` extra, and schema 4 readers. Its own conclusions were
-`release_impact=major` for the incompatible command rename,
-`release_action=prepare`, `release_channel=prerelease`. No tag was pushed or package
-published. Earlier local tags remain immutable; RC1 remains
-[published but rejected](https://github.com/DarkArty07/Aether-Agents/releases/tag/v1.0.0-rc.1),
-and #261 remains open. Neither this source nor RC17 qualifies stable `1.0.0`, PyPI,
-WSL2, or agent behavior.
+<p align="center">
+  <a href="https://darkarty07.github.io/Aether-Agents/"><b>Website</b></a> ·
+  <a href="docs/index.md"><b>Documentation</b></a> ·
+  <a href="docs/installation.md"><b>Install</b></a> ·
+  <a href="docs/tutorials/first-objective.md"><b>Tutorial</b></a> ·
+  <a href="CHANGELOG.md"><b>Changelog</b></a>
+</p>
 
-Historical context: RC8 restores the new Morfeo SOUL and canonical contract skills
-following the RC7 bridge; that historical statement is not RC17 qualification.
+---
+
+Aether Agents is a multi-agent software-engineering product and method. It uses
+[Hermes Agent](https://hermes-agent.nousresearch.com/docs/) as the runtime (profiles,
+boards, worktrees, review, tools) and [GitHub Spec Kit](https://github.com/github/spec-kit)
+as the specification method. Aether adds what neither provides on its own: three roles
+with clear authority, durable Objective Contracts, a proportional route choice, evidence
+you can observe, and a managed, reversible release lifecycle.
+
+## How it works
+
+```mermaid
+flowchart LR
+    owner(["You"]) -- objective --> morfeo["Morfeo<br/>owner dialogue and contracts"]
+    morfeo -- "small, reversible" --> direct["Direct work<br/>by Morfeo"]
+    morfeo -- "Objective Contract" --> supervisor["Supervisor<br/>decompose, review, integrate"]
+    supervisor -- unit --> impl1["Implementer"]
+    supervisor -- unit --> impl2["Implementer"]
+    impl1 -- "commits and evidence" --> supervisor
+    impl2 -- "commits and evidence" --> supervisor
+    supervisor -- "PR, checks, merge" --> repo[("Your Git repository")]
+    direct --> repo
+```
+
+1. **You talk to Morfeo.** Morfeo is the only role you address. It inspects your project,
+   confirms its constitution, and decides the route for the complete objective.
+2. **Small, reversible work goes direct.** Morfeo does it, verifies it, and reports. No
+   ceremony.
+3. **Substantial work becomes a contract.** Morfeo writes a versioned Objective Contract
+   (scope, authority, acceptance, stop conditions), commits it, and hands one card to the
+   Supervisor.
+4. **The Supervisor decomposes and reviews.** Each unit goes to an Implementer in its own
+   branch and worktree. The Supervisor reviews work it did not write, integrates in
+   dependency order, and closes out through a pull request with required checks.
+5. **You observe instead of babysitting.** `aether observe` gives you a compact,
+   deterministic brief of a contract's progress, changes and anomalies.
+
+## Features
+
+| Capability | What you get |
+| --- | --- |
+| **Three roles, one owner** | Morfeo (dialogue and contracts), Supervisor (decomposition, review, integration) and replicable Implementers. See [Roles and authority](docs/roles-and-authority.md). |
+| **Objective Contracts** | Immutable, Git-committed contract versions with a verified digest and a small handoff envelope. See [Objective Contracts](docs/guides/objective-contracts.md). |
+| **Proportional routes** | Direct work for bounded changes, the full pipeline for substantial ones. See [Lifecycle](docs/guides/lifecycle.md). |
+| **Isolation and review** | One branch and worktree per unit, independent review, terminal GitHub closeout. See [Execution](docs/guides/execution.md). |
+| **Contract Observation** | `aether observe` and the `aether_observe` tool: bounded, provider-free briefs. See [Observation](docs/guides/observation.md). |
+| **Project knowledge** | Optional Graphify graph and per-role work memory shared by all three roles. See [Project knowledge](docs/guides/project-knowledge.md). |
+| **Morfeo over MCP** | Use Morfeo from Claude Code or any MCP client with `aether mcp morfeo serve`. See the [Claude Code tutorial](docs/tutorials/claude-code.md). |
+| **Opt-in Claude Code Implementer** | Run Implementer attempts on Claude Code for a contract, with automatic fallback to Hermes. See [Execution](docs/guides/execution.md#opt-in-implementer-harness-claude-code). |
+| **Managed releases** | `aether setup`, `update` and `rollback` stage, verify and switch releases atomically while preserving your state. See [Policy and recovery](docs/guides/policy-and-recovery.md). |
+| **Edge-safety policy** | A pre-tool hook guards secrets, credential acquisition, unauthorized external effects and destructive operations. Ordinary work stays free. |
+
+## Quick start
+
+You need Linux or WSL2 with a systemd user session, Git, [uv](https://docs.astral.sh/uv/),
+Node.js 22+ with npm, `jq`, and an account with a model provider supported by Hermes. The
+[installation guide](docs/installation.md) explains every step.
+
+```bash
+# 1. Download and verify the release bundle
+gh release download v1.0.0 --repo DarkArty07/Aether-Agents --dir aether-1.0.0
+cd aether-1.0.0 && sha256sum --check SHA256SUMS
+
+# 2. Clone the pinned Hermes runtime source named in the release lock
+git clone --branch aether-main https://github.com/DarkArty07/aether-hermes.git
+git -C aether-hermes reset --hard "$(jq -r .hermes.commit aether-agents-1.0.0-release-lock.json)"
+
+# 3. Install and activate the release (drop --yes to preview first)
+uvx --python 3.11 --from ./aether_agents-1.0.0-py3-none-any.whl aether setup \
+  --wheel ./aether_agents-1.0.0-py3-none-any.whl \
+  --hermes-checkout ./aether-hermes \
+  --release-lock ./aether-agents-1.0.0-release-lock.json --yes
+aether doctor
+
+# 4. Pick a model for each role and enable Morfeo's toolsets
+#    (installation guide, step 5)
+
+# 5. Initialize an existing Git repository and start Morfeo
+cd ~/code/my-project
+aether init
+aether
+```
+
+Then follow [your first objective](docs/tutorials/first-objective.md).
 
 ## Documentation
 
-Start with the [documentation index](docs/index.md). The current documentation owns behavior available in this build; [`docs/capabilities.toml`](docs/capabilities.toml) is the sole current implementation-status and traceability registry. This README is a portal, not a second status table or design manual.
+| Start here | Understand | Look up |
+| --- | --- | --- |
+| [Installation](docs/installation.md) | [Product boundary](docs/product-boundary.md) | [CLI reference](docs/reference/cli.md) |
+| [Getting started](docs/getting-started.md) | [Roles and authority](docs/roles-and-authority.md) | [Plugins and tools](docs/reference/plugins-and-tools.md) |
+| [Tutorial: first objective](docs/tutorials/first-objective.md) | [Lifecycle](docs/guides/lifecycle.md) and [Execution](docs/guides/execution.md) | [Capability coverage](docs/reference/capabilities.md) |
+| [Tutorial: Claude Code](docs/tutorials/claude-code.md) | [Objective Contracts](docs/guides/objective-contracts.md) | [Limitations and troubleshooting](docs/reference/limitations-and-troubleshooting.md) |
+| [Tutorial: project knowledge](docs/tutorials/project-knowledge.md) | [Expected agent behavior](docs/guides/expected-behavior.md) | [Authority map](docs/authority.md) |
 
-- [Getting started](docs/getting-started.md) and the [product boundary](docs/product-boundary.md)
-- [Roles and authority](docs/roles-and-authority.md), [lifecycle](docs/guides/lifecycle.md), and [execution](docs/guides/execution.md)
-- [Project initialization](docs/guides/project-initialization.md) and [Objective Contracts](docs/guides/objective-contracts.md)
-- [Optional project knowledge and role work memory](docs/guides/project-knowledge.md)
-- [Observation](docs/guides/observation.md) and [policy and recovery](docs/guides/policy-and-recovery.md)
-- [CLI reference](docs/reference/cli.md), [plugins and tools](docs/reference/plugins-and-tools.md), [capabilities reference](docs/reference/capabilities.md), and [limitations and troubleshooting](docs/reference/limitations-and-troubleshooting.md)
+The full [documentation index](docs/index.md) is also published, with search, on the
+[website](https://darkarty07.github.io/Aether-Agents/docs/). The documentation describes
+the behavior of this build; [`docs/capabilities.toml`](docs/capabilities.toml) is the
+sole current implementation-status and traceability registry.
 
-## Current beta boundary
+## Project status
 
-Aether uses Hermes-native Projects, boards, worktrees, review, lifecycle, profiles, and tools; it does not replace Hermes with another queue, scheduler, worker manager, or generic manual. A documented transitional downstream is no longer the runtime policy: under PD-49/61/64/65 the executable Hermes source is the maintained fork `DarkArty07/aether-hermes` branch `aether-main`, bound by the release lock's `maintained_fork` source mode — emitted as `schema_version` 5 with the closed `hermes.extras` allowlist, readable as schema 4 — through repository, exact commit, source-tree digest, artifact closure and provenance. The fixed public `v2026.8.18` tree remains the reference for upstream-compatible behavior and historical evidence, and `.patch` files stay audit/reconstruction evidence that is never replayed onto an active runtime.
+**Aether 1.0.0 is the final feature set.** The maintainer has frozen features at this
+release, and the project is published as-is ([release record](specs/v1-stable-release/spec.md)).
+Bug reports and pull requests are welcome, but fixes are not guaranteed.
 
-Immutable release code and Graphify components live under the Aether XDG data root, while every mutable Hermes home, session, board, credential, memory, observation, knowledge artifact, and any retained historical Monitor data stays under the Aether XDG state root. `aether update` is the only supported promotion and activation boundary: its local-candidate route previews explicit clean Aether and fork commits without mutating anything, activation is explicit and may interrupt Aether-owned instances, a partial transition is recoverable, and rollback restores product code without rolling user state backward.
+Known limits you should expect:
 
-The `aether init` command initializes **an existing Git repository root only**. It writes the portable project marker and binds it to exactly one non-archived native Hermes Project whose primary path matches exactly; `--hermes-project ID` resolves an otherwise ambiguous exact-path match. It does not initialize Git or modify existing native Projects; when none matches, it creates and verifies one.
+- Installation uses the release bundle with `aether setup`. There is no PyPI package,
+  hosted installer or automatic update channel.
+- `aether start`, `stop`, `restart` and `status` remain explicit unsupported placeholders,
+  and `aether reconcile` supports only its bounded `--to active` form.
+- `aether uninstall --export` is not implemented.
+- The Aether Telegram Monitor and its periodic progress reports were retired before 1.0
+  without a replacement. Hermes-native cron, ordinary Telegram interaction and Hermes'
+  native task/final/input notifications remain unchanged.
+- Agent behavior depends on the models you configure. Aether has not been qualified with
+  provider-backed live campaigns or on WSL2 as a platform.
+- Open defects are listed in [known issues](docs/reference/limitations-and-troubleshooting.md#known-issues).
 
-The operational `start`, `stop`, `restart`, and `status` commands remain explicit unsupported placeholders, and `aether reconcile` supports only its bounded `--to active` form: it reconciles the projections of the already active, authenticated release and refuses every other mode. Public release publication, provider-backed live qualification, credentials, deployment, and activation of a managed service are outside this build's supported boundary.
+## Built on
 
-The owner retired Aether's formal Qualification Lab and Telegram Monitor, including periodic progress reports, on 2026-09-28 with no replacement. Hermes-native cron, ordinary Telegram interaction, and native task/final/input notifications remain unchanged. This source decision does not prove an installed runtime has changed; historical private state is preserved, and deleting qualification tooling is not a reliability PASS. See the [retirement decision](specs/lab-monitor-retirement/spec.md).
+- [Hermes Agent](https://hermes-agent.nousresearch.com/docs/) — the agent runtime, run from
+  the maintained fork [`DarkArty07/aether-hermes`](https://github.com/DarkArty07/aether-hermes)
+  pinned by commit in every release lock.
+- [GitHub Spec Kit](https://github.com/github/spec-kit) — the specification method Aether
+  adapts for an absent owner.
+- [Graphify](https://github.com/Graphify-Labs/graphify) — the optional project-knowledge graph.
 
-Non-destructive inspection:
+## Contributing
 
-```bash
-aether --version
-aether observe --help
-aether doctor --json
-```
-
-`doctor` can honestly return a non-zero readiness result when no managed release is installed.
-
-## Maintainer authorities
-
-- [`DESIGN.md`](DESIGN.md) owns accepted conceptual principles and decisions.
-- [`specs/`](specs) owns normative intent; research, plans, and qualification evidence remain historical or evidentiary artifacts.
-- [`ROADMAP.md`](ROADMAP.md) describes future work and release-visible limitations.
-- [`CHANGELOG.md`](CHANGELOG.md) records release deltas. [`INTEGRATIONS.md`](INTEGRATIONS.md) remains the intentional integration index.
-- [`AGENTS.md`](AGENTS.md) states repository evidence, source-resolution, and contribution boundaries.
-
-For generic Hermes operation, consult the [authoritative Hermes documentation](https://hermes-agent.nousresearch.com/docs) rather than copying a second manual here.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and the repository rules in [AGENTS.md](AGENTS.md).
+Maintainer authorities: [`DESIGN.md`](DESIGN.md) owns accepted design decisions,
+[`specs/`](specs) owns normative intent, [`ROADMAP.md`](ROADMAP.md) records phase history
+and [`CHANGELOG.md`](CHANGELOG.md) records release deltas. Report security issues as
+described in [SECURITY.md](SECURITY.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Created by [Christopher Hernández Jiménez (@DarkArty07)](https://github.com/DarkArty07).

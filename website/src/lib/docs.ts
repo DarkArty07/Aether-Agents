@@ -15,7 +15,11 @@ const publicSource = `https://github.com/DarkArty07/Aether-Agents/blob/${sourceR
 
 const descriptions: Record<string, string> = {
   'index': 'Índice de la documentación canónica del proyecto.',
-  'getting-started': 'Primeros pasos, requisitos y límites de la versión documentada.',
+  'installation': 'Instalación de una versión publicada: requisitos, bundle, setup y modelos por rol.',
+  'getting-started': 'Primeros pasos: inicializar un proyecto, abrir a Morfeo e inspeccionar sin cambios.',
+  'tutorials/first-objective': 'Tutorial: un objetivo directo y otro completo por el pipeline.',
+  'tutorials/claude-code': 'Tutorial: Morfeo desde Claude Code por MCP y Claude Code como Implementer.',
+  'tutorials/project-knowledge': 'Tutorial: activar el mapa técnico de Graphify y la memoria de trabajo.',
   'product-boundary': 'Qué aporta Aether y qué reutiliza de Hermes.',
   'roles-and-authority': 'Morfeo, Supervisor e Implementers: responsabilidades y autoridad.',
   'authority': 'Qué documento es responsable de cada decisión.',

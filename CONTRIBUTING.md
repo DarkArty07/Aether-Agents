@@ -88,7 +88,7 @@ diagnosis; this direction neither disables CI nor permits a protected-check bypa
 The #541 no-test instruction continues to describe that earlier local source delivery,
 not this separately authorized release. Keep its evidence attribution unchanged.
 
-### RC19 bounded release verification (#564)
+### RC19 bounded release verification (#564, historical)
 
 The owner directs RC19 source integration and the local managed update through its RC18
 adoption bridge. #563 already ran the full exact-Hermes suite and its isolated real run.
@@ -97,6 +97,17 @@ the normal required PR checks. Each of the two cutovers then gets one non-mutati
 preview, the managed cutover and one coherence check. A required check failure still
 needs concrete diagnosis; this direction neither disables CI nor permits a
 protected-check bypass.
+
+### 1.0.0 stable release verification
+
+The owner froze features and directed the stable `1.0.0` release
+([record](specs/v1-stable-release/spec.md)). The release branch runs the version identity
+checks, the full exact-Hermes suite, Ruff, mypy, the documentation checker and the
+website checks, then the normal required PR checks. A local bundle is built from the
+exact revision, and the installation guide is followed in disposable, redirected XDG
+roots before the tag is pushed. After features were frozen, only an owner-authorized
+bounded objective may change product behavior; documentation fixes still follow the
+documentation-impact rules below.
 
 ## Quality checks
 

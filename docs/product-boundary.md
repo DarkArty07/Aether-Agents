@@ -38,7 +38,7 @@ The two package-owned canonical skills teach use of `project_knowledge` and `wor
 
 Aether does not implement its own queue, retry engine, board store, worktree manager, generic plugin system, generic provider manager, or generic Hermes manual. A role having local tool capability does not grant authority to change product intent, acquire credentials, activate services, deploy, publish, or make a protected external effect.
 
-Aether's current source also is not evidence of a stable release, public installation, active service, live profile, configured provider, or qualified model-backed execution. Those distinctions are intentional and visible in [limitations and troubleshooting](reference/limitations-and-troubleshooting.md). The authorized `1.0.0rc1` milestone is a pre-stable release candidate: it is not stable `1.0.0`, not a package-index publication and not a WSL2 qualification.
+The `1.0.0` release is a public GitHub Release with a qualified bundle. Neither the source nor the release is evidence of an active service, a live profile, a configured provider or qualified model-backed execution on a given machine; `aether doctor` reports what is installed. Those distinctions are intentional and visible in [limitations and troubleshooting](reference/limitations-and-troubleshooting.md). `1.0.0` is not a package-index publication or a WSL2 platform qualification.
 
 ## Executable Hermes source
 

@@ -1,21 +1,23 @@
 # Getting started
 
-This repository is a development and stabilization build, not a released installation guide. The safe first steps are provider-free: inspect the installed source checkout, parser help, and deterministic tests. Generic Hermes installation, provider setup, and credential management belong to the [authoritative Hermes documentation](https://hermes-agent.nousresearch.com/docs/), not this guide.
+This page takes you from an installed release to a running Morfeo session in your own
+project. If Aether is not installed yet, start with [Installation](installation.md).
+Generic Hermes provider setup and credential management belong to the
+[authoritative Hermes documentation](https://hermes-agent.nousresearch.com/docs/).
 
-## Inspect the local build
-
-From a source checkout with the locked development environment available:
+## Check the installation
 
 ```bash
-uv sync --frozen
-uv run --frozen aether --version
-uv run --frozen aether --help
-uv run --frozen aether observe --help
+aether --version
+aether doctor
+aether --help
 ```
 
-`aether --version` and parser help do not import the managed Hermes runtime. `aether doctor --json` is also read-only, but it may report a non-zero integrity result when no active candidate release exists. That result is diagnostic evidence, not an instruction to install, authenticate, or activate anything.
+`aether --version` and parser help do not import the managed Hermes runtime. `aether doctor` is read-only: it reports `ready` when the active release is coherent, and a non-zero integrity result otherwise. That result is diagnostic evidence, not an instruction to install, authenticate, or activate anything.
 
 Top-level `aether [--project PATH] --json` emits a non-mutating launch plan from packaged manager code without importing Hermes or changing state; without `--json`, `aether` launches project-bound Morfeo into the active release-owned TUI.
+
+Make sure each role has a model configured (see [Installation, step 5](installation.md#5-configure-a-model-for-each-role)) before you start working with Morfeo.
 
 ## Initialize an existing repository
 
@@ -25,8 +27,8 @@ Top-level `aether [--project PATH] --json` emits a non-mutating launch plan from
 
 ```bash
 cd /path/to/existing-git-repository
-uv run --frozen aether init --dry-run
-uv run --frozen aether init
+aether init --dry-run
+aether init
 ```
 
 The command validates or writes `.aether/project.toml`, maps its portable UUID to the exact-path native Hermes Project, and makes the marker and finalized Objective Contracts trackable while keeping drafts ignored. It refuses missing, ambiguous, mismatched, invalid, or conflicting identity rather than guessing. See [Project initialization](guides/project-initialization.md) for the full boundary.
@@ -96,17 +98,42 @@ end
 
 Remove it with `functions -e aether` and by deleting the function block.
 
-## What not to infer
+## Work with Morfeo
 
-The package has local lifecycle candidate commands (`setup`, `update`, `rollback`, and `uninstall`), but these are not a complete public installation path. Do not run a state-changing lifecycle command merely to explore the documentation. The current supported discovery commands are `--help`, `--version`, `observe --help`, and read-only `doctor`; see [CLI reference](reference/cli.md) and [limitations](reference/limitations-and-troubleshooting.md).
+Morfeo is the only role you talk to. Describe the outcome you want in plain language,
+including constraints and what "done" means. Morfeo inspects the project and then either:
 
-`aether update` is nonetheless the only supported promotion and activation boundary, and its
-local-candidate route has a non-mutating preview: `aether update --local --aether-checkout
-PATH --aether-commit SHA --fork-checkout PATH --fork-commit SHA` reports the exact Aether and
-maintained-fork revisions, target version and release ID, active HLP coverage, artifacts and
-hashes, expected service interruption, preserved state and any blockers without staging or
-activating anything. Activation happens only with an explicit `--yes`, may interrupt
-Aether-owned instances immediately, and `aether rollback` restores product code without
-rolling user state backward. The managed Hermes source is the release-lock `maintained_fork` identity (repository `https://github.com/DarkArty07/aether-hermes`, emitted as `schema_version` 5 with the closed `hermes.extras` allowlist and still readable as schema 4); the retired `transitional_fork` mode is refused for new preparation.
+- completes a small, reversible objective **directly**, verifies it and reports; or
+- writes an **Objective Contract**, commits it and hands it to the Supervisor, who
+  decomposes it into Implementer units, reviews them and closes out through a pull request.
 
-For the intended operational model after an initialized project exists, read [Lifecycle](guides/lifecycle.md), [Objective Contracts](guides/objective-contracts.md), and [Execution](guides/execution.md).
+Use `/aether-plan` when you want a plan before any implementation. Morfeo plans and stops;
+it creates no contract, card or worker. The generic `/plan` is not an Aether alias.
+
+The [first objective tutorial](tutorials/first-objective.md) walks through both routes,
+and [Lifecycle](guides/lifecycle.md) explains how Morfeo chooses between them.
+
+## Inspect without changing anything
+
+These commands are safe at any time and make no provider call:
+
+```bash
+aether --help
+aether doctor --json
+aether --project /path/to/project --json    # launch plan only
+aether observe                              # brief of the open contract, if any
+aether reconcile --to active --json         # preview of projection repairs
+```
+
+State-changing lifecycle commands (`setup`, `update`, `rollback`, `uninstall`) preview
+their plan unless you pass `--yes`. `aether update` is the only supported promotion and
+activation boundary; see [Installation](installation.md#update-to-a-later-release) and
+[Policy and recovery](guides/policy-and-recovery.md). For the parser surface, read the
+[CLI reference](reference/cli.md); for current limits, read
+[limitations and troubleshooting](reference/limitations-and-troubleshooting.md).
+
+## Next steps
+
+- [Tutorial: your first objective](tutorials/first-objective.md)
+- [Tutorial: use Morfeo from Claude Code](tutorials/claude-code.md)
+- [Tutorial: project knowledge](tutorials/project-knowledge.md)

@@ -6,6 +6,9 @@ The wording remains sober and technical, but avoids translated corporate phrasin
 unnecessary jargon and regionalisms that would distract from the product. The English
 landing remains a neutral adaptation.
 
+On 2026-10-03 the owner released stable 1.0.0, so the opening status label changed from
+`BETA` to `v1.0`; no other approved copy changed.
+
 ### 00. Origen
 
 ```text
@@ -19,7 +22,7 @@ Aether Agents es un sistema multiagente para desarrollar software: convierte lo 
 
 [ CÓMO FUNCIONA ↓ ]    [ GITHUB ↗ ]
 
-BETA · CÓDIGO ABIERTO · SPEC-DRIVEN
+v1.0 · CÓDIGO ABIERTO · SPEC-DRIVEN
 
 BASADO EN / HERMES AGENT ↗ · GITHUB SPEC KIT ↗
 CONOCIMIENTO OPCIONAL / GRAPHIFY ↗

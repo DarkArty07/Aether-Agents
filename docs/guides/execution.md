@@ -52,7 +52,7 @@ When an external harness is selected:
 
 - **Hermes by default:** Hermes remains the default executor for all roles; external harness selection is per-contract opt-in only.
 - **Role restrictions:** External harness execution applies only to Implementer work attempts. Morfeo, Supervisor, cards configured with `goal_mode`, and all review attempts (including Implementer-assigned reviews) stay on Hermes.
-- **Release:** The harness ships in the local RC19 candidate ([#564](https://github.com/DarkArty07/Aether-Agents/issues/564)). Only an installed release's managed cutover evidence establishes availability; source integration alone does not.
+- **Release:** The harness first shipped in the local RC19 candidate ([#564](https://github.com/DarkArty07/Aether-Agents/issues/564)) and is part of `1.0.0`. An installed release (`aether doctor`), not source integration alone, establishes availability on a machine.
 
 ## Card inputs and canonical procedures
 
