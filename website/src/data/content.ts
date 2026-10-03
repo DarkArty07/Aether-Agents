@@ -15,7 +15,7 @@ export const es = {
   description: 'Aether Agents es un sistema multiagente para desarrollar software: convierte lo que quieres lograr en especificaciones, código, pruebas, revisión e integración.',
   nav: ['Sistema', 'Proceso', 'Conocimiento', 'Documentación'],
   ui: { skip: 'Saltar al contenido', menu: 'Menú', close: 'Cerrar menú', pause: 'Pausar animación', play: 'Activar animación', motion: 'Movimiento', top: 'Volver al origen', concept: 'Sistema', path: 'Flujo de trabajo', docs: 'Documentación', details: 'Explorar documentación', source: 'Código abierto', step: 'Etapa', language: 'Cambiar idioma', resume: 'Reproducir recorrido' },
-  hero: { label: 'ORIGEN', name: 'AETHER AGENTS', headline: 'Del éter al software.', cta: 'CÓMO FUNCIONA ↓', github: 'GITHUB ↗', meta: 'BETA · CÓDIGO ABIERTO · SPEC-DRIVEN', imageAlt: 'Figura escultórica griega entre éter y geometrías digitales en tonos morados.' },
+  hero: { label: 'ORIGEN', name: 'AETHER AGENTS', headline: 'Del éter al software.', cta: 'CÓMO FUNCIONA ↓', github: 'GITHUB ↗', meta: 'v1.0 · CÓDIGO ABIERTO · SPEC-DRIVEN', imageAlt: 'Figura escultórica griega entre éter y geometrías digitales en tonos morados.' },
   development: {
     label: 'DESARROLLO',
     headline: ['Nuevos proyectos.', 'Nuevas capacidades.', 'Software que evoluciona.'],
@@ -112,7 +112,7 @@ export const en: typeof es = {
   description: 'Aether Agents is a multi-agent software engineering system designed to turn objectives into specifications, implementation, review and integration.',
   nav: ['System', 'Process', 'Knowledge', 'Documentation'],
   ui: { skip: 'Skip to content', menu: 'Menu', close: 'Close menu', pause: 'Pause animation', play: 'Enable animation', motion: 'Motion', top: 'Back to the origin', concept: 'System', path: 'Workflow', docs: 'Documentation', details: 'Explore documentation', source: 'Open source', step: 'Stage', language: 'Change language', resume: 'Play workflow' },
-  hero: { label: 'ORIGIN', name: 'AETHER AGENTS', headline: 'From aether to software.', cta: 'HOW IT WORKS ↓', github: 'GITHUB ↗', meta: 'BETA · OPEN SOURCE · SPEC-DRIVEN', imageAlt: 'A Greco-futurist sculptural figure emerging from aether, with mauve geometry and particles.' },
+  hero: { label: 'ORIGIN', name: 'AETHER AGENTS', headline: 'From aether to software.', cta: 'HOW IT WORKS ↓', github: 'GITHUB ↗', meta: 'v1.0 · OPEN SOURCE · SPEC-DRIVEN', imageAlt: 'A Greco-futurist sculptural figure emerging from aether, with mauve geometry and particles.' },
   development: {
     label: 'DEVELOPMENT', headline: ['New projects.', 'New capabilities.', 'Software that evolves.'],
     intro: 'Aether is designed to work on both new projects and existing software.',

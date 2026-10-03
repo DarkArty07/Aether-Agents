@@ -10,6 +10,14 @@
 
 **Current behavior and implementation status**: [`docs/`](docs/index.md) and its sole status/traceability registry, [`docs/capabilities.toml`](docs/capabilities.toml). This roadmap records future work, accepted phase history, and release-visible limitations; it is not a live capability-status tracker.
 
+## 1.0.0 stable release and feature freeze (2026-10-03)
+
+The owner declared the feature set final and released stable `1.0.0` from RC19's product
+source ([release record](specs/v1-stable-release/spec.md)). No further feature work is
+planned. The stages and limitations below remain as accepted history; their open items,
+the unmet #261 acceptance items and the PD-74 reliability gate are deferred without a
+delivery commitment. A future objective needs new owner authority.
+
 ## Bounded Graphify integration candidate
 
 The owner's 2026-09-05 instruction authorizes implementation of

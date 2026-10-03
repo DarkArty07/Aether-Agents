@@ -1,6 +1,6 @@
 # Limitations and troubleshooting
 
-This page records current limits plainly. It does not turn a candidate interface, package source file, or historical qualification artifact into a release/readiness claim.
+This page records the limits of the `1.0.0` release plainly. Features are frozen at this release, so these limits and the [known issues](#known-issues) below are expected to remain. It does not turn a candidate interface, package source file, or historical qualification artifact into a readiness claim.
 
 ## Current limits
 
@@ -13,16 +13,38 @@ This page records current limits plainly. It does not turn a candidate interface
 | Service lifecycle | `start`, `stop`, `restart`, and `status` return explicit unsupported results. | Do not expect this build to activate or control a service. |
 | Reconciliation | `reconcile --to active` repairs the projections and selector of the already active, authenticated release only; `--to installed` and a missing `--to` return explicit unsupported, and an unauthenticated legacy active release is refused before mutation. | Use it only for the active release; a package-manager mismatch still requires `aether update` or `aether rollback`, never a record edit. |
 | Observation contention | Under concurrent writers, `observe` returns the bounded retryable `STATE_BUSY` (maintenance lock held) or `CATCHUP_INCOMPLETE` (ingestion budget ended first); native `aether_observe` reports `AETHER-OBSERVE-BUSY`/`AETHER-OBSERVE-CATCHUP-INCOMPLETE`. | Retry after the contending writer or the next ingestion pass; a settled snapshot succeeds, and genuine unreadable/schema/privacy failures remain `STATE_UNREADABLE` rather than being retried as transient. |
-| Guided/declarative setup | Only a local wheel/check-out/release-lock candidate interface exists. | Do not treat it as a clean public installation wizard. |
+| Installation channel | Installation uses the GitHub Release bundle with `aether setup` and a Git checkout of the pinned Hermes fork. There is no PyPI package, hosted installer, guided wizard or automatic update channel. Setup needs a running systemd user session (on WSL2, `systemd=true` in `/etc/wsl.conf`) and Node.js with npm. | Follow [Installation](../installation.md); move between releases only with `aether update` and `aether rollback`. |
 | Managed Hermes source | The executable source is the maintained fork under release-lock source mode `maintained_fork`, emitted as `schema_version` 5 with the closed `hermes.extras` allowlist and still readable as schema 4; the retired `transitional_fork` mode is refused and `.patch` files are never replayed. | Read the release lock for the exact repository, commit, source-tree digest and artifacts; never repair a runtime by applying a patch file. |
-| Release-candidate scope | The current source revision defines the local-only candidate `1.0.0rc19` (display `1.0.0-rc.19`, local tag `v1.0.0-rc.19`), carrying the [Lab/Monitor retirement](../../specs/lab-monitor-retirement/spec.md) and the opt-in [Claude Code Implementer harness](../../specs/external-implementer-harness/spec.md); see the [RC19 scope](../../specs/rc19-local-release/spec.md). It is not stable `1.0.0`, a package-index publication or WSL2 qualification, and no verified installed release is claimed here. | Identify the installed runtime with `aether doctor --json` and exact cutover evidence; source, `VERSION` and local tags never prove activation or agent behavior. Keep #261 open. |
-| Historical RC16 candidate | Tag `v1.0.0-rc.16` (package `1.0.0rc16`, display `1.0.0-rc.16`) was a candidate, not an active release. It bound maintained-fork Hermes at `58f8c37a49b341f25b8fdd6310542fe932031b8d` (tree `a93162c1a867202b03c12fa372c71029152fdcf7`, digest `a2a9b374bd2022c7f96242b0ab2c95691119262c925389eb3820ca627c581144`), qualified required HLP-428 with HLP-433 deferred, and used the durable-history fallback for retained RC15 review guidance when the optional context count is absent. It emitted release-lock schema 5, kept schema-4/5 read compatibility, and served Morfeo MCP on stdio or `127.0.0.1` Streamable HTTP. Immutable history: earlier tags stay immutable and published rc.1 remains rejected; RC16 is not stable `1.0.0`, a package-index publication or WSL2 qualification. | Read it as history for that tagged revision only. Use `aether doctor` and the managed cutover receipt for live state; never infer activation from source, push tags or activate rc.1. |
+| Release scope | `1.0.0` (tag `v1.0.0`) is RC19's product source with stable identity, documentation and assets, on maintained-fork commit `66e87f3487d75cda3681146818006b7c796a71a9`; see the [release record](../../specs/v1-stable-release/spec.md). It is not a PyPI publication, a WSL2 platform qualification or a provider-backed agent-behavior qualification, and the PD-74 reliability gate remains outstanding. | Identify the installed runtime with `aether doctor --json`; source, `VERSION` and tags never prove activation or agent behavior. |
 | State export | `uninstall --export` returns `EXPORT_NOT_IMPLEMENTED`. | Preserve state; do not claim an export occurred. |
 | Portable profiles | Resources are versioned candidate bytes, not proof of live profile activation. | Avoid copying private profile state into project artifacts. |
+| Morfeo toolsets | The packaged Morfeo profile does not select toolsets, and launch requires `file` and `kanban` (`missing required Morfeo toolsets`). | Add them once to the Morfeo profile; see [Installation, step 5](../installation.md#5-configure-a-model-for-each-role). |
 | Optional Graphify | Structural graphs are committed-revision snapshots; configured semantic maintenance is opt-in (`semantic.enabled` plus a bound auxiliary task), bounded to one 300-second update, and dirty files are not indexed. Its semantics are an additive `origin=llm` overlay, and a snapshot without the current integrity identity is reported as untrusted structural state rather than a trusted semantic result. | Check revision/coverage and read changed sources directly; read pending/partial/unavailable/legacy warnings as structural state, never as `extraction is disabled`; see [project knowledge](../guides/project-knowledge.md). |
 | Role learning | Reflection aggregates outcome signals, not full answer semantics; lexical search has bounded scale and notes remain agent-reported evidence. | Search/read original notes, correct by expected revision and revalidate old sources. |
 | Knowledge activation | Component installation does not enable profile tools or resolve a session automatically when native workspace metadata is absent. | Check `aether knowledge doctor`, plugin enablement and exact session binding; never select the last-used graph. |
-| Live reliability/release evidence | Provider-backed model execution, persistent-session wake, protected CI, immutable runtime, and public release qualification remain outside this local build. | Use deterministic tests as local evidence only; do not invoke providers or publish. |
+| Live reliability evidence | Provider-backed model execution, persistent-session wake and live agent reliability are not qualified; deterministic tests and the release bundle's clean-install probes are the evidence shipped with `1.0.0`. | Treat agent conduct as model-dependent; verify results from commands, diffs and tests. |
+
+## Known issues
+
+These defects were open when features were frozen at `1.0.0`. They are documented here
+instead of being fixed; check each issue for its current state and any workaround.
+
+| Issue | Effect | Workaround |
+| --- | --- | --- |
+| [#558](https://github.com/DarkArty07/Aether-Agents/issues/558) | `morfeo_bootstrap` returns about 70,000 characters, above Claude Code's default MCP output limit, so the host spills it to a file. | Start Claude Code with a higher `MAX_MCP_OUTPUT_TOKENS`, for example `60000`. |
+| [#557](https://github.com/DarkArty07/Aether-Agents/issues/557) | Morfeo over MCP ignores the profile's configured memory limits. | Keep Morfeo's memory files concise. |
+| [#559](https://github.com/DarkArty07/Aether-Agents/issues/559) | The Morfeo MCP qualification lists the knowledge tools but never invokes them. | None needed for use; it is a test-coverage gap. |
+| [#553](https://github.com/DarkArty07/Aether-Agents/issues/553) | Contract alerts and terminal results do not wake Morfeo in the originating TUI session. | Ask Morfeo for status, or run `aether observe`. |
+| [#560](https://github.com/DarkArty07/Aether-Agents/issues/560) | `aether doctor` does not show why active-release revalidation failed. | Read `diagnostic_codes` in `aether doctor --json`. Never edit an installed release; use `aether reconcile --to active` or `aether rollback`. |
+| [#539](https://github.com/DarkArty07/Aether-Agents/issues/539) | The edge policy denies deleting a merged remote work branch. | Delete merged branches yourself, for example in the GitHub UI. |
+| [#561](https://github.com/DarkArty07/Aether-Agents/issues/561) | A code comment calls the gateway unit Aether-owned, although Hermes owns it. | None; the behavior matches the documentation. |
+
+The enhancements [#316](https://github.com/DarkArty07/Aether-Agents/issues/316) (Hermes Web
+Dashboard surface) and [#491](https://github.com/DarkArty07/Aether-Agents/issues/491)
+(non-blocking Graphify updates) remain open without a delivery commitment. A local release
+bundle built from a fork checkout that has Git tags records the nearest ancestor tag in its
+lock, which `aether setup` then refuses. The published bundles are built from a tagless
+fetch and are not affected.
 
 ## Provider-free diagnostics
 

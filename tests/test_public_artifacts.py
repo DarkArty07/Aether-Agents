@@ -149,61 +149,43 @@ def test_scanner_checks_wheel_and_sdist_members(tmp_path: Path) -> None:
     assert "candidate.tar.gz!candidate/evidence.txt: absolute-user-home" in completed.stderr
 
 
-def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> None:
+def test_readme_is_the_stable_release_portal_and_package_metadata_is_stable() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     incomplete = (ROOT / "INCOMPLETE_IMPLEMENTATIONS.md").read_text(encoding="utf-8")
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
-    assert readme.count("**Source versus release:**") == 1
-    source_section, history = readme.split("**Source versus release:**", 1)[1].split(
-        "The historical [RC17 local candidate]", 1
-    )
-    source_section = " ".join(source_section.split())
-    history = " ".join(history.split("Historical context:", 1)[0].split())
+    version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    # The owner-directed stable release (specs/v1-stable-release/spec.md) makes the README
+    # the user-facing portal; the wheel's METADATA embeds it, so it names the exact release.
+    assert version == "1.0.0"
     assert "multi-agent software-engineering product" in readme
     assert "[documentation index](docs/index.md)" in readme
     assert "`docs/capabilities.toml`](docs/capabilities.toml)" in readme
     assert "sole current implementation-status and traceability registry" in readme
-    assert "documented transitional downstream" in readme
-    # The wheel's METADATA embeds this portal. RC19 is this revision's local candidate;
-    # the RC18 bridge and RC17 identities stay history, and neither proves installation or behavior.
-    assert "releases/tag/v1.0.0-rc.8" not in readme
-    assert "releases/tag/v1.0.0-rc.7" not in readme
-    assert "releases/tag/v1.0.0-rc.6" not in readme
-    assert "releases/tag/v1.0.0-rc.5" not in readme
-    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "1.0.0rc19"
-    assert "`1.0.0rc19` / `1.0.0-rc.19` as a **local-only candidate**" in source_section
-    assert "local annotated tag identity is `v1.0.0-rc.19`" in source_section
-    assert (
-        "Neither this source nor a local tag proves what is installed or that agent "
-        "behavior improved" in source_section
-    )
-    assert "aether doctor --json" in source_section
-    assert "`release_action=prepare`, `release_channel=prerelease`" in source_section
-    assert "no tag is pushed and no GitHub/package publication is authorized" in source_section
-    assert "RC17 local candidate" in readme
-    assert "`release_impact=major` for the incompatible command rename" in history
-    assert "`release_action=prepare`, `release_channel=prerelease`" in history
-    assert "restores the new Morfeo SOUL and canonical contract skills" in readme
-    assert (
-        "Neither this source nor RC17 qualifies stable `1.0.0`, PyPI, WSL2, or agent behavior"
-        in history
-    )
-    assert "No tag was pushed or package published" in history
-    assert "Earlier local tags remain immutable" in readme
-    assert "releases/tag/v1.0.0-rc.1" in readme
-    assert "published but rejected" in readme
+    assert "(docs/installation.md)" in readme
+    assert "(specs/v1-stable-release/spec.md)" in readme
+    # The quick start must name the bundle members the release workflow actually attaches.
+    assert f"gh release download v{version} " in readme
+    assert f"aether_agents-{version}-py3-none-any.whl" in readme
+    assert f"aether-agents-{version}-release-lock.json" in readme
+    assert "sha256sum --check SHA256SUMS" in readme
+    banner = ".github/assets/banner.png"
+    assert banner in readme
+    assert (ROOT / banner).is_file()
+    # Release candidates are history owned by CHANGELOG.md, not README links.
+    for candidate in range(1, 20):
+        assert f"releases/tag/v1.0.0-rc.{candidate}" not in readme
+    assert "local-only candidate" not in readme
     assert "**Status:**" not in readme
-    for prior_release in ("18", "17", "16", "15", "14", "13", "12", "10", "9", "8", "7", "6", "5"):
-        assert f"releases/tag/v1.0.0-rc.{prior_release}" not in source_section
-    assert "beta stabilization build, not a release candidate" not in readme
-    assert "no release candidate has been published" not in readme
-    assert "#261 remains open" in readme
+    # The frozen limits stay visible to users instead of being implied away.
     assert "remain explicit unsupported placeholders" in readme
     assert "`aether reconcile` supports only its bounded `--to active` form" in readme
+    assert "`aether uninstall --export` is not implemented" in readme
+    assert "limitations-and-troubleshooting.md#known-issues" in readme
     assert "Historical snapshot" in incomplete
     assert "does not state the current implementation" in incomplete
     assert project["name"] == "aether-agents"
     assert "multi-agent software-engineering method" in project["description"]
+    assert "Development Status :: 5 - Production/Stable" in project["classifiers"]
     assert set(project["entry-points"]["hermes_agent.plugins"]) == {
         "aether-contract-observer",
         "aether-objective-contracts",

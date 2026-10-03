@@ -1,37 +1,41 @@
 # Aether Agents documentation
 
-Aether is a multi-agent software-engineering product built on [Hermes Agent](https://hermes-agent.nousresearch.com/docs/) and the GitHub Spec Kit method. This documentation describes the behavior present in this repository's current build. It is not a release claim: the project remains in operational-reliability stabilization, and its release path is not qualified.
+Aether Agents is a multi-agent software-engineering product built on
+[Hermes Agent](https://hermes-agent.nousresearch.com/docs/) and the GitHub Spec Kit method.
+This documentation describes the behavior of the `1.0.0` release in this repository.
+`1.0.0` is the final feature set: the maintainer froze features at this release and
+publishes it as-is (see the [release record](../specs/v1-stable-release/spec.md) and the
+[known issues](reference/limitations-and-troubleshooting.md#known-issues)).
 
-This index is navigation only and routes reader questions to the appropriate guide, reference, or authority artifact. For the complete reader-facing placement and conflict-resolution map across all artifact classes, see [Authority and artifact ownership](authority.md).
+This index is navigation only. For the reader-facing placement and conflict-resolution
+map across all artifact classes, see [Authority and artifact ownership](authority.md).
+Use `aether doctor --json` to identify the release that is actually installed; the
+source version and tags never prove what is active.
 
-The current source revision defines the local candidate `1.0.0rc19` (display
-`1.0.0-rc.19`, tag `v1.0.0-rc.19`). It carries the
-[Lab/Monitor source retirement](../specs/lab-monitor-retirement/spec.md) and the opt-in
-[Claude Code Implementer harness](../specs/external-implementer-harness/spec.md) on
-maintained-fork commit `66e87f3487d75cda3681146818006b7c796a71a9` (RC17's selection
-plus HLP-554). RC17's frozen manager adopts it only through a local `1.0.0rc18` bridge
-that keeps the historical package shape. Use `aether doctor --json` and exact cutover
-evidence to identify the installed runtime; source and local tags do not qualify agent
-behavior.
-The [RC19 scope](../specs/rc19-local-release/spec.md) records its bounded verification
-and limits, and the [RC17 scope](../specs/rc17-local-release/spec.md) stays history.
-No public tag or package release is authorized by this documentation.
-The executable Hermes source is Aether's maintained fork
-`DarkArty07/aether-hermes` branch `aether-main`, bound by release-lock
-`maintained_fork` — read as schema 4 or 5, emitted as schema 5 with the closed
-`hermes.extras` allowlist — and installed through `aether update`.
-In the historical rc3 qualification, active release `1.0.0rc3-8987f650c027ad09` was
-locally selected from Aether merge `d8ff984c67bfc147ac9c83cf8a34a72edc27c8df` and
-maintained-fork commit `aed6591a69f453a1867b73628603e7b53ba40ffc`; `aether doctor`
-reported `ready` with 22/22 callbacks. On the original large #417 trace, status completed
-in 19.266s then 15.598s, changes in 15.576s, and post-reactivation status in 34.655s then
-23.495s; watch emitted its baseline and all requests remained below the 420-second native
-bound. One rollback to `1.0.0rc2-b3ad4dd42eb0e1da` and forward reactivation preserved
-mutable state. This is not a public GitHub Release, stable `1.0.0`, a package-index
-publication or a WSL2 qualification result; the annotated tag remains local-only, and
-issue #261 stays open with those publication and platform gates outstanding. See
-[Lifecycle](guides/lifecycle.md), [Policy and recovery](guides/policy-and-recovery.md) and
-[CLI reference](reference/cli.md).
+## Start here
+
+1. [Installation](installation.md) — download the release bundle, install it with
+   `aether setup`, configure a model for each role.
+2. [Getting started](getting-started.md) — initialize a project, launch Morfeo and learn
+   the provider-free inspection commands.
+3. [Tutorial: your first objective](tutorials/first-objective.md) — the direct route and
+   the full pipeline on a practice repository.
+
+## Tutorials
+
+- [Your first objective](tutorials/first-objective.md): adopt a project, complete a direct
+  change, plan with `/aether-plan`, deliver through the pipeline and observe it.
+- [Use Aether with Claude Code](tutorials/claude-code.md): Morfeo over MCP, and Claude Code
+  as an opt-in Implementer.
+- [Give every role a map of your project](tutorials/project-knowledge.md): install and enable
+  Graphify-based project knowledge and role work memory.
+
+## Concepts
+
+- [Product boundary](product-boundary.md): what Aether adds to Hermes and what it reuses.
+- [Roles and authority](roles-and-authority.md): Morfeo, Supervisor and Implementer.
+- [Lifecycle](guides/lifecycle.md) and [Execution](guides/execution.md): routes, boards,
+  worktrees, review and closeout.
 
 ## Navigate by question
 
@@ -44,11 +48,13 @@ issue #261 stays open with those publication and platform gates outstanding. See
   See [Roles and authority](roles-and-authority.md).
 
 ### Getting started and project setup
+- **How do I install, update, roll back or uninstall Aether?**
+  See [Installation](installation.md).
 - **What should Aether do without repeated reminders, and where are those instructions?**
   See [Expected behavior of Aether agents](guides/expected-behavior.md), including triggers,
   limits and the distinction between source instructions, installation and observed conduct.
-- **How do I explore Aether locally without provider calls or credentials?**
-  See [Getting started](getting-started.md).
+- **How do I explore Aether without provider calls or credentials?**
+  See [Getting started](getting-started.md#inspect-without-changing-anything).
 - **How do I launch Aether in an already initialized project, and which commands recover an active installation?**
   See [Launch Aether in an initialized project](getting-started.md#launch-aether-in-an-initialized-project) and the [lifecycle recovery surfaces](guides/lifecycle.md#recovery-surfaces).
 - **How do I bind an existing Git repository root to a Hermes Project?**

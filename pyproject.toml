@@ -10,13 +10,29 @@ readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.11,<3.14"
 authors = [{ name = "Christopher" }]
-keywords = ["aether", "agents", "hermes", "spec-kit", "observation"]
+keywords = [
+  "aether",
+  "agents",
+  "ai-agents",
+  "multi-agent",
+  "hermes",
+  "spec-kit",
+  "spec-driven-development",
+  "mcp",
+  "claude-code",
+  "observation",
+]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
   "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development",
 ]
 dependencies = [
   "jsonschema==4.26.0",
@@ -33,8 +49,11 @@ aether-objective-contracts = "aether_agents.objective_contracts.hermes_plugin"
 aether-project-knowledge = "aether_agents.knowledge.hermes_plugin"
 
 [project.urls]
-Homepage = "https://github.com/DarkArty07/aether-agents"
-Issues = "https://github.com/DarkArty07/aether-agents/issues"
+Homepage = "https://darkarty07.github.io/Aether-Agents/"
+Documentation = "https://darkarty07.github.io/Aether-Agents/docs/"
+Repository = "https://github.com/DarkArty07/Aether-Agents"
+Issues = "https://github.com/DarkArty07/Aether-Agents/issues"
+Changelog = "https://github.com/DarkArty07/Aether-Agents/blob/main/CHANGELOG.md"
 
 # Single source of truth for the product version (OBS-FR-071: observation shares it).
 [tool.hatch.version]

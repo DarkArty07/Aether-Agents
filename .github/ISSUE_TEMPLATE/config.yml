@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://darkarty07.github.io/Aether-Agents/docs/
+    about: Installation, tutorials, guides and reference for Aether Agents.
+  - name: Known issues and limitations
+    url: https://github.com/DarkArty07/Aether-Agents/blob/main/docs/reference/limitations-and-troubleshooting.md#known-issues
+    about: Check the documented limits of the frozen 1.0.0 feature set before filing a report.
