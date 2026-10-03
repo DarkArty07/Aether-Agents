@@ -88,13 +88,14 @@ diagnosis; this direction neither disables CI nor permits a protected-check bypa
 The #541 no-test instruction continues to describe that earlier local source delivery,
 not this separately authorized release. Keep its evidence attribution unchanged.
 
-### RC18 bounded release verification (#564)
+### RC19 bounded release verification (#564)
 
-The owner directs RC18 source integration and one local managed cutover. #563 already
-ran the full exact-Hermes suite and its isolated real run. The release adds the version
-identity checks and the normal required PR checks, then one non-mutating transition
-preview, the managed cutover and one post-cutover coherence check. A required check
-failure still needs concrete diagnosis; this direction neither disables CI nor permits a
+The owner directs RC19 source integration and the local managed update through its RC18
+adoption bridge. #563 already ran the full exact-Hermes suite and its isolated real run.
+The release adds the version identity checks, the full suite on the release branch and
+the normal required PR checks. Each of the two cutovers then gets one non-mutating
+preview, the managed cutover and one coherence check. A required check failure still
+needs concrete diagnosis; this direction neither disables CI nor permits a
 protected-check bypass.
 
 ## Quality checks

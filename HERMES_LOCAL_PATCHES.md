@@ -2,7 +2,7 @@
 
 **Status:** canonical operational record of the functional differences that Aether maintains over its loaded Hermes.
 
-**RC18 candidate selection (#564):** reviewed maintained-fork merge
+**RC19 candidate selection (#564), shared by its RC18 adoption bridge:** reviewed maintained-fork merge
 `66e87f3487d75cda3681146818006b7c796a71a9` adds HLP-554 (fork PRs #24 and #25) to the
 RC17 selection and makes it required. HLP-554 is the reviewed source of the Codex
 message-id guard that the installed RC17 runtime carried as a live edit (#554, #560).
@@ -121,7 +121,7 @@ This file prevents a Hermes update from silently removing local repairs. An Aeth
 - **Behavior:** `_chat_messages_to_responses_input` and `_preflight_codex_input_items` keep a replayed assistant message id only when it starts with `msg` and stays within 64 characters. Foreign ids such as other providers' UUIDs, which Codex rejects with a non-retryable HTTP 400, are dropped. Content, phase, valid `msg` ids and tool-call pairing are unchanged, and GitHub Responses still drops every id. The guard is byte-identical to the live edit the installed RC17 runtime carried (#554, #560).
 - **Artifact:** `patches/hermes/HLP-554-codex-message-id-prefix.patch`, 6,403 bytes, 133 lines, SHA-256 `04a708d14f69b15778e5f5fceb326ea19d7353a2b359e5218831322c93ba9e15`; touches `AETHER_FORK.md`, `agent/codex_responses_adapter.py`, `tests/agent/test_codex_responses_adapter.py`.
 - **Evidence:** six parametrized regressions; the four foreign-id cases fail at base and pass after the fix. The Codex-related fork suites gave 227 passed with the fix and 221 at base. `git apply --index --check` exits 0 on a clean base checkout; applying yields the selected tree `097053ce9ca6b91021a2ba15107fdec9783df11e`, and reversing restores `b26638974fc134da866b821ab3c4b34ab430aeb3`. Full record in `specs/issue-554-codex-message-id/evidence/HLP-554.md`.
-- **Disposition:** selected and required for RC18 (#564). Fork Actions are disabled, so this is not a claim of green CI. The inspected upstream `4f22543509d1b91dc45bcb369447126c5eb14fb7` lacks the guard. Released `v2026.9.24` (commit `f97608f178d1ffeca59860195ab7da295f7c8e5f`) and main `eb7e8620324b32424c06218f6a28094df2e921f8` scope it to the Codex backend issuer only, so `UPSTREAM_PARTIAL`.
+- **Disposition:** selected and required for the RC18 adoption bridge and RC19 (#564). Fork Actions are disabled, so this is not a claim of green CI. The inspected upstream `4f22543509d1b91dc45bcb369447126c5eb14fb7` lacks the guard. Released `v2026.9.24` (commit `f97608f178d1ffeca59860195ab7da295f7c8e5f`) and main `eb7e8620324b32424c06218f6a28094df2e921f8` scope it to the Codex backend issuer only, so `UPSTREAM_PARTIAL`.
 - **Rollback/retirement:** reverse the patch or revert the implementation commit; retire only after an adopted upstream release whose guard covers the Responses issuers Aether uses passes the six regression cases without the fork guard.
 
 ## HLP-188 — sticky `initial_status=blocked`

@@ -904,7 +904,7 @@ def test_repository_hlp428_and_hlp433_are_required_for_rc17() -> None:
 @pytest.mark.parametrize(
     "identifier", ["HLP-435", "HLP-473", "HLP-474", "HLP-475", "HLP-460", "HLP-554"]
 )
-def test_rc18_selects_integrated_fixes_without_retiring_them(identifier: str) -> None:
+def test_rc19_selects_integrated_fixes_without_retiring_them(identifier: str) -> None:
     record = json.loads((ENTRIES_PATH / f"{identifier}.json").read_text(encoding="utf-8"))
     aggregate = json.loads(
         (ENTRIES_PATH.parent.parent / "hermes-patch-reconciliation.v1.json").read_text(

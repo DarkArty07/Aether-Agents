@@ -29,7 +29,7 @@ only inter-role transport. This is the explicit PD-74 bounded exception: it auth
 autonomous implementation, isolated real Claude Code runs and normal reviewed source
 closeout. On 2026-10-03 the owner directed its direct completion, integration into
 `main`, the next release candidate and the local update (spec OD-11); that release and
-update belong to the separate RC18 record. It never authorizes a Hermes fork change,
+update belong to the separate RC19 record (adopted through an RC18 bridge). It never authorizes a Hermes fork change,
 Claude credential handling or an agent-behavior campaign.
 
 Only Morfeo has a proper agent name; supervision and implementation remain role descriptions. Hermes Agent and GitHub Spec Kit are selected foundations. Aether reuses native Hermes profiles, Projects, boards, worktrees, review, and lifecycle where they qualify. A2A remains available but unused under R6; framework availability never authorizes an integration mechanism.
@@ -122,16 +122,16 @@ This principle is owned canonically by `specs/r0-design-governance/spec.md` and 
 
 ## Project guidance and canonical skills
 
-**Local release (RC18, #564, owner-directed 2026-10-03):** the owner directed finishing
+**Local release (RC19, #564, owner-directed 2026-10-03):** the owner directed finishing
 #563, integrating it into `main`, preparing the next candidate and updating the local
-installation. One local RC18 candidate, an immutable local annotated tag and one managed
-local cutover are authorized. The exact fork pin is
+installation. One local RC19 candidate, its local RC18 adoption bridge, immutable local
+annotated tags and the two managed local cutovers are authorized. The exact fork pin is
 `66e87f3487d75cda3681146818006b7c796a71a9`: RC17's selection plus HLP-554, the reviewed
 source of the Codex message-id guard that the installed RC17 carried as a live edit
 (#554, #560). It reuses #563's full gate and isolated real run plus the normal required
-PR checks. No tag push, public release or agent campaign is authorized. A recorded,
-preview-first adoption path resolves the frozen RC17 manager's forward-adoption limit
-for the three-plugin artifact; see `specs/rc18-local-release/spec.md`.
+PR checks. No tag push, public release or agent campaign is authorized. RC17's frozen
+manager accepts only the historical package shape, so the bridge keeps that shape and
+carries RC19's manager; see `specs/rc19-local-release/spec.md`.
 
 **Historical local release (RC17, #542, prepared 2026-09-27):** source integration and
 one managed local cutover are authorized with bounded verification, reusing reviewed

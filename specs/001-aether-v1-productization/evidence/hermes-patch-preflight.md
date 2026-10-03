@@ -4,7 +4,7 @@ Observation timestamp: `2026-10-03T08:41:45Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `86341df7e061858e286de169c4cbcfe97dc7000474190dca256f16089411577f`
+Source ledger SHA-256: `e922aaf0583519e818ad4b02de177fea1a919f01aaea47c954aab35964c81737`
 
 ## Remaining local guarantees
 
@@ -46,7 +46,7 @@ Source ledger SHA-256: `86341df7e061858e286de169c4cbcfe97dc7000474190dca256f1608
 - `HLP-473`: Base 54abacd1c38ce6300997289628fe2f2a7569df18; implementation c81053679cd57a24f5a7a6c93b6cd450eee47343; reviewed implementation tree 49189104a6888ef604ff0733d97b6b05e25b0d33; merged source 30b4846a2c8063528d491f48950b3b341b0ce7d7 (fork PR #21). Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
 - `HLP-474`: Base b287195d63d47d73788653bdd012c2fbfe00c0ac; implementation 7755f82df15786285378732ef17544b4736c4b81; reviewed implementation tree 105071996d00bfbb361771d82d0863552380fccb; merged source 54abacd1c38ce6300997289628fe2f2a7569df18 (fork PR #20). Source-only. RC16 still selects 58f8c37a49b341f25b8fdd6310542fe932031b8d. Declared paths can exist at that old pin without this fix. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
 - `HLP-475`: Base 30b4846a2c8063528d491f48950b3b341b0ce7d7; reviewed implementation f21c733b800a2dcc8a29639c90e5f84eb7d6278b; implementation tree c69e40e7c9f362458833778b89f88430fb9e10c4; maintained-fork PR #22 merged at 58750d6cf8182c0ff5093719b9e7cc5026621fbf. Source-only. Selected fork source is merged; installed runtime remains unchanged. No runtime restart, configuration/credential change, tag, RC17 or installed-behavior claim. Fork Actions disabled (NOT RUN). Retirement is not qualified.
-- `HLP-554`: HLP-554 replays only msg-prefixed assistant message ids to Codex Responses. Fork PR #24 merged as 96cdb97ede6e1726ad9651eb6d91553356563dcd and the AETHER_FORK.md record (PR #25) as 66e87f3487d75cda3681146818006b7c796a71a9, the RC18 selected pin. It is the reviewed source of the guard previously applied as a live edit to the installed RC17 runtime; only the managed cutover establishes adoption.
+- `HLP-554`: HLP-554 replays only msg-prefixed assistant message ids to Codex Responses. Fork PR #24 merged as 96cdb97ede6e1726ad9651eb6d91553356563dcd and the AETHER_FORK.md record (PR #25) as 66e87f3487d75cda3681146818006b7c796a71a9, the pin selected by the RC18 adoption bridge and RC19. It is the reviewed source of the guard previously applied as a live edit to the installed RC17 runtime; only the managed cutover establishes adoption.
 
 ## Qualified upstream equivalents
 

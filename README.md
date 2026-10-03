@@ -2,16 +2,17 @@
 
 Aether Agents is a multi-agent software-engineering product and method. It adapts [Hermes Agent](https://hermes-agent.nousresearch.com/docs) as the runtime substrate and [GitHub Spec Kit](https://github.com/github/spec-kit) as the specification method, while defining Aether's role, handoff, policy, and qualification boundaries.
 
-**Source versus release:** this source revision defines `1.0.0rc18` / `1.0.0-rc.18` as a
-**local-only candidate**; its local annotated tag identity is `v1.0.0-rc.18`. It carries
+**Source versus release:** this source revision defines `1.0.0rc19` / `1.0.0-rc.19` as a
+**local-only candidate**; its local annotated tag identity is `v1.0.0-rc.19`. It carries
 the reviewed [Lab/Monitor retirement](specs/lab-monitor-retirement/spec.md), the opt-in
 [Claude Code Implementer harness](specs/external-implementer-harness/spec.md) and the
 source fixes integrated since RC17. It binds maintained-fork Hermes commit
 `66e87f3487d75cda3681146818006b7c796a71a9`: RC17's selection plus the HLP-554 Codex
-message-id guard. Neither
+message-id guard. RC17's frozen manager cannot adopt this package shape directly, so a
+local `1.0.0rc18` bridge with the historical shape carries the adoption. Neither
 this source nor a local tag proves what is installed or that agent behavior improved:
 check the selected installation with `aether doctor --json` and the release lock, not
-the checkout's version string. See the [RC18 scope](specs/rc18-local-release/spec.md).
+the checkout's version string. See the [RC19 scope](specs/rc19-local-release/spec.md).
 `release_impact=major` records the retirement of a public command and plugin within the
 prerelease line; `release_action=prepare`, `release_channel=prerelease`; no tag is
 pushed and no GitHub/package publication is authorized.

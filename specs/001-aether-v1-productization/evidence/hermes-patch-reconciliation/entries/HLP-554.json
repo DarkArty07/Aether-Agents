@@ -40,5 +40,5 @@
     "Fork Actions are disabled (NOT RUN); verification is the recorded focused and Codex-related suite runs, not green CI.",
     "Upstream's narrower issuer-scoped guard is not adopted; retirement needs an exact upstream release covering the issuers Aether uses."
   ],
-  "summary": "HLP-554 replays only msg-prefixed assistant message ids to Codex Responses. Fork PR #24 merged as 96cdb97ede6e1726ad9651eb6d91553356563dcd and the AETHER_FORK.md record (PR #25) as 66e87f3487d75cda3681146818006b7c796a71a9, the RC18 selected pin. It is the reviewed source of the guard previously applied as a live edit to the installed RC17 runtime; only the managed cutover establishes adoption."
+  "summary": "HLP-554 replays only msg-prefixed assistant message ids to Codex Responses. Fork PR #24 merged as 96cdb97ede6e1726ad9651eb6d91553356563dcd and the AETHER_FORK.md record (PR #25) as 66e87f3487d75cda3681146818006b7c796a71a9, the pin selected by the RC18 adoption bridge and RC19. It is the reviewed source of the guard previously applied as a live edit to the installed RC17 runtime; only the managed cutover establishes adoption."
 }

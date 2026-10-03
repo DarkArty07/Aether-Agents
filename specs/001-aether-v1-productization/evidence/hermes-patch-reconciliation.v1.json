@@ -4520,7 +4520,7 @@
         "revision": "66e87f3487d75cda3681146818006b7c796a71a9",
         "unverified_reason": null
       },
-      "summary": "HLP-554 replays only msg-prefixed assistant message ids to Codex Responses. Fork PR #24 merged as 96cdb97ede6e1726ad9651eb6d91553356563dcd and the AETHER_FORK.md record (PR #25) as 66e87f3487d75cda3681146818006b7c796a71a9, the RC18 selected pin. It is the reviewed source of the guard previously applied as a live edit to the installed RC17 runtime; only the managed cutover establishes adoption.",
+      "summary": "HLP-554 replays only msg-prefixed assistant message ids to Codex Responses. Fork PR #24 merged as 96cdb97ede6e1726ad9651eb6d91553356563dcd and the AETHER_FORK.md record (PR #25) as 66e87f3487d75cda3681146818006b7c796a71a9, the pin selected by the RC18 adoption bridge and RC19. It is the reviewed source of the guard previously applied as a live edit to the installed RC17 runtime; only the managed cutover establishes adoption.",
       "upstream": {
         "disposition": "upstream_partial",
         "evidence": [
@@ -4564,7 +4564,7 @@
     "revision": "66e87f3487d75cda3681146818006b7c796a71a9",
     "unverified": 2
   },
-  "source_ledger_sha256": "86341df7e061858e286de169c4cbcfe97dc7000474190dca256f16089411577f",
+  "source_ledger_sha256": "e922aaf0583519e818ad4b02de177fea1a919f01aaea47c954aab35964c81737",
   "upstream": {
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
     "repository": "https://github.com/NousResearch/hermes-agent"

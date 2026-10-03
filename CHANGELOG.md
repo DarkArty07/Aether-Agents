@@ -1,18 +1,22 @@
 # Changelog
 
-## 1.0.0rc18 — Lab and Telegram Monitor retirement, opt-in Claude Code Implementer
+## 1.0.0rc19 — Lab and Telegram Monitor retirement, opt-in Claude Code Implementer
 
-Package `1.0.0rc18` / display `1.0.0-rc.18` / local annotated tag `v1.0.0-rc.18`.
+Package `1.0.0rc19` / display `1.0.0-rc.19` / local annotated tag `v1.0.0-rc.19`.
 `release_impact=major` because the Lab and Telegram Monitor retirement removes a public
 command and plugin; `release_action=prepare`, `release_channel=prerelease`. This
 continues the pre-1.0 candidate line, not a stable major release. No tag push or public
 release. Hermes is pinned to reviewed `aether-main` merge
 `66e87f3487d75cda3681146818006b7c796a71a9`: RC17's selection plus HLP-554.
 
+- RC17's frozen manager accepts only the historical package shape: the single `aether`
+  console script and the four-plugin map. A local `1.0.0rc18` bridge, cut beside this
+  release with that shape and an inert Monitor entry, carries RC19's manager, so the
+  update runs RC17 → RC18 bridge → RC19. The bridge is never merged into `main`
+  ([RC19 scope](specs/rc19-local-release/spec.md)).
 - Codex Responses replay keeps an assistant message id only when it starts with `msg`
   (HLP-554, #554). This is the reviewed source of the guard that the installed RC17
   carried as a live edit (#560); foreign ids no longer trigger repeated HTTP 400.
-
 - Reviewed source retirement merged via PR #547; the bounded documentation-site map
   correction merged via PR #548. The implementation is accepted in `main` with its
   post-merge [reception](specs/lab-monitor-retirement/evidence/reception.md).
