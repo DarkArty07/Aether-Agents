@@ -140,14 +140,14 @@ def test_release_identity_refuses_unsupported_versions_and_foreign_tags(
 
 
 def test_version_file_carries_the_objective_release_identity(tool: types.ModuleType) -> None:
-    """This unit owns VERSION; the objective fixes the RC identity it must derive."""
+    """This unit owns VERSION; the stable release fixes the identity it must derive."""
 
     package_version = (ROOT / "VERSION").read_text(encoding="ascii").strip()
     identity = tool.release_identity(package_version)
-    assert identity["package_version"] == "1.0.0rc19"
-    assert identity["semver"] == "1.0.0-rc.19"
-    assert identity["tag"] == "v1.0.0-rc.19"
-    assert identity["prerelease"] is True
+    assert identity["package_version"] == "1.0.0"
+    assert identity["semver"] == "1.0.0"
+    assert identity["tag"] == "v1.0.0"
+    assert identity["prerelease"] is False
 
 
 # --------------------------------------------------------------------------- workflow
