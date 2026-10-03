@@ -21,6 +21,17 @@ probe or agent-behavior campaign. PD-74 remains outstanding; deleting tooling is
 reliability PASS. Use this objective's plan/quickstart for preservation checks and keep
 prior failures/releases immutable.
 
+**Owner-authorized external Implementer harness (#563, 2026-09-30 UTC):**
+`specs/external-implementer-harness/spec.md` and amended PD-40 own an opt-in Claude Code
+executor for Implementer work attempts, selected only when the owner explicitly requests
+it for a contract; Hermes remains the default executor for every role and the board the
+only inter-role transport. This is the explicit PD-74 bounded exception: it authorizes
+autonomous implementation, isolated real Claude Code runs and normal reviewed source
+closeout. On 2026-10-03 the owner directed its direct completion, integration into
+`main`, the next release candidate and the local update (spec OD-11); that release and
+update belong to the separate RC18 record. It never authorizes a Hermes fork change,
+Claude credential handling or an agent-behavior campaign.
+
 Only Morfeo has a proper agent name; supervision and implementation remain role descriptions. Hermes Agent and GitHub Spec Kit are selected foundations. Aether reuses native Hermes profiles, Projects, boards, worktrees, review, and lifecycle where they qualify. A2A remains available but unused under R6; framework availability never authorizes an integration mechanism.
 
 Executable Hermes source is Aether's maintained fork `DarkArty07/aether-hermes` branch `aether-main`, bound by release-lock source mode `maintained_fork` — emitted as `schema_version` 5 with the closed `hermes.extras` allowlist and readable as schema 4 — through repository, exact commit, source-tree digest, artifacts and provenance, and installed through `aether update`. The earlier fixed public baseline `NousResearch/hermes-agent` `v2026.8.18` — annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, distribution `hermes-agent` `0.20.4`, Python `>=3.11,<3.14` — remains a reference baseline for upstream-compatible behavior and historical evidence, not the deployment input. `.patch` files and HLP records are audit/reconstruction evidence and are never replayed onto the active runtime; the retired `transitional_fork` mode is refused for new preparation. Hermes keeps its own distribution identity (`hermes-agent`). No new Aether capability may depend on a downstream-only core change, and each accepted fork change retires when an exact released upstream artifact passes its behavior gate.

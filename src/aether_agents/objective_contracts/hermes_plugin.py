@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 import subprocess
+import sys
+import sysconfig
 import threading
 import time
 from collections.abc import Iterator
@@ -145,6 +148,7 @@ def _create_metadata_exclusive(
     version: int,
     worktree_base_ref: str | None = None,
     observation_trace_id: str | None = None,
+    implementer_harness: str | None = None,
 ) -> bool:
     """Create board metadata without ever overwriting a competing writer."""
     payload: dict[str, Any] = {
@@ -161,6 +165,8 @@ def _create_metadata_exclusive(
         "created_at": int(time.time()),
         "archived": False,
     }
+    if implementer_harness == "claude-code":
+        payload["aether_implementer_harness"] = "claude-code"
     if observation_trace_id is not None:
         payload["observation_trace_id"] = observation_trace_id
     if worktree_base_ref is not None:
@@ -215,6 +221,7 @@ def _validate_execution_metadata(
     version: int,
     worktree_base_ref: str | None = None,
     observation_trace_id: str | None = None,
+    implementer_harness: str | None = None,
 ) -> None:
     if metadata.get("archived"):
         raise ExecutionBoardError(
@@ -240,6 +247,13 @@ def _validate_execution_metadata(
         raise ExecutionBoardError(
             "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT",
             "the execution board carries a different Objective Contract identity",
+        )
+    expected_harness = "claude-code" if implementer_harness == "claude-code" else None
+    stored_harness = metadata.get("aether_implementer_harness")
+    if stored_harness != expected_harness:
+        raise ExecutionBoardError(
+            "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT",
+            "the execution board carries a different implementer harness selection",
         )
     if (
         observation_trace_id is not None
@@ -401,6 +415,7 @@ def _provision_execution_board(
     version: int,
     worktree_base_ref: str | None = None,
     observation_trace_id: str | None = None,
+    implementer_harness: str | None = None,
 ) -> dict[str, str]:
     """Create or verify the one Hermes board for an executable contract version."""
     from hermes_cli import kanban_db  # type: ignore[import-untyped,import-not-found]
@@ -432,6 +447,7 @@ def _provision_execution_board(
                         version=version,
                         worktree_base_ref=worktree_base_ref,
                         observation_trace_id=observation_trace_id,
+                        implementer_harness=implementer_harness,
                     )
                     directory, metadata_path, db_path = _safe_board_paths(kanban_db, slug)
 
@@ -445,6 +461,7 @@ def _provision_execution_board(
                     version=version,
                     worktree_base_ref=worktree_base_ref,
                     observation_trace_id=observation_trace_id,
+                    implementer_harness=implementer_harness,
                 )
 
                 # Use the canonical explicit path, never Hermes's raw DB override. Idempotent
@@ -461,6 +478,7 @@ def _provision_execution_board(
                     version=version,
                     worktree_base_ref=worktree_base_ref,
                     observation_trace_id=observation_trace_id,
+                    implementer_harness=implementer_harness,
                 )
                 if not db_path.is_file():
                     raise ExecutionBoardError(
@@ -493,6 +511,12 @@ def _handle(
             )
         action = _required(args, "action")
         project_id = _required(args, "project_id")
+        if "implementer_harness" in args:
+            if action not in ("begin", "supersede"):
+                raise ContractError(
+                    "AETHER-OBJECTIVE-CONTRACT-HARNESS-INVALID",
+                    "implementer_harness is only supported on begin and supersede",
+                )
         session_workspace: Path | None = None
         if session_id:
             session_workspace = _native_session_workspace(session_id)
@@ -510,6 +534,7 @@ def _handle(
                 project_id=project_id,
                 title=_required(args, "title"),
                 session_id=session_id,
+                implementer_harness=args.get("implementer_harness"),
             )
         elif action == "set_section":
             result = store.set_section(
@@ -546,6 +571,7 @@ def _handle(
                 version=_required(args, "version"),
                 change_reason=_required(args, "change_reason"),
                 session_id=session_id,
+                implementer_harness=args.get("implementer_harness"),
             )
         elif action == "prepare_handoff":
 
@@ -559,6 +585,7 @@ def _handle(
                         worktree_base_ref=str(prepared["base_commit"]),
                         observation_trace_id=str(prepared.get("observation_trace_id") or "")
                         or None,
+                        implementer_harness=prepared.get("implementer_harness"),
                     )
                 except ExecutionBoardError as exc:
                     raise ContractError(exc.code, str(exc)) from exc
@@ -587,6 +614,55 @@ def _handle(
         )
 
 
+def _passes_through_runtime_current(path: Path) -> bool:
+    """Return True if path passes through the runtime/current selector."""
+    parts = path.parts
+    for i in range(len(parts) - 1):
+        if parts[i] == "runtime" and parts[i + 1] == "current":
+            return True
+    return False
+
+
+def _resolve_running_release_launcher(scripts_dir: Path | None = None) -> Path | None:
+    """Resolve the aether-kanban-worker launcher in the running release's scripts directory.
+
+    Resolved so the path never passes through the runtime/current selector.
+    Returns the resolved absolute Path only if it is a regular executable file;
+    otherwise returns None.
+    """
+    if scripts_dir is None:
+        scripts_dir_raw = sysconfig.get_path("scripts")
+        scripts_dir = Path(scripts_dir_raw) if scripts_dir_raw else Path(sys.executable).parent
+
+    candidate = scripts_dir / "aether-kanban-worker"
+    if not candidate.exists() and sys.platform == "win32":
+        candidate = scripts_dir / "aether-kanban-worker.exe"
+    if not candidate.exists():
+        candidate_parent = Path(sys.executable).parent / "aether-kanban-worker"
+        if candidate_parent.exists():
+            candidate = candidate_parent
+
+    try:
+        resolved = candidate.resolve()
+        if _passes_through_runtime_current(resolved):
+            return None
+        st = resolved.stat()
+        if not stat.S_ISREG(st.st_mode):
+            return None
+        if not (bool(st.st_mode & 0o111) or os.access(resolved, os.X_OK)):
+            return None
+        return resolved
+    except (OSError, ValueError):
+        return None
+
+
+def _configure_hermes_bin_override(scripts_dir: Path | None = None) -> None:
+    """Set HERMES_BIN to the running release's worker launcher if valid."""
+    launcher = _resolve_running_release_launcher(scripts_dir)
+    if launcher is not None:
+        os.environ["HERMES_BIN"] = str(launcher)
+
+
 def register(ctx: Any) -> None:
     """Register one transactional authoring tool only in the configured Morfeo profile."""
     get_config = getattr(ctx, "get_config", None)
@@ -597,6 +673,8 @@ def register(ctx: Any) -> None:
         or get_config("author_profile", "") != "morfeo"
     ):
         return
+
+    _configure_hermes_bin_override()
 
     def handler(args: dict[str, Any], **runtime_kwargs: Any) -> str:
         runtime_kwargs.pop("author_profile", None)
@@ -640,6 +718,10 @@ def register(ctx: Any) -> None:
                     },
                     "version": {"type": "integer", "minimum": 1},
                     "change_reason": {"type": "string"},
+                    "implementer_harness": {
+                        "type": "string",
+                        "enum": ["hermes", "claude-code"],
+                    },
                 },
             },
         },

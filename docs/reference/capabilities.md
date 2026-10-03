@@ -673,6 +673,34 @@ A ready finalized Objective Contract deterministically provisions or verifies an
 
 None.
 
+## `lifecycle.external-implementer-harness`
+
+**Status:** `partial`
+
+An opt-in external Implementer harness (Claude Code) executes bounded implementation units when explicitly requested by the owner, falling back statelessly to Hermes.
+
+### Surfaces
+- `lifecycle.external-implementer-harness`
+
+### Current documentation
+- [docs/guides/execution.md](../guides/execution.md)
+- [docs/guides/expected-behavior.md](../guides/expected-behavior.md)
+
+### Owning specifications
+- [specs/external-implementer-harness/plan.md](../../specs/external-implementer-harness/plan.md)
+- [specs/external-implementer-harness/spec.md](../../specs/external-implementer-harness/spec.md)
+
+### Implementation
+- [src/aether_agents/resources/profiles/morfeo/SOUL.md](../../src/aether_agents/resources/profiles/morfeo/SOUL.md)
+- [src/aether_agents/resources/skills/objective-contract-design/SKILL.md](../../src/aether_agents/resources/skills/objective-contract-design/SKILL.md)
+
+### Verification
+- [tests/test_contract_quality_documents.py](../../tests/test_contract_quality_documents.py)
+
+### Notes / current limits
+
+The external Implementer harness is opt-in per contract under owner decision OD-1; Hermes remains the default executor for every role and inter-role transport stays on the Kanban board. Minimum user requirements include an installed, authenticated Claude Code able to run unattended; attempts consume the user's plan. Aether supplies per-attempt context, skills, worker MCP and PD-71 pre-tool hook without managing the user's Claude configuration. A missing binary, disabled bypass mode, auth failure, quota exhaustion, or unready hook/MCP triggers stateless fallback to Hermes within the same claim. Goal-mode cards and review attempts remain on Hermes, and Aether never accesses or stores Claude credentials. This capability is implementation-only under OD-8; no release, managed update, or runtime activation is claimed.
+
 ## `lifecycle.git-github-terminal-closeout`
 
 **Status:** `partial`

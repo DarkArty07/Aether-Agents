@@ -35,6 +35,25 @@ explicit peer questions and coalesced evidence notices may reach the originating
 design steward without notifying the human owner. Only explicit owner input,
 contract revision, or terminal outcomes return to the owner-facing session.
 
+## Opt-in Implementer harness (Claude Code)
+
+Hermes Agent remains Aether's infrastructure and the default executor for every role. An owner may explicitly opt in to an external Claude Code harness for Implementer work attempts on a specific contract (OD-1). Without that explicit owner request, every role runs on Hermes, and Morfeo neither proposes, asks about, nor selects another harness.
+
+### Minimum requirements
+
+When an external harness is selected:
+- **Installed and authenticated:** Claude Code must be installed and logged in by the user. Aether never reads, manages, or stores Claude credentials.
+- **Unattended execution:** Claude Code must be able to work unattended. Any user hook, plugin, or setting that requires human interaction is the user's responsibility to adjust.
+- **Unmanaged configuration:** Aether adds its per-run context, role skills, worker MCP server, and deterministic PD-71 pre-tool hook only for the duration of the run; it never manages, isolates, or curates the user's Claude configuration, plugins, or model settings.
+- **Plan and quota:** Work attempts, including parallel Implementer cards, consume the user's own Claude subscription plan and quota.
+- **Stateless fallback to Hermes:** If the `claude` binary is missing, `disableBypassPermissionsMode` is set in the user's environment/settings, authentication fails, quota/rate limits are hit, or MCP/hook readiness fails, the attempt falls back statelessly to the standard Hermes executor inside the same claim, process identity, and remaining deadline.
+
+### Limits and boundaries
+
+- **Hermes by default:** Hermes remains the default executor for all roles; external harness selection is per-contract opt-in only.
+- **Role restrictions:** External harness execution applies only to Implementer work attempts. Morfeo, Supervisor, cards configured with `goal_mode`, and all review attempts (including Implementer-assigned reviews) stay on Hermes.
+- **Implementation only:** No release or runtime activation is part of this change (OD-8). Source integration does not imply installed availability.
+
 ## Card inputs and canonical procedures
 
 Every card body carries its explicit acceptance criteria, scope, shared decisions,

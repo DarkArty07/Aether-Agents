@@ -55,6 +55,12 @@ Aether does not use it, for three reasons that are properties of Aether rather t
 - **FR-606**: A2A MUST be reconsidered when either of two conditions holds, and MUST NOT be reconsidered merely because it is available:
   - a role must execute on a different machine than the board; or
   - a non-Hermes agent must participate as a role.
+
+  **Reconsidered 2026-09-30 (#563):** the owner-approved non-Hermes executor for
+  Implementer work attempts (DESIGN.md PD-40 amendment) runs on the board's host and is
+  spawned per attempt by the native dispatcher. A2A remains unused for the reasons in this
+  section, and the board remains the record (FR-607). See
+  `specs/external-implementer-harness/research.md`.
 - **FR-607**: If either condition is met, the board MUST remain the record and A2A MUST carry only the crossing. Aether MUST NOT move coordination state into the protocol.
 - **FR-608**: A2A's inbound adapter MUST NOT be enabled on a profile that also runs unattended work, because inbound tasks join that profile's live session and would interleave with a run in progress.
 
@@ -66,6 +72,7 @@ MCP's purpose is exposing tools to an agent. Using it as a work transport invert
 - **FR-610**: MCP MAY be used to expose Aether outward — for example, letting an external host create a contract or query pipeline status. That is a legitimate integration surface and belongs to whoever builds it, not to the role model.
 - **FR-611**: An outward MCP surface MUST be read-mostly and MUST NOT expose board mutation beyond contract creation, so an external caller cannot reassign or retire work the contract never authorised.
 - **FR-611a**: An external host that enacts the canonical Morfeo profile uses Morfeo's existing authority and tool surface. That enactment is still outward integration. It is not a fourth role, a second Morfeo profile, or a transport between Supervisor and Implementer. Kanban remains the inter-role transport.
+- **FR-611b**: An external harness that executes an Implementer work attempt under the DESIGN.md PD-40 amendment (2026-09-30, #563) receives exactly the Kanban worker tools that the native dispatcher grants that attempt, bound to its task/run/claim identity, plus the role's knowledge and memory tools, through a per-attempt MCP surface. That surface is the executor's access to the board, not an outward surface under FR-610/FR-611, not a fourth role and not a transport between roles: the card and its native transitions remain the only hand-off (FR-602, FR-609). See `specs/external-implementer-harness/spec.md`.
 
 ## 6. The Owner's Channel
 

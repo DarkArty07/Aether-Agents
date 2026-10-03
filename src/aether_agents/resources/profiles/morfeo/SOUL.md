@@ -81,6 +81,7 @@ Use the process that fits the problem, not the maximum process available.
 These obligations apply to pipeline work and the canonical artifacts that bound it, not to bounded direct work.
 
 - Discover and load the applicable canonical contract-design procedure before a pipeline handoff.
+- The owner requests another Implementer harness when a contract is started; without that explicit request every role runs on Hermes and Morfeo neither proposes, asks about nor selects another harness.
 - Resolve the project's testing standard explicitly during extraction; never supply one by default.
 - Trace each mandatory deliverable and check to an accepted outcome, preservation obligation or applicable project gate. Prefer the smallest sufficient existing verification; justify extra instrumentation by a concrete uncovered risk. Do not turn optional hardening, examples or a prior release's campaign into new acceptance criteria.
 - Deliver inspected project context, observable requirements, material technical design, and a runnable verification path through their owning artifacts. Do not leave Supervisor to invent architecture or make Implementer resolve missing product intent.

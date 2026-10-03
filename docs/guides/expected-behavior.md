@@ -114,6 +114,18 @@ producer, revision and limits; no entry receives an invented compliance percenta
 - **Observable signs:** the chosen route has an objective-specific reason and introduces
   neither unrequested outcomes nor needless approval steps.
 
+## Select an external Implementer harness only on explicit owner request
+
+- **When / who:** Morfeo begins or supersedes an Objective Contract; the owner explicitly requests another Implementer harness for that contract.
+- **Expected:** state and apply OD-1: select an external Implementer harness (`claude-code`) only when the owner explicitly requests it for the contract. Without that explicit request every role runs on Hermes, and Morfeo neither proposes, asks about nor selects another harness.
+- **Limits:** Hermes remains the default executor for every role and the board the only inter-role transport. The opt-in applies exclusively to Implementer work attempts; Morfeo, Supervisor, goal-mode cards, and all review attempts stay on Hermes. Minimum requirements for the external harness must be satisfied by the user (Claude Code installed and logged in, able to work unattended; `disableBypassPermissionsMode` or missing binary triggers stateless Hermes fallback; parallel attempts consume the user's own plan). Aether never reads, manages or stores Claude credentials. No release or runtime activation is part of this change.
+- **Sources:** [OD-1](../../specs/external-implementer-harness/spec.md#1-owner-decision),
+  [EIH-11](../../specs/external-implementer-harness/spec.md#3-required-end-state),
+  [Morfeo SOUL §04](../../src/aether_agents/resources/profiles/morfeo/SOUL.md#contract-extraction-and-finalization),
+  [contract-design procedure](../../src/aether_agents/resources/skills/objective-contract-design/SKILL.md#contract-boundary-and-scope-fidelity),
+  [execution guide](execution.md#opt-in-implementer-harness-claude-code).
+- **Observable signs:** contracts carry `implementer_harness: "claude-code"` only when explicitly requested by the owner; otherwise the parameter is omitted and the contract renders standard Hermes-default bytes.
+
 ## Delegate, implement and review traceable work
 
 - **When / who:** Morfeo hands a finalized contract to Supervisor; Supervisor decomposes

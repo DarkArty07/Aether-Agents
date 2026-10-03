@@ -146,6 +146,18 @@ _KNOWN_AETHER_PLUGIN_ENTRY_POINTS = (
     _HISTORICAL_AETHER_PLUGIN_ENTRY_POINTS,
 )
 
+AETHER_CONSOLE_SCRIPTS: dict[str, str] = {
+    "aether": "aether_agents.cli:main",
+    "aether-kanban-worker": "aether_agents.kanban_worker_launcher:main",
+}
+_HISTORICAL_AETHER_CONSOLE_SCRIPTS: dict[str, str] = {
+    "aether": "aether_agents.cli:main",
+}
+_KNOWN_AETHER_CONSOLE_SCRIPTS = (
+    AETHER_CONSOLE_SCRIPTS,
+    _HISTORICAL_AETHER_CONSOLE_SCRIPTS,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class AetherPrebuildIdentity:
@@ -6725,7 +6737,7 @@ class LifecycleManager:
             raise IntegrityError("candidate wheel compatibility metadata mismatch")
         if set(parser.sections()) != {"console_scripts", "hermes_agent.plugins"}:
             raise IntegrityError("candidate entry-point groups mismatch")
-        if dict(parser["console_scripts"]) != {"aether": "aether_agents.cli:main"}:
+        if dict(parser["console_scripts"]) not in _KNOWN_AETHER_CONSOLE_SCRIPTS:
             raise IntegrityError("candidate public CLI entry point mismatch")
         plugin_entry_points = dict(parser["hermes_agent.plugins"])
         try:
@@ -7072,9 +7084,14 @@ print(json.dumps({
             [[name, target] for name, target in sorted(plugin_map.items())]
             for plugin_map in _KNOWN_AETHER_PLUGIN_ENTRY_POINTS
         ]
-        if installed_entrypoints not in known_plugin_maps or identity.get("console_scripts") != [
-            ["aether", "aether_agents.cli:main"]
-        ]:
+        known_console_scripts = [
+            [[name, target] for name, target in sorted(console_map.items())]
+            for console_map in _KNOWN_AETHER_CONSOLE_SCRIPTS
+        ]
+        if (
+            installed_entrypoints not in known_plugin_maps
+            or identity.get("console_scripts") not in known_console_scripts
+        ):
             raise IntegrityError("installed Aether plugin entry-point set mismatch")
         version = identity.get("version")
         fingerprint = identity.get("fingerprint")
