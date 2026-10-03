@@ -2005,6 +2005,12 @@ def test_import_boundary_is_static_and_manager_modules_import_without_hermes() -
         "observation/capture/hermes_plugin.py",
         "objective_contracts/hermes_plugin.py",
         "mcp/hermes_adapter.py",
+        # EIH worker runtime components (plan §3.5/§3.8/§3.9, reconciled under
+        # specs/external-implementer-harness/plan.md) read the board, build worker
+        # context and derive the tool registry through deferred Hermes imports.
+        "claude_context.py",
+        "kanban_worker_launcher.py",
+        "worker_mcp_server.py",
     }
     assert forbidden_plugin_imports == []
 
