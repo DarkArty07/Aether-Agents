@@ -26,9 +26,11 @@ prior failures/releases immutable.
 executor for Implementer work attempts, selected only when the owner explicitly requests
 it for a contract; Hermes remains the default executor for every role and the board the
 only inter-role transport. This is the explicit PD-74 bounded exception: it authorizes
-autonomous implementation, one isolated real Claude Code run and normal reviewed source
-closeout — not a release, managed update, installed activation, Hermes fork change, Claude
-credential handling or agent-behavior campaign.
+autonomous implementation, isolated real Claude Code runs and normal reviewed source
+closeout. On 2026-10-03 the owner directed its direct completion, integration into
+`main`, the next release candidate and the local update (spec OD-11); that release and
+update belong to the separate RC18 record. It never authorizes a Hermes fork change,
+Claude credential handling or an agent-behavior campaign.
 
 Only Morfeo has a proper agent name; supervision and implementation remain role descriptions. Hermes Agent and GitHub Spec Kit are selected foundations. Aether reuses native Hermes profiles, Projects, boards, worktrees, review, and lifecycle where they qualify. A2A remains available but unused under R6; framework availability never authorizes an integration mechanism.
 

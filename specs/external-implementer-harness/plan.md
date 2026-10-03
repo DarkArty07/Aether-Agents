@@ -351,6 +351,20 @@ budget reset, contract-term change or acceptance.
   summary is invented. At most one substitution per attempt; no ping-pong and no failure
   memory across attempts.
 
+**Turn end and signal fields, resolved 2026-10-03 (owner-directed completion, OD-11):**
+the isolated real run showed that with `--input-format stream-json` the CLI keeps reading
+user messages after its `result`, so an attempt that never ends Claude's input never
+reaches classification. One attempt is one user turn: after the first `result` the
+executor closes Claude's input, as the official Agent SDK does for a single-turn query,
+and the CLI exits on its own. Stdout is read line by line through a queue, because a
+`select` on the pipe can miss lines its reader has already buffered, and stderr is
+drained into the bounded failure tail. Structured signals use the documented stream-json
+fields: `system/api_retry` carries its category in `error`, a terminal API failure is the
+assistant message `error`, and a `result` is an error when `is_error` is true or its
+`subtype` is not `success`. An error result without a transition falls back with cause
+`error_result_<category>` when a category was reported; a successful result supersedes
+the retries it recovered from. Sources are in [research.md](research.md) §3.2.
+
 ### 3.12 Receipts and local state (EIH-09)
 
 - Receipt `aether.harness-receipt.v1` in Aether-managed local state (XDG state root,

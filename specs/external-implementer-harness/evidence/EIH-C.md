@@ -150,3 +150,26 @@ Static analysis and checks:
 ## 8. Compatibility Conclusion
 
 Unit compatibility impact: `minor` (additive, opt-in Claude Code harness adapter; default path and earlier readers preserved unchanged).
+
+## 9. Integration correction (attributed separately, 2026-10-03)
+
+The accepted unit commit `a8f9aab0` is unchanged. The first isolated real run (run 26)
+showed that a real attempt never ended: with `--input-format stream-json` the CLI keeps
+reading user messages after its `result`, and the adapter never ended its input. Review
+of the code against the documented stream-json protocol found two more defects the stub
+fixtures could not reveal. `system/api_retry` carries its category in `error`, not
+`error_category`/`category`. A `result` reports failure through `is_error`/`subtype`, not
+`status`. Quota, authentication and error results therefore never triggered fallback.
+
+Commit `063fdafe` on the integration branch ends Claude's input after the first `result`,
+as the official Agent SDK does for a single-turn query. It reads stdout through a line
+queue, because the earlier `select` plus buffered `readline` could strand an already
+buffered line. It drains stderr into the bounded failure tail and classifies from the
+documented fields. Stub fixtures now use the documented shapes and keep reading input
+after their result like the real CLI.
+
+Re-run: `uv run --frozen python scripts/run_tests.py tests/test_claude_code_adapter.py`
+gives 29 passed. Against the previous adapter, five of the new or corrected tests fail.
+The other focused EIH suites give 78 passed. This correction belongs to the
+owner-directed completion (spec OD-11) and is not part of the independently reviewed
+unit. Plan §3.11 and research §3.2 record the resolved design.

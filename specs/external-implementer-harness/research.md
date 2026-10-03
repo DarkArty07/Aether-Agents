@@ -181,6 +181,43 @@ surface/PD-71 evaluation, or count as the isolated EIH-12 work run. The originat
 session successfully fetched the official headless documentation; that does not
 retroactively change the scheduled producer's HTTP-403 limitation recorded above.
 
+### 3.2 Turn end and failure-signal fields resolved at integration (2026-10-03)
+
+**Observed:** isolated run 26 on Claude Code 2.1.288 passed the pre-prompt gate and
+received the work prompt; the owner's then-default model, reachable only through a
+local router absent from the attempt environment, returned `model_not_found`/404 at the
+first model call. The CLI then stayed alive without activity for more than two hours,
+so no classification, receipt, comment or fallback happened. The adapter never ended
+Claude's input and read failure fields the CLI does not emit.
+
+**Upstream inspected directly** (2026-10-03): the official TypeScript Agent SDK
+`@anthropic-ai/claude-agent-sdk` 0.3.258 as installed locally.
+
+- `sdk.mjs`, `Query.readMessages`: on the first `result` of a single-turn query it logs
+  "First result received for single-turn query, closing stdin" and calls
+  `transport.endInput()`. Streaming input ends the input once its iterable is exhausted,
+  after the first result when the host has bidirectional needs.
+- `sdk.d.ts`: `SDKAPIRetryMessage.error` is an `SDKAssistantMessageError`
+  (`authentication_failed`, `oauth_org_not_allowed`, `account_on_hold`,
+  `billing_error`, `rate_limit`, `overloaded`, `invalid_request`, `model_not_found`,
+  `server_error`, `unknown`, `max_output_tokens`). `SDKResultSuccess` and
+  `SDKResultError` carry `subtype` and `is_error`; neither has a `status` field.
+- Official headless documentation (<https://code.claude.com/docs/en/headless>): the
+  `system/api_retry` table names the `error` field and its categories, and a failure
+  inside a run is printed as the result.
+
+**Decision (plan §3.11):** end Claude's input after the first `result`, read stdout
+through a line queue, drain stderr, and classify from `api_retry.error`, the assistant
+`error` and `result.is_error`/`subtype`. The earlier fixtures emitted an invented
+`error_category` and a result `status`, so the focused tests proved self-consistency
+only; they now use the documented shapes, and the stubs keep reading input after their
+result like the real CLI.
+
+**Limits:** the SDK is inspected as the reference protocol client, not added as a
+dependency. A fresh isolated run on the corrected candidate is recorded in
+[evidence/EIH-INT.md](evidence/EIH-INT.md); it proves one working path, not agent
+behavior or installed availability.
+
 ## 4. Decisions
 
 The readiness assumption in the original authoring row below was resolved during

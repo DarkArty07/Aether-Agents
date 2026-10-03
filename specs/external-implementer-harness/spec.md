@@ -5,8 +5,8 @@
 **Accepted:** 2026-09-30 UTC (decisions recorded 2026-09-28 to 2026-09-30 in the owner's
 conversation with Morfeo)
 
-**Status:** design authored; implementation authorized; no release, managed update or
-installed activation
+**Status:** implemented and integrated through the owner-directed completion (OD-11,
+2026-10-03); the release and local update belong to the separate RC18 record
 
 **Design steward:** Morfeo
 
@@ -58,6 +58,13 @@ Accepted owner decisions:
   may execute Implementer work when the owner requests it for the contract; it receives and
   delivers work through the Kanban board like any Implementer, and its MCP connection to
   the board does not replace the board.
+- **OD-11 — Owner-directed completion (2026-10-03).** After the consumed isolated run
+  ended in a `needs_input` stop, the owner instructed direct completion of this objective,
+  its integration into `main`, the next release candidate and the local update, granting
+  the effects that requires («Necesito que ya termines ese trabajo lo lleves a main, y
+  pases al siguente rc. Actulices lo local. Tienes todo permitido»). This authorizes the
+  replacement isolated real run and supersedes OD-8 only for the separate RC18 release
+  record that carries the release and local update.
 
 Delegated Morfeo decisions, with their assumptions in [`plan.md`](plan.md): every review
 attempt — including an independent review assigned to the Implementer profile — stays on

@@ -1,6 +1,9 @@
 # External Implementer harness — Supervisor task breakdown
 
-**Status:** verified decomposition for Objective Contract `oc_f1ea2c4a2e0662da@v1`.
+**Status:** verified decomposition for Objective Contract `oc_f1ea2c4a2e0662da@v1`;
+executed. EIH-A through EIH-D were accepted and integrated. After EIH-INT's
+`needs_input` stop, the integration was completed through the owner-directed completion
+(spec OD-11, 2026-10-03), recorded in `evidence/EIH-INT.md`.
 
 **Derived by:** Supervisor
 
