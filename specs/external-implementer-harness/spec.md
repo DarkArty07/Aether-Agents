@@ -6,7 +6,7 @@
 conversation with Morfeo)
 
 **Status:** implemented and integrated through the owner-directed completion (OD-11,
-2026-10-03); the release and local update belong to the separate RC18 record
+2026-10-03); the release and local update belong to the separate RC19 record (adopted through an RC18 bridge)
 
 **Design steward:** Morfeo
 
@@ -63,8 +63,8 @@ Accepted owner decisions:
   its integration into `main`, the next release candidate and the local update, granting
   the effects that requires («Necesito que ya termines ese trabajo lo lleves a main, y
   pases al siguente rc. Actulices lo local. Tienes todo permitido»). This authorizes the
-  replacement isolated real run and supersedes OD-8 only for the separate RC18 release
-  record that carries the release and local update.
+  replacement isolated real run and supersedes OD-8 only for the separate RC19 release
+  record (adopted through an RC18 bridge) that carries the release and local update.
 
 Delegated Morfeo decisions, with their assumptions in [`plan.md`](plan.md): every review
 attempt — including an independent review assigned to the Implementer profile — stays on

@@ -333,6 +333,7 @@ jobs:
           patches/hermes/HLP-474-background-review-auth.patch
           patches/hermes/HLP-475-review-affinity-dispatch.patch
           patches/hermes/HLP-460-rooted-parentage.patch
+          patches/hermes/HLP-554-codex-message-id-prefix.patch
           patches/hermes/tests/test_hlp280_live_routing_probe.py
           patches/hermes/tests/test_hlp280_recovery_compatibility.py
           policy/hooks/README.md

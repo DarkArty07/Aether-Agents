@@ -127,7 +127,7 @@ directory. Producer: owner-directed completion. Every check exited 0.
 | `git diff --check` | clean |
 
 The required PR checks remain the independent gate. The package version here is still
-`1.0.0rc17`; the RC18 identity belongs to the release record.
+`1.0.0rc17`; the RC19 identity belongs to the release record.
 
 ## 5. Criterion mapping
 
@@ -149,7 +149,7 @@ The required PR checks remain the independent gate. The package version here is 
 
 Aggregate compatibility of this objective is `minor`: additive and opt-in, with the
 default Hermes path and earlier readers unchanged. Under OD-11 the release is prepared
-separately as RC18. That release also carries earlier unreleased `main` changes, and
+separately as RC19, adopted through an RC18 bridge. That release also carries earlier unreleased `main` changes, and
 its own record owns the release conclusions.
 
 ## 7. Cleanup

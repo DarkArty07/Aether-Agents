@@ -1,0 +1,133 @@
+diff --git a/AETHER_FORK.md b/AETHER_FORK.md
+index bb4cca291..52e0d6b1d 100644
+--- a/AETHER_FORK.md
++++ b/AETHER_FORK.md
+@@ -533,6 +533,34 @@ The scoped regression surface is `tests/hermes_cli/test_kanban_collaboration.py`
+ installed runtime or release pin. Portable HLP-460 packaging and any later adoption are
+ separate reviewed work.
+ 
++## Codex message-id prefix guard (Aether #554)
++
++From base `007cfb77676b6b024d2c0986f4585e6cfdcf18d6`, implementation
++`971698cafbf477f65f6d0792dc708b759f24a500` (fork PR #24, merge
++`96cdb97ede6e1726ad9651eb6d91553356563dcd`) keeps a replayed assistant message `id`
++only when it also starts with `msg`, in both `_chat_messages_to_responses_input` and
++`_preflight_codex_input_items`. Codex Responses rejects a foreign id, such as a UUID
++minted by another provider, with a non-retryable HTTP 400 that repeats on every later
++turn of an affinity-bound worker session. The id is optional replay metadata. Content,
++phase, valid `msg` ids and tool-call pairing are unchanged, and GitHub Responses still
++drops every id.
++
++Upstream released `v2026.9.24` (commit `f97608f178d1ffeca59860195ab7da295f7c8e5f`) and
++main at `eb7e8620324b32424c06218f6a28094df2e921f8` drop non-`msg` ids only when the
++current issuer is the ChatGPT Codex backend, inside a refactored helper. This fork's
++guard applies to every non-GitHub Responses issuer. The same two-line guard had been
++applied locally to the installed Aether RC17 runtime; this commit is its reviewed
++source.
++
++Evidence: six parametrized regressions in `tests/agent/test_codex_responses_adapter.py`;
++the four foreign-id cases were RED before the fix. In a disposable venv with the `dev`
++extra, the Codex adapter, run-agent Codex Responses, provider parity, sanitization,
++multimodal tool-result and native-compaction suites passed (227) with the fix, and the
++same files passed (221) at the base. Revert the implementation commit to roll back.
++Retirement requires an adopted upstream release whose guard covers the issuers Aether
++uses. Inherited Actions remain disabled (NOT RUN, never green). This source change
++claims no installed-runtime, configuration or credential change.
++
+ ## Distribution identity and release binding
+ 
+ The fork keeps its own distribution and version identity: `hermes-agent` `0.20.1`
+diff --git a/agent/codex_responses_adapter.py b/agent/codex_responses_adapter.py
+index ac1129d4f..2e5ffa2d3 100644
+--- a/agent/codex_responses_adapter.py
++++ b/agent/codex_responses_adapter.py
+@@ -617,7 +617,7 @@ def _chat_messages_to_responses_input(
+                             and item_id.strip()
+                         ):
+                             stripped_id = item_id.strip()
+-                            if len(stripped_id) <= _MAX_RESPONSES_ITEM_ID_LENGTH:
++                            if stripped_id.startswith("msg") and len(stripped_id) <= _MAX_RESPONSES_ITEM_ID_LENGTH:
+                                 replay_item["id"] = stripped_id
+                         phase = raw_item.get("phase")
+                         if isinstance(phase, str) and phase.strip():
+@@ -921,7 +921,7 @@ def _preflight_codex_input_items(
+                 and item_id.strip()
+             ):
+                 stripped_id = item_id.strip()
+-                if len(stripped_id) <= _MAX_RESPONSES_ITEM_ID_LENGTH:
++                if stripped_id.startswith("msg") and len(stripped_id) <= _MAX_RESPONSES_ITEM_ID_LENGTH:
+                     normalized_item["id"] = stripped_id
+             phase = item.get("phase")
+             if isinstance(phase, str) and phase.strip():
+diff --git a/tests/agent/test_codex_responses_adapter.py b/tests/agent/test_codex_responses_adapter.py
+index 1ee944035..8b06c66a9 100644
+--- a/tests/agent/test_codex_responses_adapter.py
++++ b/tests/agent/test_codex_responses_adapter.py
+@@ -381,6 +381,67 @@ def test_preflight_codex_api_kwargs_drops_oversized_message_id_end_to_end():
+     assert "id" not in message_item
+ 
+ 
++# ---------------------------------------------------------------------------
++# Aether #554: a foreign message id (for example a UUID minted by another
++# provider) passes the length guard, but Codex Responses rejects an assistant
++# input[].id that does not start with ``msg`` -- a non-retryable HTTP 400 that
++# repeats on every later turn of an affinity-bound session. The id is optional
++# replay metadata, so a foreign id is dropped and ``msg`` ids are still kept.
++# ---------------------------------------------------------------------------
++
++_FOREIGN_UUID_ITEM_ID = "3f2b8c1e-9d4a-4e6f-8b2a-1c5d7e9f0a3b"
++_ID_CASES = [
++    (_FOREIGN_UUID_ITEM_ID, False),
++    ("item_123", False),
++    (_VALID_ITEM_ID, True),
++]
++
++
++def _assistant_message_item(item_id):
++    return {
++        "type": "message",
++        "role": "assistant",
++        "status": "completed",
++        "content": [{"type": "output_text", "text": "pong"}],
++        "id": item_id,
++        "phase": "final_answer",
++    }
++
++
++@pytest.mark.parametrize(("item_id", "kept"), _ID_CASES)
++def test_chat_messages_to_responses_input_keeps_only_msg_message_ids(item_id, kept):
++    messages = [
++        {"role": "user", "content": "ping"},
++        {
++            "role": "assistant",
++            "content": "pong",
++            "codex_message_items": [_assistant_message_item(item_id)],
++        },
++    ]
++
++    items = _chat_messages_to_responses_input(messages)
++
++    replayed = next(
++        i for i in items if i.get("type") == "message" and i.get("role") == "assistant"
++    )
++    assert ("id" in replayed) is kept
++    if kept:
++        assert replayed["id"] == item_id
++    assert replayed["phase"] == "final_answer"
++    assert replayed["content"] == [{"type": "output_text", "text": "pong"}]
++
++
++@pytest.mark.parametrize(("item_id", "kept"), _ID_CASES)
++def test_preflight_codex_input_items_keeps_only_msg_message_ids(item_id, kept):
++    items = _preflight_codex_input_items([_assistant_message_item(item_id)])
++
++    assert ("id" in items[0]) is kept
++    if kept:
++        assert items[0]["id"] == item_id
++    assert items[0]["phase"] == "final_answer"
++    assert items[0]["content"] == [{"type": "output_text", "text": "pong"}]
++
++
+ # ---------------------------------------------------------------------------
+ # _preflight_codex_api_kwargs — built-in (provider-executed) tools must pass
+ # through validation.  Regression guard for the xAI native web_search

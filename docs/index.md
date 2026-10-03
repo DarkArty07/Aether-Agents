@@ -4,15 +4,18 @@ Aether is a multi-agent software-engineering product built on [Hermes Agent](htt
 
 This index is navigation only and routes reader questions to the appropriate guide, reference, or authority artifact. For the complete reader-facing placement and conflict-resolution map across all artifact classes, see [Authority and artifact ownership](authority.md).
 
-The last locally tagged candidate is `1.0.0rc17` (display `1.0.0-rc.17`, tag
-`v1.0.0-rc.17`) at an earlier source revision. Current `main` also contains the
-[Lab/Monitor source retirement](../specs/lab-monitor-retirement/spec.md) without a
-new RC, release, or installed cutover. Its unchanged `VERSION` string does not make
-these later source bytes the RC17 package. Use `aether doctor --json` and exact
-cutover evidence to identify the installed runtime; source and local tags do not
-qualify agent behavior. The [RC17 scope](../specs/rc17-local-release/spec.md) retains
-its reviewed maintained-fork pin and qualification limits. No public tag or package
-release is authorized by this documentation.
+The current source revision defines the local candidate `1.0.0rc19` (display
+`1.0.0-rc.19`, tag `v1.0.0-rc.19`). It carries the
+[Lab/Monitor source retirement](../specs/lab-monitor-retirement/spec.md) and the opt-in
+[Claude Code Implementer harness](../specs/external-implementer-harness/spec.md) on
+maintained-fork commit `66e87f3487d75cda3681146818006b7c796a71a9` (RC17's selection
+plus HLP-554). RC17's frozen manager adopts it only through a local `1.0.0rc18` bridge
+that keeps the historical package shape. Use `aether doctor --json` and exact cutover
+evidence to identify the installed runtime; source and local tags do not qualify agent
+behavior.
+The [RC19 scope](../specs/rc19-local-release/spec.md) records its bounded verification
+and limits, and the [RC17 scope](../specs/rc17-local-release/spec.md) stays history.
+No public tag or package release is authorized by this documentation.
 The executable Hermes source is Aether's maintained fork
 `DarkArty07/aether-hermes` branch `aether-main`, bound by release-lock
 `maintained_fork` — read as schema 4 or 5, emitted as schema 5 with the closed
