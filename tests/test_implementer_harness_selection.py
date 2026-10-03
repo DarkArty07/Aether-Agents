@@ -52,6 +52,9 @@ def _project(tmp_path: Path, registry: ProjectRegistry, project_id: str, name: s
     )
     (root / "specs").mkdir(parents=True, exist_ok=True)
     subprocess.run(("git", "init", "-q"), cwd=root, check=True)
+    # Commits in these repositories must not depend on a global Git identity (CI has none).
+    subprocess.run(("git", "config", "user.email", "test@example.invalid"), cwd=root, check=True)
+    subprocess.run(("git", "config", "user.name", "Test"), cwd=root, check=True)
     assert registry.register(project_id, root, name)
     return root
 
